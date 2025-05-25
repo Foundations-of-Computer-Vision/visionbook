@@ -587,7 +587,7 @@ $\mathbf{E}$.
 
 #### The fundamental matrix
 
-Weehave been using camera coordinates, $\mathbf{p}$. If we want to use
+We have been using camera coordinates, $\mathbf{p}$. If we want to use
 image coordinates, in homogeneous coordinates,
 $\mathbf{c}=[n,m,1]^\mathsf{T}$, we need to also incorporate the
 intrinsic camera parameters (which will also incorporate pixel size and
@@ -599,9 +599,9 @@ algebraic form as in equation (@eq-relation4):
 $$\mathbf{c}_2^\mathsf{T}\mathbf{F} \mathbf{c}_1 = 0$$ where
 $\mathbf{F}$ is the **fundamental matrix**.
 
-The fundamental and essential matrices are related via the intrisic
+The fundamental and essential matrices are related via the intrinsic
 camera matrix, namely:
-$$\mathbf{F} = \mathbf{K}^{-\mathsf{T}} \mathbf{E} \mathbf{K}^{\mathsf{T}}$$
+$$\mathbf{F} = \mathbf{K}^{-\mathsf{T}} \mathbf{E} \mathbf{K}^{-1}$$
 
 The fundamental matrix has rank 2 (like the essential matrix) and 7
 degrees of freedom (out of the 9 degrees of freedom, one is lost due to
@@ -614,7 +614,7 @@ Given a set of matches between the two views we can estimate either the
 essential or the fundamental matrix by writing a linear set of
 equations. Any two matching points will satisfy
 $\mathbf{p}_2^\mathsf{T}\mathbf{E} \mathbf{p}_1 = 0$ and we can use this
-a linear set of equations for the coefficients of $\mathbf{E}$. However,
+linear set of equations for the coefficients of $\mathbf{E}$. However,
 the matrix $\mathbf{E}$ has a very special structure that allows more
 efficient and robust methods to estimate the coefficients. The same
 applies for the fundamental matrix.
