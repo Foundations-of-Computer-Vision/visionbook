@@ -588,7 +588,7 @@ $$
     \textcolor[rgb]{1.0, 0.4, 0.38}{x_{\texttt{out}}}[i] &= 
         \begin{cases}
             \max(\textcolor[rgb]{1.0, 0.4, 0.38}{x_{\texttt{in}}}[i],0), &\text{if} \quad \textcolor[rgb]{1.0, 0.4, 0.38}{x_{\texttt{in}}}[i] \geq 0\\
-            \textcolor[rgb]{0.2, 0.6, 1.0}{\alpha}\min(\textcolor[rgb]{1.0, 0.4, 0.38}{x_{\texttt{in}}}[i],0),              & \text{otherwise}
+            \textcolor[rgb]{0.2, 0.6, 1.0}{a}\min(\textcolor[rgb]{1.0, 0.4, 0.38}{x_{\texttt{in}}}[i],0),              & \text{otherwise}
         \end{cases} & \quad\quad \triangleleft \quad \texttt{leaky-relu}
 \end{aligned}
 $$
@@ -754,7 +754,7 @@ that generalize.
 
 Reason 4 is equally important to the first three: it says we can do all
 of this *efficiently* because most computations can be parallelized on
-modern hardware; in particular both matrix multiplications (linear layers)
+modern hardware; in particular both matrix multiplies (linear layers)
 and pointwise operations (e.g., relu layers) are easy to parallelize on
 graphical processing units. Further, most operations are applied to
 image batches, where each item in the batch can be sent to a different
