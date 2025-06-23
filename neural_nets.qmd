@@ -68,7 +68,7 @@ the plotted region.
 So a perceptron acts like a classifier, but how can we use it to learn?
 The idea is that given data, $\{\mathbf{x}^{(i)}, y^{(i)}\}_{i=1}^N$, we
 will adjust the weights $\mathbf{w}$ and the bias $b$, in order to
-minimize a classification loss, $\mathcal{L}$, that scores number of
+minimize a classification loss, $\mathcal{L}$, that scores the number of
 misclassifications: 
 
 $$\begin{aligned}    \mathbf{w}^*, b^* = \mathop{\mathrm{arg\,min}}_{\mathbf{w}, b} \frac{1}{N}\sum_{i=1}^N \mathcal{L}(\mathbf{w}^\mathsf{T}\mathbf{x}^{(i)} + b, y^{(i)})
@@ -251,8 +251,8 @@ Consider using the following settings for $\mathbf{W}_1$ and
 $\mathbf{W}_2$: $$\begin{aligned}
     \mathbf{W}_1 = 
         \begin{bmatrix}
-            -1 & 1 \\
-            1 & 2
+            1 & -1 \\
+            2 & 1
         \end{bmatrix}
     ,\quad\quad
     \mathbf{W}_2 = 
@@ -459,7 +459,7 @@ In general, everything in deep learning is represented as tensors---the
 input is one tensor, the activations are tensors, the weights are
 tensors, the outputs are tensors. If you have data that is not natively
 represented as a tensor, the first step, before feeding it to a deep
-net, is to convert it into a tensor format. Most often we use tensor of
+net, is to convert it into a tensor format. Most often we use tensors of
 real numbers, that is, the elements of the tensor are in $\mathbb{R}$.
 
 Suppose we have a dataset
@@ -498,15 +498,13 @@ and $\mathbf{b}_{\ell} \in \mathbb{R}^{C_{\ell+1}}$.
 As an example, in
 @fig-neural_nets-simple_MLP_network_tensors_and_batches below, we
 visualize all the tensors associated with a batch of three datapoints
-being processed by the MLP from @fig-neural_nets-simple_MLP_network.
+being processed by the MLP from @fig-neural_nets-simple_MLP_network, where the capital letters are the batches of datapoints and activations
+corresponding to the lowercase names of datapoints and hidden units in
+@fig-neural_nets-simple_MLP_network.
 For this network, the input is not a set of images but instead a set of
 vectors $\mathbf{X} \in \mathbb{R}^{N_{\texttt{batch}} \times C_0}$. The
 output is one value for each input vector, so we have
 $\mathbf{Y} \in \mathbb{R}^{N_{\texttt{batch}} \times 1}$.
-
-where the capital letters are the batches of datapoints and activations
-corresponding to the lowercase names of datapoints and hidden units in
-@fig-neural_nets-simple_MLP_network.
 
 ![The tensors that represent one pass through the MLP in @fig-neural_nets-simple_MLP_network](figures/neural_nets/simple_MLP_network_tensors_and_batches-2.png){#fig-neural_nets-simple_MLP_network_tensors_and_batches width=70%}
 
@@ -590,7 +588,7 @@ $$
     \textcolor[rgb]{1.0, 0.4, 0.38}{x_{\texttt{out}}}[i] &= 
         \begin{cases}
             \max(\textcolor[rgb]{1.0, 0.4, 0.38}{x_{\texttt{in}}}[i],0), &\text{if} \quad \textcolor[rgb]{1.0, 0.4, 0.38}{x_{\texttt{in}}}[i] \geq 0\\
-            \textcolor[rgb]{0.2, 0.6, 1.0}{a}\min(\textcolor[rgb]{1.0, 0.4, 0.38}{x_{\texttt{in}}}[i],0),              & \text{otherwise}
+            \textcolor[rgb]{0.2, 0.6, 1.0}{\alpha}\min(\textcolor[rgb]{1.0, 0.4, 0.38}{x_{\texttt{in}}}[i],0),              & \text{otherwise}
         \end{cases} & \quad\quad \triangleleft \quad \texttt{leaky-relu}
 \end{aligned}
 $$
@@ -630,7 +628,7 @@ There are numerous other normalization layers that have been defined
 over the years. Two more that we will highlight are **$L_2$
 normalization** and **layer normalization**
 (**layernorm**) @ba2016layer. $L_2$ normalization projects the inputs
-onto the unit hypersphere, which useful for bounding the activations to
+onto the unit hypersphere, which is useful for bounding the activations to
 unit vectors: 
 $$
 \begin{aligned}
@@ -756,13 +754,13 @@ that generalize.
 
 Reason 4 is equally important to the first three: it says we can do all
 of this *efficiently* because most computations can be parallelized on
-modern hardware; in particular both matrix multiplies (linear layers)
+modern hardware; in particular both matrix multiplications (linear layers)
 and pointwise operations (e.g., relu layers) are easy to parallelize on
 graphical processing units. Further, most operations are applied to
 image batches, where each item in the batch can be sent to a different
 parallel compute node.
 
-Reason 5 is the perhaps the most subtle. It is related to the layered
+Reason 5 is perhaps the most subtle. It is related to the layered
 structure of neural nets. Layer by layer, neural nets build up
 increasingly abstracted representations of the input data, and these
 abstractions tend to be increasingly useful. This argument is not easy
