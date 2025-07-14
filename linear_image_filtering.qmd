@@ -18,7 +18,7 @@ that makes more difficult comparisons with previously learned visual
 signals. Let's proceed by invoking the simplest mathematical processing
 we can think of: a linear filter. Linear filters as computing structures
 for vision have received a lot of attention because of their surprising
-success in modeling some aspect of the processing carried our by early
+success in modeling some aspect of the processing carried out by early
 visual areas such as the retina, the lateral geniculate nucleus (LGN)
 and primary visual cortex (V1) @Hubel62. In this chapter we will see how
 far it takes us toward these goals.
@@ -158,7 +158,7 @@ E = \frac{1}{R} \int_{-\infty}^{\infty} v(t) ^2 dt
 \end{equation}
 :::
 
-Signal are further classified as **finite energy** and **infinite
+Signals are further classified as **finite energy** and **infinite
 energy** signals. Finite length signals are finite energy and periodic
 signals are infinite energy signals when measuring the energy in the
 whole time axis.
@@ -167,7 +167,7 @@ If we want to compare two signals, we can use the squared Euclidean
 distance (squared L2 norm) between them:
 $$D^2 = \frac{1}{N} \sum_{n=0}^{N-1} \left| \ell_1 \left[n\right] - \ell_2 \left[n\right] \right| ^2$$
 However, the euclidean distance (L2) is a poor metric when we are
-interested in comparing the content of the two images and the building
+interested in comparing the content of the two images and building
 better metrics is an important area of research. Sometimes, the metric
 is L2 but in a different representation space than pixel values. We will
 talk about this more later in the book.
@@ -203,7 +203,7 @@ analytical characterization: linear systems.
 **Linear systems** represent a very small portion of all the possible
 systems one could implement, but we will see that they are capable of
 creating very interesting image transformations. A function $f$ is
-linear is it satisfies the following two properties:
+linear if it satisfies the following two properties:
 
 $$\begin{aligned}
 f\left( \boldsymbol\ell_1+\boldsymbol\ell_2 \right) &=& f(\boldsymbol\ell_1)+ f(\boldsymbol\ell_2) \\ \nonumber
@@ -432,7 +432,7 @@ transformation each output pixel at location $n,m$ is the local average
 of the input pixels in a local neighborhood around location $n,m$, and
 this operation is the same regardless of what pixel output we are
 computing. Therefore, it can be written as a convolution. The rotation
-transformation (for a fix rotation) is a linear operation but it is not
+transformation (for a fixed rotation) is a linear operation but it is not
 translation invariant. As illustrated in @fig-transformationsquizz2 (b),
 different output pixels require looking at input pixels in a way that is
 location specific. At the top left corner, one wants to grab a pixel
@@ -570,9 +570,8 @@ Some typical choices for how to pad the input image are (see
     consists of the following:
     $$\ell_{\texttt{in}}\left[n,m\right] = \ell_{\texttt{in}}\left[(n)_P,(m)_Q\right]$$
     where $(n)_P$ denotes the modulo operation and $(n)_P$ is the
-    reminder of $n/P$.
-
-    This padding transform the finite length signal into a periodic
+    remainder of $n/P$.
+    This padding transforms the finite length signal into a periodic
     infinite length signal. Although this will introduce many artifacts,
     it is a convenient extension for analytical derivations.
 
@@ -596,8 +595,8 @@ visual results.
 
 
 
-But which one is the best boundary extension? Ideally, we would to get a
-result that is a close as possible to the output we would get if we had
+But which one is the best boundary extension? Ideally, we would like to get a
+result that is as close as possible to the output we would get if we had
 access to a larger image. In this case we know what the larger image
 looks like as shown in the last column of @fig-boundaries. For each
 boundary extension method, the final row shows the absolute value of the
@@ -662,7 +661,7 @@ strict sense) or the Dirac delta function.
 
 
 :::{.column-margin}
-The delta distribution is usually represented with an arrow of height 1, indicating that it has an finite value at that point, and a finite area equal to 1:
+The delta distribution is usually represented with an arrow of height 1, indicating that it has an infinite value at that point, and a finite area equal to 1:
 
 ![](figures/linear_image_filtering/mn4.png){width="70%"}
 :::
@@ -695,7 +694,7 @@ image $\ell_{\texttt{in}}$ and the kernel $h$ is written as follows:
 $$\ell_{\texttt{out}}\left[n,m\right] = \ell_{\texttt{in}}\star h =  \sum_{k,l=-N}^N \ell_{\texttt{in}}\left[n+k,m+l \right] h \left[k,l \right]$$
 where the sum is done over the support of the filter $h$, which we
 assume is a square $(-N,N)\times(-N,N)$. In the convolution, the kernel
-is inverted left-right and up-down, while in the cross-correlation is
+is inverted left-right and up-down, while in the cross-correlation it is
 not. Remember that the convolution between image $\ell_{\texttt{in}}$
 and kernel $h$ is written as follows:
 $$\ell_{\texttt{out}}\left[n,m\right] = \ell_{\texttt{in}}\circ h = \sum_{k,l=-N}^N \ell_{\texttt{in}}\left[n-k,m-l \right] h \left[k,l \right]$$
@@ -730,7 +729,7 @@ outputs are identical when the kernel $h$ has central symmetry.
 
 The goal of template matching is to find a small image patch within a
 larger image. @fig-normcorr shows how to use template matching to
-detect all the occurrences of the letter "a" with an image of text,
+detect all the occurrences of the letter "a" within an image of text,
 shown in @fig-normcorr (b). @fig-normcorr (a) shows the template of the
 letter "a".
 
@@ -761,7 +760,7 @@ $$\ell_{\texttt{out}}\left[n,m\right]
                 \ell_{\texttt{in}}\left[n+k,m+l \right]
                 \hat{h} \left[k,l \right]$$ 
                 
-Note that this equation is similar to the correlation function, but the output is scaled by the local standard deviation, $\sigma \left[m,n \right]$, of the image patch
+Note that this equation is similar to the correlation function, but the output is scaled by the local standard deviation, $\sigma \left[n,m \right]$, of the image patch
 centered in $(n,m)$ and with support $(-N,N)\times(-N,N)$, where
 $(-N,N)\times(-N,N)$ is the size of the kernel $h$. To compute the local
 standard deviation, we first compute the local mean,
@@ -816,7 +815,7 @@ approximation to an impulse of sound), the echoes that you hear are very
 close to the impulse response of the system formed by the acoustics of
 the room. Any sounds that originates at the location of your clap will
 produce a sound in the room that will be qualitatively similar to the
-convolution of the acoustic signal with the echoes that you hear before
+convolution of the acoustic signal with the echoes that you heard before
 when you clapped. @fig-impulse_response_room_a2 shows a recording made
 in a restaurant in Cambridge, Massachusetts.
 
@@ -838,8 +837,8 @@ $$h (t) = a_0 \delta (t)
 The sound that reaches the listener
 is the superposition of four copies of the sound emitted by the speaker.
 This can be written as the convolution of the input sound,
-$\ell_{\texttt{in}}(t)$, with room impulse response, $h (t)$:
-$$\ell_{\texttt{out}}(t) = \ell_{\texttt{in}}(t) \circ h(t) = a_0 \ell_{\texttt{out}}(t)
+$\ell_{\texttt{in}}(t)$, with room impulse response, $h(t)$:
+$$\ell_{\texttt{out}}(t) = \ell_{\texttt{in}}(t) \circ h(t) = a_0 \ell_{\texttt{in}}(t)
 + a_1 \ell_{\texttt{in}}(t-T_1) 
 + a_2 \ell_{\texttt{in}}(t-T_2)
 + a_3 \ell_{\texttt{in}}(t-T_3)$$ which is shown graphically in
