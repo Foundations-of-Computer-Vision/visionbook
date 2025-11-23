@@ -1,0 +1,516 @@
+---
+title: "A Simple Vision System---Revisited"
+subtitle: "Pretrained Models and Modern Computer Vision"
+author: "Foundations of Computer Vision"
+format:
+  revealjs:
+    theme: default
+    transition: slide
+    slide-number: true
+    chalkboard: true
+    preview-links: true
+    incremental: false
+    fig-width: 10
+    fig-height: 7
+    fig-dpi: 300
+    reference-location: document
+    highlight-style: github
+    width: 1280
+    height: 720
+bibliography:
+  - all.bib
+  - visionbib.bib
+---
+
+# Introduction
+
+## The Optimism of the 2020s
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Large-scale pretrained models:**
+
+- DALL-E (image generation)
+- GPT, ChatGPT (language)
+- AutoPilot (driving)
+- Vision-language models
+
+**Trained on massive datasets**
+:::
+
+::: {.column width="50%"}
+**Key characteristics:**
+
+- Solve wide variety of tasks
+- Require massive computation
+- Can be used with little fine-tuning
+- Act as building blocks for complex systems
+:::
+
+:::
+
+## The Question
+
+::: {.incremental}
+
+- Can pretrained models solve everything?
+
+- Is computer vision in the 2020s naively optimistic like the 1960s?
+
+- **Today's goal:** Revisit the simple world problem using pretrained models
+
+:::
+
+## Our Simple World Problem
+
+![Image from the simple world.](figures/simplesystem_revisited/img1.jpg){width="90%"}
+
+**Goal:** Recover 3D structure from a single image
+
+::: {.callout-important}
+**Challenge:** We lost depth information when the 3D scene was projected to 2D!
+:::
+
+# A Simple Neural Network
+
+## Two Approaches
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Hand-crafted approach** (from earlier chapter):
+
+- Study image formation
+- Reason about information preservation
+- Build explicit representations
+- Integrate evidence step-by-step
+:::
+
+::: {.column width="50%"}
+**Pretrained model approach** (today):
+
+- Download a pretrained model
+- Apply it out-of-the-box
+- Transform output to our needs
+
+**Much simpler from user's perspective!**
+:::
+
+:::
+
+## MiDaS: State-of-the-Art 3D Perception
+
+**MiDaS** @Ranftl2021, @Ranftl2022
+
+- Neural network trained end-to-end
+- Trained on diverse real images with ground truth depth
+- Also uses stereo images
+- **From user's perspective:** Just a function call!
+
+::: {.callout-note}
+The network itself is complex, but using it is simple
+:::
+
+## How Was It Trained?
+
+![Images and depth maps from the training set. *Source*: Image from @Ranftl2022](figures/simplesystem_revisited/examples_training_midas.jpg){width="100%"}
+
+**Four diverse datasets** with real images and ground-truth depth
+
+::: {.callout-note}
+Notice how different these images are from our simple geometric world!
+:::
+
+## Training Challenges
+
+::: {.incremental}
+
+- **Scale ambiguity:** Different datasets have different scales
+- **Camera parameter ambiguity:** Different cameras, settings
+- **Stereo baseline ambiguity:** Different stereo setups
+
+**Solution:** Train with **invariant loss** that handles these ambiguities
+
+**Trade-off:** More robust training, but output needs conversion
+
+:::
+
+## Understanding the Output
+
+::: {.columns}
+
+::: {.column width="50%"}
+**MiDaS predicts:**
+
+**Disparity** (inverse depth)
+
+- Up to unknown scale and shift
+- Not directly usable
+- Needs conversion to world coordinates
+:::
+
+::: {.column width="50%"}
+**We need:**
+
+**World coordinates** $(X, Y, Z)$ for each pixel
+
+- Requires camera parameters
+- Requires choosing scale constant $d_0$
+:::
+
+:::
+
+## Converting Disparity to Depth
+
+**Step 1:** Convert disparity to depth
+
+**Key idea:** Disparity is inverse depth (up to a constant)
+
+- Small disparity → far away
+- Large disparity → close by
+
+We add a constant $d_0$ and invert to get depth
+
+::: {.callout-note}
+Think of it like: depth = 1 / (disparity + offset)
+:::
+
+## Converting Depth to World Coordinates
+
+**Step 2:** Use camera geometry
+
+**For each pixel:**
+- We know its position in the image $(n, m)$
+- We know its depth $z$
+- We use camera parameters to convert to 3D world coordinates $(X, Y, Z)$
+
+::: {.callout-tip}
+This uses the camera projection model we learned earlier!
+:::
+
+## Camera Parameters
+
+::: {.columns}
+
+::: {.column width="40%"}
+**What we need:**
+
+- **Intrinsic:** How the camera sees (focal length, image center)
+- **Extrinsic:** How camera is oriented (rotation angle)
+
+**Visual intuition:**
+- Where is the camera pointing?
+- How zoomed in is it?
+- Where is the image center?
+:::
+
+::: {.column width="60%"}
+![Camera projection model](figures/simplesystem_revisited/projection-revisted.png){width="100%"}
+:::
+
+:::
+
+## Setting Parameters: Heuristic Approach
+
+::: {.incremental}
+
+- **Scale offset ($d_0$):** Set to 0 (simplest choice)
+
+- **Camera center:** Assume image center
+  - Middle of the image horizontally and vertically
+
+- **Focal length:** Assume it matches image width
+  - Standard assumption for many cameras
+
+- **Camera tilt:** Assume 45° angle
+  - Approximately how the images were taken
+
+:::
+
+::: {.callout-tip}
+We could calibrate more accurately, but these heuristics work well enough for our purposes!
+:::
+
+# From 2D Images to 3D
+
+## Running the Model
+
+**Process:**
+
+1. Apply neural network to input image
+2. Obtain disparity output
+3. Transform disparity to world coordinates
+
+**No need for:**
+- Edge detection
+- Feature extraction
+- Manual heuristics
+
+The network learned what it needs!
+
+## Results: Multiple Viewpoints
+
+![3D reconstruction using a pretrained model. Multiple viewpoints of the reconstructed 3D scene](figures/simplesystem_revisited/views_midas.jpg){width="100%"}
+
+::: {.callout-tip}
+**Remarkable:** This works even though the model was trained on natural images, not our simple geometric world!
+
+The model has learned to generalize!
+:::
+
+## But... Not Perfect
+
+::: {.incremental}
+
+**Errors we can see:**
+
+- Ground is not flat (appears concave)
+- Cube edges are not straight
+- Faces are twisted instead of flat
+
+**Why?** Model wasn't trained on this type of simple geometric world
+
+:::
+
+## Comparison: Hand-Crafted vs Pretrained
+
+![3D reconstruction using the simple visual system from earlier chapter](figures/simplesystem/views.png){width="100%"}
+
+**Hand-crafted approach:** Beautiful results when assumptions are met
+
+## Interactive 3D Demo
+
+**Explore the 3D reconstruction interactively:**
+
+::: {.callout-tip}
+**Hand-crafted approach result** - You can rotate, zoom, and pan to examine the 3D structure from different viewpoints.
+:::
+```{=html}
+<iframe src="./demos/simple_sys/surf_with_colors.html" width="100%" height="600px" frameborder="0" allowfullscreen></iframe>
+```
+
+## The Real Test: Out-of-Domain Generalization
+
+![Comparison: Pretrained model (MiDaS) vs simple world model. The pretrained model works across all examples, while the hand-crafted approach only works for the first and breaks down for others.](figures/simplesystem_revisited/comparison_midas_simpleworld.jpg){width="100%"}
+
+## Key Insights
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Hand-crafted approach:**
+
+- ✅ Beautiful when assumptions met
+- ❌ Very fragile
+- ❌ Poor illumination breaks it
+- ❌ Fails with small changes (e.g., black ground)
+:::
+
+::: {.column width="50%"}
+**Pretrained approach:**
+
+- ✅ Robust to conditions
+- ✅ Good quality across scenarios
+- ✅ Generalizes better
+- ⚠️ Never perfect, but consistently decent
+:::
+
+:::
+
+# Large Language Model-based Scene Understanding
+
+## GPT-4V: Another Approach
+
+**GPT-4V** @openai2023gpt4v can:
+
+- Take images as input
+- Answer questions about images
+- Describe scenes
+
+**Let's see what it says about our simple world...**
+
+## GPT-4V Describes the Scene
+
+![(a) Input image and text prompt to ChatGPT. (b) Output by ChatGPT (GPT-4V, version from Nov 21, 2023) when asked to describe the image from the simple world.](figures/simplesystem_revisited/chatgpt_blockworld.png){width="100%"}
+
+**Remarkably accurate!** But how does it work?
+
+## How GPT-4V Works (Conceptually)
+
+::: {.incremental}
+
+**At one level:**
+- Transformer trained on massive data
+- Autoregressive modeling objective
+
+**At another level (what it learned):**
+- Detects edges in early layers
+- Uses filters like wavelets
+- Reasons about perspective geometry
+- Finds vanishing points
+- Estimates shape
+
+**Sound familiar?** Many concepts from this course!
+
+:::
+
+## But It's Not Perfect Either
+
+![Output by ChatGPT when asked to render a new image with the same elements. The reconstruction is close but not quite right.](figures/simplesystem_revisited/chatgpt_blockworld_2.png){width="60%"}
+
+**What's missing?** How would you improve it?
+
+# Unsolved Solved Problems
+
+## Beware the "Unsolved Solved Problems"
+
+::: {.incremental}
+
+- Some vision tasks might **appear** perfectly solved
+- It might seem like foundational problems are resolved
+- It might seem impossible to make progress
+
+**But often:** It's just an illusion!
+
+- The "solved" problem wasn't really solved
+- Even when genuinely solved, many unsolved problems lurk in the background
+
+:::
+
+## Remember
+
+::: {.callout-important}
+When everything seems solved, remember:
+
+- Advances come from exploring new directions
+- Keep an open mind
+- Creativity is a powerful tool
+:::
+
+# Summary: What We've Seen
+
+## Three Approaches to the Same Problem
+
+::: {.columns}
+
+::: {.column width="33%"}
+**1. Hand-crafted**
+
+- Edge detection
+- Geometric reasoning
+- Explicit algorithms
+- Perfect when assumptions met
+:::
+
+::: {.column width="33%"}
+**2. Pretrained Neural Net**
+
+- MiDaS depth estimation
+- Learned features
+- Robust to conditions
+- Generalizes well
+:::
+
+::: {.column width="33%"}
+**3. Vision-Language Model**
+
+- GPT-4V scene understanding
+- Text descriptions
+- Remarkable accuracy
+- Still has failures
+:::
+
+:::
+
+# Concluding Remarks
+
+## What Have We Learned?
+
+::: {.incremental}
+
+- **Pretrained models work:** Not as clean as hand-crafted, but more robust
+
+- **Hand-crafted models:** 
+  - Complete understanding of mechanisms
+  - No training data needed
+  - Work perfectly when conditions met
+  - Very fragile outside assumptions
+
+- **Pretrained models:**
+  - Generalize better
+  - Robust to changes
+  - Less interpretable
+  - Require training data
+
+:::
+
+## The Trade-offs
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Hand-crafted:**
+
+- ✅ Interpretable
+- ✅ No training needed
+- ✅ Perfect when assumptions met
+- ❌ Fragile
+- ❌ Doesn't generalize
+:::
+
+::: {.column width="50%"}
+**Pretrained:**
+
+- ✅ Robust
+- ✅ Generalizes
+- ✅ Works across conditions
+- ❌ Less interpretable
+- ❌ Requires training data
+- ❌ Never perfect
+:::
+
+:::
+
+## Open Questions
+
+::: {.incremental}
+
+- How exactly does the pretrained model work?
+- Has it learned our hand-crafted heuristics?
+- Or is it using completely different approaches?
+- Why did GPT-4V fail on reconstruction?
+
+**The precise answers don't matter right now** - the field evolves quickly!
+
+:::
+
+## The Bigger Picture
+
+::: {.incremental}
+
+- **Challenge existing approaches**
+- **Find the relevant questions** for new systems
+- **Learning-based systems** require experiments similar to psychophysics
+- **Understanding mechanisms** remains important
+
+:::
+
+## Final Thought
+
+![Gibson's bird](figures/simplesystem_revisited/gibson_bird.png){width="15%"}
+
+**What matters:** Keep asking questions, keep exploring, keep learning!
+
+# Questions?
+
+## Thank You!
+
+**Key Takeaways:**
+
+- Pretrained models offer robustness and generalization
+- Hand-crafted models offer interpretability and precision
+- Both approaches have their place
+- The field continues to evolve rapidly
+- Stay curious and keep questioning!
+

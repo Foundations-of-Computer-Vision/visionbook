@@ -1,0 +1,596 @@
+---
+title: "Imaging"
+subtitle: "How Light Interacts with Surfaces and Forms Images"
+author: "Foundations of Computer Vision"
+format:
+  revealjs:
+    theme: default
+    transition: slide
+    slide-number: true
+    chalkboard: true
+    preview-links: true
+    incremental: false
+    fig-width: 10
+    fig-height: 7
+    fig-dpi: 300
+    reference-location: document
+    highlight-style: github
+    width: 1280
+    height: 720
+bibliography:
+  - all.bib
+  - visionbib.bib
+---
+
+# Introduction
+
+## What Are We Learning Today?
+
+::: {.incremental}
+
+- How light interacts with surfaces
+- The BRDF (Bidirectional Reflection Distribution Function)
+- How cameras form images from light rays
+- Perspective vs. orthographic projection
+- How to build simple cameras yourself
+
+:::
+
+## The Big Picture
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Light in the world:**
+
+- Sun and artificial lights flood space
+- Light rays reflect off surfaces
+- Changes in brightness and color
+- Information about the scene
+:::
+
+::: {.column width="50%"}
+**Forming images:**
+
+- Need to organize light rays
+- Identify which rays come from where
+- Cameras restrict and organize rays
+- Convert 3D world to 2D images
+:::
+
+:::
+
+## Today's Roadmap
+
+::: {.incremental}
+
+1. **Light interacting with surfaces:** BRDF, Lambertian, Phong
+2. **Why we need cameras:** The problem with blank walls
+3. **Pinhole cameras:** The simplest camera
+4. **Perspective projection:** How 3D projects to 2D
+5. **Orthographic projection:** Alternative projection model
+6. **Building cameras:** Hands-on examples
+
+:::
+
+# Light Interacting with Surfaces
+
+## The Light Ray Abstraction
+
+Visible light is electromagnetic radiation with wave effects.
+
+::: {.columns}
+
+::: {.column width="50%"}
+**For imaging models:**
+
+- Abstract to **light rays**
+- Position, direction, intensity
+- Function of wavelength and polarization
+- Ignore diffraction effects
+:::
+
+::: {.column width="50%"}
+![A light ray from the sun strikes a surface and generates outgoing rays of intensity and color depending on the angles of the incoming and outgoing rays relative to the surface orientation.](figures/imaging/brdf.png){width="100%"}
+:::
+
+:::
+
+## The BRDF
+
+**Bidirectional Reflection Distribution Function** (BRDF), $F$
+
+::: {.callout-important}
+**Key concept:** The BRDF describes how a surface reflects light
+
+- Depends on surface normal $\mathbf{n}$
+- Depends on incoming direction $\mathbf{p}$
+- Depends on outgoing direction $\mathbf{q}$
+- Depends on wavelength $\lambda$
+:::
+
+**The equation:**
+
+$$\ell_{\texttt{out}} = F \left( \ell_{\texttt{in}}, \mathbf{n}, \lambda, \mathbf{p}, \mathbf{q} \right)$$
+
+## Lambertian Surfaces
+
+**Simple model for diffuse reflection:**
+
+$$\ell_{\texttt{out}} = F_{L} \left( \ell_{\texttt{in}} (\lambda), \mathbf{n}, \mathbf{p} \right)  = a \ell_{\texttt{in}}(\lambda) \left( \mathbf{n} \cdot \mathbf{p} \right)$$
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Key properties:**
+
+- $a$ = surface reflectance (albedo)
+- $\mathbf{n}$ = surface normal
+- $\mathbf{p}$ = direction to light source
+- **Independent of viewing direction!**
+:::
+
+::: {.column width="50%"}
+**What this means:**
+
+- Brightness depends on surface orientation
+- Same brightness from all viewing angles
+- Simple but useful model
+:::
+
+:::
+
+::: {.callout-note}
+Perfectly Lambertian surfaces are rare. Spectralon is the most perfectly Lambertian material.
+:::
+
+## Specular Surfaces: Phong Model
+
+**Three components:**
+
+1. **Ambient:** Constant term
+2. **Diffuse:** Lambertian reflection
+3. **Specular:** Directional highlights
+
+**Phong specular contribution:**
+
+$$\ell_{\mbox{Phong spec}} = k_s (\mathbf{r} \cdot \mathbf{q})^\alpha \ell_{\texttt{in}}$$
+
+where $\mathbf{r} = 2(\mathbf{p} \cdot \mathbf{n}) \mathbf{n} - \mathbf{p}$
+
+## Visual Comparison
+
+![Lambertian, Phong, and Photograph renderings of a sphere under two-source illumination.](figures/imaging/sphereDiffuse.png){width="30%"} ![Phong](figures/imaging/spherePhongRoughness0.3.png){width="30%"} ![Photograph](figures/imaging/photoSphere.jpg){width="30%"}
+
+::: {.callout-tip}
+**Note:** Real photographs require many more details than simple models!
+:::
+
+## Linearity of Reflection
+
+::: {.callout-important}
+**Key principle:** Surface reflection is **linear**
+
+The reflection from the sum of two light sources equals the sum of reflections from individual sources.
+
+This linearity is crucial for understanding imaging systems!
+:::
+
+# The Pinhole Camera and Image Formation
+
+## Why No Pictures on Walls?
+
+::: {.columns}
+
+::: {.column width="50%"}
+**The problem:**
+
+- Light reflects from wall
+- Integrates light from **every direction**
+- Average of many sources
+- No way to tell where light came from
+:::
+
+::: {.column width="50%"}
+![Why there are no pictures appearing on the walls?](figures/imaging/no_picture_on_a_wall_aina.png){width="100%"}
+:::
+
+:::
+
+## The Mathematical Problem
+
+For a Lambertian wall, integrating over all incoming directions:
+
+$$\ell_{\texttt{out}} = \int_{\mathbf{p}}  a \ell_{\texttt{in}}(\mathbf{p}) \cos(\mathbf{n} \cdot \mathbf{p}) \mbox{d} \mathbf{p}$$
+
+::: {.callout-important}
+**The issue:** $\ell_{\texttt{out}}$ tells us very little about $\ell_{\texttt{in}}(\mathbf{p})$ from any specific direction $\mathbf{p}$.
+
+**Solution:** We need to **form an image** to identify which rays came from which directions!
+:::
+
+## The Role of a Camera
+
+::: {.incremental}
+
+**A camera's job:**
+
+- Organize light rays
+- Convert cacophony → organized measurements
+- Identify which rays came from which directions
+- Associate light with surfaces in the world
+
+**The pinhole camera:** Simplest solution!
+
+:::
+
+## What Is a Pinhole Camera?
+
+**Three components:**
+
+1. **Light-tight enclosure**
+2. **Small hole** (pinhole) for light to pass
+3. **Projection surface** to sense/view illumination
+
+![The pinhole camera restricts the light rays reaching the wall, producing an image to appear.](figures/imaging/no_picture_on_a_wall_aina.png){width="90%"}
+
+## How It Works
+
+::: {.callout-tip}
+**Key insight:** For any point on the projection surface, light comes from **only one direction** - along the straight line joining that point and the pinhole.
+
+This creates an image of the world on the projection plane!
+:::
+
+## Building Your Own Pinhole Camera
+
+**Simple setup:**
+
+- Two pieces of paper
+- One with a hole
+- Project image on white paper
+
+![A simple setting for creating images on a white piece of paper.](figures/imaging/simple_pinhole.jpg){width="80%"}
+
+::: {.callout-note}
+**Experiment:** Change distance between projection plane and pinhole to see the effect!
+:::
+
+## Paper Bag Pinhole Camera
+
+![A pinhole camera made from paper bags.](figures/imaging/pinholeBag.png){width="45%"} ![Paper bag pinhole camera in use.](figures/imaging/pinholeBag2.png){width="45%"}
+
+**What you need:**
+
+- Aperture (hole)
+- Light-blocking mechanisms
+- Projection screen
+- Method to view/record image
+
+::: {.callout-tip}
+**Challenge:** Walking with this camera is tricky - you see an upside-down version of what's behind you!
+:::
+
+## Accidental Cameras
+
+::: {.columns}
+
+::: {.column width="50%"}
+![A wall might contain a picture of the world after all.](figures/imaging/room1.jpg){width="100%"}
+:::
+
+::: {.column width="50%"}
+![Turning the room into a pinhole camera.](figures/imaging/room2.jpg){width="100%"}
+:::
+
+:::
+
+::: {.callout-note}
+**The world is full of accidental cameras!** Light rays are restricted by walls, windows, obstacles - creating faint images often ignored by observers.
+:::
+
+# Image Formation by Perspective Projection
+
+## Coordinate Systems
+
+![Coordinate systems for pinhole camera.](figures/imaging/pinhole_names2.png){width="70%"}
+
+**Three coordinate systems:**
+
+1. **World coordinates** $(X, Y, Z)$
+2. **Camera coordinates** $(x, y)$ in virtual plane
+3. **Image coordinates** $(n, m)$ in pixels
+
+## The Geometry
+
+![Geometry of the pinhole camera.](figures/imaging/pinhole_geometry2.png){width="100%"}
+
+**Key elements:**
+
+- Pinhole at origin
+- Virtual camera plane at distance $f$
+- 3D point $\mathbf{P} = (X, Y, Z)$
+- Projects to $\mathbf{p} = (x, y)$
+
+## Perspective Projection Equations
+
+**From similar triangles:**
+
+$$x = f \frac{X}{Z}$$
+
+$$y = f \frac{Y}{Z}$$
+
+![Perspective projection equations derived geometrically.](figures/imaging/similar_triangles2.png){width="80%"}
+
+::: {.callout-note}
+**Historical note:** Thales of Miletus (624 B.C.) introduced similar triangles - used to measure pyramid heights and boat distances!
+:::
+
+## What Perspective Projection Means
+
+::: {.callout-important}
+**Key property:** Distant objects become smaller!
+
+- Inverse scaling by $Z$ (depth)
+- Objects far away → smaller in image
+- Objects close → larger in image
+:::
+
+**Applies to:**
+
+- Pinhole cameras
+- Lens-based cameras
+- Human vision
+
+## Camera to Image Coordinates
+
+**Transformation:**
+
+$$n = - a x + n_0$$
+$$m = a y + m_0$$
+
+where:
+- $a$ = scaling constant
+- $(n_0, m_0)$ = image center (optical axis)
+
+::: {.callout-note}
+**Note:** The $x$ coordinate is reversed compared to image coordinates $(m,n)$ where $m$ indexes columns and $n$ indexes rows.
+:::
+
+# Image Formation by Orthographic Projection
+
+## An Alternative Projection
+
+**Perspective projection is not the only option!**
+
+Different camera geometries → different projections
+
+**Orthographic projection:**
+
+- Parallel rays orthogonal to projection plane
+- Object size **independent** of distance
+- No perspective foreshortening
+
+![Orthographic projection.](figures/imaging/orthogonal_projection.png){width="90%"}
+
+## Orthographic Projection Equations
+
+$$x = k X$$
+$$y = k Y$$
+
+where $k$ is a constant scaling factor.
+
+::: {.callout-tip}
+**When is this a good model?**
+
+- Telephoto lenses
+- Objects at infinity
+- Used in simple vision system
+:::
+
+## Building an Orthographic Camera
+
+**The soda straw camera!**
+
+![Straw camera example.](figures/imaging/straw_camera.png){width="100%"}
+
+**How it works:**
+
+- Parallel straws restrict light rays
+- Only perpendicular rays pass through
+- Creates orthographic projection
+- Object sizes same as in world (unity scale)
+
+::: {.callout-note}
+**Tip:** Paint straws black to reduce internal reflections for sharper images!
+:::
+
+## Straw Camera Properties
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Differences from pinhole:**
+
+- No image inversion
+- Objects don't shrink with distance
+- Unity scale factor
+- Parallel projection
+:::
+
+::: {.column width="50%"}
+**Real-world example:**
+
+- Michael Farrell and Cliff Haynes built one with **32,000 straws**!
+- Another implementation: telecentric lens (pinhole + lens)
+:::
+
+:::
+
+# Key Insights
+
+## The Power of Cameras
+
+::: {.columns}
+
+::: {.column width="50%"}
+**The problem:**
+
+- Light scatters everywhere
+- Walls average all directions
+- Can't identify source directions
+:::
+
+::: {.column width="50%"}
+**The solution:**
+
+- Cameras restrict light rays
+- Organize by direction
+- Create interpretable images
+:::
+
+:::
+
+## Two Projection Models
+
+::: {.incremental}
+
+**Perspective projection:**
+
+- Objects shrink with distance
+- $x = f X/Z$, $y = f Y/Z$
+- Models pinhole and lens cameras
+- Matches human vision
+
+**Orthographic projection:**
+
+- Constant size regardless of distance
+- $x = kX$, $y = kY$
+- Models telephoto/parallel rays
+- Useful for special applications
+
+:::
+
+## Surface Reflection Models
+
+::: {.incremental}
+
+**Lambertian:**
+
+- Simple diffuse reflection
+- Independent of viewing angle
+- Depends on surface orientation
+- Good approximation for many surfaces
+
+**Phong:**
+
+- Adds specular highlights
+- Three components: ambient, diffuse, specular
+- More realistic but still simplified
+- Real surfaces are much more complex!
+
+:::
+
+## Linearity Matters
+
+::: {.callout-important}
+**Fundamental principle:** Surface reflection is linear
+
+- Reflection from sum = sum of reflections
+- Enables superposition
+- Critical for understanding imaging systems
+- Foundation for linear systems analysis
+:::
+
+# Concluding Remarks
+
+## What We've Learned
+
+::: {.incremental}
+
+**Main concepts:**
+
+- Light interacts with surfaces via BRDF
+- Lambertian and Phong models for reflection
+- Cameras organize light rays to form images
+- Perspective vs. orthographic projection
+- Simple cameras you can build yourself
+
+:::
+
+## The Big Picture
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Light reflection:**
+
+- BRDF describes surface behavior
+- Lambertian: simple diffuse model
+- Phong: adds specular component
+- Reflection is linear
+:::
+
+::: {.column width="50%"}
+**Image formation:**
+
+- Pinhole camera: simplest design
+- Perspective: objects shrink with distance
+- Orthographic: constant size
+- Many ways to build cameras
+:::
+
+:::
+
+## Hands-On Learning
+
+::: {.callout-tip}
+**Build your own pinhole camera!**
+
+- Helps develop intuition
+- See image formation in action
+- Experiment with distances
+- Understand the principles firsthand
+
+**It's easy and educational!**
+:::
+
+## Why This Matters
+
+::: {.incremental}
+
+**Understanding imaging:**
+
+- Foundation for computer vision
+- Explains how cameras work
+- Enables camera design
+- Connects physics to computation
+
+**Next steps:**
+
+- Camera parameters and calibration
+- Lens systems
+- More complex imaging models
+- Computational photography
+
+:::
+
+# Questions?
+
+## Summary
+
+**Key takeaways:**
+
+- Light rays reflect off surfaces according to BRDF
+- Cameras organize rays to form interpretable images
+- Perspective projection: $x = fX/Z$, objects shrink with distance
+- Orthographic projection: $x = kX$, constant size
+- Simple cameras demonstrate fundamental principles
+
+## Thank You!
+
+**Questions?**
+
+**Next time:** We'll explore camera parameters, lens systems, and more advanced imaging models!
+
+

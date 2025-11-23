@@ -1,0 +1,523 @@
+---
+title: "Cameras as Linear Systems"
+subtitle: "General Imaging Systems and Linear Algebra"
+author: "Foundations of Computer Vision"
+format:
+  revealjs:
+    theme: default
+    transition: slide
+    slide-number: true
+    chalkboard: true
+    preview-links: true
+    incremental: false
+    fig-width: 10
+    fig-height: 7
+    fig-dpi: 300
+    reference-location: document
+    highlight-style: github
+    width: 1280
+    height: 720
+bibliography:
+  - all.bib
+  - visionbib.bib
+---
+
+# Introduction
+
+## What Are We Learning Today?
+
+::: {.incremental}
+
+- How to describe cameras using linear algebra
+- Why some cameras don't produce interpretable images directly
+- How to recover images from sensor measurements
+- Examples of non-traditional cameras: edge, pinspeck, corner cameras
+
+:::
+
+## The Big Picture
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Traditional cameras:**
+
+- Pinhole and lens cameras
+- Produce interpretable images directly
+- Light forms recognizable images on sensors
+:::
+
+::: {.column width="50%"}
+**General imaging systems:**
+
+- Medical, astronomical systems
+- Sensor measurements may not look like images
+- Need mathematical processing to recover images
+- Linear algebra provides powerful tools
+:::
+
+:::
+
+## Today's Roadmap
+
+::: {.incremental}
+
+1. **Flatland:** 1D imaging systems for simplicity
+2. **Linear system formulation:** $\boldsymbol\ell_{\texttt{s}} = \mathbf{A} \boldsymbol\ell_{\texttt{w}}$
+3. **Regularization:** Handling noise and ill-conditioned systems
+4. **Non-traditional cameras:** Edge, pinspeck, and corner cameras
+5. **Real-world example:** Seeing around corners
+
+:::
+
+# Flatland: 1D Imaging Systems
+
+## Why 1D?
+
+For simplicity of visualization, we consider **one-dimensional (1D) imaging systems**.
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Setup:**
+
+- Sensor is 1D
+- Scene lives in flatland
+- Light intensities represented as vectors
+- Discrete approximation of continuous light
+:::
+
+::: {.column width="50%"}
+![A one dimensional imaging system in flatland. As in , we have reversed the direction of the sensor coordinates.](figures/imaging/flatland_camera_linear.png){width="100%"}
+:::
+
+:::
+
+::: {.callout-note}
+**Approximation:** We approximate input light by a discrete and finite set of light rays instead of a continuous wave. This allows us to use linear algebra.
+:::
+
+## Representing Light
+
+Let the light intensities in the world be represented by a column vector, $\boldsymbol\ell_{\texttt{w}}$.
+
+**Key points:**
+
+- The $n$-th component gives intensity at position $n$
+- Heading in the direction of the camera
+- Sensor coordinates are reversed (consistent with pinhole geometry)
+- Units are pixels
+- Scene modeled as a line with varying albedos at fixed depth
+
+::: {.callout-tip}
+For more complex spatial structures, we would need the **light field** to use the same linear algebra approach.
+:::
+
+# Cameras as Linear Systems
+
+## The Fundamental Equation
+
+If camera sensors respond **linearly** to light intensity, their measurements are a linear combination:
+
+$$\boldsymbol\ell_{\texttt{s}} = \mathbf{A} \boldsymbol\ell_{\texttt{w}}$$
+
+::: {.callout-important}
+**Key concept:** The camera is represented by matrix $\mathbf{A}$
+
+- Sensor measurements: $\boldsymbol\ell_{\texttt{s}}$
+- Unknown scene: $\boldsymbol\ell_{\texttt{w}}$
+- Camera matrix: $\mathbf{A}$
+:::
+
+## The Camera Matrix
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Pinhole camera:**
+
+- $\mathbf{A}$ is an **identity matrix**
+- Each sensor depends on single scene element
+- Direct one-to-one mapping
+:::
+
+::: {.column width="50%"}
+**General cameras:**
+
+- $\mathbf{A}$ may be very different from identity
+- Need to estimate $\boldsymbol\ell_{\texttt{w}}$ from $\boldsymbol\ell_{\texttt{s}}$
+- May not produce interpretable images directly
+:::
+
+:::
+
+![Figure: (a) Schematic drawing of a small-hole 1D pinhole camera, and (b) the visualization of its imaging matrices $\mathbf{A}$, $\mathbf{A}^{-1}$, and the regularized inverse $\mathbf{B}$. For the small-pinhole imager, all three matrices are identity matrices. Also shown is (c) a large-hole 1D pinhole camera, and (d) the visualization of its imaging matrices.](figures/imaging/traditional_pinholes_2.png){width="90%"}
+
+## The Problem: Noise and Ill-Conditioning
+
+::: {.incremental}
+
+- In presence of noise, no exact solution may exist
+- $\mathbf{A}$ may be **not invertible** or **poorly conditioned**
+- Direct inversion amplifies noise
+- Need a better approach!
+
+:::
+
+## Regularization: The Solution
+
+Instead of direct inversion, minimize:
+
+$$E = \lVert \boldsymbol\ell_{\texttt{s}}- \mathbf{A} \boldsymbol\ell_{\texttt{w}}\rVert ^2 + \lambda \lVert \boldsymbol\ell_{\texttt{w}}\rVert ^2$$
+
+::: {.callout-important}
+**Regularization parameter $\lambda$:**
+
+- Controls trade-off between fitting data and smoothness
+- Prevents overfitting to noise
+- Produces more stable solutions
+:::
+
+## The Regularized Solution
+
+Setting the derivative equal to zero:
+
+$$\boldsymbol\ell_{\texttt{w}}= (\mathbf{A}^T \mathbf{A} + \lambda \mathbf{I})^{-1}\mathbf{A}^T \boldsymbol\ell_{\texttt{s}}$$
+
+**Regularized inverse:**
+
+$$\mathbf{B}=(\mathbf{A}^T \mathbf{A} + \lambda \mathbf{I})^{-1} \mathbf{A}^T$$
+
+::: {.callout-tip}
+**Why this works:** The regularized inverse $\mathbf{B}$ is better behaved than $\mathbf{A}^{-1}$ and less sensitive to noise.
+:::
+
+## Wide Aperture Pinhole Camera
+
+Consider a **wide aperture** pinhole camera where a single pixel covers two scene positions.
+
+![Figure: (a) Schematic drawing of a small-hole 1D pinhole camera, and (b) the visualization of its imaging matrices $\mathbf{A}$, $\mathbf{A}^{-1}$, and the regularized inverse $\mathbf{B}$. For the small-pinhole imager, all three matrices are identity matrices. Also shown is (c) a large-hole 1D pinhole camera, and (d) the visualization of its imaging matrices.](figures/imaging/traditional_pinholes_2.png){width="90%"}
+
+**Key observation:** $\mathbf{A}^{-1}$ contains fast changes that amplify noise. The regularized matrix $\mathbf{B}$ is smoother and more robust.
+
+## Example: 2-Pixel Wide Pinhole
+
+![Pinhole camera. (left) Input 1D signal, ${\boldsymbol\ell_{\texttt{w}}}$. (right) The output of the two-pixel wide pinhole camera, ${\boldsymbol\ell_{\texttt{s}}}$](figures/imaging/2pixel.png){width="90%"}
+
+**What happens:**
+
+- Output obtained by multiplying input by matrix $\mathbf{A}$
+- Adds up two consecutive input values
+- Nearly identical to input but larger magnitude and smoother
+
+# More General Imagers
+
+## Beyond Traditional Cameras
+
+Many different optical systems can form cameras!
+
+::: {.incremental}
+
+- Even a simple **edge** will do
+- Linear analysis applies to all of them
+- Opens up new possibilities for camera design
+
+:::
+
+![Fig (a) Schematic drawing of an edge camera, and (b) its imaging matrices. (c) A pinspeck camera (an occluder that blocks two of the values on the scene), and (d) its imaging matrices.](figures/imaging/nontraditional_pinholes_2-2.png){width="90%"}
+
+## Edge Camera
+
+**Not a traditional pinhole camera!**
+
+- Light is blocked only on **one side**
+- Creates a very different imaging matrix
+
+**The imaging matrix:**
+
+$$\mathbf{A} = 
+\left[ 
+\begin{array}{cccccc}
+1 & 1 & 1 & 1 & \dots & 1 \\
+0 & 1 & 1 & 1 & ~ & 1 \\
+0 & 0 & 1 & 1 & ~ & 1 \\
+0 & 0 & 0 & 1 & ~ & 1 \\
+\vdots & ~ & ~ & ~ & \ddots & ~ \\
+0 & 0 & 0 & 0 & ~ & 1 
+\end{array}
+\right]$$
+
+**The inverse (derivative):**
+
+$$\mathbf{A}^{-1} = 
+\left[ 
+\begin{array}{cccccc}
+1 & -1 & 0 & 0 & \dots & 0 \\
+0 & 1 & -1 & 0 & ~ & 0 \\
+0 & 0 & 1 & -1 & ~ & 0 \\
+0 & 0 & 0 & 1 & ~ & 0 \\
+\vdots & ~ & ~ & ~ & \ddots & ~  \\
+0 & 0 & 0 & 0 & ~ & 1 
+\end{array}
+\right]$$
+
+## Edge Camera Output
+
+![Edge camera. (left) Input 1D signal, ${\boldsymbol\ell_{\texttt{w}}}$. (right) The output of an edge camera, ${\boldsymbol\ell_{\texttt{s}}}$.](figures/imaging/1dcornercamera.png){width="90%"}
+
+**Key differences from pinhole:**
+
+- Output looks like **integral** of input (reversed)
+- First value equals sum of all input values:
+  $$\ell_{\texttt{s}}\left[0 \right] = \sum_{n=0}^{12} \ell_{\texttt{w}}\left[n \right]$$
+- Very different from pinhole camera output!
+
+::: {.callout-important}
+**Intuition:** Edge camera computes an integral. Its inverse is a derivative. Regularized inverse is a blurred derivative.
+:::
+
+## Pinspeck Camera
+
+**Another non-traditional imager:**
+
+- Instead of a pinhole, we have an **occluder**
+- Blocks part of the light (complementary to large-hole pinhole)
+- Camera records the **shadow** of the occluder
+
+**The imaging matrix:** $\mathbf{A} = 1 - \mathbf{A}_{pinhole}$
+
+![Fig (a) Schematic drawing of an edge camera, and (b) its imaging matrices. (c) A pinspeck camera (an occluder that blocks two of the values on the scene), and (d) its imaging matrices.](figures/imaging/nontraditional_pinholes_2-2.png){width="90%"}
+
+## Pinspeck Camera Output
+
+![Pinspeck camera. (left) Input 1D signal, ${\boldsymbol\ell_{\texttt{w}}}$. (right) The output of a pinspeck camera, ${\boldsymbol\ell_{\texttt{s}}}$.](figures/imaging/pinspeck.png){width="90%"}
+
+**Characteristics:**
+
+- Wide dynamic range (max value = sum of all inputs)
+- Fluctuations due to shadow of occluder
+- Without occluder: constant signal
+- Missing signal (in red) = negative of 2-pixel pinhole output
+
+::: {.callout-note}
+**Real-world use:** Pinspeck cameras have been used in practice @CohenPinspeck, @Torralba2014!
+:::
+
+# Corner Camera: Seeing Around Corners
+
+## A Real-World Example
+
+The **corner camera** @Bouman17 demonstrates the power of linear systems thinking!
+
+::: {.columns}
+
+::: {.column width="50%"}
+![Objects hidden behind a corner cause very small intensity differences in ambient illumination on the ground.](figures/imaging/cornercam.png){width="100%"}
+:::
+
+::: {.column width="50%"}
+![The spatial mask to multiply by the observed ground image.](figures/imaging/cornerKey.png){width="100%"}
+:::
+
+:::
+
+**The challenge:** Can we reconstruct scenes hidden behind a corner using only ground plane intensities?
+
+## How It Works
+
+**Geometry:**
+
+- Vertical edge partially blocks scene
+- Creates intensity variations on ground
+- Objects hidden from direct view still affect ground illumination
+- Very small perturbations (~1/1000 of total light)
+
+**The mathematics:**
+
+$$\boldsymbol\ell_{\texttt{ground}}(r, \theta) \approx \int_{\xi=0}^{\xi=\theta} \ell_{\texttt{w}}(\xi) \mbox{d} \xi$$
+
+::: {.callout-tip}
+**Key insight:** Similar to edge camera - we integrate light up to angle $\theta$. To recover the signal, we take a derivative!
+:::
+
+## The Reconstruction
+
+**To estimate $\ell_{\texttt{w}}$:**
+
+- Sample continuous equation: $\boldsymbol\ell_{\texttt{ground}} = \mathbf{A} \boldsymbol\ell_{\texttt{w}}$
+- Use regularized inverse from @eq-deriv2
+- Multiply ground image by spatial mask (shown in @fig-ccmodel (b))
+- Sum over pie-shaped regions
+
+**Intuition:** "What does one pie-shaped ray see that the next one doesn't?"
+
+## Real-World Results
+
+![Outdoor corner camera experiments @Bouman17. (a) Camera recording ground plane intensities. (b) Two people walking around the corner, hidden from direct view of the camera. (c) Corner camera trace with one person moving. (d) Corner camera trace with two people moving. Angle from the corner is plotted vertically, and time is plotted horizontally.](figures/imaging/corner_camera_3D.png){width="90%"}
+
+**Remarkable results:**
+
+- Extract 1D video from scene around corner
+- Process very faint intensity changes (~0.1%)
+- Reconstruct motion of people walking
+- Works with multiple people simultaneously
+
+::: {.callout-important}
+**This is real computational imaging!** Using mathematical inversion to see what's hidden from direct view.
+:::
+
+# Key Insights
+
+## The Power of Linear Systems
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Mathematical framework:**
+
+- Cameras as matrices
+- Sensor measurements as linear combinations
+- Powerful inversion machinery
+- Regularization for robustness
+:::
+
+::: {.column width="50%"}
+**Practical applications:**
+
+- Non-traditional camera design
+- Medical imaging systems
+- Astronomical imaging
+- Seeing around corners
+:::
+
+:::
+
+## Three Camera Types
+
+::: {.incremental}
+
+**1. Pinhole camera:**
+- Identity matrix (or near-identity)
+- Direct image formation
+- Traditional cameras
+
+**2. Edge camera:**
+- Integrates light
+- Inverse is derivative
+- Non-traditional geometry
+
+**3. Pinspeck camera:**
+- Records shadows
+- Complementary to pinhole
+- Useful for special applications
+
+:::
+
+## Regularization Matters
+
+::: {.callout-important}
+**Key principle:** Direct inversion often fails
+
+- Noise amplification
+- Ill-conditioned matrices
+- Unstable solutions
+
+**Regularization helps:**
+
+- Smoother solutions
+- More robust to noise
+- Better behaved inverses
+- Trade-off between fit and smoothness
+:::
+
+# Concluding Remarks
+
+## What We've Learned
+
+::: {.incremental}
+
+**Main concepts:**
+
+- Cameras can be described as linear systems: $\boldsymbol\ell_{\texttt{s}} = \mathbf{A} \boldsymbol\ell_{\texttt{w}}$
+- Not all cameras produce interpretable images directly
+- Regularization is essential for robust inversion
+- Many non-traditional cameras are possible
+- Linear algebra provides powerful tools for camera design
+
+:::
+
+## The Big Picture
+
+::: {.columns}
+
+::: {.column width="50%"}
+**Mathematical framework:**
+
+- Linear systems theory
+- Matrix representations
+- Regularized inversion
+- Robust to noise
+:::
+
+::: {.column width="50%"}
+**Practical impact:**
+
+- New camera designs
+- Medical imaging
+- Computational imaging
+- Seeing the invisible
+:::
+
+:::
+
+## Beyond Traditional Cameras
+
+::: {.callout-tip}
+**Key takeaway:** Thinking of cameras as linear systems opens up new possibilities
+
+- Edge cameras
+- Pinspeck cameras  
+- Corner cameras
+- Many more to be discovered!
+
+**The field of computational imaging is just beginning!**
+:::
+
+## Why This Matters
+
+::: {.incremental}
+
+**Understanding imaging:**
+
+- Foundation for advanced camera design
+- Enables new imaging modalities
+- Connects mathematics to physical systems
+- Opens up new applications
+
+**Next steps:**
+
+- More complex imaging systems
+- Light fields and 4D imaging
+- Computational photography
+- Novel sensor designs
+
+:::
+
+# Questions?
+
+## Summary
+
+**Key takeaways:**
+
+- Cameras as linear systems: $\boldsymbol\ell_{\texttt{s}} = \mathbf{A} \boldsymbol\ell_{\texttt{w}}$
+- Regularization: $(\mathbf{A}^T \mathbf{A} + \lambda \mathbf{I})^{-1}\mathbf{A}^T$
+- Edge camera: integrates light, inverse is derivative
+- Pinspeck camera: records shadows, complementary to pinhole
+- Corner camera: see around corners using ground plane intensities
+
+## Thank You!
+
+**Questions?**
+
+**Next time:** We'll explore more advanced imaging systems and computational photography!
+
