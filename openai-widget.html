@@ -1,0 +1,460 @@
+<style>
+  .openai-widget-button {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 2147483640;
+    border: none;
+    border-radius: 999px;
+    padding: 0.7rem 1.4rem;
+    font-weight: 600;
+    font-family: inherit;
+    background: linear-gradient(135deg, #1a8fff, #6c4bff);
+    color: #ffffff;
+    box-shadow: 0 9px 24px rgba(32, 56, 112, 0.35);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .openai-widget-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(32, 56, 112, 0.45);
+  }
+
+  .openai-widget-button:active {
+    transform: translateY(1px);
+  }
+
+  .openai-widget-panel {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 2.25rem;
+    width: clamp(340px, 42vw, 560px);
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 5rem);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem 1.25rem;
+    background: #ffffff;
+    border-radius: 18px;
+    box-shadow: 0 20px 45px rgba(18, 32, 56, 0.28);
+    border: 1px solid rgba(18, 32, 56, 0.06);
+    z-index: 2147483639;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(1rem);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    resize: horizontal;
+    overflow: auto;
+  }
+
+  .openai-widget-panel.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  .openai-widget-button.open {
+    display: none;
+  }
+
+  .openai-widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .openai-widget-header h3 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+
+  .openai-widget-close {
+    border: none;
+    background: transparent;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    color: rgba(18, 32, 56, 0.45);
+    padding: 0.1rem;
+  }
+
+  .openai-widget-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+  }
+
+  .openai-widget-section label {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: rgba(18, 32, 56, 0.75);
+  }
+
+  .openai-widget-input,
+  .openai-widget-select,
+  .openai-widget-textarea {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid rgba(18, 32, 56, 0.18);
+    padding: 0.5rem 0.6rem;
+    font-family: inherit;
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .openai-widget-textarea {
+    resize: vertical;
+    min-height: 100px;
+  }
+
+  .openai-widget-input:focus,
+  .openai-widget-select:focus,
+  .openai-widget-textarea:focus {
+    outline: none;
+    border-color: #4f6ef7;
+    box-shadow: 0 0 0 3px rgba(79, 110, 247, 0.2);
+  }
+
+  .openai-widget-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .openai-widget-actions button {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    padding: 0.55rem 0.8rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .openai-widget-actions button.primary {
+    background: linear-gradient(135deg, #4f6ef7, #7f5aff);
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(79, 110, 247, 0.28);
+  }
+
+  .openai-widget-actions button.secondary {
+    background: rgba(18, 32, 56, 0.08);
+    color: rgba(18, 32, 56, 0.8);
+  }
+
+  .openai-widget-actions button:hover {
+    transform: translateY(-1px);
+  }
+
+  .openai-widget-output {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    padding: 0.75rem;
+    border-radius: 12px;
+    background: rgba(18, 32, 56, 0.05);
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: 1px solid rgba(18, 32, 56, 0.08);
+    white-space: pre-wrap;
+  }
+
+  .openai-widget-output img {
+    max-width: 100%;
+    border-radius: 12px;
+    box-shadow: 0 10px 24px rgba(18, 32, 56, 0.25);
+  }
+
+  .openai-widget-warning {
+    font-size: 0.78rem;
+    color: rgba(150, 62, 62, 0.85);
+  }
+
+  @media (max-width: 640px) {
+    .openai-widget-button {
+      right: 1rem;
+      bottom: 1rem;
+      padding: 0.6rem 1rem;
+    }
+
+    .openai-widget-panel {
+      right: 1rem;
+      left: 1rem;
+      width: auto;
+    }
+  }
+
+  @media print {
+    .openai-widget-button,
+    .openai-widget-panel {
+      display: none !important;
+    }
+  }
+</style>
+
+<div class="openai-widget" aria-live="polite">
+  <button type="button" class="openai-widget-button" aria-haspopup="dialog" aria-expanded="false">
+    OpenAI Helper
+  </button>
+  <div class="openai-widget-panel" role="dialog" aria-label="OpenAI helper panel">
+    <div class="openai-widget-header">
+      <h3>OpenAI helper</h3>
+      <button type="button" class="openai-widget-close" aria-label="Close OpenAI helper">×</button>
+    </div>
+
+    <div class="openai-widget-section">
+      <label for="openai-widget-key">OpenAI API key</label>
+      <input id="openai-widget-key" class="openai-widget-input" type="password" placeholder="sk-..." autocomplete="off">
+      <div class="openai-widget-warning">
+        Stored locally in this browser. You can inspect the element and review this script to confirm it only saves settings in your local storage.<br>
+        Each request automatically adds the current page as context.
+      </div>
+      <div class="openai-widget-actions">
+        <button type="button" class="secondary" data-action="save-key">Save key</button>
+        <button type="button" class="secondary" data-action="clear-key">Clear key</button>
+      </div>
+    </div>
+
+    <div class="openai-widget-section">
+      <label for="openai-widget-prompt">Prompt</label>
+      <textarea id="openai-widget-prompt" class="openai-widget-textarea" placeholder="Ask a question about this page..."></textarea>
+    </div>
+
+    <div class="openai-widget-actions">
+      <button type="button" class="secondary" data-action="fill-context">Use page summary</button>
+      <button type="button" class="primary" data-action="submit">Run with OpenAI</button>
+    </div>
+
+    <div class="openai-widget-section">
+      <label>Response</label>
+      <div class="openai-widget-output" data-role="output">No queries yet.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const STORAGE_KEY = "visionbook-openai-settings";
+  const OPEN_CLASS = "open";
+
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+
+  const widgetRoot = document.querySelector(".openai-widget");
+  if (!widgetRoot) return;
+
+  const button = widgetRoot.querySelector(".openai-widget-button");
+  const panel = widgetRoot.querySelector(".openai-widget-panel");
+  const closeButton = widgetRoot.querySelector(".openai-widget-close");
+  const keyInput = widgetRoot.querySelector("#openai-widget-key");
+  const promptInput = widgetRoot.querySelector("#openai-widget-prompt");
+  const output = widgetRoot.querySelector("[data-role=output]");
+  const actions = widgetRoot.querySelectorAll(".openai-widget-actions button");
+
+  const settings = loadSettings();
+  if (settings.apiKey) {
+    keyInput.dataset.masked = "true";
+    keyInput.value = maskKey(settings.apiKey);
+  }
+
+  function maskKey(key) {
+    if (!key) return "";
+    if (key.length <= 8) return key.replace(/./g, "•");
+    return `${key.slice(0, 4)}${"•".repeat(Math.max(0, key.length - 8))}${key.slice(-4)}`;
+  }
+
+  function isMaskedValue(value) {
+    return /^[^a-z0-9]*[•]+[^a-z0-9]*$/i.test(value);
+  }
+
+  function loadSettings() {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return typeof parsed === "object" && parsed ? parsed : {};
+    } catch (err) {
+      console.warn("OpenAI widget: failed to load settings", err);
+      return {};
+    }
+  }
+
+  function saveSettings(updated) {
+    try {
+      const merged = { ...settings, ...updated };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      Object.assign(settings, merged);
+    } catch (err) {
+      console.warn("OpenAI widget: failed to save settings", err);
+    }
+  }
+
+  function clearSettings() {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch (err) {
+      console.warn("OpenAI widget: failed to clear settings", err);
+    }
+    settings.apiKey = "";
+  }
+
+  function togglePanel(force) {
+    const willOpen = typeof force === "boolean" ? force : !panel.classList.contains(OPEN_CLASS);
+    panel.classList.toggle(OPEN_CLASS, willOpen);
+    button.setAttribute("aria-expanded", String(willOpen));
+    button.classList.toggle("open", willOpen);
+  }
+
+  function currentPageUrl() {
+    try {
+      const url = new URL(window.location.href);
+      if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+        return url.href;
+      }
+      return `${url.origin}${url.pathname}${url.search}${url.hash}`;
+    } catch (err) {
+      return window.location ? window.location.href : "";
+    }
+  }
+
+  async function submitQuery() {
+    const apiKey = settings.apiKey;
+    if (!apiKey || apiKey.length < 10 || apiKey.indexOf("sk-") !== 0) {
+      output.textContent = "Add a valid OpenAI API key first.";
+      return;
+    }
+
+    const prompt = promptInput.value.trim();
+    if (!prompt) {
+      output.textContent = "Enter a prompt or question.";
+      return;
+    }
+
+    saveSettings({ mode: "chat" });
+    output.textContent = "Contacting OpenAI...";
+
+    try {
+      await handleChatRequest(apiKey, prompt);
+    } catch (err) {
+      console.error(err);
+      if (err?.status === 403 || /403/.test(String(err?.message))) {
+        output.textContent =
+          "OpenAI error 403: This request was denied. Double-check that your API key has access to the selected model and sufficient quota.";
+      } else {
+        output.textContent = `OpenAI error: ${err?.message || err}`;
+      }
+    }
+  }
+
+  function buildContextPrompt(prompt) {
+    const pageLink = currentPageUrl();
+    return `Current page: ${pageLink}\nUser prompt: ${prompt}`;
+  }
+
+  async function handleChatRequest(apiKey, prompt) {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a helpful assistant for the Foundations of Computer Vision book. Use the linked page to inform your answers.",
+          },
+          {
+            role: "user",
+            content: buildContextPrompt(prompt),
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const error = new Error(`${response.status} ${response.statusText}`);
+      error.status = response.status;
+      throw error;
+    }
+
+    const data = await response.json();
+    const choice = data.choices?.[0]?.message?.content;
+    if (!choice) {
+      throw new Error("No response content returned.");
+    }
+    output.textContent = choice.trim();
+  }
+
+  function fillWithContext() {
+    const pageLink = currentPageUrl();
+    const existing = promptInput.value.trim();
+    const snippet = `Summarize the most important concepts found at ${pageLink}`;
+    promptInput.value = existing ? `${existing}\n\n${snippet}` : snippet;
+  }
+
+  actions.forEach((btn) => {
+    btn.addEventListener("click", (event) => {
+      const action = btn.dataset.action;
+      switch (action) {
+        case "save-key":
+          let rawValue = keyInput.value.trim();
+          if (!rawValue) {
+            output.textContent = "Enter an API key before saving.";
+            return;
+          }
+          if (keyInput.dataset.masked === "true" && isMaskedValue(rawValue)) {
+            output.textContent = "Key already saved. Clear it first to change.";
+            return;
+          }
+          if (!/^sk-[A-Za-z0-9]{10,}$/.test(rawValue)) {
+            output.textContent = "Enter a valid OpenAI API key (starts with sk-).";
+            return;
+          }
+          saveSettings({ apiKey: rawValue });
+          keyInput.dataset.masked = "true";
+          keyInput.value = maskKey(rawValue);
+          output.textContent = "API key saved locally.";
+          break;
+        case "clear-key":
+          clearSettings();
+          keyInput.value = "";
+          delete keyInput.dataset.masked;
+          output.textContent = "API key cleared.";
+          break;
+        case "fill-context":
+          fillWithContext();
+          output.textContent = "Added page link to prompt.";
+          break;
+        case "submit":
+          submitQuery();
+          break;
+        default:
+          break;
+      }
+    });
+  });
+
+  button.addEventListener("click", () => togglePanel());
+  closeButton.addEventListener("click", () => togglePanel(false));
+
+  document.addEventListener("keydown", (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      togglePanel();
+    }
+    if (event.key === "Escape" && panel.classList.contains(OPEN_CLASS)) {
+      togglePanel(false);
+    }
+  });
+})();
+</script>
