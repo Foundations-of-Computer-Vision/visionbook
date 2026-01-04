@@ -1,15 +1,25 @@
-# This repo is getting too large. How to clone this repo more efficiently? 
-1. `git clone --no-checkout <repository_url>`
-2. `cd <repository_name>`
-3. `git fetch --shallow-since=7f001e7167b0954fbd7ae185edc490b9356552fc`
-4. `git checkout main`
+# Foundations of Computer Vision
 
-# How to dev locally?
+## Cloning (Large Repo)
 
-We need two things.
+⚠️ This repo is large!! 
 
-1. The engine [`quarto`](https://quarto.org/docs/get-started/). We just need that page's step-one `CLI` download. It should be a simple `curl` or `wget` command on the terminal. Or on MacOS, just a download and one-click installation. If the installation goes right, the executable `quarto` should be callable from the terminal.
+For a faster clone:
 
-2. Clone this repo. In the terminal, `cd` into the root of this repo. Run `quarto preview`. If all goes well, a `localhost:<some_port>` link will pop up, and a browser tab will open. That tab will be "live": i.e. it'd be updated as we make local changes. 
+```bash
+git clone --depth=1 git@github.com:Foundations-of-Computer-Vision/visionbook.git
+```
 
-In terms of content, book chapter source files are those `*.qmd` files. The `qmd` syntax is almost identical to `markdown` (which itself is pretty close to LaTeX). The `qmd` files are converted to `html` by `quarto` and then served on the website. 
+## Local Development
+
+1. **Install [Quarto](https://quarto.org/docs/get-started/)** — download the CLI and verify with `quarto --version`
+
+2. **Preview the book:**
+   ```bash
+   quarto preview
+   ```
+   This opens a live-reloading browser tab at `localhost:<port>`.
+
+## Content
+
+Chapters are written in `.qmd` files (Quarto Markdown), which use syntax similar to Markdown with LaTeX math support. Quarto converts these to HTML for the website. 
