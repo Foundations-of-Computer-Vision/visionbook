@@ -13,7 +13,7 @@ spatial frequency.
 
 Fourier transforms are the basis of a number of computer vision
 approaches and are an important tool to understand images and how linear
-spatially invariant filters transform images. There are also important
+spatially invariant filters transform images. These are also important
 to understand modern representations such as positional encoding
 popularized by transformers @vaswani2017attention.
 
@@ -21,7 +21,7 @@ popularized by transformers @vaswani2017attention.
 
 Sometimes it is useful to transform the image pixels into another
 representation that might reveal image properties that can be useful for
-solving vision tasks. Before we saw that linear filtering is a useful
+solving vision tasks. Before, we saw that linear filtering is a useful
 way of transforming an image. Linear image transforms with the form
 $\mathbf{x} =  \mathbf{H} \boldsymbol\ell_{\texttt{in}}$ can be thought
 of as a way of changing the initial pixels representation of
@@ -32,7 +32,7 @@ $\mathbf{x}$.
 We use $\mathbf{x}$ to denote an intermediate representation. The representation might not be an image.
 :::
 
-This representation is specially interesting when it can
+This representation is especially interesting when it can
 be inverted so that the original pixels can be recovered as
 $\boldsymbol\ell_{\texttt{in}}=  \mathbf{H}^{-1} \mathbf{x}$. The
 Fourier transform is one of those representations. A useful
@@ -144,7 +144,7 @@ wave cycles that will occur within the region of support). Note that if
 $k=0$ then $s\left[n\right]$ = 0 and $c\left[n\right]=1$ for all $n$.
 One can also verify that $c_{N-k} = c_k$, and $s_{N-k} = -s_k$.
 Therefore, for frequencies $k>N/2$ we find the same set of waves as the
-ones in the interval $s \in \left[1, N/2\right]$. @fig-contsignal shows
+ones in the interval $k \in \left[1, N/2\right]$. @fig-contsignal shows
 some examples.
 
 
@@ -212,9 +212,9 @@ $$\mathscr{L}\left[u,v \right] =
 \sum_{n=0}^{N-1} \sum_{m=0}^{M-1} \, \ell\left[n,m \right] 
 \exp{ \left( -2\pi j \left( \frac{u\, n}{N} + \frac{v\, m}{M} \right) \right)}
 $${#eq-fourier} We will call $\mathscr{L}\left[u,v \right]$ the Fourier
-transform of $\ell\left[m,n \right]$. We will often represent the
+transform of $\ell\left[n,m \right]$. We will often represent the
 relationship between the signal as its transform as:
-$$\ell\left[n,m \right] \xrightarrow{\mathscr{F}} \mathscr{L}\left[u,v \right]$$By applying $\frac{1}{MN} \sum_{u=0}^{M-1} \sum_{v=0}^{N-1}$ to both
+$$\ell\left[n,m \right] \xrightarrow{\mathscr{F}} \mathscr{L}\left[u,v \right]$$By applying $\frac{1}{MN} \sum_{u=0}^{N-1} \sum_{v=0}^{M-1}$ to both
 sides of equation (@eq-fourier) and exploiting the orthogonality between
 distinct Fourier basis elements, we find the **inverse Fourier
 transform** relation $$\ell\left[n,m \right] = 
@@ -244,9 +244,9 @@ $a,b \in \mathbb{Z}$.
 
 Using the fact that $e_{N-u, M-v} = e_{-u,-v}$, another equivalent way
 to write for the Fourier transform is to sum over the frequency interval
-$\left[-N/2, N/2\right]$ and $\left[-M/2, M/2\right]$. This is
+$\left[-N/2, N/2-1\right]$ and $\left[-M/2, M/2-1\right]$. This is
 especially useful for the inverse that can be written as:
-$$\ell\left[n,m \right] = \frac{1}{NM} \sum_{u=-N/2}^{N/2} \sum_{v=-M/2}^{M/2} \mathscr{L}\left[u,v \right]\exp{ \left(+2\pi j \left(\frac{u\, n}{N} + \frac{v\, m}{M} \right) \right) }
+$$\ell\left[n,m \right] = \frac{1}{NM} \sum_{u=-N/2}^{N/2-1} \sum_{v=-M/2}^{M/2-1} \mathscr{L}\left[u,v \right]\exp{ \left(+2\pi j \left(\frac{u\, n}{N} + \frac{v\, m}{M} \right) \right) }
 $${#eq-inversefourier2}
 
 This formulation allows us to arrange the coefficients in the complex
@@ -256,7 +256,7 @@ near the origin. If the amplitudes of the complex conjugate exponentials
 are the same, then their sum will represent a cosine wave; if their
 amplitudes are opposite, it will be a sine wave. Frequencies further
 away from the origin represent faster variation with movement across
-space. The DFT and its inverse in 1D are defined in the same way as
+space. The DFT and its inverse in 1D are defined in the same way, as
 shown in @tbl-tableFamilyFT.
 
 One very important property is that the decomposition of a signal into a
@@ -360,7 +360,7 @@ terms of the inverse Fourier transform, this means that if we sum all
 the complex exponentials with a coefficient of 1, then all the values
 will cancel but the one at the origin, which results in a delta
 function:
-$$\delta \left[n,m \right] = \frac{1}{NM} \sum_{u=-N/2}^{N/2} \sum_{v=-M/2}^{M/2}  
+$$\delta \left[n,m \right] = \frac{1}{NM} \sum_{u=-N/2}^{N/2-1} \sum_{v=-M/2}^{M/2-1}  
 \exp{ \left(2\pi j \left(\frac{u\, n}{N} + \frac{v\, m}{M} \right) \right) }$$
 
 ### Cosine and Sine Waves
@@ -472,7 +472,7 @@ Where $a$ is a constant. This is a symmetrical periodic function with a maximum 
 :::
 
 
-In summary, we get that The DFT of the box function is the discrete sinc
+In summary, we get that the DFT of the box function is the discrete sinc
 function: 
 $$\text{box}_{L} \left[n \right]\xrightarrow{\mathscr{F}} 
 \frac{\sin \pi u (2L+1)/N}{\sin \pi u/N}
@@ -569,8 +569,8 @@ Consider a signal $\ell_{\texttt{out}}$ that is the result of applying
 (circular) convolution of two signals, $\ell_1$ and $\ell_2$, both of
 size $N \times M$: $$\ell_{\texttt{out}}= \ell_1 \circ \ell_2$$
 
-The question is; how does the Fourier transform of the signal
-$\ell_{\texttt{out}}$ relates to the Fourier transforms of the two
+The question is: how does the Fourier transform of the signal
+$\ell_{\texttt{out}}$ relate to the Fourier transforms of the two
 signals $\ell_1$ and $\ell_2$?
 
 
@@ -605,7 +605,7 @@ $$\mathscr{L}_{\texttt{out}}\left[u,v \right] =
 \ell_1 \left[n', m' \right] 
 \exp{ \left(-2 \pi j \left(\frac{(n'+k)u}{N} + \frac{(m'+l)v}{M} \right) \right)}$$
 Recognizing that the last two summations give the DFT of
-$x\left[n,m\right]$, using circular boundary conditions, gives
+$\ell_1 \left[n,m\right]$, using circular boundary conditions, gives
 $$\mathscr{L}_{\texttt{out}}\left[u,v \right] = \sum_{k=0}^{N-1} \sum_{l=0}^{M-1}  \mathscr{L}_1 \left[u,v\right] \exp{ \left(-2 \pi j \left(\frac{ku}{N}+\frac{lv}{M} \right ) \right)} \ell_2 \left[k,l\right]$$
 Performing the DFT indicated by the second two summations gives the
 desired result:
@@ -722,8 +722,8 @@ Fourier Transform does not have symmetries around $u,v=0$.
 
 A related relationship is as follows:
 
-$$\ell\left[n,m \right]  \cos{ \left( 2\pi j \left( \frac{u_0\, n}{N} + \frac{v_0\, m}{M} \right) \right)}\xrightarrow{\mathscr{F}} 
-\mathscr{L}\left[u-u_0,v-v_0 \right] + \mathscr{L}\left[u+u_0,v+v_0 \right]$$
+$$\ell\left[n,m \right]  \cos{ \left( 2\pi \left( \frac{u_0\, n}{N} + \frac{v_0\, m}{M} \right) \right)}\xrightarrow{\mathscr{F}} 
+1/2 \left( \mathscr{L}\left[u-u_0,v-v_0 \right] + \mathscr{L}\left[u+u_0,v+v_0 \right] \right)$$
 
 Multiplying a signal by a wave is called signal modulation and it is one
 of the basic operations in communications. It is also an important
@@ -955,7 +955,7 @@ The transfer function of a filter is
 the Fourier transform of the convolution kernel.
 :::
 
-The transfer function will allow us interpret filters by how they modify the spectral
+The transfer function will allow us to interpret filters by how they modify the spectral
 content of the input signal. As the Fourier transform of the output is
 just a product between the Fourier transform of the input and the
 transfer function, a linear filter simply reweights the spectral content
@@ -1018,25 +1018,25 @@ analysis of linear filters.
 
 @fig-filteringFT (a) shows a picture of the main MIT building. The columns
 produce a quasiperiodic pattern. @fig-filteringFT (b) shows the magnitude
-of the DFT of the MIT picture. One can see picks in the horizontal
-frequency axis, those picks are due to the columns.
+of the DFT of the MIT picture. One can see peaks in the horizontal
+frequency axis, those peaks are due to the columns.
 
-To check this we can verify first that the location of the picks is
+To check this we can verify first that the location of the peaks is
 related to the separation of the columns. The image in
 @fig-filteringFT (a) has a size of $256\times256$ pixels, and the columns
 are repeated every 14 pixels. Therefore, the DFT, with $N=256$, will
-have picks at the horizontal frequencies: $256/14=18.2$, which is indeed
+have peaks at the horizontal frequencies: $256/14=18.2$, which is indeed
 what we observe in @fig-filteringFT (b). As the repeated pattern is not a
-pure sinusoidal function, there will be picks at all the harmonic
+pure sinusoidal function, there will be peaks at all the harmonic
 frequencies $k\frac{256}{14}$, where $k$ is an integer. Note also that
-the picks seem to produce vertical bands with decreasing amplitude with
+the peaks seem to produce vertical bands with decreasing amplitude with
 increasing vertical frequency $v$. These bands occur because the columns
 only occupy a small vertical segment of the image. Also, as the columns
-only exist in a portion of the horizontal region of the image, the picks
+only exist in a portion of the horizontal region of the image, the peaks
 also have some horizontal width.
 
 We can now also check the effect of suppressing those frequencies by
-zeroing the magnitude of the DFT around each pick (here we zero 7 pixels
+zeroing the magnitude of the DFT around each peak (here we zero 7 pixels
 in the horizontal dimension and all the pixels along the vertical
 dimension) as shown @fig-filteringFT (d). @fig-filteringFT (c) shows the
 resulting image where the columns are almost gone while the rest of the
@@ -1046,7 +1046,7 @@ image (in fact, $a=c+e$) and its DFT in @fig-filteringFT (f).
 ![Simple filtering in the Fourier domain.  (a) The repeated columns of the
   building of the MIT dome generate harmonics along a horizontal line
   in the Fourier domain shown in (b). By zeroing out those Fourier
-  components, as done in (d), the columns of the building are substantially removed (c). We can also the complementary operation keeping only those harmonics, shown in (f), which results in keeping only the columns (e).](figures/Image_processing_fourier/mit_columns.png){width="100%" #fig-filteringFT}
+  components, as done in (d), the columns of the building are substantially removed (c). We can also do the complementary operation keeping only those harmonics, shown in (f), which results in keeping only the columns (e).](figures/Image_processing_fourier/mit_columns.png){width="100%" #fig-filteringFT}
 
 ### Example 2: The Human Visual System and the Contrast Sensitivity Function
 
@@ -1055,7 +1055,7 @@ chapters, let's start by gaining some subjective experience by playing
 with one: our own visual system. Although our visual system is clearly a
 nonlinear system, linear filter theory can explain some aspects of our
 perception. Indeed, under certain conditions, the first stages of visual
-computation perform of the visual system can be approximated by a linear
+computation performed by the visual system can be approximated by a linear
 filter.
 
 
@@ -1124,7 +1124,7 @@ $H \left[ u,v \right]$, which approximates the human visual system
 
 The CSF is not a simple linear function but it can be approximated by
 one under certain conditions. However, the CSF changes depending of many
-factors such as overall intensity (the pick moves toward the left under
+factors such as overall intensity (the peak moves toward the left under
 low illumination.), adaptation (long exposure to one frequency reduces
 the sensitivity for that frequency), age, and so on.
 
