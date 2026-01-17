@@ -36,7 +36,7 @@ $$ {#eq-likelihood}
 We represent the camera by matrix $\mathbf{A}$. For the case of a pinhole camera, and assuming 13 pixel sensor observations, the camera matrix is just a 13×13 identity matrix, depicted in @fig-amats1 (b), as each sensor depends only on the value of a single scene element. For the case of conventional lens and pinhole cameras, where the observed intensities, $\boldsymbol\ell_{\texttt{s}}$, are an image of the reflected intensities in the scene, $\boldsymbol\ell_{\texttt{w}}$, then $\mathbf{A}$ is approximately an identity matrix. For more general cameras, $\mathbf{A}$ may be very different from an identity matrix, and we will need to estimate $\boldsymbol\ell_{\texttt{w}}$ from $\boldsymbol\ell_{\texttt{s}}$.
 
 
-In the presence of noise, there may not be a solution $\boldsymbol\ell_{\texttt{w}}$ that exactly satisfies ast squares sense. In most cases, $\mathbf{A}$ is either not invertible, or is poorly conditioned. It is often useful to introduce a regularizr, an additional term in the objective function to. be minimized @Poggio85. If the regularizaion term favors a smallworld $\boldsymbol\ell_{\texttt{world}}$, then the objective term to minimize, $E$, could be 
+In the presence of noise, there may not be a solution $\boldsymbol\ell_{\texttt{w}}$ that exactly satisfies @eq-likelihood, so we often seek to satisfy it in a least squares sense. In most cases, $\mathbf{A}$ is either not invertible, or is poorly conditioned. It is often useful to introduce a regularizr, an additional term in the objective function to. be minimized @Poggio85. If the regularizaion term favors a small $\boldsymbol\ell_{\texttt{w}}$, then the objective term to minimize, $E$, could be 
 $$E = \lVert \boldsymbol\ell_{\texttt{s}}- \mathbf{A} \boldsymbol\ell_{\texttt{w}}\rVert ^2 + \lambda \lVert \boldsymbol\ell_{\texttt{w}}\rVert ^2
 $$ {#eq-posterior}
 
@@ -44,7 +44,7 @@ The regularization parameter, $\lambda$, determines the trade-off between explai
 
 ![Figure: (a) Schematic drawing of a small-hole 1D pinhole camera, and (b) the visualization of its imaging matrices $\mathbf{A}$, $\mathbf{A}^{-1}$, and the regularized inverse $\mathbf{B}$. For the small-pinhole imager, all three matrices are identity matrices. Also shown is (c) a large-hole 1D pinhole camera, and (d) the visualization of its imaging matrices.](figures/imaging/traditional_pinholes_2.png){#fig-amats1}
 
-Setting the derivative of @eq-posterior of the vector $\boldsymbol\ell_{\texttt{w}}$ equal to zero, we have 
+Setting the derivative of @eq-posterior with respect to the elements of the vector $\boldsymbol\ell_{\texttt{w}}$ equal to zero, we have 
 $$
 \begin{align}
 0 &=  \bigtriangledown_{\boldsymbol\ell_{\texttt{w}}} \lVert \boldsymbol\ell_{\texttt{s}}- \mathbf{A} \boldsymbol\ell_{\texttt{w}}\rVert ^2 +  \bigtriangledown_{\boldsymbol\ell_{\texttt{w}}} \lambda \lVert \boldsymbol\ell_{\texttt{w}}\rVert ^2 \\
@@ -56,7 +56,7 @@ or
 $$\boldsymbol\ell_{\texttt{w}}= (\mathbf{A}^T \mathbf{A} + \lambda \mathbf{I})^{-1}\mathbf{A}^T \boldsymbol\ell_{\texttt{s}}
 $$ {#eq-deriv2} 
 
-Where the matrix $\mathbf{B}=(\mathbf{A}^T \mathbf{A} + \lambda \mathbf{I})^{-1} \mathbf{A}^T$ is the regularized inverse of the imaging matrix $\mathbf{A}$.
+where the matrix $\mathbf{B}=(\mathbf{A}^T \mathbf{A} + \lambda \mathbf{I})^{-1} \mathbf{A}^T$ is the regularized inverse of the imaging matrix $\mathbf{A}$.
  
 Next, consider the case of a wide aperture pinhole camera, shown in @fig-amats1 (c). If a single pixel in the sensor plane covers exactly two positions of the
 scene intensities, then the geometry is as shown in @fig-amats1 (c). @fig-amats1 (d) also shows the imaging matrix, $\mathbf{A}$, its invere, $\mathbf{A}^{-1}$, and the regularized inverse of the imaging matrix, which will usually give image
@@ -130,7 +130,7 @@ In the example of @fig-amats3 (c), the occluder has the size of the wide pinhole
 
 ![Pinspeck camera. (left) Input 1D signal, ${\boldsymbol\ell_{\texttt{w}}}$. (right) The output of a pinspeck camera, ${\boldsymbol\ell_{\texttt{s}}}$.](figures/imaging/pinspeck.png){#fig-pinspeck_output_plot}
 
-The output is now a signal with a wide dynamic range (a max value of 14, which correspond to the sum of the values in
+The output is now a signal with a wide dynamic range (a max value of 14, which corresponds to the sum of the values in
 $\boldsymbol\ell_{\texttt{w}}$) and with fluctuations due to the shadow of the occluder on the camera sensor. If there was no occluder, then the output would be a constant signal of value 14. In red we show the effect of the shadow, which is the light missing because of the presence of the occluder. You can see how the missing signal is identical to the output of the two-pixel wide pinhole camera but reversed in sign.
 
 ### Corner Camera
