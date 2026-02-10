@@ -85,7 +85,7 @@ $$\begin{aligned}
   {\colorbox{shared_term_color}{$\displaystyle\frac{\partial J}{\partial \mathbf{x}_L}\frac{\partial \mathbf{x}_L}{\partial \mathbf{x}_{L-1}} \cdots \frac{\partial \mathbf{x}_3}{\partial \mathbf{x}_2}$}}%
   {\colorbox{shared_term_color}{$\textstyle\frac{\partial J}{\partial \mathbf{x}_L}\frac{\partial \mathbf{x}_L}{\partial \mathbf{x}_{L-1}} \cdots \frac{\partial \mathbf{x}_3}{\partial \mathbf{x}_2}$}}%
   {\colorbox{shared_term_color}{$\scriptstyle\frac{\partial J}{\partial \mathbf{x}_L}\frac{\partial \mathbf{x}_L}{\partial \mathbf{x}_{L-1}} \cdots \frac{\partial \mathbf{x}_3}{\partial \mathbf{x}_2}$}}%
-  {\colorbox{shared_term_color}{$\scriptscriptstyle\frac{\partial J}{\partial \mathbf{x}_L}\frac{\partial \mathbf{x}_L}{\partial \mathbf{x}_{L-1}} \cdots \frac{\partial \mathbf{x}_3}{\partial \mathbf{x}_2}$}} \frac{\partial \mathbf{x}_2}{\mathbf{x}_1}\frac{\partial \mathbf{x}_1}{\partial \mathbf{\theta}_1}\\
+  {\colorbox{shared_term_color}{$\scriptscriptstyle\frac{\partial J}{\partial \mathbf{x}_L}\frac{\partial \mathbf{x}_L}{\partial \mathbf{x}_{L-1}} \cdots \frac{\partial \mathbf{x}_3}{\partial \mathbf{x}_2}$}} \frac{\partial \mathbf{x}_2}{\partial \mathbf{x}_1}\frac{\partial \mathbf{x}_1}{\partial \mathbf{\theta}_1}\\
     \frac{\partial J}{\partial \theta_2} &=  \mathchoice%
   {\colorbox{shared_term_color}{$\displaystyle\frac{\partial J}{\partial \mathbf{x}_{L}}\frac{\partial \mathbf{x}_L}{\partial \mathbf{x}_{L-1}} \cdots \frac{\partial \mathbf{x}_3}{\partial \mathbf{x}_2}$}}%
   {\colorbox{shared_term_color}{$\textstyle\frac{\partial J}{\partial \mathbf{x}_{L}}\frac{\partial \mathbf{x}_L}{\partial \mathbf{x}_{L-1}} \cdots \frac{\partial \mathbf{x}_3}{\partial \mathbf{x}_2}$}}%
@@ -165,7 +165,7 @@ following recurrence relation:
 $$\begin{aligned}    \mathbf{g}_{\texttt{in}} &= \mathbf{g}_{\texttt{out}}\mathbf{L}^{\mathbf{x}} &&\quad\quad \triangleleft \quad \text{backpropagation of errors}
 \end{aligned}$${#eq-backpropagation-backward} 
 
-This recurrence is essence of backprop: it sends error signals (gradients) backward through the network, starting at the last
+This recurrence is the essence of backprop: it sends error signals (gradients) backward through the network, starting at the last
 layer and iteratively applying @eq-backpropagation-backward to compute $\mathbf{g}$ for each previous layer. 
 
 :::{.column-margin}
@@ -231,7 +231,7 @@ gradients for each layer (@fig-backpropagation-backward_pass).
 
 The full algorithm is summarized in algorithm @alg-backpropagation-backprop_for_chains.
 
-![Backpropagation (for chain computation graphs). A simple version of the backpropagation algorithm. This will work for the computation graphs we have seen so far, which consist of a series of layers, $f_1 \circ \ldots \circ f_L$, with no merging or branching (see @sec-backpropagation-branch_and_merge for how to handle more complicated graphs with merge and branch operations).](figures/backpropagation/backprop_for_chains.png){#alg-backpropagation-backprop_for_chains width="100%"}
+![Backpropagation (for chain computation graphs). A simple version of the backpropagation algorithm. This will work for the computation graphs we have seen so far, which consist of a series of layers, $f_L \circ \ldots \circ f_1$, with no merging or branching (see @sec-backpropagation-branch_and_merge for how to handle more complicated graphs with merge and branch operations).](figures/backpropagation/backprop_for_chains.png){#alg-backpropagation-backprop_for_chains width="100%"}
 
 ## Backpropagation Over Data Batches
 
@@ -348,7 +348,7 @@ right we have the backward operation in
 @eq-backpropagation-linear_backward_costgrad.
 
 
-![The forward and backward matrix multiples for a linear layer.](figures/backpropagation/linear_forward_backward_matrices.png){#fig-backpropagation-linear_forward_backward_matrices width="80%"}
+![The forward and backward matrix multiplies for a linear layer.](figures/backpropagation/linear_forward_backward_matrices.png){#fig-backpropagation-linear_forward_backward_matrices width="80%"}
 
 Unlike the other equations, at first glance
 $\frac{\partial J}{\partial \mathbf{W}}$ does not seem to have a simple
@@ -436,11 +436,11 @@ class linear():
         self.x_in = x_in
         return matmul(W,x)+b
     
-    def backward(self,J_out):
-        J_in = matmul(J_out,W)
-        dJdW = matmul(self.x_in,J_out)
-        dJdb = J_out
-        return J_in, dJdW, dJdb
+    def backward(self,g_out):
+        g_in = matmul(g_out,W)
+        dJdW = matmul(self.x_in,g_out)
+        dJdb = g_out
+        return g_in, dJdW, dJdb
     
     def update(self, dJdW, dJdb):
         self.W -= self.lr*dJdW.transpose()
@@ -584,7 +584,7 @@ $\mathbf{g}_{\texttt{out}}$ (see
 
 ### Forward-Backward Is Just a Bigger Neural Network {#sec-backpropagation-backprop_as_neural_net}
 
-In the previous section we saw that the backward pass through an neural
+In the previous section we saw that the backward pass through a neural
 network can itself be implemented as another neural network, which is in
 fact a linear network with parameters determined by the weight matrices
 of the original network as well as by the activations in the original
@@ -675,7 +675,7 @@ just as a notational convenience; for example, it's natural to think
 about images as two-dimensional arrays.
 :::
 
- Here,
+Here,
 $\texttt{merge}$ takes two inputs and concatenates them. This results in
 a new multidimensional variable. The backward pass equation is trivial.
 To compute the gradient of the cost with respect to
@@ -755,7 +755,7 @@ use backprop to optimize parameter inputs to the graph.
 To see this, it helps to think about just the inputs and outputs to the
 full computation graph. In the forward direction, the inputs are the
 data and parameter settings and the output is the loss. In the backward
-direction, the input is the number 1 and the outputs are the are
+direction, the input is the number 1 and the outputs are the
 gradients of the loss with respect to the data and parameters. The full
 computation graph, for a learning problem using neural net
 $F = f_L \circ \cdots \circ f_1$ and loss function $\mathcal{L}$, is
