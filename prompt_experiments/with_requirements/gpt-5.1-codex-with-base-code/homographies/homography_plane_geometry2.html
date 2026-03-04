@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Homography Plane Geometry</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      background: #f7f7f7;
+    }
+    #container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+    #ui {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 320px;
+      z-index: 10;
+    }
+    .panel {
+      background: rgba(255,255,255,0.92);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      padding: 14px 18px;
+      backdrop-filter: blur(8px);
+    }
+    .panel h2 {
+      margin: 0 0 6px 0;
+      font-size: 1.05rem;
+      letter-spacing: 0.02em;
+    }
+    .panel p {
+      margin: 4px 0;
+      font-size: 0.92rem;
+      line-height: 1.3;
+      color: #333;
+    }
+    button, input[type="range"] {
+      width: 100%;
+      border: none;
+      border-radius: 999px;
+      padding: 10px 12px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    button {
+      background: #111;
+      color: white;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    button.secondary { background: #00a0c6; }
+    label {
+      font-size: 0.85rem;
+      color: #444;
+      display: block;
+      margin-bottom: 4px;
+    }
+    #stepText {
+      font-size: 0.9rem;
+      color: #0f172a;
+      font-weight: 500;
+    }
+    #legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      font-size: 0.78rem;
+      color: #333;
+      margin-top: 8px;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.04);
+    }
+    .chip span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <div id="ui">
+      <div class="panel">
+        <h2>Camera to Plane Homography</h2>
+        <p id="stepText">Step 1 · Camera center and its axes.</p>
+        <button id="stepBtn" class="secondary">Next guided step</button>
+        <button id="resetBtn">Reset to textbook view</button>
+      </div>
+      <div class="panel">
+        <label for="tiltSlider">Planar surface tilt</label>
+        <input id="tiltSlider" type="range" min="0" max="45" value="18" />
+        <label for="pointSlider">Surface sample point</label>
+        <input id="pointSlider" type="range" min="0" max="100" value="60" />
+        <button id="toggleRays" class="secondary">Toggle rays</button>
+        <div id="legend">
+          <div class="chip"><span style="background:#009a2e;"></span>Camera axes (x,y)</div>
+          <div class="chip"><span style="background:#c20808;"></span>Plane axes (X,Y,Z)</div>
+          <div class="chip"><span style="background:#00d4ff;"></span>Projected sample (x,y)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls.js';
+    import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three/examples/jsm/renderers/CSS2DRenderer.js';
+
+    const container = document.getElementById('container');
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(container.clientWidth, container.clientHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    container.appendChild(labelRenderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xfefefe);
+
+    const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 50);
+    camera.position.set(4, 2.6, 4.5);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0.4, 0.4, 0);
+    controls.update();
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    keyLight.position.set(4, 6, 5);
+    scene.add(keyLight);
+
+    const grid = new THREE.GridHelper(10, 20, 0xf0f0f0, 0xfafafa);
+    grid.position.y = -0.6;
+    scene.add(grid);
+
+    // Camera center and camera plane setup (maps textbook camera pyramid into 3D box-like objects).
+    const cameraCenter = new THREE.Mesh(new THREE.SphereGeometry(0.08, 24, 24), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+    cameraCenter.position.set(-1.4, 0.6, 0);
+    scene.add(cameraCenter);
+
+    addLabel('Camera center', cameraCenter.position, 0x111111);
+
+    const cameraPlaneGroup = new THREE.Group();
+    cameraPlaneGroup.position.set(0, 0.6, 0);
+    scene.add(cameraPlaneGroup);
+
+    const cameraPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.4, 1.2),
+      new THREE.MeshStandardMaterial({ color: 0xdddddd, side: THREE.DoubleSide, transparent: true, opacity: 0.5 })
+    );
+    cameraPlaneGroup.add(cameraPlane);
+
+    const imagePatch = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.5, 0.35),
+      new THREE.MeshStandardMaterial({ color: 0x9e9e9e, side: THREE.DoubleSide, opacity: 0.8 })
+    );
+    imagePatch.position.set(-0.15, -0.1, 0.001);
+    cameraPlaneGroup.add(imagePatch);
+
+    addLabel('(x, y)', new THREE.Vector3(0.25, 0.8, 0.01), 0x00d4ff);
+
+    // Frustum-like dashed guides mimic textbook dashed triangles.
+    const frustumLines = new THREE.Group();
+    const planeCorners = [
+      new THREE.Vector3(-0.7, 1.2, 0.6),
+      new THREE.Vector3(0.7, 1.2, 0.6),
+      new THREE.Vector3(0.7, 0, 0.6),
+      new THREE.Vector3(-0.7, 0, 0.6)
+    ];
+    const frameMaterial = new THREE.LineBasicMaterial({ color: 0x4f4f4f });
+    const quadGeo = new THREE.BufferGeometry().setFromPoints([...planeCorners, planeCorners[0]]);
+    frustumLines.add(new THREE.Line(quadGeo, frameMaterial));
+    planeCorners.forEach((corner) => {
+      const geo = new THREE.BufferGeometry().setFromPoints([cameraCenter.position, corner]);
+      const line = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: 0x222222, dashSize: 0.1, gapSize: 0.08 }));
+      line.computeLineDistances();
+      frustumLines.add(line);
+    });
+    scene.add(frustumLines);
+
+    // Camera coordinate axes from figure (green x/y axes next to sensor).
+    addAxis(new THREE.Vector3(-0.2, -0.05, 0), new THREE.Vector3(0.5, 0, 0), 0x009a2e, 'x');
+    addAxis(new THREE.Vector3(-0.2, -0.05, 0), new THREE.Vector3(0, 0.5, 0), 0x009a2e, 'y');
+
+    // Planar surface group (maps textbook gray tilted plane).
+    const planeGroup = new THREE.Group();
+    planeGroup.position.set(1.8, 0, 0);
+    planeGroup.rotation.y = THREE.MathUtils.degToRad(18);
+    scene.add(planeGroup);
+
+    const planarSurface = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.4, 1.4),
+      new THREE.MeshStandardMaterial({ color: 0xcdcdcd, side: THREE.DoubleSide, transparent: true, opacity: 0.95 })
+    );
+    planarSurface.rotation.x = THREE.MathUtils.degToRad(-8);
+    planeGroup.add(planarSurface);
+
+    addLabel('Planar surface', planeGroup.getWorldPosition(new THREE.Vector3(0.8, 0.6, 0)), 0x222222);
+
+    // Planar coordinate frame (red XYZ from textbook).
+    addAxis(new THREE.Vector3(0, -0.6, 0), new THREE.Vector3(0.5, 0, 0), 0xc20808, 'X', planeGroup);
+    addAxis(new THREE.Vector3(0, -0.6, 0), new THREE.Vector3(0, 0.4, 0), 0xc20808, 'Y', planeGroup);
+    addAxis(new THREE.Vector3(0, -0.6, 0), new THREE.Vector3(0, 0, 0.4), 0xc20808, 'Z', planeGroup);
+
+    // Sample surface point and its projection on image plane.
+    const planePoint = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 20, 20),
+      new THREE.MeshStandardMaterial({ color: 0x00d4ff, emissive: 0x006a7d })
+    );
+    scene.add(planePoint);
+
+    const imagePoint = new THREE.Mesh(
+      new THREE.SphereGeometry(0.05, 20, 20),
+      new THREE.MeshStandardMaterial({ color: 0x00d4ff, emissive: 0x006a7d })
+    );
+    scene.add(imagePoint);
+
+    addLabel('(X, Y, 0)', planeGroup.localToWorld(new THREE.Vector3(0.4, 0.3, 0)).clone(), 0x00d4ff);
+
+    // Rays showing homography mapping (cyan) and pyramid edges (toggleable).
+    const rayMaterial = new THREE.LineDashedMaterial({ color: 0x00d4ff, dashSize: 0.13, gapSize: 0.07, linewidth: 2 });
+    const rayLine = new THREE.Line(new THREE.BufferGeometry(), rayMaterial);
+    rayLine.computeLineDistances();
+    scene.add(rayLine);
+
+    const mappingMaterial = new THREE.LineDashedMaterial({ color: 0x00d4ff, dashSize: 0.07, gapSize: 0.05 });
+    const mappingLine = new THREE.Line(new THREE.BufferGeometry(), mappingMaterial);
+    mappingLine.computeLineDistances();
+    scene.add(mappingLine);
+
+    // Two additional black dashed guides to mimic textbook outer pyramid.
+    const guideMaterial = new THREE.LineDashedMaterial({ color: 0x1a1a1a, dashSize: 0.2, gapSize: 0.1 });
+    const guideGeometry = new THREE.BufferGeometry().setFromPoints([
+      cameraCenter.position,
+      planeGroup.localToWorld(new THREE.Vector3(-1.2, 0.7, 0)),
+      planeGroup.localToWorld(new THREE.Vector3(1.2, -0.7, 0)),
+      cameraCenter.position
+    ]);
+    const guideLine = new THREE.Line(guideGeometry, guideMaterial);
+    guideLine.computeLineDistances();
+    scene.add(guideLine);
+
+    const state = {
+      tilt: 18,
+      pointParam: 0.6,
+      raysVisible: true,
+      stepIndex: 0
+    };
+
+    const steps = [
+      { text: 'Step 1 · Camera center and its axes.', focus: 'camera' },
+      { text: 'Step 2 · Image plane captures incoming rays.', focus: 'imagePlane' },
+      { text: 'Step 3 · World planar surface defines source patch.', focus: 'worldPlane' },
+      { text: 'Step 4 · Rays map (X,Y,0) to (x,y) via homography.', focus: 'mapping' }
+    ];
+
+    const tiltSlider = document.getElementById('tiltSlider');
+    const pointSlider = document.getElementById('pointSlider');
+    const toggleRaysBtn = document.getElementById('toggleRays');
+    const resetBtn = document.getElementById('resetBtn');
+    const stepBtn = document.getElementById('stepBtn');
+    const stepText = document.getElementById('stepText');
+
+    tiltSlider.addEventListener('input', (e) => {
+      state.tilt = Number(e.target.value);
+      // Interaction: rotating the plane shows how planar orientation influences homography.
+      planeGroup.rotation.y = THREE.MathUtils.degToRad(state.tilt);
+      updateHomography();
+    });
+
+    pointSlider.addEventListener('input', (e) => {
+      state.pointParam = Number(e.target.value) / 100;
+      // Interaction: moving the handle drags (X,Y,0) along the planar surface and updates (x,y).
+      updateHomography();
+    });
+
+    toggleRaysBtn.addEventListener('click', () => {
+      state.raysVisible = !state.raysVisible;
+      rayLine.visible = mappingLine.visible = state.raysVisible;
+      toggleRaysBtn.textContent = state.raysVisible ? 'Hide rays' : 'Show rays';
+    });
+    toggleRaysBtn.textContent = 'Hide rays';
+
+    stepBtn.addEventListener('click', () => {
+      state.stepIndex = (state.stepIndex + 1) % steps.length;
+      applyStep();
+    });
+
+    resetBtn.addEventListener('click', () => {
+      state.tilt = 18;
+      state.pointParam = 0.6;
+      tiltSlider.value = 18;
+      pointSlider.value = 60;
+      planeGroup.rotation.y = THREE.MathUtils.degToRad(state.tilt);
+      state.stepIndex = 0;
+      state.raysVisible = true;
+      rayLine.visible = mappingLine.visible = true;
+      toggleRaysBtn.textContent = 'Hide rays';
+      controls.target.set(0.4, 0.4, 0);
+      camera.position.set(4, 2.6, 4.5);
+      controls.update();
+      applyStep();
+      updateHomography();
+    });
+
+    function applyStep() {
+      const step = steps[state.stepIndex];
+      stepText.textContent = step.text;
+      highlight(step.focus);
+    }
+
+    function highlight(target) {
+      cameraPlane.material.opacity = target === 'imagePlane' ? 0.7 : 0.4;
+      planarSurface.material.opacity = target === 'worldPlane' ? 1 : 0.95;
+      planePoint.visible = target !== 'camera';
+      imagePoint.visible = target !== 'camera';
+      rayLine.visible = mappingLine.visible = state.raysVisible && target !== 'camera';
+      imagePatch.material.color.set(target === 'imagePlane' ? 0x7b7b7b : 0x9e9e9e);
+    }
+
+    function addAxis(origin, dir, color, labelText, parent = scene) {
+      const arrow = new THREE.ArrowHelper(dir.clone().normalize(), origin, dir.length(), color, 0.1, 0.05);
+      parent.add(arrow);
+      const labelPos = origin.clone().add(dir.clone().setLength(dir.length() + 0.1));
+      addLabel(labelText || '', parent.localToWorld ? parent.localToWorld(labelPos.clone()) : labelPos, color);
+    }
+
+    function addLabel(text, position, color) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      div.style.color = `#${color.toString(16).padStart(6, '0')}`;
+      div.style.fontSize = '12px';
+      div.style.fontWeight = '600';
+      const labelObject = new CSS2DObject(div);
+      labelObject.position.copy(position);
+      scene.add(labelObject);
+    }
+
+    function updateHomography() {
+      planeGroup.updateMatrixWorld(true);
+      const localPoint = new THREE.Vector3(-0.7 + 1.4 * state.pointParam, -0.3 + 0.6 * state.pointParam, 0);
+      const worldPoint = planeGroup.localToWorld(localPoint.clone());
+      planePoint.position.copy(worldPoint);
+
+      const dir = worldPoint.clone().sub(cameraCenter.position);
+      const t = (0 - cameraCenter.position.x) / dir.x;
+      const projection = cameraCenter.position.clone().add(dir.multiplyScalar(t));
+      imagePoint.position.copy(projection);
+
+      rayLine.geometry.dispose();
+      rayLine.geometry = new THREE.BufferGeometry().setFromPoints([cameraCenter.position.clone(), worldPoint.clone()]);
+      rayLine.computeLineDistances();
+
+      mappingLine.geometry.dispose();
+      mappingLine.geometry = new THREE.BufferGeometry().setFromPoints([worldPoint.clone(), projection.clone()]);
+      mappingLine.computeLineDistances();
+    }
+
+    updateHomography();
+    applyStep();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      labelRenderer.setSize(w, h);
+    });
+  </script>
+</body>
+</html>

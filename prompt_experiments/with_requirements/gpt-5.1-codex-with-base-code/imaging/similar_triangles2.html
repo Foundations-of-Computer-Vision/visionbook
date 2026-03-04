@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Similar Triangles Projection Explorer</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #ffffff;
+    }
+    #container {
+      width: 100%;
+      height: 100%;
+    }
+    #ui {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 14px 18px;
+      border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+      max-width: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #ui h2 {
+      margin: 0 0 6px 0;
+      font-size: 18px;
+      color: #111;
+    }
+    #ui label {
+      font-size: 13px;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #ui input[type="range"] {
+      width: 100%;
+    }
+    #ui button {
+      padding: 8px 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      background: #08306b;
+      color: #fff;
+      transition: background 0.2s ease;
+    }
+    #ui button:hover {
+      background: #0b4b9c;
+    }
+    #stepText {
+      font-size: 12px;
+      color: #222;
+      min-height: 40px;
+      border-left: 3px solid #08306b;
+      padding-left: 8px;
+      line-height: 1.4;
+    }
+    #depthValue {
+      font-size: 12px;
+      color: #08306b;
+      font-weight: 600;
+    }
+    .checkbox {
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+    }
+    .label {
+      font-size: 13px;
+      color: #111;
+      font-weight: 500;
+      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+    }
+    @media (max-width: 680px) {
+      #ui {
+        top: auto;
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: calc(100% - 40px);
+        max-width: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  <div id="ui">
+    <h2>Similar Triangles</h2>
+    <label>
+      World depth
+      <input type="range" id="depthSlider" min="1.5" max="5" step="0.1" value="3.2" />
+    </label>
+    <div id="depthValue">Depth: 3.2</div>
+    <label class="checkbox">
+      <input type="checkbox" id="planesToggle" checked />
+      Show reference planes
+    </label>
+    <button id="stepButton">Guided Step</button>
+    <button id="resetButton">Reset to textbook view</button>
+    <div id="stepText"></div>
+  </div>
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three@0.161.0';
+    import { OrbitControls } from 'https://esm.sh/three@0.161.0/examples/jsm/controls/OrbitControls.js';
+    import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three@0.161.0/examples/jsm/renderers/CSS2DRenderer.js';
+
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    // Orthographic camera to preserve textbook proportions.
+    const aspect = container.clientWidth / container.clientHeight;
+    const d = 4;
+    const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 50);
+    camera.position.set(4, 4.5, 4);
+    camera.lookAt(0, 0.5, 0);
+    camera.zoom = 1.1;
+    camera.updateProjectionMatrix();
+    const defaultCameraPosition = camera.position.clone();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(container.clientWidth, container.clientHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    container.appendChild(labelRenderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.set(0, 0.5, 0);
+
+    scene.add(new THREE.HemisphereLight(0xf0f0ff, 0xdedede, 0.6));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    keyLight.position.set(4, 6, 3);
+    scene.add(keyLight);
+
+    // Helper to convert 2D textbook wedges into translucent 3D triangles.
+    const referencePlanes = new THREE.Group();
+    scene.add(referencePlanes);
+
+    function makeTriangle(vertices, color, opacity) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+      geometry.setIndex([0, 1, 2]);
+      geometry.computeVertexNormals();
+      return new THREE.Mesh(
+        geometry,
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide })
+      );
+    }
+
+    // Green XZ wedge.
+    const baseTriangle = makeTriangle(
+      [0, 0, 0, 4, 0, 0, 0, 0, 3.2],
+      0xb3ffb3,
+      0.45
+    );
+    referencePlanes.add(baseTriangle);
+
+    // Cyan YZ wedge.
+    const sideTriangle = makeTriangle(
+      [0, 0, 0, 0, 2.8, 0, 0, 0, 3.2],
+      0xaee9ff,
+      0.5
+    );
+    referencePlanes.add(sideTriangle);
+
+    // Image plane represents the textbook sensor/film plane.
+    const planeOffset = 1.4;
+    const imagePlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.6, 3.4),
+      new THREE.MeshBasicMaterial({ color: 0xf4f4f4, transparent: true, opacity: 0.9, side: THREE.DoubleSide })
+    );
+    imagePlane.position.x = -planeOffset;
+    imagePlane.rotation.y = Math.PI / 2;
+    scene.add(imagePlane);
+
+    // Red base edge to match original emphasis on X-axis.
+    const baseEdge = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(4.2, 0, 0)
+      ]),
+      new THREE.LineBasicMaterial({ color: 0xff0000 })
+    );
+    scene.add(baseEdge);
+
+    const axesMaterial = new THREE.LineBasicMaterial({ color: 0x111111 });
+
+    function addAxis(start, end, color) {
+      const axis = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([start, end]),
+        new THREE.LineBasicMaterial({ color })
+      );
+      scene.add(axis);
+    }
+
+    addAxis(new THREE.Vector3(-2.5, 0, 0), new THREE.Vector3(4.5, 0, 0), 0xff0000); // X axis
+    addAxis(new THREE.Vector3(0, -0.5, 0), new THREE.Vector3(0, 3.5, 0), 0x111111); // Y axis
+    addAxis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, 4), 0x111111); // Z axis
+
+    const originMarker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 24, 24),
+      new THREE.MeshPhongMaterial({ color: 0x000000 })
+    );
+    scene.add(originMarker);
+
+    // Interactive elements representing the world point and its projection.
+    const worldSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 32, 32),
+      new THREE.MeshPhongMaterial({ color: 0xff3030, emissive: 0x330000 })
+    );
+    scene.add(worldSphere);
+
+    const imageSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(0.08, 32, 32),
+      new THREE.MeshPhongMaterial({ color: 0x8b4513, emissive: 0x2f1200 })
+    );
+    scene.add(imageSphere);
+
+    function makeGuideLine(color) {
+      const line = new THREE.Line(
+        new THREE.BufferGeometry(),
+        new THREE.LineBasicMaterial({ color, linewidth: 1 })
+      );
+      line.visible = false;
+      return line;
+    }
+
+    const verticalGuide = makeGuideLine(0x2ca02c);
+    const horizontalGuide = makeGuideLine(0x2ca02c);
+    scene.add(verticalGuide);
+    scene.add(horizontalGuide);
+
+    const projectionLine = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineDashedMaterial({ color: 0x444444, dashSize: 0.25, gapSize: 0.12 })
+    );
+    projectionLine.computeLineDistances();
+    scene.add(projectionLine);
+
+    function makeLabel(text, position) {
+      const div = document.createElement('div');
+      div.className = 'label';
+      div.textContent = text;
+      const label = new CSS2DObject(div);
+      label.position.copy(position);
+      scene.add(label);
+      return label;
+    }
+
+    makeLabel('X', new THREE.Vector3(4.5, 0.05, 0));
+    makeLabel('Y', new THREE.Vector3(0, 3.4, 0));
+    makeLabel('Z', new THREE.Vector3(0, 0.05, 3.8));
+    const xLabel = makeLabel('x', new THREE.Vector3());
+    const yLabel = makeLabel('y', new THREE.Vector3());
+    const fLabel = makeLabel('f', new THREE.Vector3(-planeOffset - 0.05, -0.1, 0));
+    yLabel.visible = false;
+    xLabel.visible = false;
+
+    const worldPointLabel = makeLabel('World point', new THREE.Vector3());
+    const imagePointLabel = makeLabel('Image point', new THREE.Vector3());
+
+    // This normalized vector holds the direction from the camera to the world feature.
+    const worldDir = new THREE.Vector3(3.4, 1.6, 2.8).normalize();
+
+    function projectToImagePlane(worldPoint) {
+      const planeX = -planeOffset;
+      const t = planeX / worldPoint.x; // Negative t naturally places projection behind the origin.
+      return worldPoint.clone().multiplyScalar(t);
+    }
+
+    function updateLine(line, points) {
+      const positions = new Float32Array(points.length * 3);
+      points.forEach((pt, idx) => {
+        positions[idx * 3] = pt.x;
+        positions[idx * 3 + 1] = pt.y;
+        positions[idx * 3 + 2] = pt.z;
+      });
+      line.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      line.geometry.computeBoundingSphere();
+      if (line.material.isLineDashedMaterial) {
+        line.computeLineDistances();
+      }
+    }
+
+    const depthSlider = document.getElementById('depthSlider');
+    const depthValue = document.getElementById('depthValue');
+    const planesToggle = document.getElementById('planesToggle');
+    const stepButton = document.getElementById('stepButton');
+    const resetButton = document.getElementById('resetButton');
+    const stepText = document.getElementById('stepText');
+
+    const state = { depth: parseFloat(depthSlider.value), step: 0 };
+    const stepNarratives = [
+      'Step 1: The red world point lies in 3D space within the green XZ wedge.',
+      'Step 2: A dashed ray heads toward the camera center at the origin.',
+      'Step 3: The ray extends through the origin and hits the gray image plane, forming the brown image point.',
+      'Step 4: Green guide drops reveal the projected x and y coordinates on the image plane.'
+    ];
+
+    function updateSceneFromDepth(depth) {
+      state.depth = depth;
+      depthValue.textContent = 'Depth: ' + depth.toFixed(1);
+      const worldPoint = worldDir.clone().multiplyScalar(depth);
+      worldSphere.position.copy(worldPoint);
+      worldPointLabel.position.copy(worldPoint.clone().add(new THREE.Vector3(0.08, 0.15, 0)));
+      const imagePoint = projectToImagePlane(worldPoint);
+      imageSphere.position.copy(imagePoint);
+      imagePointLabel.position.copy(imagePoint.clone().add(new THREE.Vector3(0.08, 0.08, 0)));
+
+      updateLine(projectionLine, [worldPoint, new THREE.Vector3(0, 0, 0), imagePoint]);
+
+      const footPoint = imagePoint.clone();
+      footPoint.y = 0;
+      updateLine(verticalGuide, [imagePoint, footPoint]);
+      updateLine(horizontalGuide, [footPoint, new THREE.Vector3(-planeOffset, 0, 0)]);
+
+      yLabel.position.copy(imagePoint.clone().add(new THREE.Vector3(-0.12, 0.2, 0)));
+      xLabel.position.copy(footPoint.clone().add(new THREE.Vector3(0, -0.15, 0)));
+    }
+
+    function updateGuidedStep() {
+      stepText.textContent = stepNarratives[state.step];
+      worldSphere.scale.setScalar(state.step === 0 ? 1.4 : 1);
+      projectionLine.material.color.setHex(state.step === 1 ? 0x000000 : 0x444444);
+      imagePlane.material.opacity = state.step === 2 ? 0.98 : 0.9;
+      imageSphere.scale.setScalar(state.step === 2 ? 1.4 : 1);
+      const guidesVisible = state.step >= 3;
+      verticalGuide.visible = guidesVisible;
+      horizontalGuide.visible = guidesVisible;
+      xLabel.visible = guidesVisible;
+      yLabel.visible = guidesVisible;
+    }
+
+    depthSlider.addEventListener('input', (event) => {
+      updateSceneFromDepth(parseFloat(event.target.value));
+    });
+
+    planesToggle.addEventListener('change', (event) => {
+      referencePlanes.visible = event.target.checked;
+    });
+
+    stepButton.addEventListener('click', () => {
+      state.step = (state.step + 1) % stepNarratives.length;
+      updateGuidedStep();
+    });
+
+    resetButton.addEventListener('click', () => {
+      depthSlider.value = '3.2';
+      planesToggle.checked = true;
+      referencePlanes.visible = true;
+      state.step = 0;
+      updateGuidedStep();
+      updateSceneFromDepth(3.2);
+      camera.position.copy(defaultCameraPosition);
+      controls.target.set(0, 0.5, 0);
+      controls.update();
+    });
+
+    window.addEventListener('resize', () => {
+      const aspectRatio = container.clientWidth / container.clientHeight;
+      camera.left = -d * aspectRatio;
+      camera.right = d * aspectRatio;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      labelRenderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    updateSceneFromDepth(state.depth);
+    updateGuidedStep();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>

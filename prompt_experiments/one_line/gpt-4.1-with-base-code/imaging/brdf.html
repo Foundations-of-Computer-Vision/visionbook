@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>3D Textbook Figure</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+        }
+
+        .label {
+            color: black;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 2px 4px;
+            border-radius: 3px;
+            pointer-events: none;
+            position: absolute;
+            z-index: 10;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+        import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three/examples/jsm/renderers/CSS2DRenderer';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // Orthographic camera
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 3;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 20);
+        camera.position.set(3, 3.5, 3);
+        camera.lookAt(0, 0, 0);
+        camera.zoom = 1.2;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        // CSS2DRenderer for labels
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(container.clientWidth, container.clientHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Green plane
+        const planeGeom = new THREE.PlaneGeometry(4, 2.5);
+        const planeMat = new THREE.MeshLambertMaterial({ color: 0x7fff00, side: THREE.DoubleSide });
+        const plane = new THREE.Mesh(planeGeom, planeMat);
+        plane.rotation.x = -Math.PI / 2;
+        scene.add(plane);
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        // Point p at origin
+        const p = new THREE.Vector3(0, 0.01, 0); // slightly above plane
+
+        // Draw normal vector n (black)
+        drawArrow(p, new THREE.Vector3(0, 1, 0), 0.8, 0x000000, 'n', [0, 0.9, 0]);
+
+        // Draw tangent vectors p (red) and q (dark green)
+        drawArrow(p, new THREE.Vector3(1, 0, 0), 0.7, 0x880000, 'p', [0.8, 0.05, 0]);
+        drawArrow(p, new THREE.Vector3(0, 0, 1), 0.7, 0x006600, 'q', [0.05, 0.05, 0.8]);
+
+        // Draw incoming light vector (yellow/orange)
+        drawArrow(
+            new THREE.Vector3(-1.2, 1.5, -1.2),
+            p.clone().sub(new THREE.Vector3(-1.2, 1.5, -1.2)).normalize(),
+            1.7,
+            0xffaa00,
+            'ℓ_in(λ)',
+            [-1.1, 1.6, -1.1]
+        );
+
+        // Draw outgoing light vectors (green, various directions)
+        const outDirs = [
+            new THREE.Vector3(1, 1, 0.2).normalize(),
+            new THREE.Vector3(0.5, 1, 0.8).normalize(),
+            new THREE.Vector3(-0.5, 1, 0.7).normalize(),
+            new THREE.Vector3(-1, 1, 0.2).normalize(),
+            new THREE.Vector3(0, 1, -1).normalize()
+        ];
+        outDirs.forEach((dir, i) => {
+            drawArrow(p, dir, 1.1, 0x009900, i === 0 ? 'ℓ_out' : null, [dir.x, 1.1, dir.z]);
+        });
+
+        // Draw circle at p
+        const circGeom = new THREE.RingGeometry(0.07, 0.09, 32);
+        const circMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+        const circ = new THREE.Mesh(circGeom, circMat);
+        circ.position.copy(p);
+        circ.rotation.x = -Math.PI / 2;
+        scene.add(circ);
+
+        // Draw label for formula
+        addLabel('ℓ_out = F(ℓ_in, n, λ, p, q)', [1.2, 1.3, 0.7]);
+
+        function drawArrow(start, dir, length, color, label, labelOffset) {
+            const arrow = new THREE.ArrowHelper(dir.clone().normalize(), start, length, color, 0.18, 0.09);
+            scene.add(arrow);
+            if (label) {
+                addLabel(label, [
+                    start.x + (labelOffset ? labelOffset[0] : dir.x * length * 0.7),
+                    start.y + (labelOffset ? labelOffset[1] : dir.y * length * 0.7),
+                    start.z + (labelOffset ? labelOffset[2] : dir.z * length * 0.7)
+                ]);
+            }
+        }
+
+        function addLabel(text, pos) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            const labelObj = new CSS2DObject(div);
+            labelObj.position.set(pos[0], pos[1], pos[2]);
+            scene.add(labelObj);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.left = -d * (w / h);
+            camera.right = d * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+            labelRenderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

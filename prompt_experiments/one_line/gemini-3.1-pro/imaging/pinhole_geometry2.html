@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinhole Camera Model</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+    </style>
+    <!-- Import maps polyfill -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="info">
+        <h3>Pinhole Camera Model</h3>
+        <p>Blue Point: Object P<br>
+            Cyan Point: Virtual Image p<br>
+            Blue Point (Inverted): Projected Image p</p>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+
+        // Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(5, 5, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0x404040, 2);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7);
+        scene.add(directionalLight);
+
+        // Parameters
+        const params = {
+            f: 2,
+            px: 3,
+            py: 2,
+            pz: 5
+        };
+
+        // Materials
+        const materialPlane = new THREE.MeshBasicMaterial({ color: 0xcccccc, side: THREE.DoubleSide, transparent: true, opacity: 0.3 });
+        const materialBorder = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const materialP = new THREE.MeshPhongMaterial({ color: 0x0088ff });
+        const materialPVirtual = new THREE.MeshPhongMaterial({ color: 0x00ffff });
+        const materialPProj = new THREE.MeshPhongMaterial({ color: 0x0088ff });
+        const materialRay = new THREE.LineBasicMaterial({ color: 0xaaaaaa, dashed: true });
+        const materialAxis = new THREE.LineBasicMaterial({ color: 0x000000 });
+
+        // Objects
+        const group = new THREE.Group();
+        scene.add(group);
+
+        // Pinhole (Origin)
+        const pinholeGeo = new THREE.SphereGeometry(0.05);
+        const pinholeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const pinhole = new THREE.Mesh(pinholeGeo, pinholeMat);
+        group.add(pinhole);
+
+        // Main coordinate axes
+        const axisLength = 8;
+        const axesHelper = new THREE.AxesHelper(axisLength);
+        // Custom axes to match diagram colors/labels could be added, but AxesHelper is standard RGB (XYZ).
+        // Diagram has Black axes. Let's make custom black axes.
+        function createAxisLine(start, end, color = 0x000000) {
+            const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+            const material = new THREE.LineBasicMaterial({ color: color });
+            return new THREE.Line(geometry, material);
+        }
+
+        // World Axes (X, Y, Z)
+        // In diagram: Y up, Z right (optical axis?), X?
+        // Let's standard Three.js: Y up, Z towards camera, X right.
+        // We will treat Z as the optical axis, but looking down -Z or +Z?
+        // Let's use Z as the optical axis.
+        // Virtual plane at +f, Project at -f? Or vice-versa? 
+        // Diagram: P is at (X, Y, Z). Virtual Camera Plane is between Origin and P. 
+        // Wait, if Virtual Camera Plane is at `f`, and P is at `Z`, usually `Z > f`.
+        // So Z axis points towards the object.
+        // Pinhole at 0.
+        // Projection plane at -f (behind camera).
+
+        const zAxis = createAxisLine(new THREE.Vector3(0, 0, -5), new THREE.Vector3(0, 0, 10));
+        const yAxis = createAxisLine(new THREE.Vector3(0, -5, 0), new THREE.Vector3(0, 5, 0));
+        const xAxis = createAxisLine(new THREE.Vector3(-5, 0, 0), new THREE.Vector3(5, 0, 0));
+        group.add(zAxis, yAxis, xAxis);
+
+        // Planes
+        // We'll resize planes dynamically or fix them? Fixed size is easier.
+        const planeSize = 4;
+        const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+
+        // Virtual Plane (at Z = f)
+        const virtualPlane = new THREE.Mesh(planeGeo, materialPlane);
+        group.add(virtualPlane);
+
+        // Virtual Plane Border
+        const borderGeo = new THREE.EdgesGeometry(planeGeo);
+        const virtualBorder = new THREE.LineSegments(borderGeo, materialBorder);
+        virtualPlane.add(virtualBorder); // Add minimal hierarchy
+
+        // Virtual Plane Coordinates (x, y) - green in diagram
+        const vAxisLength = 1.5;
+        const vXAxis = createAxisLine(new THREE.Vector3(-vAxisLength, 0, 0), new THREE.Vector3(vAxisLength, 0, 0), 0x00ff00);
+        const vYAxis = createAxisLine(new THREE.Vector3(0, -vAxisLength, 0), new THREE.Vector3(0, vAxisLength, 0), 0x00ff00);
+        virtualPlane.add(vXAxis);
+        virtualPlane.add(vYAxis);
+
+        // Projection Plane (at Z = -f)
+        const projPlane = new THREE.Mesh(planeGeo, materialPlane);
+        group.add(projPlane);
+
+        const projBorder = new THREE.LineSegments(borderGeo, materialBorder);
+        projPlane.add(projBorder);
+
+        // Projection Plane Coordinates (x, y) - green
+        const pXAxis = createAxisLine(new THREE.Vector3(-vAxisLength, 0, 0), new THREE.Vector3(vAxisLength, 0, 0), 0x00ff00);
+        const pYAxis = createAxisLine(new THREE.Vector3(0, -vAxisLength, 0), new THREE.Vector3(0, vAxisLength, 0), 0x00ff00);
+        projPlane.add(pXAxis);
+        projPlane.add(pYAxis);
+
+        // Object P
+        const pGeo = new THREE.SphereGeometry(0.15);
+        const objectP = new THREE.Mesh(pGeo, materialP);
+        group.add(objectP);
+
+        // Virtual Point p
+        const pVirtual = new THREE.Mesh(pGeo, materialPVirtual);
+        pVirtual.scale.set(0.7, 0.7, 0.7);
+        group.add(pVirtual);
+
+        // Projected Point p_prime
+        const pProj = new THREE.Mesh(pGeo, materialPProj);
+        pProj.scale.set(0.7, 0.7, 0.7);
+        group.add(pProj);
+
+        // Ray
+        const rayGeo = new THREE.BufferGeometry();
+        const rayLine = new THREE.Line(rayGeo, materialRay);
+        group.add(rayLine);
+
+        // Projection Line (P_z to axis)
+        const droplineGeo = new THREE.BufferGeometry();
+        const dropline = new THREE.Line(droplineGeo, new THREE.LineBasicMaterial({ color: 0xaaaaaa, opacity: 0.5 }));
+        group.add(dropline);
+
+
+        // Text Labels (using sprites for simplicity and no font loading issues)
+        function makeTextSprite(message, color) {
+            const fontface = "Arial";
+            const fontsize = 24;
+            const borderThickness = 0;
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            context.font = "Bold " + fontsize + "px " + fontface;
+
+            const metrics = context.measureText(message);
+            const textWidth = metrics.width;
+
+            canvas.width = textWidth + 20;
+            canvas.height = fontsize + 20;
+
+            context.font = "Bold " + fontsize + "px " + fontface;
+            context.fillStyle = color;
+            context.fillText(message, 0, fontsize);
+
+            const texture = new THREE.Texture(canvas);
+            texture.needsUpdate = true;
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(1, 0.5, 1.0);
+            return sprite;
+        }
+
+        const labelP = makeTextSprite("P", "rgba(0, 0, 255, 1)");
+        scene.add(labelP);
+
+        const labelVP = makeTextSprite("p", "rgba(0, 255, 255, 1)");
+        scene.add(labelVP);
+
+        // Update Function
+        function update() {
+            const { f, px, py, pz } = params;
+
+            // Planes Positions
+            // Z axis points to object.
+            // Virtual Plane is at Z = f
+            // Projection Plane is at Z = -f
+            // (Assuming Pinhole is 0)
+
+            // Note: If Z points to object, then Z is positive for object.
+            // If virtual plane is "in front" of pinhole (between pinhole and object? No, usually pinhole is between object and image plane).
+            // Diagram (a): 
+            // - World Coordinates axis.
+            // - Pinhole at (0,0,0).
+            // - Virtual Camera Plane is at distance f (on the side of the object? No, "Virtual plane" is usually where the upright image is formed, in front of the center of projection).
+            // - Wait, standard pinhole: Image plane is BEHIND the pinhole (distance f). This forms inverted image.
+            // - Virtual Image plane is in FRONT of the pinhole (distance f). This forms upright image.
+            // - In diagram (a):
+            //      - P is at some Z.
+            //      - Virtual camera plane is between origin and P?
+            //      - Coordinate system Z points towards P?  Let's look at the grey rays.
+            //      - Ray goes P -> Origin -> Back plane.
+            //      - Intersection with Virtual plane gives p (upright).
+            //      - Intersection with Back plane (Projection plane) gives p (inverted).
+            //      - Yes.
+
+            virtualPlane.position.z = f;
+            virtualPlane.scale.setScalar(1); // Reset scale if necessary
+
+            projPlane.position.z = -f;
+            projPlane.rotation.z = Math.PI; // Rotate geometry so axes flip? No, keep it straight but p is inverted.
+
+            // Object P Position
+            // If P is at (px, py, pz).
+            // In diagram, P is in +Z (if Z points right).
+            objectP.position.set(px, py, pz);
+            labelP.position.set(px + 0.2, py + 0.2, pz);
+
+            // Calculate projections
+            // Similar triangles.
+            // p_virtual / f = P / P_z
+            // p_virtual = P * (f / P_z)
+
+            if (Math.abs(pz) > 0.001) {
+                const ratioV = f / pz;
+                pVirtual.position.set(px * ratioV, py * ratioV, f);
+                labelVP.position.set(px * ratioV + 0.2, py * ratioV + 0.2, f);
+
+                const ratioP = -f / pz; // projection plane is at -f
+                pProj.position.set(px * ratioP, py * ratioP, -f);
+            }
+
+            // Ray
+            const points = [];
+            points.push(new THREE.Vector3(px, py, pz)); // P
+            points.push(new THREE.Vector3(0, 0, 0)); // Origin
+            // Extend to projection plane
+            if (Math.abs(pz) > 0.001) {
+                const ratioP = -f / pz;
+                points.push(new THREE.Vector3(px * ratioP, py * ratioP, -f));
+            }
+            rayLine.geometry.setFromPoints(points);
+
+            // Dropline for context (P to Z axis projection to show coordinates)
+            const dropPoints = [
+                new THREE.Vector3(px, py, pz),
+                new THREE.Vector3(px, 0, pz),
+                new THREE.Vector3(0, 0, pz),
+                new THREE.Vector3(0, 0, 0)
+            ];
+            dropline.geometry.setFromPoints(dropPoints);
+
+            renderer.render(scene, camera);
+        }
+
+        // GUI
+        const gui = new GUI();
+        const folder = gui.addFolder('Camera Parameters');
+        folder.add(params, 'f', 0.5, 5).name('Focal Length (f)').onChange(update);
+        folder.add(params, 'px', -10, 10).name('Object X').onChange(update);
+        folder.add(params, 'py', -10, 10).name('Object Y').onChange(update);
+        folder.add(params, 'pz', 2, 20).name('Object Z').onChange(update); // Keep Z > f generally
+        gui.open();
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            update(); // Call update every frame or just on change? calling every frame handles damping smoothly
+        }
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+
+    </script>
+</body>
+
+</html>

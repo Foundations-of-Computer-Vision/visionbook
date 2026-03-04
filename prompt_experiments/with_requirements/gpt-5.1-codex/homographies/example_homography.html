@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Grid Shear Concept</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: "Source Sans Pro", sans-serif;
+            background: linear-gradient(130deg, #f7f7f7, #e0ecff);
+        }
+
+        #ui {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px 16px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 280px;
+        }
+
+        label {
+            font-size: 13px;
+            color: #102040;
+        }
+
+        button {
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            background: #2858ff;
+            color: #fff;
+        }
+
+        button.secondary {
+            background: #ff7a18;
+        }
+
+        button.ghost {
+            background: transparent;
+            color: #2858ff;
+            border: 1px solid #2858ff;
+        }
+
+        #stepText {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 40, 0.85);
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 999px;
+            font-size: 14px;
+            letter-spacing: 0.4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <label>Shear Amount <input id="shearRange" type="range" min="0" max="1.2" step="0.01" value="0"></label>
+        <button id="playMorphBtn">Play Morph</button>
+        <button id="guidedBtn" class="secondary">Guided Demo Step</button>
+        <button id="resetBtn" class="ghost">Reset to Textbook View</button>
+    </div>
+    <div id="stepText">Drag the slider or orbit to explore the mapping.</div>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
+        import { OrbitControls } from 'https://unpkg.com/three@0.165.0/examples/jsm/controls/OrbitControls.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf4f6ff);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.8, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.minDistance = 4;
+        controls.maxDistance = 20;
+
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(5, 8, 5);
+        scene.add(dirLight);
+
+        // Helper to draw simple text labels using sprite canvases.
+        function createLabel(text, color = '#111', size = 150) {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = color;
+            ctx.font = '28px "Source Sans Pro", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, size / 2, 32);
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(canvas.width / 100, canvas.height / 100, 1);
+            return sprite;
+        }
+
+        // Creates the 2D textbook grid as 3D line segments so we can transform it.
+        function createGrid({ width, height, rows, cols, color }) {
+            const stepX = width / cols;
+            const stepY = height / rows;
+            const points = [];
+            // Vertical lines.
+            for (let i = 0; i <= cols; i++) {
+                const x = -width / 2 + i * stepX;
+                points.push(x, -height / 2, 0, x, height / 2, 0);
+            }
+            // Horizontal lines.
+            for (let j = 0; j <= rows; j++) {
+                const y = -height / 2 + j * stepY;
+                points.push(-width / 2, y, 0, width / 2, y, 0);
+            }
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+            const material = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+            const lines = new THREE.LineSegments(geometry, material);
+            return { lines, geometry };
+        }
+
+        // Left grid = untouched textbook plane.
+        const leftGrid = createGrid({ width: 4, height: 4, rows: 3, cols: 3, color: 0x111111 }).lines;
+        leftGrid.position.set(-3, 0, 0);
+        scene.add(leftGrid);
+
+        // Right grid that will be morphed interactively.
+        const distorted = createGrid({ width: 4, height: 4, rows: 3, cols: 3, color: 0x111111 });
+        const rightGrid = distorted.lines;
+        rightGrid.position.set(3, 0, 0);
+        scene.add(rightGrid);
+
+        // Save original positions to reapply transforms cleanly.
+        const basePositions = distorted.geometry.attributes.position.array.slice();
+
+        // Arrow showing transformation direction.
+        const arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(-0.3, 0, 0), 2.5, 0x111111, 0.4, 0.2);
+        scene.add(arrow);
+
+        // Labels explaining each plane.
+        const originalLabel = createLabel('Original Grid');
+        originalLabel.position.set(-3, -2.6, 0.1);
+        scene.add(originalLabel);
+
+        const warpedLabel = createLabel('Sheared Plane');
+        warpedLabel.position.set(3.2, -2.6, 0.1);
+        scene.add(warpedLabel);
+
+        // Parameters for interactive deformation.
+        let shearAmount = 0;
+        let planeTilt = 0;
+        const shearRange = document.getElementById('shearRange');
+        const stepText = document.getElementById('stepText');
+
+        function applyShear(amount) {
+            shearAmount = amount;
+            const position = distorted.geometry.attributes.position;
+            const arr = position.array;
+            for (let i = 0; i < arr.length; i += 3) {
+                const baseX = basePositions[i];
+                const baseY = basePositions[i + 1];
+                const centerY = 0;
+                const relY = (baseY - centerY) / 4 + 0.5; // normalized column depth.
+                // Map 2D grid points to a slanted plane to mimic perspective sheet.
+                arr[i] = baseX + amount * (relY - 0.5) * 1.2;
+                arr[i + 2] = -amount * (relY * 1.4); // push into depth to show tilt.
+            }
+            position.needsUpdate = true;
+            rightGrid.rotation.x = -planeTilt;
+        }
+
+        // Slider interaction teaches how shear amount controls projection depth.
+        shearRange.addEventListener('input', (e) => {
+            planeTilt = 0.3 * (e.target.value / parseFloat(shearRange.max));
+            applyShear(parseFloat(e.target.value));
+        });
+
+        // Auto morph interaction for continuous demonstration.
+        let autoMorph = false;
+        let autoDir = 1;
+        document.getElementById('playMorphBtn').addEventListener('click', () => {
+            autoMorph = !autoMorph;
+            stepText.textContent = autoMorph ? 'Auto morphing between orthographic and perspective views.' : 'Auto morph paused.';
+        });
+
+        // Guided demo cycles through conceptual steps for learners.
+        const guidedSteps = [
+            { text: 'Step 1: Start with a flat, axis-aligned sampling grid.', shear: 0, tilt: 0 },
+            { text: 'Step 2: Columns slide horizontally: a shear hints at perspective.', shear: 0.5, tilt: 0.15 },
+            { text: 'Step 3: Top edge recedes, showing depth after projection.', shear: 0.9, tilt: 0.28 }
+        ];
+        let currentStep = 0;
+        document.getElementById('guidedBtn').addEventListener('click', () => {
+            currentStep = (currentStep + 1) % guidedSteps.length;
+            const step = guidedSteps[currentStep];
+            shearRange.value = step.shear.toFixed(2);
+            planeTilt = step.tilt;
+            applyShear(step.shear);
+            stepText.textContent = step.text;
+        });
+
+        // Reset button returns to textbook configuration.
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            autoMorph = false;
+            currentStep = 0;
+            shearRange.value = 0;
+            planeTilt = 0;
+            applyShear(0);
+            stepText.textContent = 'Reset to the textbook view.';
+        });
+
+        // Animation loop handling auto-morphing and controls damping.
+        function animate() {
+            requestAnimationFrame(animate);
+            if (autoMorph) {
+                const max = parseFloat(shearRange.max);
+                let val = parseFloat(shearRange.value);
+                val += 0.005 * autoDir;
+                if (val > max || val < 0) {
+                    autoDir *= -1;
+                    val = THREE.MathUtils.clamp(val, 0, max);
+                }
+                shearRange.value = val.toFixed(3);
+                planeTilt = 0.3 * (val / max);
+                applyShear(val);
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        applyShear(0);
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

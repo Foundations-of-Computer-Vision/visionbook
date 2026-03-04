@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Interactive BRDF Figure</title>
+  <style>
+    :root {
+      --bg0: #f8f6f1;
+      --bg1: #f3efe6;
+      --ink: #111111;
+      --accent: #ffb000;
+      --accent2: #1a8f2a;
+      --surface: #8cff1a;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      font-family: "Fira Sans", "Trebuchet MS", sans-serif;
+      background: radial-gradient(1200px 800px at 10% 10%, #ffffff 0%, var(--bg0) 45%, var(--bg1) 100%);
+      color: var(--ink);
+      overflow: hidden;
+    }
+
+    #app {
+      position: absolute;
+      inset: 0;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      right: 18px;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .title {
+      font-size: 18px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      pointer-events: auto;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 10px;
+      padding: 10px 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    }
+
+    .legend span {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    #hud {
+      position: absolute;
+      bottom: 18px;
+      left: 18px;
+      width: min(420px, calc(100% - 36px));
+      background: rgba(255, 255, 255, 0.82);
+      border-radius: 14px;
+      padding: 14px 16px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+      backdrop-filter: blur(6px);
+      pointer-events: auto;
+    }
+
+    #hud label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+
+    #hud input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    #hint {
+      font-size: 12px;
+      margin-top: 10px;
+      opacity: 0.7;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app"></div>
+  <div class="overlay">
+    <div class="title">Interactive Illumination / BRDF Sketch</div>
+    <div class="legend">
+      <span><i class="dot" style="background: var(--accent);"></i> input light</span>
+      <span><i class="dot" style="background: var(--accent2);"></i> outgoing light</span>
+      <span><i class="dot" style="background: #000000;"></i> frame</span>
+    </div>
+  </div>
+  <div id="hud">
+    <label for="inAngle">Input angle <strong id="inAngleVal">35°</strong></label>
+    <input id="inAngle" type="range" min="-70" max="70" value="35" />
+    <label for="outAngle" style="margin-top: 10px;">Output angle <strong id="outAngleVal">20°</strong></label>
+    <input id="outAngle" type="range" min="-70" max="70" value="20" />
+    <div id="hint">Drag to orbit • scroll to zoom • sliders update $\ell_{in}$ and $\ell_{out}$</div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+    import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+
+    const app = document.getElementById("app");
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    app.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(4.6, 3.6, 4.2);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0.5, 0.05, 0.2);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    keyLight.position.set(4, 6, 3);
+    scene.add(keyLight);
+
+    const planeGeo = new THREE.PlaneGeometry(8, 6);
+    const planeMat = new THREE.MeshPhongMaterial({ color: 0x7cff2a, side: THREE.DoubleSide });
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.rotation.x = -Math.PI / 2.4;
+    plane.position.y = 0;
+    scene.add(plane);
+
+    const outlineMat = new THREE.LineBasicMaterial({ color: 0x111111, linewidth: 2 });
+    const outlinePoints = [
+      new THREE.Vector3(-4, 0, -3),
+      new THREE.Vector3(4, 0, -3),
+      new THREE.Vector3(4, 0, 3),
+      new THREE.Vector3(-4, 0, 3),
+      new THREE.Vector3(-4, 0, -3)
+    ];
+    const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePoints);
+    const outline = new THREE.Line(outlineGeo, outlineMat);
+    outline.rotation.x = -Math.PI / 2.4;
+    scene.add(outline);
+
+    const origin = new THREE.Vector3(0, 0.05, 0);
+
+    const pointGeo = new THREE.SphereGeometry(0.06, 24, 24);
+    const pointMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.4 });
+    const point = new THREE.Mesh(pointGeo, pointMat);
+    point.position.copy(origin);
+    scene.add(point);
+
+    const ringGeo = new THREE.TorusGeometry(0.18, 0.02, 16, 48);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.copy(origin);
+    scene.add(ring);
+
+    const normalArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), origin, 0.9, 0x111111, 0.2, 0.12);
+    scene.add(normalArrow);
+
+    const tangentArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), origin, 0.8, 0x111111, 0.2, 0.12);
+    scene.add(tangentArrow);
+
+    const bitangentArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), origin, 0.8, 0x111111, 0.2, 0.12);
+    scene.add(bitangentArrow);
+
+    const inArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), origin, 2.5, 0xffb000, 0.32, 0.18);
+    scene.add(inArrow);
+
+    const outArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), origin, 2.0, 0x1a8f2a, 0.28, 0.16);
+    scene.add(outArrow);
+
+    const inFlares = [];
+    const outFlares = [];
+    const flareGeo = new THREE.ConeGeometry(0.08, 0.3, 12);
+    const flareInMat = new THREE.MeshStandardMaterial({ color: 0xffc933, roughness: 0.6 });
+    const flareOutMat = new THREE.MeshStandardMaterial({ color: 0x2acb40, roughness: 0.6 });
+
+    for (let i = 0; i < 8; i += 1) {
+      const flare = new THREE.Mesh(flareGeo, flareInMat);
+      flare.position.copy(origin);
+      flare.rotation.x = Math.PI / 2;
+      scene.add(flare);
+      inFlares.push(flare);
+    }
+
+    for (let i = 0; i < 10; i += 1) {
+      const flare = new THREE.Mesh(flareGeo, flareOutMat);
+      flare.position.copy(origin);
+      flare.rotation.x = Math.PI / 2;
+      scene.add(flare);
+      outFlares.push(flare);
+    }
+
+    const inSlider = document.getElementById("inAngle");
+    const outSlider = document.getElementById("outAngle");
+    const inVal = document.getElementById("inAngleVal");
+    const outVal = document.getElementById("outAngleVal");
+
+    function degToRad(deg) {
+      return (deg * Math.PI) / 180;
+    }
+
+    function updateArrows() {
+      const inAngle = degToRad(Number(inSlider.value));
+      const outAngle = degToRad(Number(outSlider.value));
+
+      inVal.textContent = `${inSlider.value}°`;
+      outVal.textContent = `${outSlider.value}°`;
+
+      const inDir = new THREE.Vector3(Math.sin(inAngle), Math.cos(inAngle), 0).normalize();
+      const outDir = new THREE.Vector3(Math.sin(outAngle), Math.cos(outAngle), 0).normalize();
+
+      inArrow.setDirection(inDir.negate());
+      outArrow.setDirection(outDir);
+
+      inArrow.position.copy(origin);
+      outArrow.position.copy(origin);
+
+      const inRingRadius = 1.6;
+      inFlares.forEach((flare, idx) => {
+        const t = (idx / inFlares.length) * Math.PI * 2;
+        const jitter = 0.08 * Math.sin(idx + inAngle * 3);
+        const pos = new THREE.Vector3(
+          Math.cos(t) * inRingRadius,
+          0.2 + jitter,
+          Math.sin(t) * inRingRadius
+        );
+        flare.position.copy(origin).add(pos);
+        flare.lookAt(origin);
+      });
+
+      const outRingRadius = 1.3;
+      outFlares.forEach((flare, idx) => {
+        const t = (idx / outFlares.length) * Math.PI * 2;
+        const jitter = 0.1 * Math.cos(idx + outAngle * 2);
+        const pos = new THREE.Vector3(
+          Math.cos(t) * outRingRadius,
+          0.1 + jitter,
+          Math.sin(t) * outRingRadius
+        );
+        flare.position.copy(origin).add(pos);
+        flare.lookAt(origin);
+      });
+    }
+
+    updateArrows();
+    inSlider.addEventListener("input", updateArrows);
+    outSlider.addEventListener("input", updateArrows);
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    window.addEventListener("resize", onResize);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const t = performance.now() * 0.0004;
+      inFlares.forEach((flare, idx) => {
+        flare.rotation.y = t + idx * 0.7;
+      });
+      outFlares.forEach((flare, idx) => {
+        flare.rotation.y = -t - idx * 0.6;
+      });
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+
+</html>

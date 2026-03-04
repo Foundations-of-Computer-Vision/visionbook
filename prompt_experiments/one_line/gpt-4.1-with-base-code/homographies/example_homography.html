@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Grid Transformation Visualization</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // Camera setup
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 4;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 20);
+        camera.position.set(6, 7, 8);
+        camera.lookAt(0, 0, 0);
+        camera.zoom = 1.2;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Helper function to create a grid
+        function createGrid(origin, cellSize, rows, cols, transformFn, color = 0x000000) {
+            const group = new THREE.Group();
+            // Vertical lines
+            for (let i = 0; i <= cols; i++) {
+                const points = [];
+                for (let j = 0; j <= rows; j++) {
+                    let x = origin.x + i * cellSize;
+                    let y = origin.y + j * cellSize;
+                    let z = origin.z;
+                    if (transformFn) [x, y, z] = transformFn(x, y, z, i, j, cols, rows);
+                    points.push(new THREE.Vector3(x, y, z));
+                }
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color }));
+                group.add(line);
+            }
+            // Horizontal lines
+            for (let j = 0; j <= rows; j++) {
+                const points = [];
+                for (let i = 0; i <= cols; i++) {
+                    let x = origin.x + i * cellSize;
+                    let y = origin.y + j * cellSize;
+                    let z = origin.z;
+                    if (transformFn) [x, y, z] = transformFn(x, y, z, i, j, cols, rows);
+                    points.push(new THREE.Vector3(x, y, z));
+                }
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color }));
+                group.add(line);
+            }
+            return group;
+        }
+
+        // Left: regular grid
+        const leftGrid = createGrid({ x: -4, y: -2, z: 0 }, 1, 3, 3, null, 0x000000);
+        scene.add(leftGrid);
+
+        // Right: transformed grid (simulate perspective skew)
+        function skewTransform(x, y, z, i, j, cols, rows) {
+            // Move grid to the right
+            x += 5.5;
+            // Apply a simple perspective-like skew
+            const skewAmount = 0.5;
+            const depth = 2.5;
+            const factor = 1 - (i / cols) * skewAmount;
+            const newX = x + (i / cols) * 2.0;
+            const newY = y + (i / cols) * 0.7;
+            const newZ = z - (i / cols) * depth;
+            return [newX, newY, newZ];
+        }
+        const rightGrid = createGrid({ x: -4, y: -2, z: 0 }, 1, 3, 3, skewTransform, 0x000000);
+        scene.add(rightGrid);
+
+        // Arrow between grids
+        const arrowDir = new THREE.Vector3(1, 0, 0);
+        const arrowOrigin = new THREE.Vector3(1.2, 0, 0);
+        const arrowLength = 2.2;
+        const arrowHelper = new THREE.ArrowHelper(arrowDir, arrowOrigin, arrowLength, 0x000000, 0.3, 0.18);
+        scene.add(arrowHelper);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.left = -d * (w / h);
+            camera.right = d * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

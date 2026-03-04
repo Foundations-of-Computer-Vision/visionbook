@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinhole Camera – Interactive 3D Visualization</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        canvas { display: block; }
+
+        /* ── Controls overlay ── */
+        #controls {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: rgba(20, 20, 40, 0.88);
+            backdrop-filter: blur(12px);
+            padding: 18px 22px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.08);
+            width: 310px;
+            z-index: 10;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+        }
+        #controls h2 {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 14px;
+            color: #7ecfff;
+            letter-spacing: 0.3px;
+        }
+        .ctrl-group {
+            margin-bottom: 12px;
+        }
+        .ctrl-group label {
+            display: block;
+            font-size: 12px;
+            color: #a0b0c0;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .ctrl-group input[type="range"] {
+            width: 100%;
+            accent-color: #7ecfff;
+        }
+        .ctrl-group .val {
+            float: right;
+            font-size: 12px;
+            color: #7ecfff;
+            font-weight: 600;
+        }
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .btn-row button, #controls button {
+            flex: 1;
+            padding: 8px 0;
+            border: 1px solid rgba(126,207,255,0.3);
+            background: rgba(126,207,255,0.08);
+            color: #c0dff0;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-row button:hover, #controls button:hover {
+            background: rgba(126,207,255,0.22);
+            color: #fff;
+        }
+        .btn-row button.active {
+            background: rgba(126,207,255,0.35);
+            color: #fff;
+            border-color: #7ecfff;
+        }
+        .separator {
+            border: none;
+            border-top: 1px solid rgba(255,255,255,0.07);
+            margin: 14px 0;
+        }
+        #info-text {
+            font-size: 12px;
+            line-height: 1.5;
+            color: #90a0b0;
+            margin-top: 6px;
+        }
+        #info-text strong { color: #b0d0f0; }
+
+        /* ── Caption ── */
+        #caption {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 40, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 10px 28px;
+            border-radius: 10px;
+            font-size: 14px;
+            color: #c0dff0;
+            border: 1px solid rgba(255,255,255,0.06);
+            text-align: center;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* --- Legend top-right --- */
+        #legend {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(20,20,40,0.85);
+            backdrop-filter: blur(10px);
+            padding: 14px 18px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.07);
+            z-index: 10;
+            font-size: 12px;
+        }
+        #legend div { display: flex; align-items: center; margin-bottom: 6px; }
+        #legend div:last-child { margin-bottom: 0; }
+        .legend-color {
+            width: 14px; height: 14px;
+            border-radius: 3px;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<!-- Controls Panel -->
+<div id="controls">
+    <h2>Pinhole Camera Controls</h2>
+
+    <div class="btn-row">
+        <button id="btn-no-pinhole" class="active">No Pinhole (a)</button>
+        <button id="btn-pinhole">Pinhole (b)</button>
+    </div>
+
+    <hr class="separator">
+
+    <div class="ctrl-group">
+        <label>Pinhole Size <span class="val" id="val-pinhole">0.30</span></label>
+        <input type="range" id="slider-pinhole" min="0.05" max="1.5" step="0.01" value="0.30">
+    </div>
+    <div class="ctrl-group">
+        <label>Screen Distance <span class="val" id="val-dist">4.0</span></label>
+        <input type="range" id="slider-dist" min="1.5" max="8" step="0.1" value="4.0">
+    </div>
+    <div class="ctrl-group">
+        <label>Number of Rays <span class="val" id="val-rays">7</span></label>
+        <input type="range" id="slider-rays" min="3" max="15" step="1" value="7">
+    </div>
+    <div class="ctrl-group">
+        <label>Ray Opacity <span class="val" id="val-opacity">0.55</span></label>
+        <input type="range" id="slider-opacity" min="0.1" max="1.0" step="0.05" value="0.55">
+    </div>
+
+    <hr class="separator">
+
+    <button id="btn-animate" style="width:100%; margin-bottom:8px;">▶ Animate Rays</button>
+    <button id="btn-reset" style="width:100%;">Reset View</button>
+
+    <div id="info-text"></div>
+</div>
+
+<!-- Legend -->
+<div id="legend">
+    <div><span class="legend-color" style="background:#ff6060"></span> Scene Object (Arrow)</div>
+    <div><span class="legend-color" style="background:#5588bb"></span> Barrier Wall</div>
+    <div><span class="legend-color" style="background:#446688"></span> Projection Screen</div>
+    <div><span class="legend-color" style="background:#ffcc44"></span> Light Rays</div>
+    <div><span class="legend-color" style="background:#44ff88"></span> Projected Image</div>
+</div>
+
+<!-- Caption -->
+<div id="caption">
+    (a) Without a pinhole, light from every direction hits each wall point — no image forms.
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+    }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+
+// ─────── Scene Setup ───────
+const container = document.getElementById('canvas-container');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+scene.fog = new THREE.FogExp2(0x1a1a2e, 0.012);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+camera.position.set(8, 5, 10);
+camera.lookAt(0, 1, 0);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 1.2, 0);
+controls.minDistance = 4;
+controls.maxDistance = 40;
+controls.update();
+
+// ─────── Lighting ───────
+const ambientLight = new THREE.AmbientLight(0x404060, 1.2);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+dirLight.position.set(5, 10, 8);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(2048, 2048);
+scene.add(dirLight);
+
+const fillLight = new THREE.DirectionalLight(0x6688cc, 0.5);
+fillLight.position.set(-5, 3, -5);
+scene.add(fillLight);
+
+// ─────── Ground Plane ───────
+const groundGeo = new THREE.PlaneGeometry(60, 60);
+const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x222240,
+    roughness: 0.9
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Subtle grid
+const gridHelper = new THREE.GridHelper(30, 30, 0x333355, 0x2a2a45);
+gridHelper.position.y = 0.005;
+scene.add(gridHelper);
+
+// ─────── State ───────
+let mode = 'no-pinhole';     // 'no-pinhole' | 'pinhole'
+let pinholeRadius = 0.30;
+let screenDistance = 4.0;
+let numRays = 7;
+let rayOpacity = 0.55;
+let animating = false;
+let animPhase = 0;
+
+// Object-on-scene positions
+const sceneObjectZ = -5;     // where the "world" arrow lives
+const barrierZ = 0;          // barrier (wall with hole)
+
+// ─────── Scene Object: Upright Arrow (the "world" scene) ───────
+const arrowGroup = new THREE.Group();
+scene.add(arrowGroup);
+
+function buildArrow() {
+    // Shaft
+    const shaftH = 2.4;
+    const shaftR = 0.12;
+    const shaftGeo = new THREE.CylinderGeometry(shaftR, shaftR, shaftH, 16);
+    const shaftMat = new THREE.MeshStandardMaterial({ color: 0xff4444, roughness: 0.35, metalness: 0.1 });
+    const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+    shaft.position.y = shaftH / 2;
+    shaft.castShadow = true;
+    arrowGroup.add(shaft);
+
+    // Head
+    const headH = 0.6;
+    const headR = 0.35;
+    const headGeo = new THREE.ConeGeometry(headR, headH, 16);
+    const headMat = new THREE.MeshStandardMaterial({ color: 0xff6666, roughness: 0.35, metalness: 0.1 });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.y = shaftH + headH / 2;
+    head.castShadow = true;
+    arrowGroup.add(head);
+
+    // Base
+    const baseGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.08, 16);
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0xcc3333 });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.position.y = 0.04;
+    arrowGroup.add(base);
+}
+buildArrow();
+arrowGroup.position.set(0, 0, sceneObjectZ);
+
+// Arrow tip/base world positions (for ray targets)
+const arrowTipY = 3.0;
+const arrowBaseY = 0.0;
+const arrowSamplePoints = [];
+for (let i = 0; i < 20; i++) {
+    arrowSamplePoints.push(new THREE.Vector3(0, arrowBaseY + (arrowTipY - arrowBaseY) * i / 19, sceneObjectZ));
+}
+
+// ─────── Barrier Wall ───────
+const barrierGroup = new THREE.Group();
+scene.add(barrierGroup);
+
+const wallMat = new THREE.MeshStandardMaterial({
+    color: 0x3a5577,
+    roughness: 0.7,
+    metalness: 0.05,
+    side: THREE.DoubleSide
+});
+
+function buildBarrier() {
+    // Clear old
+    while (barrierGroup.children.length) barrierGroup.remove(barrierGroup.children[0]);
+
+    const wallW = 8;
+    const wallH = 5;
+    const wallD = 0.15;
+
+    if (mode === 'pinhole') {
+        // Wall with a circular hole – approximate with a shape
+        const shape = new THREE.Shape();
+        shape.moveTo(-wallW / 2, 0);
+        shape.lineTo(wallW / 2, 0);
+        shape.lineTo(wallW / 2, wallH);
+        shape.lineTo(-wallW / 2, wallH);
+        shape.closePath();
+
+        // Hole (circle) centred at (0, wallH/2)
+        const holeCX = 0, holeCY = wallH / 2;
+        const segments = 32;
+        const holePath = new THREE.Path();
+        holePath.absarc(holeCX, holeCY, pinholeRadius, 0, Math.PI * 2, false);
+        shape.holes.push(holePath);
+
+        const extrudeSettings = { depth: wallD, bevelEnabled: false };
+        const wallGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        const wall = new THREE.Mesh(wallGeo, wallMat);
+        wall.position.set(0, 0, barrierZ - wallD / 2);
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        barrierGroup.add(wall);
+
+        // Highlight ring around hole
+        const ringGeo = new THREE.TorusGeometry(pinholeRadius + 0.02, 0.035, 16, 32);
+        const ringMat = new THREE.MeshStandardMaterial({ color: 0xffdd66, emissive: 0x886622, emissiveIntensity: 0.4 });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.set(0, wallH / 2, barrierZ);
+        barrierGroup.add(ring);
+    } else {
+        // Solid wall (no hole) – shown faded to indicate light passes everywhere
+        const wallGeo = new THREE.BoxGeometry(wallW, wallH, wallD);
+        const fadedMat = new THREE.MeshStandardMaterial({
+            color: 0x3a5577,
+            roughness: 0.7,
+            transparent: true,
+            opacity: 0.25,
+            side: THREE.DoubleSide
+        });
+        const wall = new THREE.Mesh(wallGeo, fadedMat);
+        wall.position.set(0, wallH / 2, barrierZ);
+        barrierGroup.add(wall);
+    }
+}
+buildBarrier();
+
+// ─────── Projection Screen ───────
+const screenGroup = new THREE.Group();
+scene.add(screenGroup);
+
+function buildScreen() {
+    while (screenGroup.children.length) screenGroup.remove(screenGroup.children[0]);
+
+    const sw = 6, sh = 4.5, sd = 0.08;
+    const screenGeo = new THREE.BoxGeometry(sw, sh, sd);
+    const screenMat = new THREE.MeshStandardMaterial({
+        color: 0x445566,
+        roughness: 0.85,
+        side: THREE.DoubleSide
+    });
+    const screenMesh = new THREE.Mesh(screenGeo, screenMat);
+    screenMesh.position.set(0, sh / 2, barrierZ + screenDistance);
+    screenMesh.receiveShadow = true;
+    screenGroup.add(screenMesh);
+
+    // Frame
+    const edges = new THREE.EdgesGeometry(screenGeo);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x667799 });
+    const wireframe = new THREE.LineSegments(edges, lineMat);
+    wireframe.position.copy(screenMesh.position);
+    screenGroup.add(wireframe);
+}
+buildScreen();
+
+// ─────── Projected Image (inverted arrow on screen) ───────
+const projGroup = new THREE.Group();
+scene.add(projGroup);
+
+function buildProjectedImage() {
+    while (projGroup.children.length) projGroup.remove(projGroup.children[0]);
+    if (mode !== 'pinhole') return;
+
+    const pinholeY = 2.5; // barrier hole height
+    const projZ = barrierZ + screenDistance - 0.03; // just in front of screen
+
+    // For each sample point on the arrow, compute where the ray through pinhole hits the screen
+    const scale = screenDistance / Math.abs(barrierZ - sceneObjectZ);
+
+    // Inverted arrow on screen
+    // Shaft
+    const invShaftH = 2.4 * scale;
+    const invShaftR = 0.10 * scale;
+    const shaftGeo = new THREE.CylinderGeometry(invShaftR, invShaftR, invShaftH, 12);
+    const shaftMat = new THREE.MeshStandardMaterial({
+        color: 0x44ff88,
+        emissive: 0x22aa55,
+        emissiveIntensity: 0.3,
+        roughness: 0.4
+    });
+    const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+    // The image is inverted: top of arrow maps below pinhole, base maps above
+    // Arrow tip in world: y=3.0, pinhole y=2.5 → offset = 0.5, projected offset = 0.5*scale below pinhole
+    // Arrow base in world: y=0, pinhole y=2.5 → offset = -2.5, projected offset = 2.5*scale above pinhole
+    const centerOffsetY = -((arrowTipY + arrowBaseY) / 2 - pinholeY) * scale;
+    shaft.position.set(0, pinholeY + centerOffsetY, projZ);
+    shaft.rotation.z = Math.PI; // inverted
+    projGroup.add(shaft);
+
+    // Head (inverted → points down)
+    const invHeadH = 0.6 * scale;
+    const invHeadR = 0.30 * scale;
+    const headGeo = new THREE.ConeGeometry(invHeadR, invHeadH, 12);
+    const headMat = new THREE.MeshStandardMaterial({
+        color: 0x66ffaa,
+        emissive: 0x33cc77,
+        emissiveIntensity: 0.3,
+        roughness: 0.4
+    });
+    const head = new THREE.Mesh(headGeo, headMat);
+    // Arrow tip at y=3.0 → projects to pinholeY - (3.0 - pinholeY)*scale
+    const tipProjY = pinholeY - (arrowTipY - pinholeY) * scale;
+    head.position.set(0, tipProjY - invHeadH / 2, projZ);
+    head.rotation.z = Math.PI;
+    projGroup.add(head);
+
+    // Glow on screen
+    const glowGeo = new THREE.PlaneGeometry(1.2 * scale, (arrowTipY) * scale + 0.5);
+    const glowMat = new THREE.MeshBasicMaterial({
+        color: 0x44ff88,
+        transparent: true,
+        opacity: 0.08,
+        side: THREE.DoubleSide
+    });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.set(0, pinholeY + centerOffsetY, projZ + 0.04);
+    projGroup.add(glow);
+}
+buildProjectedImage();
+
+// ─────── Light Rays ───────
+const raysGroup = new THREE.Group();
+scene.add(raysGroup);
+
+function buildRays() {
+    while (raysGroup.children.length) raysGroup.remove(raysGroup.children[0]);
+
+    const pinholeY = 2.5;
+    const pinholePos = new THREE.Vector3(0, pinholeY, barrierZ);
+
+    if (mode === 'pinhole') {
+        // Rays from sample points on arrow → through pinhole → to screen
+        const nSrc = numRays;
+        for (let i = 0; i < nSrc; i++) {
+            const t = i / (nSrc - 1);
+            const srcY = arrowBaseY + (arrowTipY - arrowBaseY) * t;
+            const src = new THREE.Vector3(0, srcY, sceneObjectZ);
+
+            // Direction through pinhole
+            const dir = new THREE.Vector3().subVectors(pinholePos, src).normalize();
+
+            // Extend past pinhole to screen
+            const distToScreen = (barrierZ + screenDistance - src.z) / dir.z;
+            const hitScreen = new THREE.Vector3().copy(src).addScaledVector(dir, distToScreen);
+
+            // Color gradient: bottom = warmer, top = cooler
+            const color = new THREE.Color().lerpColors(
+                new THREE.Color(0xffaa44),
+                new THREE.Color(0xffee88),
+                t
+            );
+
+            // Segment 1: source → pinhole
+            const points1 = [src, pinholePos];
+            const geo1 = new THREE.BufferGeometry().setFromPoints(points1);
+            const mat1 = new THREE.LineBasicMaterial({ color, transparent: true, opacity: rayOpacity });
+            raysGroup.add(new THREE.Line(geo1, mat1));
+
+            // Segment 2: pinhole → screen
+            const points2 = [pinholePos, hitScreen];
+            const geo2 = new THREE.BufferGeometry().setFromPoints(points2);
+            const mat2 = new THREE.LineBasicMaterial({ color, transparent: true, opacity: rayOpacity * 0.7 });
+            raysGroup.add(new THREE.Line(geo2, mat2));
+        }
+    } else {
+        // No pinhole: many rays go from source to random points on the wall
+        const nSrc = numRays;
+        const wallH = 5, wallW = 8;
+        for (let i = 0; i < nSrc; i++) {
+            const t = i / (nSrc - 1);
+            const srcY = arrowBaseY + (arrowTipY - arrowBaseY) * t;
+            const src = new THREE.Vector3(0, srcY, sceneObjectZ);
+
+            const color = new THREE.Color().lerpColors(
+                new THREE.Color(0xffaa44),
+                new THREE.Color(0xffee88),
+                t
+            );
+
+            // Each source sends rays to several points on the far wall
+            const nFan = 5;
+            for (let j = 0; j < nFan; j++) {
+                const fy = (j / (nFan - 1)) * wallH;
+                const fx = (Math.random() - 0.5) * wallW * 0.5;
+                const dest = new THREE.Vector3(fx, fy, barrierZ + screenDistance);
+
+                const points = [src, dest];
+                const geo = new THREE.BufferGeometry().setFromPoints(points);
+                const mat = new THREE.LineBasicMaterial({
+                    color,
+                    transparent: true,
+                    opacity: rayOpacity * 0.4
+                });
+                raysGroup.add(new THREE.Line(geo, mat));
+            }
+        }
+    }
+}
+buildRays();
+
+// ─────── Animated ray dots ───────
+const dotGroup = new THREE.Group();
+scene.add(dotGroup);
+const dotGeo = new THREE.SphereGeometry(0.06, 8, 8);
+const dotMat = new THREE.MeshBasicMaterial({ color: 0xffff88 });
+let dots = [];
+
+function spawnDots() {
+    // Remove old
+    while (dotGroup.children.length) dotGroup.remove(dotGroup.children[0]);
+    dots = [];
+    if (!animating) return;
+
+    const pinholeY = 2.5;
+    const pinholePos = new THREE.Vector3(0, pinholeY, barrierZ);
+
+    if (mode === 'pinhole') {
+        for (let i = 0; i < numRays; i++) {
+            const t = i / (numRays - 1);
+            const srcY = arrowBaseY + (arrowTipY - arrowBaseY) * t;
+            const src = new THREE.Vector3(0, srcY, sceneObjectZ);
+            const dir = new THREE.Vector3().subVectors(pinholePos, src).normalize();
+            const distToScreen = (barrierZ + screenDistance - src.z) / dir.z;
+            const hitScreen = new THREE.Vector3().copy(src).addScaledVector(dir, distToScreen);
+
+            const dot = new THREE.Mesh(dotGeo, dotMat.clone());
+            dot.position.copy(src);
+            dotGroup.add(dot);
+            dots.push({ mesh: dot, src, mid: pinholePos.clone(), dest: hitScreen, phase: Math.random() });
+        }
+    } else {
+        for (let i = 0; i < numRays; i++) {
+            const t = i / (numRays - 1);
+            const srcY = arrowBaseY + (arrowTipY - arrowBaseY) * t;
+            const src = new THREE.Vector3(0, srcY, sceneObjectZ);
+            for (let j = 0; j < 3; j++) {
+                const fy = Math.random() * 5;
+                const fx = (Math.random() - 0.5) * 3;
+                const dest = new THREE.Vector3(fx, fy, barrierZ + screenDistance);
+                const dot = new THREE.Mesh(dotGeo, dotMat.clone());
+                dot.position.copy(src);
+                dotGroup.add(dot);
+                dots.push({ mesh: dot, src, mid: null, dest, phase: Math.random() });
+            }
+        }
+    }
+}
+
+// ─────── Labels (sprites) ───────
+function makeLabel(text, position, color = '#c0dff0', size = 0.45) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 512;
+    canvas.height = 128;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = 'bold 48px Segoe UI, sans-serif';
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.needsUpdate = true;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.position.copy(position);
+    sprite.scale.set(size * (canvas.width / canvas.height), size, 1);
+    scene.add(sprite);
+    return sprite;
+}
+
+makeLabel('Scene Object', new THREE.Vector3(0, 3.8, sceneObjectZ), '#ff8888');
+const barrierLabel = makeLabel('Barrier', new THREE.Vector3(0, 5.5, barrierZ), '#88aacc');
+const screenLabel = makeLabel('Projection Screen', new THREE.Vector3(0, 5.2, barrierZ + screenDistance), '#88aacc');
+const pinholeLabel = makeLabel('Pinhole', new THREE.Vector3(0, 3.6, barrierZ), '#ffdd66', 0.35);
+pinholeLabel.visible = false;
+
+// Optical axis (dashed line)
+const axisMat = new THREE.LineDashedMaterial({ color: 0x556688, dashSize: 0.3, gapSize: 0.15, transparent: true, opacity: 0.4 });
+const axisGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 2.5, sceneObjectZ - 1),
+    new THREE.Vector3(0, 2.5, barrierZ + screenDistance + 1)
+]);
+const axisLine = new THREE.Line(axisGeo, axisMat);
+axisLine.computeLineDistances();
+scene.add(axisLine);
+
+// ─────── Rebuild Everything ───────
+function rebuild() {
+    buildBarrier();
+    buildScreen();
+    buildProjectedImage();
+    buildRays();
+    if (animating) spawnDots();
+
+    screenLabel.position.z = barrierZ + screenDistance;
+    pinholeLabel.visible = (mode === 'pinhole');
+
+    // Update axis
+    const pts = [
+        new THREE.Vector3(0, 2.5, sceneObjectZ - 1),
+        new THREE.Vector3(0, 2.5, barrierZ + screenDistance + 1)
+    ];
+    axisLine.geometry.setFromPoints(pts);
+    axisLine.computeLineDistances();
+
+    // Update info & caption
+    const infoEl = document.getElementById('info-text');
+    const captionEl = document.getElementById('caption');
+    if (mode === 'pinhole') {
+        infoEl.innerHTML = `<strong>Pinhole camera:</strong> Only rays passing through the small aperture reach the screen, creating an <strong>inverted image</strong>. Larger hole → brighter but blurrier.`;
+        captionEl.textContent = '(b) The pinhole restricts light rays reaching the wall, producing an inverted image.';
+    } else {
+        infoEl.innerHTML = `<strong>No pinhole:</strong> Light from every part of the scene reaches every point on the wall — all signals mix together and <strong>no image forms</strong>.`;
+        captionEl.textContent = '(a) Without a pinhole, light from every direction hits each wall point — no image forms.';
+    }
+}
+
+// ─────── UI Wiring ───────
+document.getElementById('btn-no-pinhole').addEventListener('click', () => {
+    mode = 'no-pinhole';
+    document.getElementById('btn-no-pinhole').classList.add('active');
+    document.getElementById('btn-pinhole').classList.remove('active');
+    rebuild();
+});
+document.getElementById('btn-pinhole').addEventListener('click', () => {
+    mode = 'pinhole';
+    document.getElementById('btn-pinhole').classList.add('active');
+    document.getElementById('btn-no-pinhole').classList.remove('active');
+    rebuild();
+});
+
+document.getElementById('slider-pinhole').addEventListener('input', e => {
+    pinholeRadius = parseFloat(e.target.value);
+    document.getElementById('val-pinhole').textContent = pinholeRadius.toFixed(2);
+    rebuild();
+});
+document.getElementById('slider-dist').addEventListener('input', e => {
+    screenDistance = parseFloat(e.target.value);
+    document.getElementById('val-dist').textContent = screenDistance.toFixed(1);
+    rebuild();
+});
+document.getElementById('slider-rays').addEventListener('input', e => {
+    numRays = parseInt(e.target.value);
+    document.getElementById('val-rays').textContent = numRays;
+    rebuild();
+});
+document.getElementById('slider-opacity').addEventListener('input', e => {
+    rayOpacity = parseFloat(e.target.value);
+    document.getElementById('val-opacity').textContent = rayOpacity.toFixed(2);
+    rebuild();
+});
+
+document.getElementById('btn-animate').addEventListener('click', () => {
+    animating = !animating;
+    document.getElementById('btn-animate').textContent = animating ? '⏸ Pause Rays' : '▶ Animate Rays';
+    if (animating) spawnDots();
+    else { while (dotGroup.children.length) dotGroup.remove(dotGroup.children[0]); dots = []; }
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+    camera.position.set(8, 5, 10);
+    controls.target.set(0, 1.2, 0);
+    controls.update();
+});
+
+// ─────── Animate ───────
+const clock = new THREE.Clock();
+function animate() {
+    requestAnimationFrame(animate);
+    const dt = clock.getDelta();
+    controls.update();
+
+    // Animate dots along rays
+    if (animating) {
+        animPhase += dt * 0.35;
+        for (const d of dots) {
+            let p = (d.phase + animPhase) % 1.0;
+            if (d.mid) {
+                // Two-segment: src→mid→dest
+                if (p < 0.5) {
+                    const t = p / 0.5;
+                    d.mesh.position.lerpVectors(d.src, d.mid, t);
+                } else {
+                    const t = (p - 0.5) / 0.5;
+                    d.mesh.position.lerpVectors(d.mid, d.dest, t);
+                }
+            } else {
+                d.mesh.position.lerpVectors(d.src, d.dest, p);
+            }
+            // Pulse size
+            const s = 0.8 + 0.4 * Math.sin(p * Math.PI);
+            d.mesh.scale.setScalar(s);
+        }
+    }
+
+    renderer.render(scene, camera);
+}
+animate();
+
+// ─────── Resize ───────
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Initial info
+rebuild();
+</script>
+</body>
+</html>

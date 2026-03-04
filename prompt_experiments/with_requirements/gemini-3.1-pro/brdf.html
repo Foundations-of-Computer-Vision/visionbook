@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRDF & Light Scattering Visualization</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 320px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+            border: 1px solid #ddd;
+            z-index: 10;
+        }
+
+        h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #333;
+        }
+
+        p.description {
+            font-size: 13px;
+            color: #555;
+            line-height: 1.4;
+            margin-bottom: 15px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 8px;
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #0052a3;
+        }
+
+        button.secondary {
+            background-color: #e0e0e0;
+            color: #333;
+        }
+
+        button.secondary:hover {
+            background-color: #cccccc;
+        }
+
+        #demo-text {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #0052a3;
+            border-left: 4px solid #0066cc;
+            min-height: 60px;
+            margin-bottom: 10px;
+        }
+
+        /* 3D Labels */
+        .math-label {
+            position: absolute;
+            color: #000;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 22px;
+            font-style: italic;
+            pointer-events: none;
+            text-shadow: 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+        }
+
+        .math-label b {
+            font-style: normal;
+        }
+
+        .math-label sub {
+            font-size: 14px;
+        }
+    </style> <!-- Import Three.js as ES module -->
+    <script
+        type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } } </script>
+</head>
+
+<body>
+
+</body>
+
+</html>
+<div id="ui-panel">
+    <h2>Light Scattering (BRDF)</h2>
+    <p class="description">
+        Interactive 3D model of the textbook figure demonstrating how incoming light reflects off a surface.
+    </p>
+
+    <div id="demo-text">
+        <strong>Step 0:</strong> The complete textbook view. Light arrives, hits the surface, and scatters based on the
+        BRDF function <i>F</i>.
+    </div>
+
+    <div class="control-group">
+        <button id="btn-step">Next Demo Step</button>
+        <button id="btn-reset" class="secondary">Reset to Textbook View</button>
+    </div>
+
+    <div class="control-group">
+        <label for="angle-slider">Incoming Light Angle (&theta;<sub>in</sub>)</label>
+        <input type="range" id="angle-slider" min="10" max="80" value="45">
+    </div>
+</div>
+
+<div id="canvas-container"></div>
+
+<!-- Labels corresponding to the 2D figure -->
+<div id="label-lin" class="math-label">&#8467;<sub>in</sub>(&lambda;)</div>
+<div id="label-p" class="math-label"><b>p</b></div>
+<div id="label-n" class="math-label"><b>n</b></div>
+<div id="label-q" class="math-label"><b>q</b></div>
+<div id="label-lout" class="math-label">&#8467;<sub>out</sub> = F(&#8467;<sub>in</sub>, <b>n</b>, &lambda;, <b>p</b>,
+    <b>q</b>)</div>
+
+<script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // --- 1. SCENE SETUP ---
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#ffffff');
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // --- 2. GEOMETRY CREATION (2D to 3D Mapping) ---
+    // The 2D figure shows a perspective view of a plane, vectors, and rays.
+    // We recreate these as true 3D objects.
+
+    const objects = {}; // Store references for interactivity
+
+    // A. The Surface (Green Plane)
+    // Maps to the green parallelogram in the 2D figure.
+    const planeGeo = new THREE.PlaneGeometry(12, 12);
+    const planeMat = new THREE.MeshBasicMaterial({ color: 0x7CFC00, side: THREE.DoubleSide });
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.rotation.x = -Math.PI / 2;
+    scene.add(plane);
+
+    // Black outline for the plane to match the drawing style
+    const edgesGeo = new THREE.EdgesGeometry(planeGeo);
+    const edgesMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+    const planeEdges = new THREE.LineSegments(edgesGeo, edgesMat);
+    planeEdges.rotation.x = -Math.PI / 2;
+    scene.add(planeEdges);
+
+    // B. The Origin Circle
+    // Maps to the small black circle at the intersection point.
+    const circleGeo = new THREE.RingGeometry(0.15, 0.2, 32);
+    const circleMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+    const circle = new THREE.Mesh(circleGeo, circleMat);
+    circle.rotation.x = -Math.PI / 2;
+    circle.position.y = 0.01; // Slightly above plane to prevent z-fighting
+    scene.add(circle);
+
+    // C. Right Angle Symbol
+    // Maps to the square symbol between the normal and the plane.
+    const rightAngleGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0.4, 0, 0),
+        new THREE.Vector3(0.4, 0.4, 0),
+        new THREE.Vector3(0, 0.4, 0)
+    ]);
+    const rightAngleMat = new THREE.LineBasicMaterial({ color: 0x000000 });
+    const rightAngle = new THREE.Line(rightAngleGeo, rightAngleMat);
+    // Rotate to align roughly with the outgoing vector q
+    rightAngle.rotation.y = Math.PI / 4;
+    scene.add(rightAngle);
+
+    // Helper function to create thick arrows (better than ArrowHelper for matching the drawing)
+    function createThickArrow(dir, origin, length, color, thickness, headScale = 2.5) {
+        const group = new THREE.Group();
+        const shaftLength = length * 0.75;
+        const headLength = length * 0.25;
+
+        const shaftGeo = new THREE.CylinderGeometry(thickness, thickness, shaftLength, 16);
+        const headGeo = new THREE.ConeGeometry(thickness * headScale, headLength, 16);
+        const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: color === 0x32CD32 ? 0.6 : 1.0 });
+
+        const shaft = new THREE.Mesh(shaftGeo, mat);
+        shaft.position.y = shaftLength / 2;
+        const head = new THREE.Mesh(headGeo, mat);
+        head.position.y = shaftLength + headLength / 2;
+
+        group.add(shaft);
+        group.add(head);
+
+        // Align
+        group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+        group.position.copy(origin);
+        return group;
+    }
+
+    // D. Normal Vector (n)
+    // Maps to the black arrow pointing straight up.
+    objects.n = createThickArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 2.5, 0x111111, 0.06);
+    scene.add(objects.n);
+
+    // E. Outgoing Vector (q)
+    // Maps to the black arrow pointing towards the viewer/right.
+    const dirQ = new THREE.Vector3(1, 0.8, 0.5).normalize();
+    objects.q = createThickArrow(dirQ, new THREE.Vector3(0, 0, 0), 2.5, 0x111111, 0.06);
+    scene.add(objects.q);
+
+    // F. Outgoing Light Ray (l_out)
+    // Maps to the dark green arrow representing the specific scattered light.
+    objects.lout = createThickArrow(dirQ, new THREE.Vector3(0, 0, 0), 4.5, 0x006400, 0.08);
+    scene.add(objects.lout);
+
+    // G. Scattered Rays
+    // Maps to the multiple light green arrows.
+    objects.scatteredGroup = new THREE.Group();
+    const scatterDirs = [
+        new THREE.Vector3(1, 0.3, 1), new THREE.Vector3(-1, 0.5, 1),
+        new THREE.Vector3(0.5, 0.8, -1), new THREE.Vector3(-0.8, 0.4, -0.5),
+        new THREE.Vector3(0, 0.6, 1.2), new THREE.Vector3(1.2, 0.2, -0.2),
+        new THREE.Vector3(-1, 0.2, 0)
+    ];
+    scatterDirs.forEach(dir => {
+        const arrow = createThickArrow(dir.normalize(), new THREE.Vector3(0, 0, 0), 3, 0x32CD32, 0.05);
+        objects.scatteredGroup.add(arrow);
+    });
+    scene.add(objects.scatteredGroup);
+
+    // H. Incoming Light Ray (l_in) & Vector (p)
+    // Maps to the yellow/orange gradient beam and the black vector pointing to the origin.
+
+    // Create gradient texture for the incoming ray
+    const canvas = document.createElement('canvas');
+    canvas.width = 2; canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+    gradient.addColorStop(0, "#FFD700"); // Yellow
+    gradient.addColorStop(1, "#FF4500"); // Orange
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 2, 256);
+    const tex = new THREE.CanvasTexture(canvas);
+
+    const linGeo = new THREE.CylinderGeometry(0.12, 0.12, 6, 16);
+    // Translate geometry so its base is at the origin
+    linGeo.translate(0, 3, 0);
+    const linMat = new THREE.MeshBasicMaterial({ map: tex });
+    objects.lin = new THREE.Mesh(linGeo, linMat);
+    scene.add(objects.lin);
+
+    // Vector p (points towards origin, so we offset its start position)
+    objects.p = createThickArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 2.0, 0x111111, 0.06);
+    scene.add(objects.p);
+
+    // Function to update incoming light based on angle
+    function updateIncomingLight(angleDegrees) {
+        const angleRad = THREE.MathUtils.degToRad(angleDegrees);
+        // Direction from light source to origin
+        const dirIn = new THREE.Vector3(-Math.sin(angleRad), -Math.cos(angleRad), 0).normalize();
+
+        // Update l_in cylinder
+        // We want the cylinder to point *from* the source *to* the origin.
+        // Since we translated the geometry up by half length, we rotate it to point along -dirIn
+        objects.lin.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirIn.clone().multiplyScalar(-1));
+
+        // Update p arrow
+        // p points towards the origin. Its direction is dirIn.
+        // To make the arrowhead end at the origin, we start it at -dirIn * length
+        const pLength = 2.0;
+        objects.p.position.copy(dirIn.clone().multiplyScalar(-pLength));
+        objects.p.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirIn);
+    }
+
+    // --- 3. INTERACTIVITY & EDUCATIONAL DEMO ---
+
+    let currentStep = 0;
+    const demoText = document.getElementById('demo-text');
+    const btnStep = document.getElementById('btn-step');
+    const btnReset = document.getElementById('btn-reset');
+    const angleSlider = document.getElementById('angle-slider');
+
+    const steps = [
+        {
+            text: "<strong>Step 0:</strong> The complete textbook view. Light arrives, hits the surface, and scatters based on the BRDF function <i>F</i>.",
+            state: { lin: true, p: true, n: true, scattered: true, q: true, lout: true }
+        },
+        {
+            text: "<strong>Step 1: Incoming Light.</strong> Light <i>&#8467;<sub>in</sub></i> arrives at the surface. The vector <b>p</b> defines the direction of this incoming light.",
+            state: { lin: true, p: true, n: false, scattered: false, q: false, lout: false }
+        },
+        {
+            text: "<strong>Step 2: Surface Normal.</strong> The vector <b>n</b> is perpendicular to the surface. The angle between <b>p</b> and <b>n</b> is crucial for calculating reflection.",
+            state: { lin: true, p: true, n: true, scattered: false, q: false, lout: false }
+        },
+        {
+            text: "<strong>Step 3: Scattering.</strong> When light hits a non-perfect mirror, it scatters in many directions across the hemisphere.",
+            state: { lin: true, p: true, n: true, scattered: true, q: false, lout: false }
+        },
+        {
+            text: "<strong>Step 4: The BRDF.</strong> To find the light <i>&#8467;<sub>out</sub></i> seen from a specific viewing direction <b>q</b>, we use the BRDF function <i>F</i>.",
+            state: { lin: true, p: true, n: true, scattered: true, q: true, lout: true }
+        }
+    ];
+
+    function applyStep(stepIndex) {
+        const step = steps[stepIndex];
+        demoText.innerHTML = step.text;
+
+        objects.lin.visible = step.state.lin;
+        objects.p.visible = step.state.p;
+        objects.n.visible = step.state.n;
+        rightAngle.visible = step.state.n;
+        objects.scatteredGroup.visible = step.state.scattered;
+        objects.q.visible = step.state.q;
+        objects.lout.visible = step.state.lout;
+
+        // Toggle labels based on visibility
+        document.getElementById('label-lin').style.display = step.state.lin ? 'block' : 'none';
+        document.getElementById('label-p').style.display = step.state.p ? 'block' : 'none';
+        document.getElementById('label-n').style.display = step.state.n ? 'block' : 'none';
+        document.getElementById('label-q').style.display = step.state.q ? 'block' : 'none';
+        document.getElementById('label-lout').style.display = step.state.lout ? 'block' : 'none';
+    }
+
+    btnStep.addEventListener('click', () => {
+        currentStep = (currentStep + 1) % steps.length;
+        if (currentStep === 0) currentStep = 1; // Skip step 0 on cycle
+        applyStep(currentStep);
+    });
+
+    function resetView() {
+        currentStep = 0;
+        applyStep(0);
+        angleSlider.value = 45;
+        updateIncomingLight(45);
+
+        // Set camera to match the 2D textbook perspective
+        camera.position.set(0, 5, 10);
+        controls.target.set(0, 0, 0);
+        controls.update();
+    }
+
+    btnReset.addEventListener('click', resetView);
+
+    angleSlider.addEventListener('input', (e) => {
+        updateIncomingLight(e.target.value);
+    });
+
+    // --- 4. LABELS & RENDER LOOP ---
+
+    const labels = {
+        lin: document.getElementById('label-lin'),
+        p: document.getElementById('label-p'),
+        n: document.getElementById('label-n'),
+        q: document.getElementById('label-q'),
+        lout: document.getElementById('label-lout')
+    };
+
+    // Helper to project 3D coordinates to 2D screen space for HTML labels
+    function updateLabelPosition(element, position3D) {
+        if (element.style.display === 'none') return;
+        const pos = position3D.clone();
+        pos.project(camera);
+
+        // Check if behind camera
+        if (pos.z > 1) {
+            element.style.display = 'none';
+            return;
+        } else if (element.style.display === 'none' && objects.lin.visible) {
+            // Basic visibility check based on current step state is handled in applyStep
+            element.style.display = 'block';
+        }
+
+        const x = (pos.x * 0.5 + 0.5) * window.innerWidth;
+        const y = (pos.y * -0.5 + 0.5) * window.innerHeight;
+        element.style.left = `${x}px`;
+        element.style.top = `${y}px`;
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+
+        // Update label positions dynamically
+
+        // l_in label: halfway up the incoming ray
+        const angleRad = THREE.MathUtils.degToRad(angleSlider.value);
+        const dirIn = new THREE.Vector3(-Math.sin(angleRad), -Math.cos(angleRad), 0).normalize();
+        updateLabelPosition(labels.lin, dirIn.clone().multiplyScalar(-4));
+
+        // p label: near the p arrow
+        updateLabelPosition(labels.p, dirIn.clone().multiplyScalar(-1.5).add(new THREE.Vector3(-0.3, 0.3, 0)));
+
+        // n label: tip of normal
+        updateLabelPosition(labels.n, new THREE.Vector3(0, 2.8, 0));
+
+        // q label: tip of q arrow
+        updateLabelPosition(labels.q, dirQ.clone().multiplyScalar(2.8));
+
+        // l_out label: tip of l_out arrow
+        updateLabelPosition(labels.lout, dirQ.clone().multiplyScalar(5.0));
+
+        renderer.render(scene, camera);
+    }
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Initialize
+    resetView();
+    animate();
+
+</script>

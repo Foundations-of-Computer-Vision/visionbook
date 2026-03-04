@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Camera Projection</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Times New Roman', serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            block-size: 100vh;
+        }
+
+        .label {
+            color: black;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 0 0 4px white;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .math-label {
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            font-size: 18px;
+        }
+    </style>
+    <!-- Import maps polyfill -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(-8, 6, 15); // Adjust to match the diagram view approximately
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none'; // allow orbital controls to work
+        document.getElementById('canvas-container').appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        // labelRenderer blocks events, so we need to attach controls to the renderer dom or overlay
+        // Actually if we set pointerEvents none on labelRenderer, we can attach controls to renderer.domElement
+        // But we need to make sure the label container sits on top.
+
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // --- Constants & Materials ---
+        const COLOR_CAMERA_CENTER = 0x000000;
+        const COLOR_RAYS = 0x000000;
+        const COLOR_POINT_HIGHLIGHT = 0x00FFFF; // Cyan
+        const COLOR_PLANE_FILL = 0xCCCCCC;
+        const COLOR_PLANE_EDGE = 0x000000;
+        const COLOR_AXIS_X = 0xFF0000;
+        const COLOR_AXIS_Y = 0x00FF00;
+        const COLOR_AXIS_Z = 0x0000FF;
+
+        // --- Geometry Utility Functions ---
+
+        function createLabel(text, className = 'label') {
+            const div = document.createElement('div');
+            div.className = className;
+            div.textContent = text;
+            // Handle limited HTML/Math formatting manually if needed, or just insert as text
+            if (text.includes("<i>")) {
+                div.innerHTML = text;
+            }
+            return new CSS2DObject(div);
+        }
+
+        function createPoint(position, color, radius = 0.15) {
+            const geometry = new THREE.SphereGeometry(radius, 32, 32);
+            const material = new THREE.MeshBasicMaterial({ color: color });
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.copy(position);
+            return sphere;
+        }
+
+        function createLine(start, end, dashed = false, color = 0x000000) {
+            const points = [start, end];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            let material;
+            if (dashed) {
+                material = new THREE.LineDashedMaterial({
+                    color: color,
+                    linewidth: 1,
+                    scale: 1,
+                    dashSize: 0.5,
+                    gapSize: 0.3,
+                });
+            } else {
+                material = new THREE.LineBasicMaterial({ color: color });
+            }
+            const line = new THREE.Line(geometry, material);
+            if (dashed) line.computeLineDistances();
+            return line;
+        }
+
+        function createArrow(dir, origin, length, color, headLength = 0.5, headWidth = 0.3) {
+            return new THREE.ArrowHelper(dir.normalize(), origin, length, color, headLength, headWidth);
+        }
+
+        // --- Scene Construction ---
+
+        // 1. Camera Center (C)
+        // Let's place Camera Center at origin for simplicity of mental model, 
+        // or place it back to match the "looking at" feel. 
+        // Diagram: Camera Center is top-left-back.
+        const camCenterPos = new THREE.Vector3(-4, 4, 8);
+        const camCenter = createPoint(camCenterPos, COLOR_CAMERA_CENTER, 0.2);
+        scene.add(camCenter);
+
+        const labelCamCenter = createLabel("Camera\ncenter");
+        labelCamCenter.position.set(0, 0.5, 0);
+        camCenter.add(labelCamCenter);
+
+        // 2. Camera Plane (Image Plane)
+        // Positioned along the view direction from camera center.
+        // Let's define a "view direction" towards region (0,0,0).
+        // Let's say camera looks towards (2, 0, 0)
+        const targetPos = new THREE.Vector3(4, -2, -4);
+        const viewDir = new THREE.Vector3().subVectors(targetPos, camCenterPos).normalize();
+
+        // Distance to image plane
+        const f = 5;
+        const imagePlaneCenter = new THREE.Vector3().copy(camCenterPos).add(viewDir.clone().multiplyScalar(f));
+
+        // Construct Image Plane orientation
+        // We need a Local Up vector. Standard is Y usually.
+        const worldUp = new THREE.Vector3(0, 1, 0);
+        const cameraRight = new THREE.Vector3().crossVectors(viewDir, worldUp).normalize();
+        const cameraUp = new THREE.Vector3().crossVectors(cameraRight, viewDir).normalize();
+
+        const planeWidth = 4;
+        const planeHeight = 3;
+
+        const imagePlaneGroup = new THREE.Group();
+        imagePlaneGroup.position.copy(imagePlaneCenter);
+        // Rotate to face viewDir
+        const quaternion = new THREE.Quaternion().setFromRotationMatrix(
+            new THREE.Matrix4().lookAt(camCenterPos, targetPos, worldUp)
+        );
+        imagePlaneGroup.quaternion.copy(quaternion);
+
+        // The lookAt function rotates the +Z axis to point at the eye.
+        // Three.js PlaneGeometry lies in XY plane. We want it to be perpendicular to view (Z axis).
+        // So default PlaneGeometry matches the lookAt frame (facing the camera center basically).
+
+        const imgPlaneGeom = new THREE.PlaneGeometry(planeWidth, planeHeight);
+        const imgPlaneMat = new THREE.MeshBasicMaterial({
+            color: 0xeeeeee,
+            transparent: true,
+            opacity: 0.5,
+            side: THREE.DoubleSide,
+            depthWrite: false // nicer transparency
+        });
+        const imgPlaneMesh = new THREE.Mesh(imgPlaneGeom, imgPlaneMat);
+        imagePlaneGroup.add(imgPlaneMesh);
+
+        const imgPlaneEdges = new THREE.EdgesGeometry(imgPlaneGeom);
+        const imgPlaneLines = new THREE.LineSegments(imgPlaneEdges, new THREE.LineBasicMaterial({ color: 0x000000 }));
+        imagePlaneGroup.add(imgPlaneLines);
+
+        scene.add(imagePlaneGroup);
+
+        const labelCamPlane = createLabel("Camera plane");
+        labelCamPlane.position.set(0, planeHeight / 2 + 0.5, 0);
+        imagePlaneGroup.add(labelCamPlane); // Attach to group so it moves/rotates
+
+        // 3. Planar Surface (World Plane)
+        // A generic quad somewhat parallel to the image plane but tilted and larger, further away.
+        const worldPlaneCenter = new THREE.Vector3().copy(camCenterPos).add(viewDir.clone().multiplyScalar(15));
+
+        // Let's create a custom quad for the "Planar Surface" so it looks irregular/perspective-y like the diagram
+        // Actually, just a tilted plane is fine.
+        const worldPlaneGroup = new THREE.Group();
+        worldPlaneGroup.position.copy(worldPlaneCenter);
+
+        // Tilt it a bit
+        // Rotate slightly around X and Y
+        worldPlaneGroup.rotation.x = -Math.PI / 4;
+        worldPlaneGroup.rotation.z = Math.PI / 8;
+
+        const worldPlaneGeom = new THREE.PlaneGeometry(12, 10);
+        const worldPlaneMat = new THREE.MeshBasicMaterial({
+            color: 0xcccccc,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.8
+        });
+        const worldPlaneMesh = new THREE.Mesh(worldPlaneGeom, worldPlaneMat);
+        worldPlaneGroup.add(worldPlaneMesh);
+
+        const worldPlaneEdges = new THREE.EdgesGeometry(worldPlaneGeom);
+        const worldPlaneLines = new THREE.LineSegments(worldPlaneEdges, new THREE.LineBasicMaterial({ color: 0x000000 }));
+        worldPlaneGroup.add(worldPlaneLines);
+
+        scene.add(worldPlaneGroup);
+
+        const labelWorldPlane = createLabel("planar surface");
+        labelWorldPlane.position.set(6, 0, 0); // Offset to side
+        worldPlaneGroup.add(labelWorldPlane);
+
+        // 4. Points & Rays
+        // We define a point on the world plane geometry (local coords), then transform to world space.
+        const ptWorldLocal = new THREE.Vector3(2, 1, 0);
+        // Need to calculate absolute position
+        const ptWorldGlobal = ptWorldLocal.clone().applyMatrix4(worldPlaneMesh.matrixWorld);
+
+        // Wait, matrixWorld might not be updated yet until render
+        worldPlaneGroup.updateMatrixWorld(true);
+        const pWorld = new THREE.Vector3(2, 2, 0); // Local to plane group
+        pWorld.applyMatrix4(worldPlaneGroup.matrixWorld);
+
+        // Another point to show the field of view or just generic
+        const pWorld2 = new THREE.Vector3(-3, -1, 0);
+        pWorld2.applyMatrix4(worldPlaneGroup.matrixWorld);
+
+        // Ray from Camera Center to World Point
+        // Intersect with Image Plane?
+        // Actually, simpler: The ray is just Line(CamCenter, P_World).
+        // The intersection P_img is on the line.
+        // We need to calculate intersection point with the Image Plane.
+
+        // Plane definition for intersection:
+        // Normal is -viewDir (pointing back to camera), Point is imagePlaneCenter.
+        // Use Ray-Plane intersection math.
+        const ray = new THREE.Ray(camCenterPos, pWorld.clone().sub(camCenterPos).normalize());
+        const planeMath = new THREE.Plane().setFromNormalAndCoplanarPoint(viewDir, imagePlaneCenter);
+        const pImage = new THREE.Vector3();
+        ray.intersectPlane(planeMath, pImage);
+
+        // Draw Ray
+        const rayLine = createLine(camCenterPos, pWorld, true, COLOR_RAYS);
+        scene.add(rayLine);
+
+        // Additional dashed lines for frustum corners (optional, like in diagram)
+        // Diagram has 4 lines from center to corners of image plane, extended to world
+        // Let's add those corners.
+        const w = planeWidth / 2;
+        const h = planeHeight / 2;
+        const cornersLocal = [
+            new THREE.Vector3(-w, h, 0),
+            new THREE.Vector3(w, h, 0),
+            new THREE.Vector3(-w, -h, 0),
+            new THREE.Vector3(w, -h, 0)
+        ];
+
+        cornersLocal.forEach(c => {
+            // Transform to world
+            c.applyMatrix4(imagePlaneGroup.matrixWorld);
+            // Draw ray from center through corner, extending further
+            const dir = c.clone().sub(camCenterPos).normalize();
+            const farPoint = camCenterPos.clone().add(dir.multiplyScalar(20));
+            const frustumLine = createLine(camCenterPos, farPoint, true, 0x333333);
+            scene.add(frustumLine);
+        });
+
+        // Add Points Visuals
+        const spherePWorld = createPoint(pWorld, COLOR_POINT_HIGHLIGHT);
+        scene.add(spherePWorld);
+        const labelPWorld = createLabel("<i>(X, Y, 0)</i>", "math-label");
+        labelPWorld.position.set(0, 0.5, 0); // slight offset
+        spherePWorld.add(labelPWorld);
+
+        const spherePImage = createPoint(pImage, COLOR_POINT_HIGHLIGHT);
+        scene.add(spherePImage);
+        const labelPImage = createLabel("<i>(x, y)</i>", "math-label");
+        labelPImage.position.set(0, 0.5, 0);
+        spherePImage.add(labelPImage);
+
+
+        // 5. Coordinate Systems
+
+        // Image Plane Coordinate System (x, y)
+        // Local to Image Plane Group
+        // x is right, y is up (in image plane local space)
+        const axisLengthImg = 1.5;
+        const axisXImg = createArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(-planeWidth / 2 - 0.5, -planeHeight / 2, 0), axisLengthImg, 0x00FF00); // Green for y? Diagram shows green for both
+        // Actually diagram: y is up (green), x is right (green) - diagram colors match local axes usually
+        const axisYImg = createArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-planeWidth / 2 - 0.5, -planeHeight / 2, 0), axisLengthImg, 0x00FF00);
+
+        imagePlaneGroup.add(axisXImg);
+        imagePlaneGroup.add(axisYImg);
+
+        const labelXImg = createLabel("<i>x</i>", "math-label");
+        labelXImg.position.set(axisLengthImg, 0, 0);
+        axisXImg.add(labelXImg);
+
+        const labelYImg = createLabel("<i>y</i>", "math-label");
+        labelYImg.position.set(0, axisLengthImg, 0);
+        axisYImg.add(labelYImg);
+
+        // World Coordinate System (X, Y, Z)
+        // On the planar surface.
+        // Let's place the origin on the plane somewhere.
+        const axisLengthWorld = 2;
+        const worldOriginLocal = new THREE.Vector3(-3, -2, 0);
+
+        // We attach these to the worldPlaneGroup so they rotate with it
+        // Normal is Z in local space (0,0,1)
+
+        // X axis (Red)
+        const axisXWorld = createArrow(new THREE.Vector3(1, 0, 0), worldOriginLocal, axisLengthWorld, 0xFF0000);
+        worldPlaneGroup.add(axisXWorld);
+        const labelXWorld = createLabel("<i>X</i>", "math-label");
+        labelXWorld.position.set(axisLengthWorld + 0.2, 0, 0);
+        axisXWorld.add(labelXWorld);
+
+        // Y axis (Red)
+        const axisYWorld = createArrow(new THREE.Vector3(0, 1, 0), worldOriginLocal, axisLengthWorld, 0xFF0000);
+        worldPlaneGroup.add(axisYWorld);
+        const labelYWorld = createLabel("<i>Y</i>", "math-label");
+        labelYWorld.position.set(0, axisLengthWorld + 0.2, 0);
+        axisYWorld.add(labelYWorld);
+
+        // Z axis (Red) - Normal to plane
+        const axisZWorld = createArrow(new THREE.Vector3(0, 0, 1), worldOriginLocal, axisLengthWorld, 0xFF0000);
+        worldPlaneGroup.add(axisZWorld);
+        const labelZWorld = createLabel("<i>Z</i>", "math-label");
+        labelZWorld.position.set(0, 0, axisLengthWorld + 0.2);
+        axisZWorld.add(labelZWorld);
+
+        // Right Angle indicator between Z and plane? Maybe too detailed.
+
+
+        // --- Render Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        // Handle Resize
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        animate();
+
+    </script>
+</body>
+
+</html>

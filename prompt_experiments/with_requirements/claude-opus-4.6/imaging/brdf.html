@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Interactive BRDF / Surface Reflectance Visualization</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#1a1a2e; font-family:'Segoe UI',Arial,sans-serif; overflow:hidden; color:#eee; }
+  canvas { display:block; }
+
+  /* ── UI overlay ── */
+  #ui {
+    position:absolute; top:12px; left:12px; z-index:10;
+    display:flex; flex-direction:column; gap:8px; max-width:320px;
+  }
+  .panel {
+    background:rgba(20,20,40,.88); border:1px solid rgba(255,255,255,.12);
+    border-radius:10px; padding:12px 14px; backdrop-filter:blur(6px);
+  }
+  .panel h2 { font-size:13px; margin-bottom:6px; color:#8cf; letter-spacing:.4px; }
+  .panel p  { font-size:11.5px; line-height:1.45; color:#ccd; }
+
+  .btn-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .btn {
+    padding:5px 11px; font-size:11.5px; border:1px solid rgba(255,255,255,.18);
+    border-radius:6px; background:rgba(255,255,255,.07); color:#dde; cursor:pointer;
+    transition:background .15s,border-color .15s;
+  }
+  .btn:hover { background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.35); }
+  .btn.active { background:rgba(100,180,255,.25); border-color:#6af; color:#fff; }
+
+  label.slider-label {
+    display:flex; align-items:center; gap:8px; font-size:11.5px; margin-top:4px;
+  }
+  label.slider-label input[type=range] { flex:1; accent-color:#6af; }
+
+  #step-text {
+    position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+    background:rgba(20,20,40,.9); border:1px solid rgba(255,255,255,.15);
+    border-radius:10px; padding:10px 20px; font-size:13px; text-align:center;
+    max-width:600px; z-index:10; display:none; line-height:1.5;
+    backdrop-filter:blur(6px);
+  }
+  #step-nav {
+    position:absolute; bottom:14px; right:14px; z-index:10;
+    display:flex; gap:6px;
+  }
+  #step-nav .btn { font-size:12px; padding:6px 14px; }
+
+  /* Legend (top-right) */
+  #legend {
+    position:absolute; top:12px; right:12px; z-index:10;
+    background:rgba(20,20,40,.88); border:1px solid rgba(255,255,255,.12);
+    border-radius:10px; padding:10px 14px; backdrop-filter:blur(6px);
+    font-size:11.5px; line-height:1.7;
+  }
+  .legend-dot {
+    display:inline-block; width:10px; height:10px; border-radius:50%;
+    margin-right:5px; vertical-align:middle;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── UI Controls ── -->
+<div id="ui">
+  <!-- Concept panel -->
+  <div class="panel">
+    <h2>BRDF &mdash; Surface Reflectance</h2>
+    <p>A surface point reflects incoming light <b>ℓ<sub>in</sub>(λ)</b> into outgoing
+       light <b>ℓ<sub>out</sub></b> according to the <em>Bidirectional Reflectance
+       Distribution Function</em>: <b>F(ℓ<sub>in</sub>, n, λ, p, q)</b>.</p>
+  </div>
+
+  <!-- BRDF model selector -->
+  <div class="panel">
+    <h2>BRDF Model</h2>
+    <div class="btn-row">
+      <button class="btn active" data-model="phong">Glossy (Phong)</button>
+      <button class="btn" data-model="diffuse">Diffuse (Lambert)</button>
+      <button class="btn" data-model="mirror">Mirror (Specular)</button>
+    </div>
+  </div>
+
+  <!-- Sliders -->
+  <div class="panel">
+    <h2>Parameters</h2>
+    <label class="slider-label">
+      Incoming azimuth
+      <input type="range" id="sl-azimuth" min="-170" max="170" value="-45"/>
+    </label>
+    <label class="slider-label">
+      Incoming elevation
+      <input type="range" id="sl-elevation" min="10" max="85" value="55"/>
+    </label>
+    <label class="slider-label">
+      Shininess
+      <input type="range" id="sl-shininess" min="2" max="200" value="40"/>
+    </label>
+  </div>
+
+  <!-- Toggles -->
+  <div class="panel">
+    <h2>Display</h2>
+    <div class="btn-row">
+      <button class="btn active" id="tog-lobe">Reflection lobe</button>
+      <button class="btn active" id="tog-labels">Labels</button>
+      <button class="btn" id="tog-animate">Animate sun</button>
+      <button class="btn" id="btn-reset">Reset view</button>
+    </div>
+  </div>
+</div>
+
+<!-- Legend -->
+<div id="legend">
+  <span class="legend-dot" style="background:linear-gradient(135deg,#ffd200,#ff4500);"></span> ℓ<sub>in</sub>(λ) &mdash; incoming light<br/>
+  <span class="legend-dot" style="background:#00cc44;"></span> ℓ<sub>out</sub> &mdash; outgoing (observed) ray<br/>
+  <span class="legend-dot" style="background:#22ff66;opacity:.5;"></span> Reflection lobe samples<br/>
+  <span class="legend-dot" style="background:#111;border:1.5px solid #eee;"></span> <b>n</b> &mdash; surface normal<br/>
+  <span class="legend-dot" style="background:#dd2222;"></span> <b>p</b> &mdash; incoming tangent proj.<br/>
+  <span class="legend-dot" style="background:#006622;"></span> <b>q</b> &mdash; outgoing tangent proj.
+</div>
+
+<!-- Step-through text -->
+<div id="step-text"></div>
+<div id="step-nav">
+  <button class="btn" id="step-prev">◀ Prev</button>
+  <button class="btn" id="step-next">Next ▶</button>
+  <button class="btn" id="step-start">Guided Demo</button>
+</div>
+
+<!-- ── Three.js (ES module) ── -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+/* ================================================================
+   GLOBALS & STATE
+   ================================================================ */
+const state = {
+  model: 'phong',       // 'phong' | 'diffuse' | 'mirror'
+  azimuth: -45,         // degrees – incoming light azimuth
+  elevation: 55,        // degrees – incoming light elevation from surface
+  shininess: 40,
+  showLobe: true,
+  showLabels: true,
+  animateSun: false,
+  stepIndex: -1         // -1 = demo inactive
+};
+
+// Textbook camera pose (used by "Reset view")
+const TEXTBOOK_CAM = { pos: new THREE.Vector3(4.5, 3.5, 5.5), target: new THREE.Vector3(0, 0.3, 0) };
+
+/* ================================================================
+   SCENE SETUP
+   ================================================================ */
+const scene    = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+scene.fog = new THREE.FogExp2(0x1a1a2e, 0.035);
+
+const camera   = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 100);
+camera.position.copy(TEXTBOOK_CAM.pos);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// CSS2D label renderer
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(innerWidth, innerHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+document.body.appendChild(labelRenderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(TEXTBOOK_CAM.target);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.update();
+
+// Lights (ambient + directional for subtle surface shading)
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(3, 5, 4);
+scene.add(dirLight);
+
+/* ================================================================
+   SURFACE PLANE  –  represents the green material surface
+   The textbook figure shows a green parallelogram; here we use
+   a flat green plane in 3D on the XZ plane (y = 0).
+   ================================================================ */
+const planeGeo = new THREE.PlaneGeometry(8, 8);
+const planeMat = new THREE.MeshPhongMaterial({
+  color: 0x22cc44, side: THREE.DoubleSide, transparent: true, opacity: 0.82,
+  shininess: 30, specular: 0x115522
+});
+const planeMesh = new THREE.Mesh(planeGeo, planeMat);
+planeMesh.rotation.x = -Math.PI / 2;  // lay flat on XZ
+scene.add(planeMesh);
+
+// Thin grid for depth cue
+const gridHelper = new THREE.GridHelper(8, 16, 0x116622, 0x116622);
+gridHelper.position.y = 0.005;
+gridHelper.material.opacity = 0.25;
+gridHelper.material.transparent = true;
+scene.add(gridHelper);
+
+/* ================================================================
+   HELPER: thick arrow from ArrowHelper (color, origin, dir, len)
+   ================================================================ */
+function makeArrow(color, origin, dir, len, headLen, headW, opacity=1) {
+  const ah = new THREE.ArrowHelper(dir.clone().normalize(), origin, len, color, headLen, headW);
+  if (opacity < 1) {
+    ah.line.material.transparent = true;
+    ah.line.material.opacity = opacity;
+    ah.cone.material.transparent = true;
+    ah.cone.material.opacity = opacity;
+  }
+  return ah;
+}
+
+/* ================================================================
+   HELPER: CSS2D label
+   ================================================================ */
+function makeLabel(text, fontSize='14px', color='#fff', bold=false) {
+  const div = document.createElement('div');
+  div.innerHTML = text;
+  div.style.cssText = `font-family:'Segoe UI',Arial,sans-serif;font-size:${fontSize};color:${color};
+    text-shadow:0 0 6px rgba(0,0,0,.85);pointer-events:none;white-space:nowrap;${bold?'font-weight:700':''}`;
+  const obj = new CSS2DObject(div);
+  return obj;
+}
+
+/* ================================================================
+   DYNAMIC OBJECTS GROUP  –  rebuilt whenever parameters change
+   ================================================================ */
+const dynGroup = new THREE.Group();
+scene.add(dynGroup);
+
+const labelGroup = new THREE.Group(); // labels separate so we can toggle
+scene.add(labelGroup);
+
+/* incoming light ray line (gradient via vertex colors) */
+let incomingLine;
+
+/* ================================================================
+   REBUILD  –  the core function that recalculates geometry from state
+   ================================================================ */
+function rebuild() {
+  // Clear previous
+  dynGroup.clear();
+  labelGroup.clear();
+
+  const ORIGIN = new THREE.Vector3(0, 0, 0);
+
+  // ── Incoming direction (world space) ──
+  // azimuth: 0 = +X, rotates around Y; elevation: angle from surface (0=grazing, 90=overhead)
+  const azRad  = THREE.MathUtils.degToRad(state.azimuth);
+  const elRad  = THREE.MathUtils.degToRad(state.elevation);
+  const inDir  = new THREE.Vector3(
+    Math.cos(elRad) * Math.cos(azRad),
+    Math.sin(elRad),
+    Math.cos(elRad) * Math.sin(azRad)
+  ).normalize();
+
+  // The incoming light *comes from* inDir; the arrow shows light traveling towards origin
+  const RAY_LEN = 3.0;
+
+  // ── Draw incoming ray as a gradient line (yellow → red → surface) ──
+  // Using a fat line via a tube for visibility
+  {
+    const start = inDir.clone().multiplyScalar(RAY_LEN);
+    const curve = new THREE.LineCurve3(start, ORIGIN);
+    const tubeGeo = new THREE.TubeGeometry(curve, 16, 0.04, 8, false);
+    // Vertex-color gradient: yellow at start → red at end
+    const colors = [];
+    const posAttr = tubeGeo.attributes.position;
+    for (let i = 0; i < posAttr.count; i++) {
+      const v = new THREE.Vector3().fromBufferAttribute(posAttr, i);
+      const t = v.distanceTo(start) / RAY_LEN; // 0 at start, ~1 at origin
+      // lerp yellow(1,0.82,0) → red-orange(1,0.27,0)
+      colors.push(1, 0.82 - 0.55*t, 0);
+    }
+    tubeGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const tubeMat = new THREE.MeshBasicMaterial({ vertexColors:true });
+    dynGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+
+    // Small arrowhead at surface end
+    const coneGeo = new THREE.ConeGeometry(0.08, 0.22, 12);
+    const coneMat = new THREE.MeshBasicMaterial({ color:0xff4500 });
+    const cone = new THREE.Mesh(coneGeo, coneMat);
+    // point cone along -inDir
+    cone.position.copy(inDir.clone().multiplyScalar(0.12));
+    cone.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), inDir.clone().negate());
+    dynGroup.add(cone);
+  }
+
+  // ── Surface normal n ──
+  // Maps to the vertical black arrow labeled "n" in the figure
+  const normalDir = new THREE.Vector3(0, 1, 0);
+  const nArrow = makeArrow(0xeeeeee, ORIGIN, normalDir, 1.8, 0.18, 0.10);
+  dynGroup.add(nArrow);
+
+  // ── p  – projection of incoming direction onto the surface plane ──
+  // The red arrow "p" in the figure: tangent-plane component of the incoming direction
+  const pDir = new THREE.Vector3(inDir.x, 0, inDir.z).normalize();
+  const pArrow = makeArrow(0xdd2222, ORIGIN, pDir, 1.0, 0.14, 0.09);
+  dynGroup.add(pArrow);
+
+  // ── Mirror reflection direction ──
+  // R = 2(n·L)n - L   where L = inDir
+  const nDotL = normalDir.dot(inDir);
+  const reflectDir = normalDir.clone().multiplyScalar(2 * nDotL).sub(inDir).normalize();
+
+  // ── q  – projection of outgoing (reflected) direction onto surface ──
+  // The dark-green arrow "q" in the figure
+  const qDir = new THREE.Vector3(reflectDir.x, 0, reflectDir.z).normalize();
+  const qArrow = makeArrow(0x006622, ORIGIN, qDir, 1.0, 0.14, 0.09);
+  dynGroup.add(qArrow);
+
+  // ── Primary outgoing ray ℓ_out ──
+  // Dark green arrow showing the dominant reflected direction
+  let mainOutDir;
+  if (state.model === 'diffuse') {
+    mainOutDir = normalDir.clone(); // dominant = along normal for Lambertian
+  } else {
+    mainOutDir = reflectDir.clone();
+  }
+  const outArrow = makeArrow(0x00cc44, ORIGIN, mainOutDir, 2.5, 0.20, 0.12);
+  dynGroup.add(outArrow);
+
+  // ── Reflection lobe (multiple semi-transparent arrows) ──
+  // These represent the distribution of outgoing light — the BRDF lobe
+  if (state.showLobe) {
+    const lobeArrows = buildLobe(inDir, normalDir, reflectDir, state.model, state.shininess);
+    lobeArrows.forEach(a => dynGroup.add(a));
+  }
+
+  // ── Small angle arcs ──
+  // Show angle between incoming ray and normal
+  addAngleArc(dynGroup, ORIGIN, normalDir, inDir, 0.6, 0xffaa00, 'θ_in');
+  // Show angle between outgoing ray and normal
+  addAngleArc(dynGroup, ORIGIN, normalDir, mainOutDir, 0.8, 0x44ff88, 'θ_out');
+
+  // ── LABELS ──
+  if (state.showLabels) {
+    const lIn = makeLabel('ℓ<sub>in</sub>(λ)', '15px', '#ffcc00', true);
+    lIn.position.copy(inDir.clone().multiplyScalar(RAY_LEN * 0.75).add(new THREE.Vector3(0.15,0.15,0)));
+    labelGroup.add(lIn);
+
+    const lOut = makeLabel('ℓ<sub>out</sub>=F(ℓ<sub>in</sub>,<b>n</b>,λ,<b>p</b>,<b>q</b>)', '14px', '#44ff88', true);
+    lOut.position.copy(mainOutDir.clone().multiplyScalar(2.6).add(new THREE.Vector3(0.2,0.15,0)));
+    labelGroup.add(lOut);
+
+    const lN = makeLabel('<b>n</b>', '16px', '#ffffff', true);
+    lN.position.set(0.15, 1.95, 0);
+    labelGroup.add(lN);
+
+    const lP = makeLabel('<b>p</b>', '15px', '#ff4444', true);
+    lP.position.copy(pDir.clone().multiplyScalar(1.15).add(new THREE.Vector3(0, 0.12, 0)));
+    labelGroup.add(lP);
+
+    const lQ = makeLabel('<b>q</b>', '15px', '#33cc66', true);
+    lQ.position.copy(qDir.clone().multiplyScalar(1.15).add(new THREE.Vector3(0, 0.12, 0)));
+    labelGroup.add(lQ);
+
+    // BRDF model name
+    const modelNames = { phong:'Glossy (Phong)', diffuse:'Diffuse (Lambert)', mirror:'Mirror (Specular)' };
+    const lModel = makeLabel(modelNames[state.model], '13px', '#8cf');
+    lModel.position.set(0, 0.15, 2.5);
+    labelGroup.add(lModel);
+  }
+}
+
+/* ================================================================
+   BUILD LOBE  –  generate arrows sampling the BRDF
+   ================================================================ */
+function buildLobe(inDir, normal, reflectDir, model, shininess) {
+  const arrows = [];
+  const ORIGIN = new THREE.Vector3(0, 0, 0);
+
+  if (model === 'mirror') {
+    // Mirror: all energy in one direction — just a few arrows very close to reflect
+    for (let i = 0; i < 5; i++) {
+      const offset = new THREE.Vector3(
+        (Math.random()-0.5)*0.06,
+        (Math.random()-0.5)*0.06,
+        (Math.random()-0.5)*0.06
+      );
+      const d = reflectDir.clone().add(offset).normalize();
+      if (d.y < 0) d.y = 0.01;
+      d.normalize();
+      const a = makeArrow(0x22ff66, ORIGIN, d, 2.0 + Math.random()*0.3, 0.12, 0.07, 0.4);
+      arrows.push(a);
+    }
+  } else if (model === 'diffuse') {
+    // Lambertian: cosine-weighted hemisphere — uniform-looking spread
+    const N = 40;
+    for (let i = 0; i < N; i++) {
+      // cosine-weighted hemisphere sampling
+      const u1 = Math.random(), u2 = Math.random();
+      const r = Math.sqrt(u1);
+      const theta = 2 * Math.PI * u2;
+      const x = r * Math.cos(theta);
+      const z = r * Math.sin(theta);
+      const y = Math.sqrt(Math.max(0, 1 - u1));
+      const d = new THREE.Vector3(x, y, z).normalize();
+      const cosTheta = d.y;
+      const len = 0.5 + 1.5 * cosTheta; // length proportional to cos
+      const a = makeArrow(0x22ff66, ORIGIN, d, len, 0.08, 0.05, 0.25 + 0.2 * cosTheta);
+      arrows.push(a);
+    }
+  } else {
+    // Phong / glossy: lobe concentrated around reflection direction
+    const N = 50;
+    // Build local frame around reflectDir
+    const up = Math.abs(reflectDir.y) < 0.99 ? new THREE.Vector3(0,1,0) : new THREE.Vector3(1,0,0);
+    const t1 = new THREE.Vector3().crossVectors(reflectDir, up).normalize();
+    const t2 = new THREE.Vector3().crossVectors(reflectDir, t1).normalize();
+
+    for (let i = 0; i < N; i++) {
+      // sample around reflection dir with Phong-like distribution
+      const u1 = Math.random(), u2 = Math.random();
+      const cosAlpha = Math.pow(u1, 1/(shininess+1));
+      const sinAlpha = Math.sqrt(1 - cosAlpha*cosAlpha);
+      const phi = 2 * Math.PI * u2;
+      const d = reflectDir.clone().multiplyScalar(cosAlpha)
+        .add(t1.clone().multiplyScalar(sinAlpha * Math.cos(phi)))
+        .add(t2.clone().multiplyScalar(sinAlpha * Math.sin(phi)))
+        .normalize();
+      if (d.y < 0) continue; // below surface
+      const weight = Math.pow(cosAlpha, shininess);
+      const len = 0.4 + 2.0 * weight;
+      const a = makeArrow(0x22ff66, ORIGIN, d, len, 0.08, 0.05, 0.15 + 0.45 * weight);
+      arrows.push(a);
+    }
+  }
+  return arrows;
+}
+
+/* ================================================================
+   ANGLE ARC  –  little curved line between two directions
+   ================================================================ */
+function addAngleArc(parent, origin, dirA, dirB, radius, color) {
+  const angle = dirA.angleTo(dirB);
+  if (angle < 0.05) return;
+  const steps = 24;
+  const pts = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const v = dirA.clone().lerp(dirB.clone().normalize(), t).normalize().multiplyScalar(radius);
+    pts.push(v.add(origin.clone()));
+  }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  const mat = new THREE.LineBasicMaterial({ color, transparent:true, opacity:0.6 });
+  parent.add(new THREE.Line(geo, mat));
+}
+
+/* ================================================================
+   GUIDED DEMO STEPS
+   ================================================================ */
+const steps = [
+  {
+    text: '<b>Step 1:</b> Light arrives at a surface point. The incoming ray <span style="color:#ffcc00">ℓ<sub>in</sub>(λ)</span> carries energy at wavelength λ. Its direction is parameterised by angles relative to the surface normal <b>n</b>.',
+    setup() { state.model='phong'; state.showLobe=false; state.azimuth=-45; state.elevation=55; state.shininess=40; applyUI(); }
+  },
+  {
+    text: '<b>Step 2:</b> The surface normal <span style="color:#fff"><b>n</b></span> is perpendicular to the surface. Vectors <span style="color:#ff4444"><b>p</b></span> (incoming tangent projection) and <span style="color:#33cc66"><b>q</b></span> (outgoing tangent projection) lie in the surface plane.',
+    setup() { state.showLobe=false; applyUI(); }
+  },
+  {
+    text: '<b>Step 3 – Glossy (Phong):</b> A glossy surface reflects most light near the mirror direction. The <em>reflection lobe</em> is concentrated but has spread controlled by the shininess parameter.',
+    setup() { state.model='phong'; state.showLobe=true; state.shininess=40; applyUI(); }
+  },
+  {
+    text: '<b>Step 4 – Diffuse (Lambert):</b> A perfectly diffuse surface scatters light equally in all directions above the surface. The lobe is a cosine-weighted hemisphere — it looks the same from all viewing angles.',
+    setup() { state.model='diffuse'; state.showLobe=true; applyUI(); }
+  },
+  {
+    text: '<b>Step 5 – Mirror (Specular):</b> A perfect mirror reflects all energy into exactly the mirror direction <b>R</b> = 2(<b>n</b>·<b>L</b>)<b>n</b> − <b>L</b>. The "lobe" collapses to a single ray.',
+    setup() { state.model='mirror'; state.showLobe=true; applyUI(); }
+  },
+  {
+    text: '<b>Step 6 – The BRDF:</b> The function <b>F</b>(ℓ<sub>in</sub>, <b>n</b>, λ, <b>p</b>, <b>q</b>) describes how much light is redirected from the incoming to each outgoing direction. Try changing the azimuth, elevation, and shininess sliders to explore!',
+    setup() { state.model='phong'; state.showLobe=true; state.shininess=40; applyUI(); }
+  }
+];
+
+/* ================================================================
+   UI WIRING
+   ================================================================ */
+// Model selector buttons
+document.querySelectorAll('[data-model]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-model]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.model = btn.dataset.model;
+    rebuild();
+  });
+});
+
+// Sliders
+const slAz = document.getElementById('sl-azimuth');
+const slEl = document.getElementById('sl-elevation');
+const slSh = document.getElementById('sl-shininess');
+slAz.addEventListener('input', () => { state.azimuth  = +slAz.value;  rebuild(); });
+slEl.addEventListener('input', () => { state.elevation = +slEl.value;  rebuild(); });
+slSh.addEventListener('input', () => { state.shininess = +slSh.value;  rebuild(); });
+
+// Toggles
+document.getElementById('tog-lobe').addEventListener('click', function() {
+  state.showLobe = !state.showLobe; this.classList.toggle('active'); rebuild();
+});
+document.getElementById('tog-labels').addEventListener('click', function() {
+  state.showLabels = !state.showLabels; this.classList.toggle('active'); rebuild();
+});
+document.getElementById('tog-animate').addEventListener('click', function() {
+  state.animateSun = !state.animateSun; this.classList.toggle('active');
+});
+
+// Reset
+document.getElementById('btn-reset').addEventListener('click', () => {
+  camera.position.copy(TEXTBOOK_CAM.pos);
+  controls.target.copy(TEXTBOOK_CAM.target);
+  controls.update();
+  state.azimuth=-45; state.elevation=55; state.shininess=40; state.model='phong';
+  state.showLobe=true; state.showLabels=true; state.animateSun=false; state.stepIndex=-1;
+  applyUI(); rebuild();
+  document.getElementById('step-text').style.display='none';
+});
+
+// Step-through
+const stepText = document.getElementById('step-text');
+document.getElementById('step-start').addEventListener('click', () => {
+  state.stepIndex = 0;
+  showStep();
+});
+document.getElementById('step-next').addEventListener('click', () => {
+  if (state.stepIndex < 0) { state.stepIndex = 0; }
+  else { state.stepIndex = Math.min(state.stepIndex + 1, steps.length - 1); }
+  showStep();
+});
+document.getElementById('step-prev').addEventListener('click', () => {
+  if (state.stepIndex > 0) { state.stepIndex--; showStep(); }
+});
+
+function showStep() {
+  const s = steps[state.stepIndex];
+  stepText.innerHTML = s.text + `<br/><span style="color:#888;font-size:11px;">(${state.stepIndex+1}/${steps.length})</span>`;
+  stepText.style.display = 'block';
+  s.setup();
+  rebuild();
+}
+
+/* Sync UI controls to state (for resets and step setups) */
+function applyUI() {
+  slAz.value = state.azimuth;
+  slEl.value = state.elevation;
+  slSh.value = state.shininess;
+  document.querySelectorAll('[data-model]').forEach(b => {
+    b.classList.toggle('active', b.dataset.model === state.model);
+  });
+  document.getElementById('tog-lobe').classList.toggle('active', state.showLobe);
+  document.getElementById('tog-labels').classList.toggle('active', state.showLabels);
+  document.getElementById('tog-animate').classList.toggle('active', state.animateSun);
+}
+
+/* ================================================================
+   ANIMATION LOOP
+   ================================================================ */
+let clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+
+  // Animate incoming light azimuth if toggled
+  if (state.animateSun) {
+    state.azimuth = ((state.azimuth + 30 * dt + 180) % 360) - 180;
+    slAz.value = state.azimuth;
+    rebuild();
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+}
+
+// Handle resize
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  labelRenderer.setSize(innerWidth, innerHeight);
+});
+
+// Initial build & start
+rebuild();
+animate();
+</script>
+</body>
+</html>

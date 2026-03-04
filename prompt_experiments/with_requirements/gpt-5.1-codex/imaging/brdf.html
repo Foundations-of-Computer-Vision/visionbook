@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive BRDF Visualization</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: "Space Grotesk", "Segoe UI", sans-serif;
+            background: radial-gradient(circle at top, #fdfdfd 0%, #efefef 50%, #e2e2e2 100%);
+        }
+
+        #scene {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .controls {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            max-width: 450px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 14px;
+            border-radius: 12px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+        }
+
+        .controls button,
+        .controls label {
+            font-size: 13px;
+            border: none;
+            border-radius: 20px;
+            padding: 7px 14px;
+            background: #111;
+            color: #fff;
+            cursor: pointer;
+            transition: background 0.25s;
+        }
+
+        .controls button.secondary {
+            background: #29a329;
+        }
+
+        .controls button.highlighted {
+            background: #ff7a00;
+        }
+
+        .controls label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: #2d2d2d;
+        }
+
+        .controls input[type="range"] {
+            width: 150px;
+            accent-color: #90ff4f;
+        }
+
+        #stepText {
+            position: absolute;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 999px;
+            font-size: 14px;
+            max-width: 70vw;
+            text-align: center;
+            line-height: 1.3;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        #labelLayer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            font-size: 16px;
+        }
+
+        .label {
+            position: absolute;
+            color: #111;
+            text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+            transition: color 0.3s, transform 0.2s;
+        }
+
+        .label.highlight {
+            color: #ff5d00;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="scene"></div>
+    <div class="controls">
+        <button id="resetBtn">Reset to textbook view</button>
+        <label>Roughness
+            <input type="range" id="roughness" min="0" max="1" step="0.01" value="0.35">
+        </label>
+        <button id="rotateBtn" class="secondary">Rotate light: Off</button>
+        <button id="pulseBtn" class="secondary">Pulse energy: Off</button>
+        <button id="demoBtn" class="highlighted">Guided demo step</button>
+    </div>
+    <div id="stepText">Use the controls or run the guided demo to explore how incoming light and material parameters
+        shape the outgoing distribution.</div>
+    <div id="labelLayer"></div>
+
+    <script type="module">
+        import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js";
+        import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/controls/OrbitControls.js";
+
+        const sceneEl = document.getElementById("scene");
+        const labelLayer = document.getElementById("labelLayer");
+        const stepText = document.getElementById("stepText");
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf3f3f3);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(7, 5.5, 7);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
+        sceneEl.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0.4, 0);
+        controls.enableDamping = true;
+
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x3c3c3c, 1.0));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        dirLight.position.set(5, 8, 4);
+        scene.add(dirLight);
+
+        // Plane corresponds to the green patch in the 2D figure.
+        const plane = new THREE.Mesh(
+            new THREE.BoxGeometry(9, 0.05, 5.5),
+            new THREE.MeshStandardMaterial({ color: 0x7bff00, roughness: 0.6, metalness: 0.05 })
+        );
+        plane.position.y = 0;
+        scene.add(plane);
+
+        // Small ring marks the scattering point illustrated in 2D.
+        const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(0.22, 0.02, 12, 32),
+            new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x226600 })
+        );
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(0, 0.05, 0);
+        scene.add(ring);
+
+        const interactionPoint = new THREE.Vector3(0, 0.05, 0);
+
+        // Normal vector from the 2D drawing.
+        const normalArrow = new THREE.ArrowHelper(
+            new THREE.Vector3(0, 1, 0),
+            interactionPoint,
+            3.2,
+            0x000000,
+            0.6,
+            0.35
+        );
+        scene.add(normalArrow);
+
+        // Tangent directions p and q mapped from the planar arrows.
+        const pArrow = new THREE.ArrowHelper(
+            new THREE.Vector3(-0.9, 0, 0.3).normalize(),
+            interactionPoint,
+            2.3,
+            0x000000,
+            0.4,
+            0.2
+        );
+        scene.add(pArrow);
+
+        const qArrow = new THREE.ArrowHelper(
+            new THREE.Vector3(0.7, 0, 0.55).normalize(),
+            interactionPoint,
+            2.3,
+            0x000000,
+            0.4,
+            0.2
+        );
+        scene.add(qArrow);
+
+        // Incoming radiance arrow from the diagram.
+        const incomingLength = 5.2;
+        let incomingDir = new THREE.Vector3(0.38, -1, 0.22).normalize();
+        const incomingTail = new THREE.Vector3();
+        const incomingArrow = new THREE.ArrowHelper(
+            incomingDir,
+            incomingTail,
+            incomingLength,
+            0xffa600,
+            0.7,
+            0.4
+        );
+        scene.add(incomingArrow);
+
+        // Outgoing lobe arrows (teaching the BRDF response).
+        const outgoingCount = 7;
+        const outgoingArrows = [];
+        const outgoingDirs = [];
+        for (let i = 0; i < outgoingCount; i++) {
+            const arrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), interactionPoint, 2.3, 0x2ca02c, 0.5, 0.25);
+            outgoingArrows.push(arrow);
+            outgoingDirs.push(new THREE.Vector3());
+            scene.add(arrow);
+        }
+
+        // Code comment requirement: slider maps the "roughness" idea in 2D to a wider/narrower 3D lobe.
+        function updateOutgoingSpread(value) {
+            const spread = THREE.MathUtils.lerp(0.12, 0.95, value);
+            outgoingArrows.forEach((arrow, idx) => {
+                const azimuth = idx / outgoingCount * Math.PI * 2;
+                const dir = new THREE.Vector3(
+                    Math.cos(azimuth) * Math.sin(spread),
+                    Math.cos(spread),
+                    Math.sin(azimuth) * Math.sin(spread)
+                ).normalize();
+                arrow.setDirection(dir);
+                outgoingDirs[idx].copy(dir);
+            });
+        }
+
+        function positionIncomingArrow() {
+            incomingTail.copy(interactionPoint).sub(incomingDir.clone().multiplyScalar(incomingLength));
+            incomingArrow.position.copy(incomingTail);
+            incomingArrow.setDirection(incomingDir);
+        }
+        positionIncomingArrow();
+        updateOutgoingSpread(parseFloat(document.getElementById("roughness").value));
+
+        // Label overlay setup with KaTeX for math fidelity.
+        const labels = [
+            {
+                key: "lin",
+                expression: "\\ell_{in}(\\lambda)",
+                element: createLabel(),
+                getPosition: () => incomingArrow.position.clone().add(incomingDir.clone().multiplyScalar(incomingLength * 0.6))
+            },
+            {
+                key: "nout",
+                expression: "\\ell_{out} = F(\\ell_{in},\\,\\mathbf{n},\\,\\lambda,\\,\\mathbf{p},\\,\\mathbf{q})",
+                element: createLabel(),
+                getPosition: () => interactionPoint.clone().add(new THREE.Vector3(2.7, 2.4, 0.6))
+            },
+            {
+                key: "n",
+                expression: "\\mathbf{n}",
+                element: createLabel(),
+                getPosition: () => interactionPoint.clone().add(new THREE.Vector3(0.0, 2.8, 0.0))
+            },
+            {
+                key: "p",
+                expression: "\\mathbf{p}",
+                element: createLabel(),
+                getPosition: () => interactionPoint.clone().add(new THREE.Vector3(-1.7, 0.35, 0.5))
+            },
+            {
+                key: "q",
+                expression: "\\mathbf{q}",
+                element: createLabel(),
+                getPosition: () => interactionPoint.clone().add(new THREE.Vector3(1.5, 0.35, 0.9))
+            }
+        ];
+
+        function createLabel() {
+            const el = document.createElement("div");
+            el.className = "label";
+            labelLayer.appendChild(el);
+            return el;
+        }
+
+        function renderLabels() {
+            labels.forEach(label => {
+                const pos = label.getPosition().clone();
+                pos.project(camera);
+                const visible = pos.z < 1;
+                if (!visible) {
+                    label.element.style.display = "none";
+                    return;
+                }
+                const x = (pos.x * 0.5 + 0.5) * renderer.domElement.clientWidth;
+                const y = (-pos.y * 0.5 + 0.5) * renderer.domElement.clientHeight;
+                label.element.style.display = "block";
+                label.element.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+            });
+        }
+
+        function applyKaTeX() {
+            if (!window.katex) return;
+            labels.forEach(label => {
+                window.katex.render(label.expression, label.element, { throwOnError: false, strict: false });
+            });
+        }
+        applyKaTeX();
+
+        const roughnessSlider = document.getElementById("roughness");
+        roughnessSlider.addEventListener("input", event => {
+            updateOutgoingSpread(parseFloat(event.target.value));
+        });
+
+        const rotateBtn = document.getElementById("rotateBtn");
+        const pulseBtn = document.getElementById("pulseBtn");
+        const demoBtn = document.getElementById("demoBtn");
+        const resetBtn = document.getElementById("resetBtn");
+
+        let rotateLight = false;
+        let pulseEnergy = false;
+        let rotationAngle = 0;
+        const clock = new THREE.Clock();
+
+        rotateBtn.addEventListener("click", () => {
+            rotateLight = !rotateLight;
+            rotateBtn.textContent = rotateLight ? "Rotate light: On" : "Rotate light: Off";
+        });
+
+        pulseBtn.addEventListener("click", () => {
+            pulseEnergy = !pulseEnergy;
+            pulseBtn.textContent = pulseEnergy ? "Pulse energy: On" : "Pulse energy: Off";
+        });
+
+        const steps = [
+            {
+                text: "Incoming radiance ℓ_in(λ) travels along the yellow ray toward the surface point.",
+                action: () => {
+                    resetHighlights();
+                    incomingArrow.setColor(0xffff66);
+                    highlightLabel("lin", true);
+                    roughnessSlider.value = "0.2";
+                    updateOutgoingSpread(0.2);
+                }
+            },
+            {
+                text: "The surface normal n sets the local frame that the BRDF uses.",
+                action: () => {
+                    resetHighlights();
+                    normalArrow.setColor(0xff5500);
+                    highlightLabel("n", true);
+                }
+            },
+            {
+                text: "Tangents p and q span the plane, anchoring anisotropic behavior.",
+                action: () => {
+                    resetHighlights();
+                    pArrow.setColor(0xff5500);
+                    qArrow.setColor(0xff5500);
+                    highlightLabel("p", true);
+                    highlightLabel("q", true);
+                }
+            },
+            {
+                text: "By increasing roughness, the outgoing lobe widens: ℓ_out spreads out.",
+                action: () => {
+                    resetHighlights();
+                    roughnessSlider.value = "0.85";
+                    updateOutgoingSpread(0.85);
+                    outgoingArrows.forEach(a => a.setColor(0x64ff74));
+                    highlightLabel("nout", true);
+                }
+            }
+        ];
+        let stepIndex = 0;
+
+        demoBtn.addEventListener("click", () => {
+            steps[stepIndex].action();
+            stepText.textContent = steps[stepIndex].text;
+            stepIndex = (stepIndex + 1) % steps.length;
+        });
+
+        function highlightLabel(key, on) {
+            const target = labels.find(l => l.key === key);
+            if (target) on ? target.element.classList.add("highlight") : target.element.classList.remove("highlight");
+        }
+
+        function resetHighlights() {
+            incomingArrow.setColor(0xffa600);
+            normalArrow.setColor(0x000000);
+            pArrow.setColor(0x000000);
+            qArrow.setColor(0x000000);
+            outgoingArrows.forEach(a => a.setColor(0x2ca02c));
+            labels.forEach(l => l.element.classList.remove("highlight"));
+        }
+
+        const defaultCamPos = camera.position.clone();
+        const defaultTarget = controls.target.clone();
+        const defaultRoughness = parseFloat(roughnessSlider.value);
+
+        resetBtn.addEventListener("click", () => {
+            controls.reset();
+            camera.position.copy(defaultCamPos);
+            controls.target.copy(defaultTarget);
+            controls.update();
+            rotateLight = false;
+            pulseEnergy = false;
+            rotateBtn.textContent = "Rotate light: Off";
+            pulseBtn.textContent = "Pulse energy: Off";
+            roughnessSlider.value = String(defaultRoughness);
+            updateOutgoingSpread(defaultRoughness);
+            incomingDir.set(0.38, -1, 0.22).normalize();
+            rotationAngle = 0;
+            positionIncomingArrow();
+            resetHighlights();
+            stepIndex = 0;
+            stepText.textContent = "Reset complete. Explore manually or run the guided demo.";
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            const elapsed = clock.getElapsedTime();
+
+            if (rotateLight) {
+                rotationAngle += 0.01;
+                const radius = 0.45;
+                incomingDir.set(Math.cos(rotationAngle) * radius, -1, Math.sin(rotationAngle) * radius).normalize();
+                positionIncomingArrow();
+            }
+
+            if (pulseEnergy) {
+                const pulse = 0.35 + 0.35 * Math.sin(elapsed * 3.0);
+                plane.material.emissive.setRGB(0, pulse, 0);
+                incomingArrow.setColor(new THREE.Color().lerpColors(new THREE.Color(0xffc400), new THREE.Color(0xff5400), pulse));
+            } else {
+                plane.material.emissive.setRGB(0, 0.15, 0);
+            }
+
+            renderLabels();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener("resize", () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

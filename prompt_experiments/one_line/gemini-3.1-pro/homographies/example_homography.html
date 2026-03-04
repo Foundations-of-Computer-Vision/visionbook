@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perspective Projection Demo</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+
+        #container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            color: #333;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .label {
+            position: absolute;
+            bottom: 20px;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 5px 10px;
+            border-radius: 4px;
+            pointer-events: none;
+        }
+
+        #label-left {
+            left: 25%;
+            transform: translateX(-50%);
+        }
+
+        #label-right {
+            left: 75%;
+            transform: translateX(-50%);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="info">Understanding Perspective Projection</div>
+    <div id="label-left" class="label">World View (Move me!)</div>
+    <div id="label-right" class="label">Camera View (Result)</div>
+
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+        import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+        import { GUI } from 'https://unpkg.com/three@0.160.0/examples/jsm/libs/lil-gui.module.min.js';
+
+        // Main variables
+        let container, renderer;
+        let worldScene, worldCamera, worldControls; // For the left view
+        let projectionCamera, cameraHelper; // The camera creating the perspective
+
+        // Settings for the projection camera
+        const params = {
+            camX: 0,
+            camY: 3,
+            camZ: 5,
+            camRotX: -25, // degrees
+            camRotY: 0,
+            camRotZ: 0,
+            fov: 45
+        };
+
+        init();
+        animate();
+
+        function init() {
+            container = document.getElementById('container');
+
+            // RENDERER
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setScissorTest(true);
+            renderer.setClearColor(0xffffff);
+            container.appendChild(renderer.domElement);
+
+            // SCENE
+            worldScene = new THREE.Scene();
+            worldScene.background = new THREE.Color(0xffffff);
+
+            // --- WORLD SETUP ---
+            // 1. A grid representing the source image (Left side of textbook figure)
+            // The figure is a 4x4 grid.
+            const gridSize = 4;
+            const divisions = 4;
+            const gridColor = 0x000000;
+            const gridHelper = new THREE.GridHelper(gridSize, divisions, gridColor, gridColor);
+            worldScene.add(gridHelper);
+
+            // Also add a plane geometry to make it look solid white (avoid seeing through)
+            // but the background is white so maybe not needed. 
+            // Let's add slight grey ground to differentiate.
+            const planeGeo = new THREE.PlaneGeometry(100, 100);
+            const planeMat = new THREE.MeshBasicMaterial({ color: 0xf0f0f0, side: THREE.DoubleSide });
+            const plane = new THREE.Mesh(planeGeo, planeMat);
+            plane.rotation.x = - Math.PI / 2;
+            plane.position.y = -0.01; // slightly below grid
+            worldScene.add(plane);
+
+            // --- CAMERAS ---
+
+            // 1. World Camera (The "God's Eye" view)
+            worldCamera = new THREE.PerspectiveCamera(50, (window.innerWidth / 2) / window.innerHeight, 0.1, 100);
+            worldCamera.position.set(-8, 8, 8);
+            worldCamera.lookAt(0, 0, 0);
+
+            worldControls = new OrbitControls(worldCamera, renderer.domElement);
+            worldControls.enableDamping = true;
+            worldControls.target.set(0, 0, 0);
+
+            // 2. Projection Camera (The one creating the perspective view)
+            projectionCamera = new THREE.PerspectiveCamera(params.fov, (window.innerWidth / 2) / window.innerHeight, 1, 20);
+            worldScene.add(projectionCamera); // Add to scene so helpers work
+
+            // Helper to visualize the projection camera in the world view
+            cameraHelper = new THREE.CameraHelper(projectionCamera);
+            worldScene.add(cameraHelper);
+
+            // Update Projection Camera Position based on params
+            updateProjectionCamera();
+
+            // GUI
+            const gui = new GUI();
+            const camFolder = gui.addFolder('Camera Pose');
+            camFolder.add(params, 'camX', -10, 10).name('X Position').onChange(updateProjectionCamera);
+            camFolder.add(params, 'camY', 0.5, 10).name('Y Position').onChange(updateProjectionCamera);
+            camFolder.add(params, 'camZ', -10, 10).name('Z Position').onChange(updateProjectionCamera);
+            camFolder.add(params, 'camRotX', -90, 90).name('Pitch (X-Rot)').onChange(updateProjectionCamera);
+            camFolder.add(params, 'camRotY', -180, 180).name('Yaw (Y-Rot)').onChange(updateProjectionCamera);
+            camFolder.add(params, 'camRotZ', -180, 180).name('Roll (Z-Rot)').onChange(updateProjectionCamera);
+            camFolder.add(params, 'fov', 10, 120).name('Field of View').onChange(updateProjectionCamera);
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function updateProjectionCamera() {
+            projectionCamera.position.set(params.camX, params.camY, params.camZ);
+            projectionCamera.rotation.set(
+                THREE.MathUtils.degToRad(params.camRotX),
+                THREE.MathUtils.degToRad(params.camRotY),
+                THREE.MathUtils.degToRad(params.camRotZ)
+            );
+            projectionCamera.fov = params.fov;
+            projectionCamera.updateProjectionMatrix();
+            if (cameraHelper) cameraHelper.update();
+        }
+
+        function onWindowResize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            renderer.setSize(width, height);
+
+            // Update aspect ratios
+            const halfWidth = width / 2;
+            worldCamera.aspect = halfWidth / height;
+            worldCamera.updateProjectionMatrix();
+
+            projectionCamera.aspect = halfWidth / height;
+            projectionCamera.updateProjectionMatrix();
+            cameraHelper.update();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update controls
+            worldControls.update();
+
+            render();
+        }
+
+        function render() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            // 1. Render Left View (World View)
+            renderer.setViewport(0, 0, width / 2, height);
+            renderer.setScissor(0, 0, width / 2, height);
+
+            // Show the camera helper in this view
+            cameraHelper.visible = true;
+            // gridHelper is visible
+            renderer.render(worldScene, worldCamera);
+
+            // 2. Render Right View (From Projection Camera)
+            renderer.setViewport(width / 2, 0, width / 2, height);
+            renderer.setScissor(width / 2, 0, width / 2, height);
+
+            // Hide the camera helper itself in this view (users don't see their own eyes)
+            cameraHelper.visible = false;
+            renderer.render(worldScene, projectionCamera);
+        }
+    </script>
+</body>
+
+</html>

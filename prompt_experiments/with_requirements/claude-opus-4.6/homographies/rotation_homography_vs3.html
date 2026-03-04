@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Stereo Camera Rotation – Interactive 3D Visualization</title>
+<style>
+  /* ── Global ── */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background:#1a1a2e; color:#e0e0e0; overflow:hidden; }
+  canvas { display:block; }
+
+  /* ── Top instruction bar ── */
+  #topBar {
+    position:absolute; top:0; left:0; width:100%; padding:8px 16px;
+    background:rgba(16,16,40,0.92); border-bottom:1px solid #333;
+    display:flex; align-items:center; gap:18px; z-index:20; flex-wrap:wrap;
+  }
+  #topBar h1 { font-size:15px; font-weight:700; color:#66ffcc; white-space:nowrap; }
+  #topBar .hint { font-size:12px; color:#aaa; }
+
+  /* ── Controls panel ── */
+  #controls {
+    position:absolute; top:52px; left:12px; width:270px;
+    background:rgba(20,20,50,0.93); border:1px solid #444; border-radius:8px;
+    padding:14px; z-index:15; max-height:calc(100vh - 70px); overflow-y:auto;
+  }
+  #controls h2 { font-size:13px; color:#66ffcc; margin:0 0 8px; text-transform:uppercase; letter-spacing:1px; }
+  .ctrl-group { margin-bottom:12px; }
+  .ctrl-group label { display:block; font-size:12px; margin-bottom:3px; color:#ccc; }
+  .ctrl-group input[type=range] { width:100%; accent-color:#66ffcc; }
+  .ctrl-group .val { font-size:11px; color:#88ddaa; float:right; }
+
+  button.action {
+    display:inline-block; padding:5px 10px; margin:3px 2px; font-size:11px;
+    border:1px solid #555; border-radius:4px; cursor:pointer;
+    background:#222244; color:#ddd; transition:background .2s;
+  }
+  button.action:hover { background:#334; }
+  button.action.active { background:#225544; border-color:#66ffcc; color:#66ffcc; }
+
+  /* ── Guide overlay ── */
+  #guideOverlay {
+    position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
+    background:rgba(10,10,35,0.95); border:1px solid #66ffcc; border-radius:8px;
+    padding:14px 22px; z-index:20; max-width:560px; text-align:center;
+    display:none;
+  }
+  #guideOverlay .step-text { font-size:13px; line-height:1.5; margin-bottom:10px; }
+  #guideOverlay .step-nav button { margin:0 6px; }
+
+  /* ── Legend (bottom-right) ── */
+  #legend {
+    position:absolute; bottom:12px; right:12px;
+    background:rgba(20,20,50,0.9); border:1px solid #444; border-radius:6px;
+    padding:10px 14px; z-index:15; font-size:11px; line-height:1.7;
+  }
+  #legend .swatch { display:inline-block; width:12px; height:12px; border-radius:2px; vertical-align:middle; margin-right:5px; }
+</style>
+</head>
+<body>
+
+<!-- ── Top bar ── -->
+<div id="topBar">
+  <h1>Rotated Stereo Cameras &amp; Projection</h1>
+  <span class="hint">Drag to orbit · Scroll to zoom · Right-drag to pan</span>
+</div>
+
+<!-- ── Controls ── -->
+<div id="controls">
+  <h2>Controls</h2>
+
+  <!-- 1. Camera rotation slider -->
+  <div class="ctrl-group">
+    <label>Camera 2 Rotation (R) <span class="val" id="rotVal">30°</span></label>
+    <input type="range" id="rotSlider" min="-90" max="90" value="30" step="1"/>
+  </div>
+
+  <!-- 2. 3D point depth -->
+  <div class="ctrl-group">
+    <label>3D Point Depth (Z) <span class="val" id="depthVal">5.0</span></label>
+    <input type="range" id="depthSlider" min="2" max="10" value="5" step="0.1"/>
+  </div>
+
+  <!-- 3. 3D point X -->
+  <div class="ctrl-group">
+    <label>3D Point X <span class="val" id="pxVal">1.5</span></label>
+    <input type="range" id="pxSlider" min="-3" max="3" value="1.5" step="0.1"/>
+  </div>
+
+  <!-- 4. 3D point Y -->
+  <div class="ctrl-group">
+    <label>3D Point Y <span class="val" id="pyVal">1.0</span></label>
+    <input type="range" id="pySlider" min="-2" max="2" value="1.0" step="0.1"/>
+  </div>
+
+  <!-- Buttons -->
+  <div class="ctrl-group" style="display:flex;flex-wrap:wrap;gap:2px;">
+    <button class="action active" id="btnRays">Projection Rays</button>
+    <button class="action active" id="btnProjections">Proj. Points</button>
+    <button class="action" id="btnTopView">Top-Down View</button>
+    <button class="action" id="btnTextbookView">Reset View</button>
+  </div>
+
+  <div class="ctrl-group" style="margin-top:6px;">
+    <button class="action" id="btnGuide" style="width:100%;background:#1a3a2a;border-color:#66ffcc;color:#66ffcc;">
+      ▶ Guided Demo (Step-through)
+    </button>
+  </div>
+</div>
+
+<!-- ── Guide overlay ── -->
+<div id="guideOverlay">
+  <div class="step-text" id="guideText"></div>
+  <div class="step-nav">
+    <button class="action" id="guidePrev">← Prev</button>
+    <span id="guideCounter" style="font-size:11px;color:#aaa;"></span>
+    <button class="action" id="guideNext">Next →</button>
+    <button class="action" id="guideClose" style="margin-left:12px;">✕ Close</button>
+  </div>
+</div>
+
+<!-- ── Legend ── -->
+<div id="legend">
+  <div><span class="swatch" style="background:#00dd44;"></span> Camera 1 plane</div>
+  <div><span class="swatch" style="background:#dd2222;"></span> Camera 2 plane (rotated by <b>R</b>)</div>
+  <div><span class="swatch" style="background:#00ffff;"></span> 3D World Point (X, Y, Z)</div>
+  <div><span class="swatch" style="background:#ffff44;"></span> Projection rays</div>
+  <div><span class="swatch" style="background:#ff88ff;"></span> Projected image points</div>
+</div>
+
+<!-- ── Three.js (ES module) ── -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+/* ================================================================
+   SCENE SETUP
+   ================================================================ */
+const scene    = new THREE.Scene();
+scene.background = new THREE.Color(0x111122);
+
+const camera   = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+// Textbook-like 3/4 view (matching the left panel perspective)
+const TEXTBOOK_CAM = new THREE.Vector3(5, 4, 8);
+const TEXTBOOK_TARGET = new THREE.Vector3(1.5, 0.5, 2.5);
+camera.position.copy(TEXTBOOK_CAM);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// CSS2D label renderer
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+document.body.appendChild(labelRenderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(TEXTBOOK_TARGET);
+controls.enableDamping = true;
+controls.dampingFactor = 0.12;
+controls.update();
+
+// Lighting
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(5, 8, 6);
+scene.add(dirLight);
+
+// Subtle grid on Y = 0 plane for spatial reference
+const gridHelper = new THREE.GridHelper(16, 16, 0x333355, 0x222244);
+scene.add(gridHelper);
+
+/* ================================================================
+   HELPER: Create a CSS2D label
+   ================================================================ */
+function makeLabel(text, color = '#ffffff', fontSize = '13px') {
+  const div = document.createElement('div');
+  div.style.color = color;
+  div.style.fontSize = fontSize;
+  div.style.fontFamily = "'Segoe UI', Arial, sans-serif";
+  div.style.fontWeight = '600';
+  div.style.textShadow = '0 0 4px #000, 0 0 8px #000';
+  div.style.whiteSpace = 'nowrap';
+  div.textContent = text;
+  const obj = new CSS2DObject(div);
+  return obj;
+}
+
+/* ================================================================
+   WORLD COORDINATE AXES  (X green, Y green, Z green — matching fig)
+   ================================================================ */
+// Axes from origin
+function createAxis(dir, length, color) {
+  const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0,0,0), length, color, 0.2, 0.12);
+  scene.add(arrow);
+  return arrow;
+}
+createAxis(new THREE.Vector3(1,0,0), 2.0, 0x00cc00);  // X
+createAxis(new THREE.Vector3(0,1,0), 2.0, 0x00cc00);  // Y
+createAxis(new THREE.Vector3(0,0,1), 2.0, 0x00cc00);  // Z
+
+const lblX = makeLabel('X', '#00ee44', '14px'); lblX.position.set(2.2, 0, 0); scene.add(lblX);
+const lblY = makeLabel('Y', '#00ee44', '14px'); lblY.position.set(0, 2.3, 0); scene.add(lblY);
+const lblZ = makeLabel('Z', '#00ee44', '14px'); lblZ.position.set(0, 0, 2.2); scene.add(lblZ);
+
+/* ================================================================
+   CAMERA CENTER (shared origin) — black sphere
+   Mapping: The black dot at the origin in both figure panels.
+   Both cameras share this optical center; only image planes differ.
+   ================================================================ */
+const originSphere = new THREE.Mesh(
+  new THREE.SphereGeometry(0.12, 24, 24),
+  new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3 })
+);
+scene.add(originSphere);
+const originLabel = makeLabel('Camera Center', '#aaaaaa', '11px');
+originLabel.position.set(0, -0.3, 0);
+scene.add(originLabel);
+
+/* ================================================================
+   IMAGE PLANE PARAMETERS
+   The image planes are rectangles placed at focal distance f along
+   their respective optical axes. Camera 1 looks along +Z; Camera 2
+   is rotated by angle R about the Y-axis.
+   ================================================================ */
+const FOCAL   = 2.0;          // focal length (distance from origin to image plane)
+const PLANE_W = 3.0;          // image plane half-width
+const PLANE_H = 2.0;          // image plane half-height
+
+/* Camera 1 image plane — GREEN semi-transparent rectangle.
+   Mapping: The green rectangle labeled "Camera 1" in the figure.
+   It faces +Z at distance f from the origin. */
+const planeMat1 = new THREE.MeshStandardMaterial({
+  color: 0x00cc44, transparent:true, opacity:0.28, side: THREE.DoubleSide,
+  depthWrite: false
+});
+const planeGeo = new THREE.PlaneGeometry(PLANE_W * 2, PLANE_H * 2);
+const planeMesh1 = new THREE.Mesh(planeGeo, planeMat1);
+planeMesh1.position.set(0, 0, FOCAL);
+scene.add(planeMesh1);
+
+// Border wireframe for Camera 1 plane
+const border1 = new THREE.LineSegments(
+  new THREE.EdgesGeometry(planeGeo),
+  new THREE.LineBasicMaterial({ color: 0x00ff44, linewidth: 2 })
+);
+border1.position.copy(planeMesh1.position);
+scene.add(border1);
+
+const cam1Label = makeLabel('Camera 1', '#44ff88', '14px');
+cam1Label.position.set(-PLANE_W, PLANE_H + 0.3, FOCAL);
+scene.add(cam1Label);
+
+/* Camera 2 image plane — RED semi-transparent rectangle.
+   Mapping: The red rectangle labeled "Camera 2" in the figure.
+   Rotated by angle R about the Y-axis relative to Camera 1. */
+const planeMat2 = new THREE.MeshStandardMaterial({
+  color: 0xcc2222, transparent:true, opacity:0.28, side: THREE.DoubleSide,
+  depthWrite: false
+});
+const planeMesh2 = new THREE.Mesh(planeGeo.clone(), planeMat2);
+const cam2Group = new THREE.Group();    // rotation pivot at origin
+cam2Group.add(planeMesh2);
+planeMesh2.position.set(0, 0, FOCAL);  // local offset = focal length along local Z
+scene.add(cam2Group);
+
+const border2 = new THREE.LineSegments(
+  new THREE.EdgesGeometry(planeGeo),
+  new THREE.LineBasicMaterial({ color: 0xff3333, linewidth: 2 })
+);
+cam2Group.add(border2);
+border2.position.set(0, 0, FOCAL);
+
+const cam2Label = makeLabel('Camera 2', '#ff5555', '14px');
+cam2Label.position.set(PLANE_W, PLANE_H + 0.3, FOCAL);
+cam2Group.add(cam2Label);
+
+/* Rotation arc label "R" — placed near the rotation arrow in the figure */
+const rotLabel = makeLabel('R', '#ffffff', '16px');
+rotLabel.position.set(0, PLANE_H + 0.8, FOCAL);
+scene.add(rotLabel);
+
+/* ================================================================
+   OPTICAL AXES — thin lines from origin through the center of each
+   image plane, extended outward.
+   Mapping: the implied optical axis directions in the figure.
+   ================================================================ */
+const opticalAxisMat = new THREE.LineBasicMaterial({ color: 0x00ff44, transparent:true, opacity:0.35 });
+function makeOptAxisLine() {
+  const geo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,8)
+  ]);
+  return new THREE.Line(geo, opticalAxisMat.clone());
+}
+const optAxis1 = makeOptAxisLine();
+scene.add(optAxis1);
+const optAxis2 = makeOptAxisLine();
+optAxis2.material.color.set(0xff4444);
+cam2Group.add(optAxis2);
+
+/* ================================================================
+   3D WORLD POINT — cyan sphere.
+   Mapping: The cyan dot labeled (X,Y,Z) in the right panel.
+   The user can move it with sliders.
+   ================================================================ */
+const worldPt = new THREE.Mesh(
+  new THREE.SphereGeometry(0.13, 24, 24),
+  new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00aaaa })
+);
+scene.add(worldPt);
+const worldPtLabel = makeLabel('(X, Y, Z)', '#00ffff', '13px');
+scene.add(worldPtLabel);
+
+/* ================================================================
+   PROJECTION RAYS — lines from origin through image plane to 3D point.
+   Mapping: The green/red lines drawn from the camera center through
+   the projected image points (x,y) and (x',y') to (X,Y,Z).
+   These teach how a 3D point projects onto each rotated image plane.
+   ================================================================ */
+const rayMat1 = new THREE.LineBasicMaterial({ color: 0xffff44, linewidth: 2 });
+const rayMat2 = new THREE.LineBasicMaterial({ color: 0xffff44, linewidth: 2 });
+let rayLine1, rayLine2;
+function makeRayLine(mat) {
+  const geo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(), new THREE.Vector3()
+  ]);
+  return new THREE.Line(geo, mat);
+}
+rayLine1 = makeRayLine(rayMat1); scene.add(rayLine1);
+rayLine2 = makeRayLine(rayMat2); scene.add(rayLine2);
+
+/* ================================================================
+   PROJECTED POINTS — small magenta spheres on each image plane.
+   Mapping: (x,y) on Camera 1 and (x',y') on Camera 2 in the figure.
+   ================================================================ */
+const projPtMat = new THREE.MeshStandardMaterial({ color: 0xff66ff, emissive: 0xaa44aa });
+const projPt1 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), projPtMat);
+const projPt2 = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), projPtMat.clone());
+scene.add(projPt1);
+scene.add(projPt2);
+
+const projLabel1 = makeLabel('(x, y)', '#ff88ff', '12px');
+scene.add(projLabel1);
+const projLabel2 = makeLabel("(x', y')", '#ff88ff', '12px');
+scene.add(projLabel2);
+
+/* ================================================================
+   DASHED LINES — from projected points straight to the 3D point
+   (illustrating the "ray beyond the image plane").
+   Mapping: The dashed lines in the right panel of the figure.
+   ================================================================ */
+const dashMat1 = new THREE.LineDashedMaterial({ color:0xffff44, dashSize:0.2, gapSize:0.1 });
+const dashMat2 = new THREE.LineDashedMaterial({ color:0xffff44, dashSize:0.2, gapSize:0.1 });
+let dashLine1, dashLine2;
+function makeDashLine(mat) {
+  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const l = new THREE.Line(geo, mat);
+  l.computeLineDistances();
+  return l;
+}
+dashLine1 = makeDashLine(dashMat1); scene.add(dashLine1);
+dashLine2 = makeDashLine(dashMat2); scene.add(dashLine2);
+
+/* ================================================================
+   ROTATION ARC — curved arrow showing rotation R between planes.
+   Mapping: The curved arrow labeled R in the left panel of figure.
+   ================================================================ */
+const arcGroup = new THREE.Group();
+scene.add(arcGroup);
+
+function updateRotationArc(angleDeg) {
+  // Remove old children
+  while (arcGroup.children.length) arcGroup.remove(arcGroup.children[0]);
+
+  if (Math.abs(angleDeg) < 1) return;
+
+  const radius = FOCAL + 0.3;
+  const startAngle = 0;
+  const endAngle = THREE.MathUtils.degToRad(angleDeg);
+  const segments = 40;
+  const points = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = startAngle + (endAngle - startAngle) * (i / segments);
+    points.push(new THREE.Vector3(Math.sin(t) * radius, PLANE_H + 0.4, Math.cos(t) * radius));
+  }
+  const arcGeo = new THREE.BufferGeometry().setFromPoints(points);
+  const arcLine = new THREE.Line(arcGeo, new THREE.LineBasicMaterial({ color: 0xffffff }));
+  arcGroup.add(arcLine);
+
+  // Arrowhead at end
+  const last = points[points.length - 1];
+  const prev = points[points.length - 2];
+  const dir = new THREE.Vector3().subVectors(last, prev).normalize();
+  const arrowHelper = new THREE.ArrowHelper(dir, prev, 0.3, 0xffffff, 0.15, 0.08);
+  arcGroup.add(arrowHelper);
+}
+
+/* ================================================================
+   STATE & UPDATE LOGIC
+   ================================================================ */
+let showRays = true;
+let showProjections = true;
+let rotationDeg = 30;
+let worldPos = new THREE.Vector3(1.5, 1.0, 5.0);
+
+function updateScene() {
+  // Read sliders
+  rotationDeg = parseFloat(document.getElementById('rotSlider').value);
+  const depth = parseFloat(document.getElementById('depthSlider').value);
+  const px    = parseFloat(document.getElementById('pxSlider').value);
+  const py    = parseFloat(document.getElementById('pySlider').value);
+  worldPos.set(px, py, depth);
+
+  // Update display values
+  document.getElementById('rotVal').textContent = rotationDeg + '°';
+  document.getElementById('depthVal').textContent = depth.toFixed(1);
+  document.getElementById('pxVal').textContent = px.toFixed(1);
+  document.getElementById('pyVal').textContent = py.toFixed(1);
+
+  // Rotate Camera 2 group about Y-axis
+  const rotRad = THREE.MathUtils.degToRad(rotationDeg);
+  cam2Group.rotation.y = rotRad;
+
+  // Update rotation arc
+  updateRotationArc(rotationDeg);
+
+  // Position the 3D world point
+  worldPt.position.copy(worldPos);
+  worldPtLabel.position.set(worldPos.x + 0.25, worldPos.y + 0.25, worldPos.z);
+
+  /* ── Compute projections ──
+     Camera 1 looks along +Z.  Image plane at z = FOCAL.
+     Projection of P onto Camera 1: (f*X/Z, f*Y/Z, f) */
+  const p1x = FOCAL * worldPos.x / worldPos.z;
+  const p1y = FOCAL * worldPos.y / worldPos.z;
+  const proj1World = new THREE.Vector3(p1x, p1y, FOCAL);
+
+  /* Camera 2 is rotated by R about Y-axis.
+     P in Camera 2 coords: P2 = R^T * P.
+     Then project: (f*P2x/P2z, f*P2y/P2z, f) in Camera 2 local,
+     then transform back to world. */
+  const R = new THREE.Matrix4().makeRotationY(-rotRad);  // R^T
+  const pLocal2 = worldPos.clone().applyMatrix4(R);
+
+  let proj2World;
+  let cam2Visible = pLocal2.z > 0.1; // point is in front of camera 2?
+  if (cam2Visible) {
+    const p2x = FOCAL * pLocal2.x / pLocal2.z;
+    const p2y = FOCAL * pLocal2.y / pLocal2.z;
+    // Local position in Camera 2 frame
+    const proj2Local = new THREE.Vector3(p2x, p2y, FOCAL);
+    // Transform back to world
+    const Rfwd = new THREE.Matrix4().makeRotationY(rotRad);
+    proj2World = proj2Local.applyMatrix4(Rfwd);
+  } else {
+    proj2World = new THREE.Vector3(0, 0, 0);
+  }
+
+  // Camera 1 projection on image plane
+  projPt1.position.copy(proj1World);
+  projLabel1.position.set(proj1World.x - 0.3, proj1World.y - 0.25, proj1World.z);
+
+  // Camera 2 projection on image plane
+  projPt2.position.copy(proj2World);
+  projLabel2.position.set(proj2World.x + 0.3, proj2World.y - 0.25, proj2World.z);
+
+  projPt1.visible = showProjections && (worldPos.z > 0.2);
+  projPt2.visible = showProjections && cam2Visible;
+  projLabel1.visible = projPt1.visible;
+  projLabel2.visible = projPt2.visible;
+
+  /* ── Projection rays: origin → projected point (solid),
+        projected point → 3D point (dashed) ── */
+  function updateRayGeometry(line, from, to) {
+    const posArr = line.geometry.attributes.position.array;
+    posArr[0] = from.x; posArr[1] = from.y; posArr[2] = from.z;
+    posArr[3] = to.x;   posArr[4] = to.y;   posArr[5] = to.z;
+    line.geometry.attributes.position.needsUpdate = true;
+    if (line.computeLineDistances) line.computeLineDistances();
+  }
+
+  const origin = new THREE.Vector3(0, 0, 0);
+  if (worldPos.z > 0.2) {
+    updateRayGeometry(rayLine1, origin, proj1World);
+    updateRayGeometry(dashLine1, proj1World, worldPos);
+  }
+  if (cam2Visible) {
+    updateRayGeometry(rayLine2, origin, proj2World);
+    updateRayGeometry(dashLine2, proj2World, worldPos);
+  }
+
+  rayLine1.visible = showRays && worldPos.z > 0.2;
+  rayLine2.visible = showRays && cam2Visible;
+  dashLine1.visible = showRays && worldPos.z > 0.2;
+  dashLine2.visible = showRays && cam2Visible;
+
+  // R label follows the arc
+  rotLabel.position.set(Math.sin(rotRad / 2) * (FOCAL + 0.6), PLANE_H + 1.0, Math.cos(rotRad / 2) * (FOCAL + 0.6));
+}
+
+/* ================================================================
+   UI WIRING
+   ================================================================ */
+['rotSlider', 'depthSlider', 'pxSlider', 'pySlider'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateScene);
+});
+
+// Toggle projection rays
+document.getElementById('btnRays').addEventListener('click', function() {
+  showRays = !showRays;
+  this.classList.toggle('active', showRays);
+  updateScene();
+});
+
+// Toggle projection points
+document.getElementById('btnProjections').addEventListener('click', function() {
+  showProjections = !showProjections;
+  this.classList.toggle('active', showProjections);
+  updateScene();
+});
+
+// Top-down view (matching the right panel of the textbook figure)
+document.getElementById('btnTopView').addEventListener('click', function() {
+  /* Interaction teaching: The right panel of the figure is a top-down
+     view (looking down the Y axis) that shows horizontal (XZ) geometry.
+     This helps the student see projection rays in the epipolar plane. */
+  camera.position.set(0, 12, 3);
+  controls.target.set(1, 0, 3);
+  controls.update();
+});
+
+// Reset to textbook 3/4 view (matching the left panel perspective)
+document.getElementById('btnTextbookView').addEventListener('click', function() {
+  camera.position.copy(TEXTBOOK_CAM);
+  controls.target.copy(TEXTBOOK_TARGET);
+  controls.update();
+  // Also reset sliders
+  document.getElementById('rotSlider').value = 30;
+  document.getElementById('depthSlider').value = 5;
+  document.getElementById('pxSlider').value = 1.5;
+  document.getElementById('pySlider').value = 1.0;
+  showRays = true;
+  showProjections = true;
+  document.getElementById('btnRays').classList.add('active');
+  document.getElementById('btnProjections').classList.add('active');
+  updateScene();
+});
+
+/* ================================================================
+   GUIDED DEMO – step-through sequence explaining the concept.
+   Interaction teaching: walks the student through how rotation R
+   changes the projections (x,y) and (x',y') of a world point.
+   ================================================================ */
+const guideSteps = [
+  {
+    text: "<b>Step 1 / 6:</b> This is the shared <em>camera center</em> (origin). Both Camera 1 and Camera 2 share this optical center — only their image planes differ by a rotation <b>R</b>.",
+    action() {
+      document.getElementById('rotSlider').value = 0;
+      camera.position.set(3, 3, 7);
+      controls.target.set(0, 0.5, 2);
+      controls.update();
+      updateScene();
+    }
+  },
+  {
+    text: "<b>Step 2 / 6:</b> Camera 1's image plane (green) faces along the +Z axis at focal distance <em>f</em>. A 3D point (cyan) projects through the center onto this plane at <b>(x, y)</b>.",
+    action() {
+      document.getElementById('rotSlider').value = 0;
+      document.getElementById('depthSlider').value = 5;
+      document.getElementById('pxSlider').value = 1.5;
+      document.getElementById('pySlider').value = 1.0;
+      showRays = true; showProjections = true;
+      document.getElementById('btnRays').classList.add('active');
+      document.getElementById('btnProjections').classList.add('active');
+      camera.position.set(4, 3, 7);
+      controls.target.set(1, 0.5, 3);
+      controls.update();
+      updateScene();
+    }
+  },
+  {
+    text: "<b>Step 3 / 6:</b> Now we rotate Camera 2 (red) by <b>R = 30°</b> about the Y-axis. The red image plane swings to a new orientation. Notice how the projection <b>(x', y')</b> shifts on the red plane.",
+    action() {
+      document.getElementById('rotSlider').value = 30;
+      camera.position.set(5, 4, 8);
+      controls.target.copy(TEXTBOOK_TARGET);
+      controls.update();
+      updateScene();
+    }
+  },
+  {
+    text: "<b>Step 4 / 6:</b> Switch to top-down view. This matches the right panel of the textbook figure. You can see both image planes edge-on, the projection rays, and the 3D point.",
+    action() {
+      camera.position.set(0, 14, 3);
+      controls.target.set(1, 0, 3);
+      controls.update();
+    }
+  },
+  {
+    text: "<b>Step 5 / 6:</b> Move the 3D point closer (Z = 2.5). The projected points shift because closer objects create larger angles — this is the basis of <em>stereo disparity</em>.",
+    action() {
+      document.getElementById('depthSlider').value = 2.5;
+      updateScene();
+    }
+  },
+  {
+    text: "<b>Step 6 / 6:</b> Now push the point far away (Z = 9). The projections converge because distant objects subtend smaller angles. The <em>difference</em> between (x, y) and (x', y') encodes depth — this is the fundamental insight of stereo vision!",
+    action() {
+      document.getElementById('depthSlider').value = 9;
+      updateScene();
+    }
+  }
+];
+
+let guideIdx = 0;
+const guideOverlay = document.getElementById('guideOverlay');
+const guideText    = document.getElementById('guideText');
+const guideCounter = document.getElementById('guideCounter');
+
+function showGuideStep(idx) {
+  guideIdx = Math.max(0, Math.min(idx, guideSteps.length - 1));
+  guideText.innerHTML = guideSteps[guideIdx].text;
+  guideCounter.textContent = `${guideIdx + 1} / ${guideSteps.length}`;
+  guideSteps[guideIdx].action();
+}
+
+document.getElementById('btnGuide').addEventListener('click', () => {
+  guideOverlay.style.display = 'block';
+  showGuideStep(0);
+});
+document.getElementById('guideNext').addEventListener('click', () => showGuideStep(guideIdx + 1));
+document.getElementById('guidePrev').addEventListener('click', () => showGuideStep(guideIdx - 1));
+document.getElementById('guideClose').addEventListener('click', () => {
+  guideOverlay.style.display = 'none';
+});
+
+/* ================================================================
+   ANIMATION LOOP
+   ================================================================ */
+updateScene();
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+}
+animate();
+
+/* ================================================================
+   RESIZE HANDLER
+   ================================================================ */
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

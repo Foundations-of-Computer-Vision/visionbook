@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Pinhole Camera Model</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+        }
+    </style>
+    <!-- Import maps polyfill -->
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.150.1/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.150.1/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="info">
+        <h3>Pinhole Camera Model</h3>
+        <p>Interactive 3D View</p>
+        <p>Left Click to Rotate | Right Click to Pan | Scroll to Zoom</p>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(15, 10, 20);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        directionalLight.position.set(10, 20, 10);
+        scene.add(directionalLight);
+
+        // --- Geometry Constants ---
+        const focalLength = 4; // f
+        const cameraBoxWidth = 5;
+        const cameraBoxHeight = 5;
+        const cameraBoxDepth = focalLength;
+
+        // 1. Camera Box (The grey box)
+        // Positioned so the front face (pinhole) is at origin (0,0,0) roughly, 
+        // or actually the box extends *backwards* along -Z like in the diagram (where Z points forward)
+        // In the diagram:
+        // center is at origin.
+        // Z axis points RIGHT (in diagram space).
+        // Y axis points UP.
+        // X axis points "into" the page (or out, looks like specific perspective).
+        // The box is BEHIND the center, along the negative Z direction relative to the 'forward' world Z?
+        // Let's interpret axes from standard Three.js (Right-handed):
+        // +X Right, +Y Up, +Z Towards viewer.
+        // 
+        // Diagram Interpretation:
+        // The "World coordinates" axes origin is the Pinhole.
+        // Z axis (Optical axis) points to the right.
+        // Y axis points up.
+        // X axis points "deep left" (standard 3D axes).
+        // The Box is to the LEFT of the origin (negative Z in diagram logic?). 
+        // Wait, "Optical axis" arrow points +Z. The box is *behind* the pinhole relative to the scene?
+        // Actually, usually in pinhole models, the image plane is *behind* the generic center. 
+        // In the diagram, the box is largely in the -Z direction if Z is "forward".
+        // Let's align with Three.js axes for simplicity but rotate everything to match the visual if needed.
+        // Let's stick to standard math: 
+        // Origin = Pinhole.
+        // Image Plane is at z = -f.
+
+        // Let's build geometry relative to a group at Pinhole (0,0,0).
+
+        const cameraGroup = new THREE.Group();
+        scene.add(cameraGroup);
+
+        // Pinhole (a small sphere)
+        const pinholeGeo = new THREE.SphereGeometry(0.2, 32, 32);
+        const pinholeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const pinhole = new THREE.Mesh(pinholeGeo, pinholeMat);
+        cameraGroup.add(pinhole);
+
+        // Camera Body (The semi-transparent box)
+        // It sits between z=0 and z=-f.
+        // We want the 'front' face to be open (or just vertex at 0,0,0)
+        // The diagram has the box extending from the pinhole BACKWARDS.
+        // Note: The diagram axis shows Z pointing *away* from the box.
+        // So the box is in -Z direction.
+        const boxGeo = new THREE.BoxGeometry(cameraBoxWidth, cameraBoxHeight, focalLength);
+        const boxMat = new THREE.MeshStandardMaterial({
+            color: 0x889999,
+            transparent: true,
+            opacity: 0.5,
+            side: THREE.DoubleSide
+        });
+        const box = new THREE.Mesh(boxGeo, boxMat);
+        // Box center needs to be at -f/2
+        box.position.set(0, 0, -focalLength / 2);
+        cameraGroup.add(box);
+
+        // Edges for the box to make it look like a wireframe sketch
+        const edges = new THREE.EdgesGeometry(boxGeo);
+        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x555555, width: 2 }));
+        line.position.copy(box.position);
+        cameraGroup.add(line);
+
+        // Projection Plane (a plane inside the back of the box)
+        // At z = -f
+        const planeGeo = new THREE.PlaneGeometry(cameraBoxWidth, cameraBoxHeight);
+        const planeMat = new THREE.MeshBasicMaterial({
+            color: 0xaaccff,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.3
+        });
+        const projectionPlane = new THREE.Mesh(planeGeo, planeMat);
+        projectionPlane.position.set(0, 0, -focalLength);
+        cameraGroup.add(projectionPlane);
+
+        // 2. Axes Arrows
+        // The diagram shows X, Y, Z originating from the Pinhole.
+        // Z is "Optical / principal axis".
+        const axisLength = 8;
+        const arrowHeadLength = 0.5;
+        const arrowHeadWidth = 0.3;
+
+        // Z Axis (Optical Axis) - Blueish in diagram? Grey? Black.
+        const zDir = new THREE.Vector3(0, 0, 1);
+        const zArrow = new THREE.ArrowHelper(zDir, new THREE.Vector3(0, 0, 0), axisLength, 0x000000, arrowHeadLength, arrowHeadWidth);
+        // Creating thicker lines is hard in standard Three.js universally, sticking to ArrowHelper or cylinders.
+        // Let's use Cylinders for axes shafts to make them thicker like diagram.
+
+        function createThickArrow(dir, origin, length, color, labelText, textOffset) {
+            const group = new THREE.Group();
+
+            // Shaft
+            const shaftLen = length - arrowHeadLength;
+            const shaftGeo = new THREE.CylinderGeometry(0.05, 0.05, shaftLen, 8);
+            const shaftMat = new THREE.MeshBasicMaterial({ color: color });
+            const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+
+            // Align shaft
+            // Cylinder is created along Y axis by default. We need to rotate it.
+            // Quaternion rotation from (0,1,0) to dir.
+            const defaultUp = new THREE.Vector3(0, 1, 0);
+            const quaternion = new THREE.Quaternion().setFromUnitVectors(defaultUp, dir.clone().normalize());
+            shaft.setRotationFromQuaternion(quaternion);
+
+            // Position shaft: Center is at length/2
+            const midPoint = dir.clone().multiplyScalar(shaftLen / 2).add(origin);
+            shaft.position.copy(midPoint);
+            group.add(shaft);
+
+            // Head
+            const headGeo = new THREE.ConeGeometry(arrowHeadWidth, arrowHeadLength, 16);
+            const headMat = new THREE.MeshBasicMaterial({ color: color });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.setRotationFromQuaternion(quaternion);
+            head.position.copy(origin.clone().add(dir.clone().multiplyScalar(shaftLen + arrowHeadLength / 2))); // Tip
+            // Actually cone center is at h/2.
+            // We want cone base at shaft end.
+            const headPos = origin.clone().add(dir.clone().multiplyScalar(shaftLen + arrowHeadLength / 2));
+            head.position.copy(headPos);
+            // Re-adjust head pos
+            // The cone pivot is center.
+            // Base is at y = -h/2 relative to center.
+            // Try ArrowHelper for ease if thick lines aren't critical, but user showed diagram.
+            // Let's keep separate primitives.
+            // Arrow Helper is easiest for direction, but thin.
+            // Let's stick to ArrowHelper for simplicity of code and robustness, standard lines are visible enough.
+
+            const arrow = new THREE.ArrowHelper(dir, origin, length, color, arrowHeadLength, arrowHeadWidth);
+            // Make line thicker? No native support.
+            group.add(arrow);
+
+            return [group, arrow.cone.position]; // Return group and tip pos for label
+        }
+
+        const zAxis = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 6, 0x000000, 0.5, 0.3);
+        cameraGroup.add(zAxis);
+
+        const yAxis = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 5, 0x000000, 0.5, 0.3);
+        cameraGroup.add(yAxis);
+
+        const xAxis = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 5, 0x000000, 0.5, 0.3);
+        // Diagram X looks like (1, 0, 1) direction due to perspective?
+        // Let's assume standard orthogonal.
+        cameraGroup.add(xAxis);
+
+        // 3. Dashed Line for Optical Axis inside the box
+        // Extends from 0 to -f - something
+        const dashPoints = [];
+        dashPoints.push(new THREE.Vector3(0, 0, 0));
+        dashPoints.push(new THREE.Vector3(0, 0, -focalLength - 2));
+        const dashGeo = new THREE.BufferGeometry().setFromPoints(dashPoints);
+        const dashMat = new THREE.LineDashedMaterial({
+            color: 0x555555,
+            dashSize: 0.5,
+            gapSize: 0.3,
+        });
+        const centerLine = new THREE.Line(dashGeo, dashMat);
+        centerLine.computeLineDistances();
+        cameraGroup.add(centerLine);
+
+        // 4. Red arrow for 'f'
+        // Double headed arrow at the bottom
+        // Below the box.
+        // Box bounds: y from -2.5 to 2.5.
+        // We want arrow at y = -3.0
+        // From z = 0 to z = -4
+        const fY = -cameraBoxHeight / 2 - 0.5;
+        const fStart = new THREE.Vector3(0, fY, 0); // At pinhole z
+        const fEnd = new THREE.Vector3(0, fY, -focalLength); // At plane z
+        const fDir = new THREE.Vector3(0, 0, -1);
+
+        const fArrowColor = 0xff0000;
+        const arrow1 = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, fY, 0), focalLength, fArrowColor, 0.3, 0.2);
+        const arrow2 = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, fY, -focalLength), focalLength, fArrowColor, 0.3, 0.2);
+        cameraGroup.add(arrow1);
+        cameraGroup.add(arrow2);
+
+        // Connect the tips of arrows if they are just direction markers?
+        // The diagram has a double arrow <---->
+        // We can just add a line between them
+        const fLineGeo = new THREE.BufferGeometry().setFromPoints([fStart, fEnd]);
+        const fLineMat = new THREE.LineBasicMaterial({ color: fArrowColor });
+        const fLine = new THREE.Line(fLineGeo, fLineMat);
+        cameraGroup.add(fLine);
+
+        // Vertical dashed drop lines to the f-arrow
+        // From (0, -2.5, 0) to (0, -3.0, 0)
+        // From (0, -2.5, -f) to (0, -3.0, -f)
+        const dropLineMat = new THREE.LineDashedMaterial({ color: 0x888888, dashSize: 0.2, gapSize: 0.1 });
+
+        const d1Points = [new THREE.Vector3(0, -cameraBoxHeight / 2, 0), new THREE.Vector3(0, fY, 0)];
+        const d1Geo = new THREE.BufferGeometry().setFromPoints(d1Points);
+        const d1 = new THREE.Line(d1Geo, dropLineMat);
+        d1.computeLineDistances();
+        cameraGroup.add(d1);
+
+        const d2Points = [new THREE.Vector3(0, -cameraBoxHeight / 2, -focalLength), new THREE.Vector3(0, fY, -focalLength)];
+        const d2Geo = new THREE.BufferGeometry().setFromPoints(d2Points);
+        const d2 = new THREE.Line(d2Geo, dropLineMat);
+        d2.computeLineDistances();
+        cameraGroup.add(d2);
+
+
+        // 5. Labels
+        // We need a font loader
+        const loader = new FontLoader();
+        loader.load('https://unpkg.com/three@0.150.1/examples/fonts/helvetiker_regular.typeface.json', function (font) {
+
+            function createLabel(text, position, size = 0.5, color = 0x000000) {
+                const textGeo = new TextGeometry(text, {
+                    font: font,
+                    size: size,
+                    height: 0.01,
+                });
+                textGeo.computeBoundingBox();
+                const textMat = new THREE.MeshBasicMaterial({ color: color });
+                const textMesh = new THREE.Mesh(textGeo, textMat);
+
+                // Center text slightly or align left?
+                // Just positioning
+                textMesh.position.copy(position);
+                cameraGroup.add(textMesh);
+
+                // Make text always face camera?
+                // In simple viewer, maybe just static orientation or billboard.
+                // Let's rotate to face roughly +Z and up.
+                // textMesh.lookAt(camera.position); // Dynamic inside animate loop is better
+                return textMesh;
+            }
+
+            // "Pinhole Camera"
+            // Top left of box
+            createLabel("Pinhole camera", new THREE.Vector3(-3, 3.5, -focalLength / 2), 0.6);
+
+            // "World coordinates"
+            createLabel("World coordinates", new THREE.Vector3(2, 4, 2), 0.7);
+
+            // X, Y, Z
+            createLabel("X", new THREE.Vector3(5.2, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), 0), 0.6);
+            createLabel("Y", new THREE.Vector3(0.2, 5.2, 0), 0.6);
+            createLabel("Z", new THREE.Vector3(0, -0.5, 6.5), 0.8);
+
+            // "Optical / principal axis"
+            createLabel("Optical / principal axis", new THREE.Vector3(2, 0.5, 3), 0.5, 0x445566);
+
+            // "Pinhole / camera center"
+            // Arrow pointing to center?
+            createLabel("Pinhole / camera center", new THREE.Vector3(1, -1.5, 0.5), 0.45);
+            // Little line pointing to origin
+            const labelPt = new THREE.Vector3(0.8, -1.2, 0.5);
+            const originPt = new THREE.Vector3(0.1, -0.1, 0.1);
+            const ptrGeo = new THREE.BufferGeometry().setFromPoints([labelPt, originPt]);
+            const ptrLine = new THREE.Line(ptrGeo, new THREE.LineBasicMaterial({ color: 0x888888 }));
+            cameraGroup.add(ptrLine);
+
+            // "Projection plane"
+            // Pointing to back plane
+            createLabel("Projection plane", new THREE.Vector3(-6, 0, -focalLength), 0.5);
+            const ppLabelPt = new THREE.Vector3(-4.0, 0.2, -focalLength);
+            const ppTarget = new THREE.Vector3(-cameraBoxWidth / 2 + 0.1, 0, -focalLength); // Left edge of plane
+            // Actually curve arrow? Straight line ok.
+            // ArrowHelper
+            const ppDir = ppTarget.clone().sub(ppLabelPt).normalize();
+            const ppLen = ppTarget.distanceTo(ppLabelPt);
+            const ppArrow = new THREE.ArrowHelper(ppDir, ppLabelPt, ppLen, 0x556677, 0.3, 0.2);
+            cameraGroup.add(ppArrow);
+
+            // "f"
+            createLabel("f", new THREE.Vector3(-0.2, fY - 0.8, -focalLength / 2), 0.6, 0xff0000);
+
+        });
+
+        // Rotate the whole group to match the isometric-like view of the diagram initially
+        // Diagram: Z points Right-ish. Y points Up. X points Left-ish (into depth).
+        // Standard view: Camera is at +Z.
+        // Let's rotate the CameraGroup so Z axis points right (World +X).
+        // And diagram X axis (which is orthogonal to Z and Y) points...
+        // Let's just move the THREE.Camera to a nice isometric angle.
+        // The diagram has World X coming towards us-right, Y up, Z right.
+        // Wait, diagram X is top right? No, diagram X is top-right diagonal.
+        // Diagram Y is Up.
+        // Diagram Z is Right.
+        // This is a coordinate system rotation.
+
+        // Let's position the Three.js camera to mimic the screenshot.
+        // Image view: looking from positive X, positive Y, positive Z octant? 
+        // No.
+        // Box is on left. Axis on right.
+        // Viewer is looking from roughly (+X, +Y, +Z) but zoomed out.
+        // In our scene:
+        // Z is axis line. (0,0,1)
+        // Box is at -Z.
+        // We want Z axis pointing RIGHT on screen.
+        // We want Y axis pointing UP on screen.
+        // We want X axis pointing INTO screen?
+        // Let's just adjust the OrbitControls initial position.
+
+        // Let's realign the objects to Match Diagram logic visually if we want exact 1:1 match of axes labels.
+        // In diagram:
+        // Z axis is Horizontal Right.
+        // Y axis is Vertical Up.
+        // X axis is Diagonal Up-Right (or Down-Left?). It says X next to an arrow pointing "Back-Right".
+        // That looks like a left-handed system or just perspective.
+
+        // Let's keep strict Right-Hand Rule and just position camera nicely.
+        // Three.js: +X Right, +Y Up, +Z Towards.
+        // We built: Z axis along +Z.
+        camera.position.set(10, 5, 10); // Generic iso view
+        controls.update();
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+
+</html>

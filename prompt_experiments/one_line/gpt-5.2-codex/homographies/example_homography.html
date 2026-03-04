@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Grid to Perspective Warp</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #111111;
+      --muted: #666666;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+
+    #overlay {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid #e6e6e6;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    #overlay b {
+      font-weight: 600;
+    }
+
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="overlay">
+    <b>Homography intuition</b><br />
+    Drag to rotate · Scroll to zoom · Right-drag to pan
+  </div>
+  <script type="module">
+    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+    import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      100
+    );
+    camera.position.set(0, 1.5, 6);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    document.body.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 2.5;
+    controls.maxDistance = 12;
+
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x111111 });
+
+    function makeGridLines(cols, rows, sizeX, sizeY, material) {
+      const positions = [];
+
+      for (let i = 0; i <= cols; i += 1) {
+        const x = -sizeX / 2 + (sizeX * i) / cols;
+        positions.push(x, -sizeY / 2, 0, x, sizeY / 2, 0);
+      }
+      for (let j = 0; j <= rows; j += 1) {
+        const y = -sizeY / 2 + (sizeY * j) / rows;
+        positions.push(-sizeX / 2, y, 0, sizeX / 2, y, 0);
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(positions, 3)
+      );
+      return new THREE.LineSegments(geometry, material);
+    }
+
+    const gridSize = 3.2;
+    const gridCols = 4;
+    const gridRows = 4;
+
+    const leftGrid = makeGridLines(gridCols, gridRows, gridSize, gridSize, lineMaterial);
+    leftGrid.position.set(-2.4, 0, 0);
+    scene.add(leftGrid);
+
+    const rightGrid = makeGridLines(gridCols, gridRows, gridSize, gridSize, lineMaterial);
+    rightGrid.position.set(2.4, 0, 0);
+    rightGrid.rotation.set(-0.12, -0.7, 0.08);
+    rightGrid.scale.set(1.15, 1.05, 1);
+    scene.add(rightGrid);
+
+    const arrowDir = new THREE.Vector3(1, 0, 0).normalize();
+    const arrowOrigin = new THREE.Vector3(-0.6, 0, 0);
+    const arrowLength = 1.2;
+    const arrowColor = 0x111111;
+    const arrow = new THREE.ArrowHelper(
+      arrowDir,
+      arrowOrigin,
+      arrowLength,
+      arrowColor,
+      0.18,
+      0.1
+    );
+    scene.add(arrow);
+
+    const light = new THREE.HemisphereLight(0xffffff, 0xf0f0f0, 0.6);
+    scene.add(light);
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+    window.addEventListener("resize", onResize);
+
+    function animate() {
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    animate();
+  </script>
+</body>
+
+</html>

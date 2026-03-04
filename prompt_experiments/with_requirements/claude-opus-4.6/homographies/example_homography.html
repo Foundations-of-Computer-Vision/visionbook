@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interactive Homography (Projective Transformation)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* ---- Overlay panels ---- */
+        .panel {
+            position: absolute;
+            background: rgba(20, 20, 40, 0.92);
+            border: 1px solid rgba(100, 140, 255, 0.3);
+            border-radius: 10px;
+            padding: 14px 18px;
+            backdrop-filter: blur(8px);
+            pointer-events: auto;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Title panel */
+        #title-panel {
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            max-width: 640px;
+        }
+
+        #title-panel h1 {
+            font-size: 20px;
+            color: #7ecfff;
+            margin-bottom: 4px;
+        }
+
+        #title-panel p {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        /* Controls panel */
+        #controls-panel {
+            top: 90px;
+            left: 14px;
+            width: 270px;
+        }
+
+        #controls-panel h2 {
+            font-size: 15px;
+            color: #7ecfff;
+            margin-bottom: 10px;
+        }
+
+        .control-group {
+            margin-bottom: 12px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 12px;
+            color: #bbb;
+            margin-bottom: 3px;
+        }
+
+        .control-group input[type=range] {
+            width: 100%;
+            accent-color: #5b8def;
+        }
+
+        .control-group .val {
+            float: right;
+            font-size: 11px;
+            color: #7ecfff;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 6px 14px;
+            margin: 3px 3px 3px 0;
+            border: 1px solid rgba(100, 140, 255, 0.4);
+            border-radius: 6px;
+            background: rgba(60, 80, 140, 0.35);
+            color: #b0d0ff;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: rgba(80, 120, 220, 0.5);
+        }
+
+        .btn.active {
+            background: rgba(80, 120, 220, 0.65);
+            border-color: #7ecfff;
+            color: #fff;
+        }
+
+        /* Matrix display */
+        #matrix-panel {
+            bottom: 14px;
+            left: 14px;
+            width: 270px;
+        }
+
+        #matrix-panel h2 {
+            font-size: 14px;
+            color: #7ecfff;
+            margin-bottom: 6px;
+        }
+
+        .matrix-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .matrix-cell {
+            background: rgba(40, 50, 80, 0.6);
+            border: 1px solid rgba(100, 140, 255, 0.2);
+            border-radius: 4px;
+            padding: 4px 2px;
+        }
+
+        /* Info / guided-demo panel */
+        #info-panel {
+            top: 90px;
+            right: 14px;
+            width: 280px;
+        }
+
+        #info-panel h2 {
+            font-size: 15px;
+            color: #7ecfff;
+            margin-bottom: 8px;
+        }
+
+        #info-panel p,
+        #info-panel li {
+            font-size: 12px;
+            line-height: 1.5;
+            color: #ccc;
+        }
+
+        #info-panel ul {
+            padding-left: 18px;
+            margin: 6px 0;
+        }
+
+        #step-text {
+            min-height: 64px;
+            margin-bottom: 10px;
+        }
+
+        /* Legend */
+        #legend-panel {
+            bottom: 14px;
+            right: 14px;
+            width: 280px;
+        }
+
+        #legend-panel h2 {
+            font-size: 14px;
+            color: #7ecfff;
+            margin-bottom: 6px;
+        }
+
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 4px 0;
+            font-size: 12px;
+        }
+
+        .legend-swatch {
+            width: 18px;
+            height: 4px;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container">
+        <!-- Title -->
+        <div class="panel" id="title-panel">
+            <h1>Homography: Projective Transformation of a Grid</h1>
+            <p>Colinear points remain colinear. Parallel lines need not stay parallel. Angles &amp; lengths are not
+                preserved.</p>
+        </div>
+
+        <!-- Controls -->
+        <div class="panel" id="controls-panel">
+            <h2>Controls</h2>
+
+            <!-- Interactive sliders for the homography matrix bottom row (perspective params) -->
+            <div class="control-group">
+                <label>Perspective g (H[2,0]) <span class="val" id="val-g">0.000</span></label>
+                <input type="range" id="slider-g" min="-0.003" max="0.003" step="0.0001" value="0">
+            </div>
+            <div class="control-group">
+                <label>Perspective h (H[2,1]) <span class="val" id="val-h">0.000</span></label>
+                <input type="range" id="slider-h" min="-0.003" max="0.003" step="0.0001" value="0">
+            </div>
+            <div class="control-group">
+                <label>Shear (H[0,1]) <span class="val" id="val-shear">0.000</span></label>
+                <input type="range" id="slider-shear" min="-1.0" max="1.0" step="0.01" value="0">
+            </div>
+            <div class="control-group">
+                <label>Rotation (degrees) <span class="val" id="val-rot">0</span></label>
+                <input type="range" id="slider-rot" min="-45" max="45" step="1" value="0">
+            </div>
+
+            <div style="margin-top:10px;">
+                <button class="btn" id="btn-reset-view">Reset to Textbook View</button>
+                <button class="btn" id="btn-reset-H">Reset H to Identity</button>
+            </div>
+            <div style="margin-top:6px;">
+                <button class="btn" id="btn-toggle-original">Toggle Original Grid</button>
+                <button class="btn" id="btn-toggle-lines">Highlight Lines</button>
+            </div>
+            <div style="margin-top:6px;">
+                <button class="btn" id="btn-animate">Animate Warp</button>
+                <button class="btn" id="btn-guided-demo">Guided Demo ▶</button>
+            </div>
+        </div>
+
+        <!-- Matrix display -->
+        <div class="panel" id="matrix-panel">
+            <h2>Homography Matrix H</h2>
+            <div class="matrix-grid">
+                <div class="matrix-cell" id="m00">1.00</div>
+                <div class="matrix-cell" id="m01">0.00</div>
+                <div class="matrix-cell" id="m02">0.00</div>
+                <div class="matrix-cell" id="m10">0.00</div>
+                <div class="matrix-cell" id="m11">1.00</div>
+                <div class="matrix-cell" id="m12">0.00</div>
+                <div class="matrix-cell" id="m20">0.00</div>
+                <div class="matrix-cell" id="m21">0.00</div>
+                <div class="matrix-cell" id="m22">1.00</div>
+            </div>
+        </div>
+
+        <!-- Info / guided demo -->
+        <div class="panel" id="info-panel">
+            <h2>Guided Demo</h2>
+            <div id="step-text">
+                <p>Click <b>Guided Demo ▶</b> to walk through the key properties of a homography (projective
+                    transformation).</p>
+            </div>
+            <div>
+                <button class="btn" id="btn-prev-step">◀ Prev</button>
+                <button class="btn" id="btn-next-step">Next ▶</button>
+                <span id="step-counter" style="font-size:11px; margin-left:8px; color:#888;"></span>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="panel" id="legend-panel">
+            <h2>Legend</h2>
+            <div class="legend-row">
+                <div class="legend-swatch" style="background:#4488ff;"></div> Original grid (before H)
+            </div>
+            <div class="legend-row">
+                <div class="legend-swatch" style="background:#ff6644;"></div> Transformed grid (after H)
+            </div>
+            <div class="legend-row">
+                <div class="legend-swatch" style="background:#44ff88;"></div> Highlighted colinear set
+            </div>
+            <div class="legend-row">
+                <div class="legend-swatch" style="background:#ffcc00;"></div> Corner markers / labels
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ======================================================================
+        //  SCENE SETUP
+        // ======================================================================
+        const container = document.getElementById('canvas-container');
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.prepend(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+        // "Textbook view" — slightly above and to the right so both grids are visible
+        const TEXTBOOK_POS = new THREE.Vector3(0, 8, 14);
+        const TEXTBOOK_TARGET = new THREE.Vector3(0, 0, 0);
+        camera.position.copy(TEXTBOOK_POS);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.copy(TEXTBOOK_TARGET);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.update();
+
+        // Lights
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        // Subtle ground reference
+        const groundGeo = new THREE.PlaneGeometry(40, 40);
+        const groundMat = new THREE.MeshStandardMaterial({
+            color: 0x222244, transparent: true, opacity: 0.25, side: THREE.DoubleSide
+        });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.05;
+        scene.add(ground);
+
+        // ======================================================================
+        //  GRID PARAMETERS
+        //  The original figure is a 4×4 grid of squares. We represent it as
+        //  a set of lines on the XZ plane (Y=0). The grid spans [-4,4]×[-4,4].
+        // ======================================================================
+        const GRID_DIV = 4;                       // 4 columns / rows
+        const GRID_HALF = 4;                       // half-extent
+        const GRID_STEP = (2 * GRID_HALF) / GRID_DIV;
+        const LINE_RES = 40;                      // segments per line for smooth warping
+
+        // Offset: original grid on the left, transformed grid on the right
+        const ORIG_OFFSET = new THREE.Vector3(-6, 0, 0);
+        const WARPED_OFFSET = new THREE.Vector3(6, 0, 0);
+
+        // ======================================================================
+        //  HELPER: Build a grid made of THREE.Line objects
+        //  Returns { group, lines[] } where each line stores its raw positions
+        //  so we can re-compute them when H changes.
+        // ======================================================================
+        function makeGrid(color, offset) {
+            const group = new THREE.Group();
+            group.position.copy(offset);
+            const mat = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+            const lines = [];
+
+            // Horizontal lines (constant z, varying x)
+            for (let i = 0; i <= GRID_DIV; i++) {
+                const z = -GRID_HALF + i * GRID_STEP;
+                const pts = [];
+                for (let j = 0; j <= LINE_RES; j++) {
+                    const t = j / LINE_RES;
+                    const x = -GRID_HALF + t * 2 * GRID_HALF;
+                    pts.push({ x, z });                  // store logical 2D positions
+                }
+                const geo = new THREE.BufferGeometry();
+                const pos = new Float32Array((LINE_RES + 1) * 3);
+                geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+                const line = new THREE.Line(geo, mat.clone());
+                line.userData = { pts, type: 'h', index: i };
+                lines.push(line);
+                group.add(line);
+            }
+
+            // Vertical lines (constant x, varying z)
+            for (let i = 0; i <= GRID_DIV; i++) {
+                const x = -GRID_HALF + i * GRID_STEP;
+                const pts = [];
+                for (let j = 0; j <= LINE_RES; j++) {
+                    const t = j / LINE_RES;
+                    const z = -GRID_HALF + t * 2 * GRID_HALF;
+                    pts.push({ x, z });
+                }
+                const geo = new THREE.BufferGeometry();
+                const pos = new Float32Array((LINE_RES + 1) * 3);
+                geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+                const line = new THREE.Line(geo, mat.clone());
+                line.userData = { pts, type: 'v', index: i };
+                lines.push(line);
+                group.add(line);
+            }
+            scene.add(group);
+            return { group, lines };
+        }
+
+        // ---- Create original (blue) and warped (red-orange) grids ----
+        const origGrid = makeGrid(0x4488ff, ORIG_OFFSET);
+        const warpedGrid = makeGrid(0xff6644, WARPED_OFFSET);
+
+        // ======================================================================
+        //  Arrow between grids – visual cue matching the textbook figure
+        // ======================================================================
+        const arrowDir = new THREE.Vector3(1, 0, 0);
+        const arrowOrigin = new THREE.Vector3(-1.2, 0.3, 0);
+        const arrowHelper = new THREE.ArrowHelper(arrowDir, arrowOrigin, 2.4, 0xffffff, 0.5, 0.3);
+        scene.add(arrowHelper);
+
+        // Label "H" near the arrow using a sprite
+        function makeTextSprite(text, color = '#ffcc00', size = 1) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = color;
+            ctx.font = 'bold 80px Segoe UI, Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 128, 64);
+            const tex = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+            const sprite = new THREE.Sprite(mat);
+            sprite.scale.set(size * 2, size, 1);
+            return sprite;
+        }
+
+        const labelH = makeTextSprite('H', '#ffcc00', 1);
+        labelH.position.set(0, 1.4, 0);
+        scene.add(labelH);
+
+        // Labels for each grid
+        const labelOrig = makeTextSprite('Original Grid', '#4488ff', 1.2);
+        labelOrig.position.copy(ORIG_OFFSET).add(new THREE.Vector3(0, 0.4, -GRID_HALF - 1.2));
+        scene.add(labelOrig);
+
+        const labelWarped = makeTextSprite('Transformed Grid', '#ff6644', 1.2);
+        labelWarped.position.copy(WARPED_OFFSET).add(new THREE.Vector3(0, 0.4, -GRID_HALF - 1.2));
+        scene.add(labelWarped);
+
+        // Corner labels (p1..p4) on original, (p1'..p4') on warped
+        const cornerNames = ["p₁", "p₂", "p₃", "p₄"];
+        const cornerPrimeNames = ["p₁'", "p₂'", "p₃'", "p₄'"];
+        const cornerCoords = [
+            { x: -GRID_HALF, z: -GRID_HALF },
+            { x: GRID_HALF, z: -GRID_HALF },
+            { x: GRID_HALF, z: GRID_HALF },
+            { x: -GRID_HALF, z: GRID_HALF }
+        ];
+        const cornerSpritesOrig = [];
+        const cornerSpritesWarp = [];
+        cornerCoords.forEach((c, i) => {
+            const s1 = makeTextSprite(cornerNames[i], '#ffcc00', 0.6);
+            s1.position.set(c.x + ORIG_OFFSET.x, 0.5, c.z + ORIG_OFFSET.z);
+            scene.add(s1);
+            cornerSpritesOrig.push(s1);
+
+            const s2 = makeTextSprite(cornerPrimeNames[i], '#ffcc00', 0.6);
+            s2.position.set(c.x + WARPED_OFFSET.x, 0.5, c.z + WARPED_OFFSET.z);
+            scene.add(s2);
+            cornerSpritesWarp.push(s2);
+        });
+
+        // ======================================================================
+        //  HIGHLIGHTED COLINEAR LINE (green) — shows that a line stays a line
+        // ======================================================================
+        const hlMat = new THREE.LineBasicMaterial({ color: 0x44ff88, linewidth: 3 });
+        const hlGeoOrig = new THREE.BufferGeometry();
+        hlGeoOrig.setAttribute('position', new THREE.BufferAttribute(new Float32Array((LINE_RES + 1) * 3), 3));
+        const hlLineOrig = new THREE.Line(hlGeoOrig, hlMat.clone());
+        hlLineOrig.position.copy(ORIG_OFFSET);
+        hlLineOrig.visible = false;
+        scene.add(hlLineOrig);
+
+        const hlGeoWarp = new THREE.BufferGeometry();
+        hlGeoWarp.setAttribute('position', new THREE.BufferAttribute(new Float32Array((LINE_RES + 1) * 3), 3));
+        const hlLineWarp = new THREE.Line(hlGeoWarp, hlMat.clone());
+        hlLineWarp.position.copy(WARPED_OFFSET);
+        hlLineWarp.visible = false;
+        scene.add(hlLineWarp);
+
+        let highlightOn = false;
+        // Diagonal line through grid as highlighted set
+        const hlPts = [];
+        for (let j = 0; j <= LINE_RES; j++) {
+            const t = j / LINE_RES;
+            hlPts.push({ x: -GRID_HALF + t * 2 * GRID_HALF, z: -GRID_HALF + t * 2 * GRID_HALF });
+        }
+
+        // ======================================================================
+        //  HOMOGRAPHY STATE (3×3 matrix stored as flat array, column-major)
+        //  H = [ a  b  c ]    indices:  [0  3  6]
+        //      [ d  e  f ]              [1  4  7]
+        //      [ g  h  1 ]              [2  5  8]
+        //
+        //  In homogeneous coords:  [x', y', w']^T = H * [x, y, 1]^T
+        //  Then  u' = x'/w',  v' = y'/w'
+        // ======================================================================
+        let H = [1, 0, 0, 0, 1, 0, 0, 0, 1]; // identity
+
+        function getH() {
+            // Build from sliders: rotation + shear + perspective
+            const g = parseFloat(document.getElementById('slider-g').value);
+            const h = parseFloat(document.getElementById('slider-h').value);
+            const shear = parseFloat(document.getElementById('slider-shear').value);
+            const rotD = parseFloat(document.getElementById('slider-rot').value);
+            const rotR = rotD * Math.PI / 180;
+            const c = Math.cos(rotR), s = Math.sin(rotR);
+
+            // H = Perspective * Shear * Rotation  (composed)
+            // Rotation: [ c -s 0; s c 0; 0 0 1 ]
+            // Shear:    [ 1 sh 0; 0 1 0; 0 0 1 ]
+            // Persp:    [ 1 0 0; 0 1 0; g h 1 ]
+            // Combined (order: first rotate, then shear, then add perspective row)
+            const a00 = c + shear * s, a01 = -s + shear * c, a02 = 0;
+            const a10 = s, a11 = c, a12 = 0;
+            const a20 = g, a21 = h, a22 = 1;
+
+            H = [a00, a10, a20, a01, a11, a21, a02, a12, a22];
+            return H;
+        }
+
+        /**
+         * Apply homography H to a 2D point (x, z) → (u, v).
+         * We treat z as the "y" of the 2D plane.
+         */
+        function applyH(px, pz) {
+            const xh = H[0] * px + H[3] * pz + H[6];
+            const yh = H[1] * px + H[4] * pz + H[7];
+            const wh = H[2] * px + H[5] * pz + H[8];
+            if (Math.abs(wh) < 1e-8) return { x: px, z: pz }; // degenerate
+            return { x: xh / wh, z: yh / wh };
+        }
+
+        // ======================================================================
+        //  UPDATE FUNCTIONS
+        // ======================================================================
+
+        /** Write positions into a line's buffer from its stored pts. Identity transform. */
+        function updateLineIdentity(line) {
+            const buf = line.geometry.attributes.position.array;
+            const pts = line.userData.pts;
+            for (let j = 0; j < pts.length; j++) {
+                buf[j * 3] = pts[j].x;
+                buf[j * 3 + 1] = 0;
+                buf[j * 3 + 2] = pts[j].z;
+            }
+            line.geometry.attributes.position.needsUpdate = true;
+        }
+
+        /** Write positions into a line's buffer applying current H. */
+        function updateLineWarped(line) {
+            const buf = line.geometry.attributes.position.array;
+            const pts = line.userData.pts;
+            for (let j = 0; j < pts.length; j++) {
+                const w = applyH(pts[j].x, pts[j].z);
+                buf[j * 3] = w.x;
+                buf[j * 3 + 1] = 0;
+                buf[j * 3 + 2] = w.z;
+            }
+            line.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function updateAll() {
+            getH();
+            origGrid.lines.forEach(l => updateLineIdentity(l));
+            warpedGrid.lines.forEach(l => updateLineWarped(l));
+
+            // Update highlight lines
+            {
+                const bufO = hlLineOrig.geometry.attributes.position.array;
+                const bufW = hlLineWarp.geometry.attributes.position.array;
+                for (let j = 0; j < hlPts.length; j++) {
+                    bufO[j * 3] = hlPts[j].x;
+                    bufO[j * 3 + 1] = 0.02;
+                    bufO[j * 3 + 2] = hlPts[j].z;
+                    const w = applyH(hlPts[j].x, hlPts[j].z);
+                    bufW[j * 3] = w.x;
+                    bufW[j * 3 + 1] = 0.02;
+                    bufW[j * 3 + 2] = w.z;
+                }
+                hlLineOrig.geometry.attributes.position.needsUpdate = true;
+                hlLineWarp.geometry.attributes.position.needsUpdate = true;
+            }
+
+            // Update corner labels on warped grid
+            cornerCoords.forEach((c, i) => {
+                const w = applyH(c.x, c.z);
+                cornerSpritesWarp[i].position.set(w.x + WARPED_OFFSET.x, 0.5, w.z + WARPED_OFFSET.z);
+            });
+
+            // Update matrix panel
+            document.getElementById('m00').textContent = H[0].toFixed(3);
+            document.getElementById('m01').textContent = H[3].toFixed(3);
+            document.getElementById('m02').textContent = H[6].toFixed(3);
+            document.getElementById('m10').textContent = H[1].toFixed(3);
+            document.getElementById('m11').textContent = H[4].toFixed(3);
+            document.getElementById('m12').textContent = H[7].toFixed(3);
+            document.getElementById('m20').textContent = H[2].toFixed(4);
+            document.getElementById('m21').textContent = H[5].toFixed(4);
+            document.getElementById('m22').textContent = H[8].toFixed(3);
+        }
+
+        // Initialize
+        updateAll();
+
+        // ======================================================================
+        //  SLIDER EVENTS
+        // ======================================================================
+        ['slider-g', 'slider-h', 'slider-shear', 'slider-rot'].forEach(id => {
+            const el = document.getElementById(id);
+            el.addEventListener('input', () => {
+                document.getElementById('val-g').textContent = parseFloat(document.getElementById('slider-g').value).toFixed(4);
+                document.getElementById('val-h').textContent = parseFloat(document.getElementById('slider-h').value).toFixed(4);
+                document.getElementById('val-shear').textContent = parseFloat(document.getElementById('slider-shear').value).toFixed(2);
+                document.getElementById('val-rot').textContent = document.getElementById('slider-rot').value;
+                updateAll();
+            });
+        });
+
+        // ======================================================================
+        //  BUTTON HANDLERS
+        // ======================================================================
+
+        // 1. Reset camera to textbook view
+        document.getElementById('btn-reset-view').addEventListener('click', () => {
+            camera.position.copy(TEXTBOOK_POS);
+            controls.target.copy(TEXTBOOK_TARGET);
+            controls.update();
+        });
+
+        // 2. Reset H to identity
+        document.getElementById('btn-reset-H').addEventListener('click', () => {
+            document.getElementById('slider-g').value = 0;
+            document.getElementById('slider-h').value = 0;
+            document.getElementById('slider-shear').value = 0;
+            document.getElementById('slider-rot').value = 0;
+            document.getElementById('val-g').textContent = '0.0000';
+            document.getElementById('val-h').textContent = '0.0000';
+            document.getElementById('val-shear').textContent = '0.00';
+            document.getElementById('val-rot').textContent = '0';
+            updateAll();
+        });
+
+        // 3. Toggle original grid visibility
+        let origVisible = true;
+        document.getElementById('btn-toggle-original').addEventListener('click', () => {
+            origVisible = !origVisible;
+            origGrid.group.visible = origVisible;
+            cornerSpritesOrig.forEach(s => s.visible = origVisible);
+            labelOrig.visible = origVisible;
+        });
+
+        // 4. Toggle highlight colinear line
+        document.getElementById('btn-toggle-lines').addEventListener('click', () => {
+            highlightOn = !highlightOn;
+            hlLineOrig.visible = highlightOn;
+            hlLineWarp.visible = highlightOn;
+        });
+
+        // 5. Animate warp — smoothly interpolate from identity to a preset perspective transform
+        let animating = false;
+        let animT = 0;
+        const ANIM_DURATION = 2.0; // seconds
+        const TARGET_G = 0.0018;
+        const TARGET_H = -0.001;
+
+        document.getElementById('btn-animate').addEventListener('click', () => {
+            if (animating) return;
+            // Reset to identity first
+            document.getElementById('slider-g').value = 0;
+            document.getElementById('slider-h').value = 0;
+            document.getElementById('slider-shear').value = 0;
+            document.getElementById('slider-rot').value = 0;
+            animating = true;
+            animT = 0;
+        });
+
+        // 6. Guided demo step-through
+        const demoSteps = [
+            {
+                text: "<b>Step 1 — Identity:</b> When H is the identity matrix, the grid is unchanged. Both grids look identical.",
+                action: () => {
+                    setSliders(0, 0, 0, 0);
+                    highlightOn = false; hlLineOrig.visible = false; hlLineWarp.visible = false;
+                    origGrid.group.visible = true; origVisible = true;
+                    cornerSpritesOrig.forEach(s => s.visible = true); labelOrig.visible = true;
+                }
+            },
+            {
+                text: "<b>Step 2 — Rotation:</b> A rotation preserves parallelism, angles between grid lines, and lengths. This is a <em>rigid</em> transformation — a special case of homography.",
+                action: () => { setSliders(0, 0, 0, 25); }
+            },
+            {
+                text: "<b>Step 3 — Shear:</b> Adding shear breaks right angles but keeps parallel lines parallel. Areas are preserved. This is an <em>affine</em> transformation — still a special case.",
+                action: () => { setSliders(0, 0, 0.5, 0); }
+            },
+            {
+                text: "<b>Step 4 — Perspective (g ≠ 0):</b> A nonzero bottom-row element adds projective distortion. Parallel lines <em>converge</em>. This is the full <em>projective</em> (homography) transform — like viewing a grid from an angle.",
+                action: () => { setSliders(0.0018, 0, 0, 0); }
+            },
+            {
+                text: "<b>Step 5 — Colinear points stay colinear:</b> The green diagonal line is straight before AND after the homography. This is the defining property: <em>straight lines remain straight</em>.",
+                action: () => {
+                    setSliders(0.0018, -0.0008, 0.15, 10);
+                    highlightOn = true;
+                    hlLineOrig.visible = true;
+                    hlLineWarp.visible = true;
+                }
+            },
+            {
+                text: "<b>Step 6 — Full combined transform:</b> Observe how rotation + shear + perspective combine. The corner labels show how each point maps. Try dragging the sliders to explore on your own!",
+                action: () => {
+                    setSliders(0.0015, -0.001, 0.3, 15);
+                }
+            }
+        ];
+
+        let currentStep = -1;
+
+        function setSliders(g, h, shear, rot) {
+            document.getElementById('slider-g').value = g;
+            document.getElementById('slider-h').value = h;
+            document.getElementById('slider-shear').value = shear;
+            document.getElementById('slider-rot').value = rot;
+            document.getElementById('val-g').textContent = g.toFixed(4);
+            document.getElementById('val-h').textContent = h.toFixed(4);
+            document.getElementById('val-shear').textContent = shear.toFixed(2);
+            document.getElementById('val-rot').textContent = String(rot);
+            updateAll();
+        }
+
+        function showStep(idx) {
+            if (idx < 0 || idx >= demoSteps.length) return;
+            currentStep = idx;
+            document.getElementById('step-text').innerHTML = demoSteps[idx].text;
+            document.getElementById('step-counter').textContent = `Step ${idx + 1} / ${demoSteps.length}`;
+            demoSteps[idx].action();
+        }
+
+        document.getElementById('btn-guided-demo').addEventListener('click', () => {
+            currentStep = -1;
+            showStep(0);
+        });
+        document.getElementById('btn-next-step').addEventListener('click', () => {
+            if (currentStep < demoSteps.length - 1) showStep(currentStep + 1);
+        });
+        document.getElementById('btn-prev-step').addEventListener('click', () => {
+            if (currentStep > 0) showStep(currentStep - 1);
+        });
+
+        // ======================================================================
+        //  RENDER LOOP
+        // ======================================================================
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            controls.update();
+
+            // Smooth animation of warp
+            if (animating) {
+                animT += dt;
+                const t = Math.min(animT / ANIM_DURATION, 1);
+                // Ease in-out
+                const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                const gVal = TARGET_G * ease;
+                const hVal = TARGET_H * ease;
+                document.getElementById('slider-g').value = gVal;
+                document.getElementById('slider-h').value = hVal;
+                document.getElementById('val-g').textContent = gVal.toFixed(4);
+                document.getElementById('val-h').textContent = hVal.toFixed(4);
+                updateAll();
+                if (t >= 1) animating = false;
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // ======================================================================
+        //  RESIZE
+        // ======================================================================
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Set the textbook-matching preset on load: use a perspective warp
+        // similar to the original figure (converging toward the left, expanding right)
+        setTimeout(() => {
+            setSliders(0.0018, -0.0005, 0, 0);
+        }, 100);
+    </script>
+</body>
+
+</html>

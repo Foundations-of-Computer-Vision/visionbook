@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive Homography Visualization</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    overflow: hidden;
+    height: 100vh;
+  }
+  #canvas-container {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+  }
+  canvas { display: block; }
+
+  /* Info panel */
+  #info-panel {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: rgba(22, 27, 34, 0.92);
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 18px 22px;
+    max-width: 340px;
+    backdrop-filter: blur(12px);
+    z-index: 10;
+  }
+  #info-panel h1 {
+    font-size: 17px;
+    color: #58a6ff;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  #info-panel p {
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: #8b949e;
+    margin-bottom: 4px;
+  }
+  #info-panel .key-props {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: rgba(56, 139, 253, 0.08);
+    border-radius: 6px;
+    border-left: 3px solid #58a6ff;
+  }
+  #info-panel .key-props li {
+    font-size: 12px;
+    margin-bottom: 3px;
+    color: #c9d1d9;
+    list-style: none;
+    padding-left: 0;
+  }
+  #info-panel .key-props li::before {
+    content: "✓ ";
+    color: #3fb950;
+    font-weight: bold;
+  }
+  #info-panel .key-props li.no::before {
+    content: "✗ ";
+    color: #f85149;
+  }
+
+  /* Controls panel */
+  #controls-panel {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    background: rgba(22, 27, 34, 0.92);
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 16px 20px;
+    backdrop-filter: blur(12px);
+    z-index: 10;
+    min-width: 300px;
+  }
+  #controls-panel h2 {
+    font-size: 13px;
+    color: #58a6ff;
+    margin-bottom: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .slider-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 10px;
+  }
+  .slider-row label {
+    font-size: 12px;
+    color: #8b949e;
+    min-width: 100px;
+  }
+  .slider-row input[type="range"] {
+    flex: 1;
+    accent-color: #58a6ff;
+    height: 4px;
+  }
+  .slider-row .val {
+    font-size: 11px;
+    color: #58a6ff;
+    min-width: 36px;
+    text-align: right;
+    font-family: 'Consolas', monospace;
+  }
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .btn {
+    padding: 6px 14px;
+    border: 1px solid #30363d;
+    background: rgba(56, 139, 253, 0.1);
+    color: #58a6ff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+  }
+  .btn:hover {
+    background: rgba(56, 139, 253, 0.25);
+    border-color: #58a6ff;
+  }
+
+  /* Legend */
+  #legend {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(22, 27, 34, 0.92);
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 14px 18px;
+    backdrop-filter: blur(12px);
+    z-index: 10;
+  }
+  #legend h2 {
+    font-size: 13px;
+    color: #58a6ff;
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+    font-size: 12px;
+  }
+  .legend-swatch {
+    width: 18px;
+    height: 4px;
+    border-radius: 2px;
+  }
+
+  /* Navigation hint */
+  #nav-hint {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    background: rgba(22, 27, 34, 0.85);
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: #8b949e;
+    line-height: 1.6;
+    backdrop-filter: blur(12px);
+    z-index: 10;
+  }
+  #nav-hint kbd {
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 10px;
+    color: #c9d1d9;
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container">
+  <!-- Info panel -->
+  <div id="info-panel">
+    <h1>Homography Transformation</h1>
+    <p>A homography (projective transformation) maps points via a 3×3 matrix
+       <b>p' = H p</b> in homogeneous coordinates.</p>
+    <ul class="key-props">
+      <li>Colinear points remain colinear</li>
+      <li>Straight lines stay straight</li>
+      <li class="no">Angles are <b>not</b> preserved</li>
+      <li class="no">Parallel lines may <b>not</b> stay parallel</li>
+    </ul>
+  </div>
+
+  <!-- Legend -->
+  <div id="legend">
+    <h2>Legend</h2>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:#58a6ff"></div>
+      <span>Original grid</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:#f0883e"></div>
+      <span>Transformed grid</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:#3fb950"></div>
+      <span>Colinear point triples</span>
+    </div>
+    <div class="legend-item">
+      <div class="legend-swatch" style="background:#f85149; height:8px; width:8px; border-radius:50%"></div>
+      <span>Corresponding points</span>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div id="controls-panel">
+    <h2>Homography Parameters</h2>
+    <div class="slider-row">
+      <label>Perspective X (g)</label>
+      <input type="range" id="sl-g" min="-0.3" max="0.3" step="0.01" value="0.15">
+      <span class="val" id="val-g">0.15</span>
+    </div>
+    <div class="slider-row">
+      <label>Perspective Y (h)</label>
+      <input type="range" id="sl-h" min="-0.3" max="0.3" step="0.01" value="0.1">
+      <span class="val" id="val-h">0.10</span>
+    </div>
+    <div class="slider-row">
+      <label>Rotation (θ)</label>
+      <input type="range" id="sl-theta" min="-45" max="45" step="1" value="15">
+      <span class="val" id="val-theta">15°</span>
+    </div>
+    <div class="slider-row">
+      <label>Scale</label>
+      <input type="range" id="sl-scale" min="0.5" max="2.0" step="0.05" value="1.0">
+      <span class="val" id="val-scale">1.00</span>
+    </div>
+    <div class="slider-row">
+      <label>Shear</label>
+      <input type="range" id="sl-shear" min="-0.5" max="0.5" step="0.02" value="0.1">
+      <span class="val" id="val-shear">0.10</span>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="btn-reset">Reset</button>
+      <button class="btn" id="btn-animate">Animate</button>
+      <button class="btn" id="btn-2d">2D View</button>
+      <button class="btn" id="btn-3d">3D View</button>
+    </div>
+  </div>
+
+  <!-- Nav hint -->
+  <div id="nav-hint">
+    <kbd>Left-drag</kbd> Rotate &nbsp;
+    <kbd>Right-drag</kbd> Pan &nbsp;
+    <kbd>Scroll</kbd> Zoom
+  </div>
+</div>
+
+<!-- Three.js from CDN -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ─── Scene setup ─────────────────────────────────────────
+const container = document.getElementById('canvas-container');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x0d1117, 1);
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(0, 6, 8);
+camera.lookAt(0, 0, 0);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0, 0);
+
+// ─── Lighting ────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(5, 10, 7);
+scene.add(dirLight);
+
+// ─── Subtle reference ground ─────────────────────────────
+const groundGeo = new THREE.PlaneGeometry(20, 20);
+const groundMat = new THREE.MeshStandardMaterial({
+  color: 0x161b22,
+  transparent: true,
+  opacity: 0.5,
+  side: THREE.DoubleSide
+});
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.01;
+scene.add(ground);
+
+// Subtle ground grid
+const gridHelper = new THREE.GridHelper(14, 28, 0x21262d, 0x21262d);
+gridHelper.position.y = 0;
+scene.add(gridHelper);
+
+// ─── Grid configuration ─────────────────────────────────
+const GRID_N = 5;           // 5×5 grid
+const GRID_SPACING = 0.6;
+const OFFSET_ORIG = -3;     // X offset for original grid
+const OFFSET_TRANS = 3;     // X offset for transformed grid
+
+// Colors
+const COL_ORIG      = 0x58a6ff;
+const COL_TRANS     = 0xf0883e;
+const COL_COLINEAR  = 0x3fb950;
+const COL_POINT     = 0xf85149;
+const COL_MAP_LINE  = 0x484f58;
+
+// ─── Generate grid points ────────────────────────────────
+function makeGridPoints(n, spacing) {
+  const pts = [];
+  const half = ((n - 1) * spacing) / 2;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      pts.push(new THREE.Vector2(i * spacing - half, j * spacing - half));
+    }
+  }
+  return pts;
+}
+
+// ─── Apply homography to a 2D point ─────────────────────
+function applyHomography(H, p) {
+  const x = H[0][0] * p.x + H[0][1] * p.y + H[0][2];
+  const y = H[1][0] * p.x + H[1][1] * p.y + H[1][2];
+  const w = H[2][0] * p.x + H[2][1] * p.y + H[2][2];
+  return new THREE.Vector2(x / w, y / w);
+}
+
+// Build homography matrix from sliders
+function buildHomography() {
+  const g     = parseFloat(document.getElementById('sl-g').value);
+  const h     = parseFloat(document.getElementById('sl-h').value);
+  const theta = parseFloat(document.getElementById('sl-theta').value) * Math.PI / 180;
+  const s     = parseFloat(document.getElementById('sl-scale').value);
+  const shear = parseFloat(document.getElementById('sl-shear').value);
+
+  const cosT = Math.cos(theta), sinT = Math.sin(theta);
+
+  // H = [[s*cosT, -sinT+shear, 0],
+  //       [sinT, s*cosT,        0],
+  //       [g,     h,            1]]
+  return [
+    [s * cosT,   -sinT + shear,  0],
+    [sinT,        s * cosT,      0],
+    [g,           h,             1]
+  ];
+}
+
+// ─── Three.js object groups ──────────────────────────────
+const origGroup  = new THREE.Group();
+const transGroup = new THREE.Group();
+const mappingGroup = new THREE.Group();
+const colinearGroup = new THREE.Group();
+
+origGroup.position.x = OFFSET_ORIG;
+transGroup.position.x = OFFSET_TRANS;
+
+scene.add(origGroup);
+scene.add(transGroup);
+scene.add(mappingGroup);
+scene.add(colinearGroup);
+
+// ─── Label sprites ───────────────────────────────────────
+function makeTextSprite(text, color = '#58a6ff', fontSize = 48) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.font = `bold ${fontSize}px 'Segoe UI', system-ui, sans-serif`;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 256, 64);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(2.5, 0.625, 1);
+  return sprite;
+}
+
+const labelOrig = makeTextSprite('Original Grid', '#58a6ff');
+labelOrig.position.set(OFFSET_ORIG, 2.2, 0);
+scene.add(labelOrig);
+
+const labelTrans = makeTextSprite('H · p', '#f0883e');
+labelTrans.position.set(OFFSET_TRANS, 2.2, 0);
+scene.add(labelTrans);
+
+// Arrow between the two grids
+function makeArrow() {
+  const dir = new THREE.Vector3(1, 0, 0);
+  const origin = new THREE.Vector3(OFFSET_ORIG + 1.6, 1.8, 0);
+  const length = OFFSET_TRANS - OFFSET_ORIG - 3.2;
+  const arrow = new THREE.ArrowHelper(dir, origin, length, 0x484f58, 0.2, 0.15);
+  scene.add(arrow);
+
+  const lbl = makeTextSprite('p\' = H p', '#8b949e', 36);
+  lbl.position.set(0, 2.2, 0);
+  scene.add(lbl);
+  return arrow;
+}
+makeArrow();
+
+// ─── Drawing helpers ─────────────────────────────────────
+function createLineMesh(points3D, color, linewidth = 1) {
+  const geo = new THREE.BufferGeometry().setFromPoints(points3D);
+  const mat = new THREE.LineBasicMaterial({ color, linewidth });
+  return new THREE.Line(geo, mat);
+}
+
+function createDot(pos, color, size = 0.06) {
+  const geo = new THREE.SphereGeometry(size, 12, 12);
+  const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.4 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(pos);
+  return mesh;
+}
+
+// ─── Build the visualization ─────────────────────────────
+function rebuild() {
+  // Clear groups
+  [origGroup, transGroup, mappingGroup, colinearGroup].forEach(g => {
+    while (g.children.length) g.remove(g.children[0]);
+  });
+
+  const gridPts = makeGridPoints(GRID_N, GRID_SPACING);
+  const H = buildHomography();
+  const transPts = gridPts.map(p => applyHomography(H, p));
+
+  // Helper: 2D → 3D (y=0 plane)
+  const to3D = (p, yOff = 0) => new THREE.Vector3(p.x, yOff, p.y);
+
+  // Draw original grid lines (rows + cols)
+  for (let i = 0; i < GRID_N; i++) {
+    // Row
+    const rowOrig = [];
+    const rowTrans = [];
+    for (let j = 0; j < GRID_N; j++) {
+      const idx = i * GRID_N + j;
+      rowOrig.push(to3D(gridPts[idx]));
+      rowTrans.push(to3D(transPts[idx]));
+    }
+    origGroup.add(createLineMesh(rowOrig, COL_ORIG));
+    transGroup.add(createLineMesh(rowTrans, COL_TRANS));
+
+    // Col
+    const colOrig = [];
+    const colTrans = [];
+    for (let j = 0; j < GRID_N; j++) {
+      const idx = j * GRID_N + i;
+      colOrig.push(to3D(gridPts[idx]));
+      colTrans.push(to3D(transPts[idx]));
+    }
+    origGroup.add(createLineMesh(colOrig, COL_ORIG));
+    transGroup.add(createLineMesh(colTrans, COL_TRANS));
+  }
+
+  // Draw grid points
+  gridPts.forEach((p, idx) => {
+    origGroup.add(createDot(to3D(p), COL_ORIG, 0.04));
+    transGroup.add(createDot(to3D(transPts[idx]), COL_TRANS, 0.04));
+  });
+
+  // Draw filled quads (semi-transparent)
+  for (let i = 0; i < GRID_N - 1; i++) {
+    for (let j = 0; j < GRID_N - 1; j++) {
+      const i00 = i * GRID_N + j;
+      const i10 = (i + 1) * GRID_N + j;
+      const i11 = (i + 1) * GRID_N + (j + 1);
+      const i01 = i * GRID_N + (j + 1);
+
+      // Original quad
+      {
+        const geo = new THREE.BufferGeometry();
+        const verts = new Float32Array([
+          ...to3D(gridPts[i00]).toArray(),
+          ...to3D(gridPts[i10]).toArray(),
+          ...to3D(gridPts[i11]).toArray(),
+          ...to3D(gridPts[i00]).toArray(),
+          ...to3D(gridPts[i11]).toArray(),
+          ...to3D(gridPts[i01]).toArray(),
+        ]);
+        geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        geo.computeVertexNormals();
+        const checkerColor = (i + j) % 2 === 0 ? 0x1a3a5c : 0x0f2440;
+        const mat = new THREE.MeshStandardMaterial({
+          color: checkerColor,
+          transparent: true,
+          opacity: 0.45,
+          side: THREE.DoubleSide
+        });
+        origGroup.add(new THREE.Mesh(geo, mat));
+      }
+
+      // Transformed quad
+      {
+        const geo = new THREE.BufferGeometry();
+        const verts = new Float32Array([
+          ...to3D(transPts[i00]).toArray(),
+          ...to3D(transPts[i10]).toArray(),
+          ...to3D(transPts[i11]).toArray(),
+          ...to3D(transPts[i00]).toArray(),
+          ...to3D(transPts[i11]).toArray(),
+          ...to3D(transPts[i01]).toArray(),
+        ]);
+        geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        geo.computeVertexNormals();
+        const checkerColor = (i + j) % 2 === 0 ? 0x5c3a1a : 0x40240f;
+        const mat = new THREE.MeshStandardMaterial({
+          color: checkerColor,
+          transparent: true,
+          opacity: 0.45,
+          side: THREE.DoubleSide
+        });
+        transGroup.add(new THREE.Mesh(geo, mat));
+      }
+    }
+  }
+
+  // Highlight colinear triples — pick a diagonal line of 3 points
+  const colinearOrigIndices = [0, 6, 12]; // diagonal points (0,0), (1,1), (2,2)
+  const colinearPtsOrig = colinearOrigIndices.map(i => to3D(gridPts[i]));
+  const colinearPtsTrans = colinearOrigIndices.map(i => to3D(transPts[i]));
+
+  // Draw highlighted colinear points & lines on original
+  const colinearLineOrig = [];
+  colinearOrigIndices.forEach(idx => {
+    const dot = createDot(to3D(gridPts[idx]), COL_COLINEAR, 0.07);
+    origGroup.add(dot);
+    colinearLineOrig.push(to3D(gridPts[idx]));
+  });
+  origGroup.add(createLineMesh(colinearLineOrig, COL_COLINEAR, 2));
+
+  // Draw highlighted colinear points & lines on transformed
+  const colinearLineTrans = [];
+  colinearOrigIndices.forEach(idx => {
+    const dot = createDot(to3D(transPts[idx]), COL_COLINEAR, 0.07);
+    transGroup.add(dot);
+    colinearLineTrans.push(to3D(transPts[idx]));
+  });
+  transGroup.add(createLineMesh(colinearLineTrans, COL_COLINEAR, 2));
+
+  // Mapping lines: connect corresponding corner points across grids
+  const cornerIndices = [0, GRID_N - 1, (GRID_N - 1) * GRID_N, GRID_N * GRID_N - 1];
+  cornerIndices.forEach(idx => {
+    const p1 = to3D(gridPts[idx]);
+    p1.x += OFFSET_ORIG;
+    const p2 = to3D(transPts[idx]);
+    p2.x += OFFSET_TRANS;
+
+    const dotOrig = createDot(p1.clone(), COL_POINT, 0.065);
+    const dotTrans = createDot(p2.clone(), COL_POINT, 0.065);
+    mappingGroup.add(dotOrig);
+    mappingGroup.add(dotTrans);
+
+    // Dashed line connecting them
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+    const lineMat = new THREE.LineDashedMaterial({
+      color: COL_MAP_LINE,
+      dashSize: 0.1,
+      gapSize: 0.08,
+      linewidth: 1
+    });
+    const line = new THREE.Line(lineGeo, lineMat);
+    line.computeLineDistances();
+    mappingGroup.add(line);
+  });
+
+  // Second set of colinear triples — middle row
+  const midRow = Math.floor(GRID_N / 2);
+  const midRowIndices = [midRow * GRID_N, midRow * GRID_N + Math.floor(GRID_N/2), midRow * GRID_N + GRID_N - 1];
+  const midOrigLine = midRowIndices.map(i => to3D(gridPts[i]));
+  const midTransLine = midRowIndices.map(i => to3D(transPts[i]));
+
+  midRowIndices.forEach(idx => {
+    origGroup.add(createDot(to3D(gridPts[idx]), COL_COLINEAR, 0.065));
+    transGroup.add(createDot(to3D(transPts[idx]), COL_COLINEAR, 0.065));
+  });
+
+  // Extended colinear line on original (longer to emphasize straightness)
+  const extendLine = (pts) => {
+    const dir = new THREE.Vector3().subVectors(pts[pts.length-1], pts[0]).normalize();
+    const start = pts[0].clone().add(dir.clone().multiplyScalar(-0.3));
+    const end = pts[pts.length-1].clone().add(dir.clone().multiplyScalar(0.3));
+    return [start, end];
+  };
+
+  origGroup.add(createLineMesh(extendLine(midOrigLine), COL_COLINEAR));
+  transGroup.add(createLineMesh(extendLine(midTransLine), COL_COLINEAR));
+}
+
+// Initial build
+rebuild();
+
+// ─── Slider events ───────────────────────────────────────
+const sliders = ['sl-g', 'sl-h', 'sl-theta', 'sl-scale', 'sl-shear'];
+const valDisplays = ['val-g', 'val-h', 'val-theta', 'val-scale', 'val-shear'];
+const formatters = [
+  v => parseFloat(v).toFixed(2),
+  v => parseFloat(v).toFixed(2),
+  v => v + '°',
+  v => parseFloat(v).toFixed(2),
+  v => parseFloat(v).toFixed(2)
+];
+
+sliders.forEach((id, i) => {
+  document.getElementById(id).addEventListener('input', () => {
+    document.getElementById(valDisplays[i]).textContent = formatters[i](document.getElementById(id).value);
+    rebuild();
+  });
+});
+
+// ─── Buttons ─────────────────────────────────────────────
+document.getElementById('btn-reset').addEventListener('click', () => {
+  const defaults = [0.15, 0.1, 15, 1.0, 0.1];
+  sliders.forEach((id, i) => {
+    document.getElementById(id).value = defaults[i];
+    document.getElementById(valDisplays[i]).textContent = formatters[i](defaults[i]);
+  });
+  rebuild();
+});
+
+document.getElementById('btn-2d').addEventListener('click', () => {
+  camera.position.set(0, 10, 0.01);
+  controls.target.set(0, 0, 0);
+  controls.update();
+});
+
+document.getElementById('btn-3d').addEventListener('click', () => {
+  camera.position.set(0, 6, 8);
+  controls.target.set(0, 0, 0);
+  controls.update();
+});
+
+// Animation
+let animating = false;
+let animTime = 0;
+document.getElementById('btn-animate').addEventListener('click', () => {
+  animating = !animating;
+  document.getElementById('btn-animate').textContent = animating ? 'Stop' : 'Animate';
+});
+
+// ─── Render loop ─────────────────────────────────────────
+function animate(time) {
+  requestAnimationFrame(animate);
+  controls.update();
+
+  if (animating) {
+    animTime += 0.015;
+    const g = 0.15 * Math.sin(animTime * 0.7);
+    const h = 0.1 * Math.cos(animTime * 0.5);
+    const theta = 20 * Math.sin(animTime * 0.3);
+    const s = 1.0 + 0.3 * Math.sin(animTime * 0.4);
+    const shear = 0.2 * Math.sin(animTime * 0.6);
+
+    document.getElementById('sl-g').value = g;
+    document.getElementById('sl-h').value = h;
+    document.getElementById('sl-theta').value = theta;
+    document.getElementById('sl-scale').value = s;
+    document.getElementById('sl-shear').value = shear;
+
+    document.getElementById('val-g').textContent = g.toFixed(2);
+    document.getElementById('val-h').textContent = h.toFixed(2);
+    document.getElementById('val-theta').textContent = Math.round(theta) + '°';
+    document.getElementById('val-scale').textContent = s.toFixed(2);
+    document.getElementById('val-shear').textContent = shear.toFixed(2);
+
+    rebuild();
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// ─── Resize ──────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+</script>
+</body>
+</html>

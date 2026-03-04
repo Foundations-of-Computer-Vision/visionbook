@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perspective Projection & Homography</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 340px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            border: 1px solid #e0e0e0;
+            backdrop-filter: blur(4px);
+        }
+
+        h1 {
+            font-size: 1.4rem;
+            margin: 0 0 10px 0;
+            color: #222;
+        }
+
+        p.description {
+            font-size: 0.9rem;
+            color: #555;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            margin-bottom: 18px;
+            padding-bottom: 18px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .control-group:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #f0f0f0;
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #e4e4e4;
+        }
+
+        button.primary {
+            background: #0066cc;
+            color: white;
+            border-color: #0052a3;
+        }
+
+        button.primary:hover {
+            background: #0052a3;
+        }
+
+        .toggle-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .toggle-row button {
+            margin-bottom: 0;
+            flex: 1;
+        }
+
+        .toggle-row button.active {
+            background: #0066cc;
+            color: white;
+            border-color: #0052a3;
+        }
+
+        .helper-text {
+            font-size: 0.75rem;
+            color: #777;
+            margin-top: 6px;
+            font-style: italic;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            color: #666;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-panel">
+        <h1>2D to 3D Perspective</h1>
+        <p class="description">
+            The textbook figure shows a 2D grid transforming into a distorted shape.
+            In reality, this represents a <strong>3D planar grid</strong> being viewed at an angle under
+            <strong>perspective projection</strong>.
+        </p>
+
+        <div class="control-group">
+            <label>
+                <span>Grid Rotation (Viewing Angle)</span>
+                <span id="angle-display">0°</span>
+            </label>
+            <input type="range" id="rotation-slider" min="-75" max="75" value="0" step="1">
+            <div class="helper-text">Rotate the grid to see how depth creates the 2D distortion.</div>
+        </div>
+
+        <div class="control-group">
+            <label>Camera Projection Type</label>
+            <div class="toggle-row">
+                <button id="btn-persp" class="active">Perspective</button>
+                <button id="btn-ortho">Orthographic</button>
+            </div>
+            <div id="camera-helper" class="helper-text">
+                Perspective: Objects further away appear smaller (lines converge).
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Educational Aids</label>
+            <button id="btn-vanishing">Show Vanishing Lines : OFF</button>
+            <div class="helper-text">Extends parallel lines to show where they intersect in the 2D image plane.</div>
+        </div>
+
+        <div class="control-group">
+            <label>Guided Views</label>
+            <button id="btn-left" class="primary">1. Reset to Textbook Left (Frontal)</button>
+            <button id="btn-right" class="primary">2. Match Textbook Right (Angled)</button>
+        </div>
+    </div>
+
+    <div id="instructions">Left Click + Drag to orbit freely • Scroll to zoom</div>
+
+    <!-- Import Three.js as ES Modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- 1. SCENE SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff); // White background to match textbook
+
+        // --- 2. CAMERAS ---
+        // We use two cameras to teach the difference between perspective (converging lines) 
+        // and orthographic (parallel lines remain parallel) projections.
+        const aspect = window.innerWidth / window.innerHeight;
+        const frustumSize = 6;
+
+        const perspCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 100);
+        perspCamera.position.set(0, 0, 8);
+
+        const orthoCamera = new THREE.OrthographicCamera(
+            frustumSize * aspect / -2, frustumSize * aspect / 2,
+            frustumSize / 2, frustumSize / -2,
+            0.1, 100
+        );
+        orthoCamera.position.set(0, 0, 8);
+
+        let currentCamera = perspCamera;
+
+        // --- 3. RENDERER & CONTROLS ---
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(currentCamera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.enablePan = false;
+
+        // --- 4. GEOMETRY: THE 3D GRID ---
+        // We map the 2D textbook drawing to a 3D physical object.
+        // Using thin cylinders instead of lines ensures consistent thickness regardless of WebGL line-width limits.
+        const gridGroup = new THREE.Group();
+        const linesMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+        const gridSize = 4;
+        const gridSteps = 4;
+        const lineThickness = 0.025;
+        const stepSize = gridSize / gridSteps;
+
+        // Create the 4x4 square grid
+        for (let i = 0; i <= gridSteps; i++) {
+            const pos = (i * stepSize) - (gridSize / 2);
+
+            // Vertical lines
+            const vGeo = new THREE.CylinderGeometry(lineThickness, lineThickness, gridSize, 8);
+            const vMesh = new THREE.Mesh(vGeo, linesMaterial);
+            vMesh.position.set(pos, 0, 0);
+            gridGroup.add(vMesh);
+
+            // Horizontal lines
+            const hGeo = new THREE.CylinderGeometry(lineThickness, lineThickness, gridSize, 8);
+            const hMesh = new THREE.Mesh(hGeo, linesMaterial);
+            hMesh.rotation.z = Math.PI / 2;
+            hMesh.position.set(0, pos, 0);
+            gridGroup.add(hMesh);
+        }
+        scene.add(gridGroup);
+
+        // --- 5. EDUCATIONAL AID: VANISHING LINES ---
+        // These lines extend the horizontal grid lines into the distance.
+        // In 3D space they are perfectly parallel. In the 2D perspective projection, they converge.
+        const vanishingGroup = new THREE.Group();
+        const dashedMaterial = new THREE.LineDashedMaterial({
+            color: 0xff0000,
+            linewidth: 2,
+            scale: 1,
+            dashSize: 0.2,
+            gapSize: 0.1,
+        });
+
+        for (let i = 0; i <= gridSteps; i++) {
+            const pos = (i * stepSize) - (gridSize / 2);
+            const points = [];
+            // Extend from the right edge of the grid far into the distance
+            points.push(new THREE.Vector3(gridSize / 2, pos, 0));
+            points.push(new THREE.Vector3(gridSize / 2 + 15, pos, 0));
+
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, dashedMaterial);
+            line.computeLineDistances(); // Required for dashed lines
+            vanishingGroup.add(line);
+        }
+        vanishingGroup.visible = false;
+        gridGroup.add(vanishingGroup); // Attach to grid so they rotate together
+
+        // --- 6. INTERACTION LOGIC ---
+        let targetRotationY = 0;
+        let isVanishingVisible = false;
+
+        // UI Elements
+        const slider = document.getElementById('rotation-slider');
+        const angleDisplay = document.getElementById('angle-display');
+        const btnPersp = document.getElementById('btn-persp');
+        const btnOrtho = document.getElementById('btn-ortho');
+        const cameraHelper = document.getElementById('camera-helper');
+        const btnVanishing = document.getElementById('btn-vanishing');
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
+
+        // Slider interaction
+        slider.addEventListener('input', (e) => {
+            targetRotationY = THREE.MathUtils.degToRad(e.target.value);
+            angleDisplay.innerText = `${e.target.value}°`;
+            // Reset camera position to front when using slider to clearly see the rotation effect
+            resetCameraPosition();
+        });
+
+        // Camera Toggle
+        function setCamera(type) {
+            if (type === 'perspective') {
+                currentCamera = perspCamera;
+                btnPersp.classList.add('active');
+                btnOrtho.classList.remove('active');
+                cameraHelper.innerText = "Perspective: Objects further away appear smaller (lines converge).";
+            } else {
+                currentCamera = orthoCamera;
+                btnOrtho.classList.add('active');
+                btnPersp.classList.remove('active');
+                cameraHelper.innerText = "Orthographic: Depth does not affect size (parallel lines stay parallel).";
+            }
+            controls.object = currentCamera;
+            controls.update();
+        }
+
+        btnPersp.addEventListener('click', () => setCamera('perspective'));
+        btnOrtho.addEventListener('click', () => setCamera('orthographic'));
+
+        // Vanishing Lines Toggle
+        btnVanishing.addEventListener('click', () => {
+            isVanishingVisible = !isVanishingVisible;
+            vanishingGroup.visible = isVanishingVisible;
+            if (isVanishingVisible) {
+                btnVanishing.innerText = "Show Vanishing Lines : ON";
+                btnVanishing.style.background = "#ffebee";
+                btnVanishing.style.borderColor = "#ffcdd2";
+                btnVanishing.style.color = "#c62828";
+            } else {
+                btnVanishing.innerText = "Show Vanishing Lines : OFF";
+                btnVanishing.style.background = "#f0f0f0";
+                btnVanishing.style.borderColor = "#ccc";
+                btnVanishing.style.color = "#333";
+            }
+        });
+
+        // Guided Views
+        function resetCameraPosition() {
+            currentCamera.position.set(0, 0, 8);
+            currentCamera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        btnLeft.addEventListener('click', () => {
+            targetRotationY = 0;
+            slider.value = 0;
+            angleDisplay.innerText = "0°";
+            setCamera('perspective');
+            resetCameraPosition();
+        });
+
+        btnRight.addEventListener('click', () => {
+            // Rotating by ~45 degrees pushes the right side away from the camera,
+            // making the left side appear larger and the right side smaller, 
+            // perfectly matching the textbook's right figure.
+            targetRotationY = THREE.MathUtils.degToRad(45);
+            slider.value = 45;
+            angleDisplay.innerText = "45°";
+            setCamera('perspective');
+            resetCameraPosition();
+        });
+
+        // --- 7. WINDOW RESIZE HANDLING ---
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const aspect = width / height;
+
+            renderer.setSize(width, height);
+
+            perspCamera.aspect = aspect;
+            perspCamera.updateProjectionMatrix();
+
+            orthoCamera.left = -frustumSize * aspect / 2;
+            orthoCamera.right = frustumSize * aspect / 2;
+            orthoCamera.top = frustumSize / 2;
+            orthoCamera.bottom = -frustumSize / 2;
+            orthoCamera.updateProjectionMatrix();
+        });
+
+        // --- 8. ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Smoothly interpolate the grid's rotation towards the target
+            gridGroup.rotation.y += (targetRotationY - gridGroup.rotation.y) * 0.08;
+
+            controls.update();
+            renderer.render(scene, currentCamera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

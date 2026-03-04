@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>3D Camera Scene</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+        }
+
+        .label {
+            color: #00eaff;
+            font-size: 16px;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            background: transparent;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+        import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three/examples/jsm/renderers/CSS2DRenderer';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // Camera setup
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 3;
+        const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 50);
+        camera.position.set(6, 6, 6);
+        camera.lookAt(0, 0, 0);
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        // Label renderer
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(container.clientWidth, container.clientHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Camera center (black sphere)
+        const cameraCenter = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15, 32, 32),
+            new THREE.MeshBasicMaterial({ color: 0x000000 })
+        );
+        cameraCenter.position.set(0, 0, 0);
+        scene.add(cameraCenter);
+
+        // Camera axes (green)
+        const cameraAxes = new THREE.AxesHelper(1.2);
+        cameraAxes.setColors(
+            new THREE.Color(0x00ff00), // x: green
+            new THREE.Color(0x00ff00), // y: green
+            new THREE.Color(0x00ff00)  // z: green
+        );
+        scene.add(cameraAxes);
+
+        // Camera plane (transparent rectangle)
+        const cameraPlaneGeometry = new THREE.PlaneGeometry(2, 2);
+        const cameraPlaneMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc, side: THREE.DoubleSide, transparent: true, opacity: 0.3 });
+        const cameraPlane = new THREE.Mesh(cameraPlaneGeometry, cameraPlaneMaterial);
+        cameraPlane.position.set(0, 0, 2.5);
+        scene.add(cameraPlane);
+
+        // Planar surface (gray rectangle)
+        const planarSurfaceGeometry = new THREE.PlaneGeometry(3, 2);
+        const planarSurfaceMaterial = new THREE.MeshBasicMaterial({ color: 0x888888, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const planarSurface = new THREE.Mesh(planarSurfaceGeometry, planarSurfaceMaterial);
+        planarSurface.position.set(2.5, 1, 5);
+        planarSurface.rotation.x = -0.3;
+        planarSurface.rotation.y = 0.4;
+        scene.add(planarSurface);
+
+        // Planar surface axes (red)
+        const surfaceAxes = new THREE.AxesHelper(1.2);
+        surfaceAxes.setColors(
+            new THREE.Color(0xff0000), // x: red
+            new THREE.Color(0xff0000), // y: red
+            new THREE.Color(0xff0000)  // z: red
+        );
+        surfaceAxes.position.set(2.5, 1, 5);
+        surfaceAxes.rotation.x = -0.3;
+        surfaceAxes.rotation.y = 0.4;
+        scene.add(surfaceAxes);
+
+        // Dashed lines: camera center to camera plane and planar surface
+        function addDashedLine(start, end, color = 0x000000) {
+            const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+            const material = new THREE.LineDashedMaterial({ color, dashSize: 0.2, gapSize: 0.1 });
+            const line = new THREE.Line(geometry, material);
+            line.computeLineDistances();
+            scene.add(line);
+        }
+        // Camera center to camera plane
+        addDashedLine(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.7, 0.7, 2.5), 0x00eaff);
+        addDashedLine(new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.7, -0.7, 2.5), 0x000000);
+        // Camera plane to planar surface
+        addDashedLine(new THREE.Vector3(0.7, 0.7, 2.5), new THREE.Vector3(2.5, 1, 5), 0x00eaff);
+
+        // Points and labels
+        // (x, y) on camera plane
+        const camPoint = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0x00eaff })
+        );
+        camPoint.position.set(0.7, 0.7, 2.5);
+        scene.add(camPoint);
+
+        const camLabel = document.createElement('div');
+        camLabel.className = 'label';
+        camLabel.textContent = '(x, y)';
+        const camLabelObj = new CSS2DObject(camLabel);
+        camLabelObj.position.set(0.7, 0.7, 2.7);
+        camPoint.add(camLabelObj);
+
+        // (X, Y, 0) on planar surface
+        const surfPoint = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0x00eaff })
+        );
+        surfPoint.position.set(2.5, 1, 5);
+        scene.add(surfPoint);
+
+        const surfLabel = document.createElement('div');
+        surfLabel.className = 'label';
+        surfLabel.textContent = '(X, Y, 0)';
+        const surfLabelObj = new CSS2DObject(surfLabel);
+        surfLabelObj.position.set(0, 0.15, 0.15);
+        surfPoint.add(surfLabelObj);
+
+        // Text labels for planes and camera center
+        function addTextLabel(text, position, color = 'black', size = 18) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.style.color = color;
+            div.style.fontSize = size + 'px';
+            div.textContent = text;
+            const obj = new CSS2DObject(div);
+            obj.position.copy(position);
+            scene.add(obj);
+        }
+        addTextLabel('Camera center', new THREE.Vector3(-0.5, -0.5, 0), 'black', 18);
+        addTextLabel('Camera plane', new THREE.Vector3(0, 0, 2.5), 'black', 18);
+        addTextLabel('planar surface', new THREE.Vector3(2.5, 1, 5.3), 'black', 18);
+
+        // Animate
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+            labelRenderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

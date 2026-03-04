@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interactive Perspective Projection</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            color: #eee;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* ── Control panel ── */
+        #controls {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            background: rgba(20, 20, 40, 0.92);
+            border-radius: 10px;
+            padding: 14px 16px;
+            width: 270px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+            font-size: 13px;
+            line-height: 1.5;
+            max-height: calc(100vh - 28px);
+            overflow-y: auto;
+        }
+
+        #controls h2 {
+            font-size: 15px;
+            margin-bottom: 8px;
+            color: #7ecfff;
+        }
+
+        #controls h3 {
+            font-size: 12px;
+            margin: 10px 0 4px;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .ctrl-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 5px 0;
+        }
+
+        .ctrl-row label {
+            flex: 1;
+        }
+
+        .ctrl-row input[type=range] {
+            width: 110px;
+        }
+
+        .ctrl-row .val {
+            width: 36px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            color: #7ecfff;
+        }
+
+        button.action {
+            display: block;
+            width: 100%;
+            padding: 7px 0;
+            margin: 4px 0;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12.5px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .btn-blue {
+            background: #2979ff;
+            color: #fff;
+        }
+
+        .btn-blue:hover {
+            background: #448aff;
+        }
+
+        .btn-green {
+            background: #00c853;
+            color: #fff;
+        }
+
+        .btn-green:hover {
+            background: #2ee67a;
+        }
+
+        .btn-amber {
+            background: #ff9100;
+            color: #fff;
+        }
+
+        .btn-amber:hover {
+            background: #ffab40;
+        }
+
+        .btn-reset {
+            background: #546e7a;
+            color: #fff;
+        }
+
+        .btn-reset:hover {
+            background: #78909c;
+        }
+
+        .btn-toggle {
+            background: #37474f;
+            color: #ccc;
+        }
+
+        .btn-toggle.active {
+            background: #00897b;
+            color: #fff;
+        }
+
+        #step-info {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 6px;
+            min-height: 46px;
+            font-size: 12px;
+            line-height: 1.45;
+        }
+
+        #step-info b {
+            color: #7ecfff;
+        }
+
+        /* ── Info card (top-right) ── */
+        #info-card {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            background: rgba(20, 20, 40, 0.88);
+            border-radius: 10px;
+            padding: 12px 16px;
+            max-width: 240px;
+            font-size: 12px;
+            line-height: 1.5;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+        }
+
+        #info-card h3 {
+            color: #7ecfff;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+
+        #info-card code {
+            color: #ffd54f;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+
+    <!-- Control Panel -->
+    <div id="controls">
+        <h2>Perspective Projection</h2>
+
+        <h3>Object Position</h3>
+        <div class="ctrl-row">
+            <label>Depth (Z)</label>
+            <input type="range" id="sliderZ" min="3" max="14" step="0.1" value="7" />
+            <span class="val" id="valZ">7.0</span>
+        </div>
+        <div class="ctrl-row">
+            <label>Height (Y)</label>
+            <input type="range" id="sliderY" min="-3" max="3" step="0.1" value="0" />
+            <span class="val" id="valY">0.0</span>
+        </div>
+        <div class="ctrl-row">
+            <label>Lateral (X)</label>
+            <input type="range" id="sliderX" min="-3" max="3" step="0.1" value="0" />
+            <span class="val" id="valX">0.0</span>
+        </div>
+
+        <h3>Projection Plane</h3>
+        <div class="ctrl-row">
+            <label>Focal length (f)</label>
+            <input type="range" id="sliderF" min="1" max="5" step="0.1" value="2" />
+            <span class="val" id="valF">2.0</span>
+        </div>
+
+        <h3>Visibility Toggles</h3>
+        <button class="action btn-toggle active" id="togRays">Projection Rays</button>
+        <button class="action btn-toggle active" id="togProjection">Projected Image</button>
+        <button class="action btn-toggle active" id="togLabels">Labels</button>
+        <button class="action btn-toggle active" id="togPlane">Projection Plane</button>
+
+        <h3>Guided Demo</h3>
+        <button class="action btn-green" id="btnDemo">▶ Start Step-Through</button>
+        <button class="action btn-amber" id="btnNext" style="display:none">Next Step →</button>
+        <div id="step-info">Click <b>Start Step-Through</b> to learn how perspective projection works.</div>
+
+        <h3 style="margin-top:12px"></h3>
+        <button class="action btn-reset" id="btnReset">↺ Reset to Textbook View</button>
+    </div>
+
+    <!-- Info card -->
+    <div id="info-card">
+        <h3>Projection Formula</h3>
+        <p style="margin:4px 0">A 3D point <code>(X, Y, Z)</code> projects to 2D:</p>
+        <p style="text-align:center;margin:6px 0">
+            <code>x = f · X / Z</code><br />
+            <code>y = f · Y / Z</code>
+        </p>
+        <p style="margin-top:6px;color:#aaa">Drag the sliders or orbit the camera to explore how depth and focal length
+            affect the projected image size.</p>
+    </div>
+
+    <!-- Three.js via ES module CDN -->
+    <script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // ═══════════════════════════════════════════════
+        //  SCENE SETUP
+        // ═══════════════════════════════════════════════
+        const container = document.getElementById('canvas-container');
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x1a1a2e);
+        container.appendChild(renderer.domElement);
+
+        // CSS2D label renderer (overlays HTML labels on the 3D scene)
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        const scene = new THREE.Scene();
+
+        // Camera – set to a nice default that approximates the textbook viewpoint
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(-6, 5, -4);
+        camera.lookAt(0, 0, 4);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0, 4);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.update();
+
+        // Lights
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(-5, 8, -3);
+        scene.add(dirLight);
+
+        // ═══════════════════════════════════════════════
+        //  HELPER: create an HTML label attached to a 3D point
+        // ═══════════════════════════════════════════════
+        const labelGroup = new THREE.Group();
+        scene.add(labelGroup);
+        function makeLabel(text, pos, color = '#fff', fontSize = '13px') {
+            const div = document.createElement('div');
+            div.textContent = text;
+            div.style.cssText = `color:${color};font-family:'Segoe UI',sans-serif;font-size:${fontSize};font-weight:700;text-shadow:0 0 6px #000,0 0 3px #000;pointer-events:none;`;
+            const obj = new CSS2DObject(div);
+            obj.position.copy(pos);
+            labelGroup.add(obj);
+            return obj;
+        }
+
+        // ═══════════════════════════════════════════════
+        //  WORLD AXES  (X, Y, Z arrows like the textbook)
+        //  – The textbook has X going left, Y up, Z into the scene (right).
+        //  We keep standard Three.js coords: X right, Y up, Z toward viewer,
+        //  but we orient the "scene Z" as the optical axis (positive Z in our setup).
+        //  To match the figure: optical axis = +Z, up = +Y, right on image = +X.
+        //  We'll flip the camera so the scene "looks" like the textbook later.
+        // ═══════════════════════════════════════════════
+        // Optical axis runs along +Z.  We label it Z.
+
+        function makeArrow(dir, origin, len, color) {
+            const arrow = new THREE.ArrowHelper(dir.normalize(), origin, len, color, 0.25, 0.14);
+            scene.add(arrow);
+            return arrow;
+        }
+        // World axes from origin
+        makeArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 3, 0xffffff);  // X axis (scene right)
+        makeArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 3, 0xffffff);  // Y axis (up)
+        makeArrow(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 14, 0xffffff); // Z axis (depth / optical axis)
+
+        // Axis labels
+        makeLabel('X', new THREE.Vector3(3.3, 0, 0), '#fff', '16px');
+        makeLabel('Y', new THREE.Vector3(0, 3.3, 0), '#fff', '16px');
+        makeLabel('Z', new THREE.Vector3(0, 0, 14.5), '#fff', '16px');
+
+        // ═══════════════════════════════════════════════
+        //  3D BOX  (the colored rectangular prism from the figure)
+        //  The figure shows a box with:
+        //    red   = front and back faces (facing ±X)
+        //    green = top and bottom faces (facing ±Y)
+        //    cyan  = side faces (facing ±Z)
+        //  We'll create a BufferGeometry box and assign face colors.
+        // ═══════════════════════════════════════════════
+        const boxW = 2.4;  // width  (X)
+        const boxH = 1.6;  // height (Y)
+        const boxD = 4.0;  // depth  (Z)
+
+        // Create box geometry with per-face materials
+        const boxGeo = new THREE.BoxGeometry(boxW, boxH, boxD);
+        // Three.js BoxGeometry face order: +X, -X, +Y, -Y, +Z, -Z
+        // Each face = a material index group.  6 groups for 6 faces.
+        const boxMats = [
+            new THREE.MeshPhongMaterial({ color: 0xff2222, transparent: true, opacity: 0.85 }), // +X  red
+            new THREE.MeshPhongMaterial({ color: 0xff2222, transparent: true, opacity: 0.85 }), // -X  red
+            new THREE.MeshPhongMaterial({ color: 0x22dd22, transparent: true, opacity: 0.85 }), // +Y  green (top)
+            new THREE.MeshPhongMaterial({ color: 0x22dd22, transparent: true, opacity: 0.85 }), // -Y  green (bottom)
+            new THREE.MeshPhongMaterial({ color: 0x22ccff, transparent: true, opacity: 0.85 }), // +Z  cyan
+            new THREE.MeshPhongMaterial({ color: 0x22ccff, transparent: true, opacity: 0.85 }), // -Z  cyan
+        ];
+        const boxMesh = new THREE.Mesh(boxGeo, boxMats);
+        // Position the box so its nearest face is ~5 units from origin along Z
+        boxMesh.position.set(0, 0, 7);
+        scene.add(boxMesh);
+
+        // Wireframe overlay for clarity (black edges)
+        const wireGeo = new THREE.EdgesGeometry(boxGeo);
+        const wireMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 });
+        const wireframe = new THREE.LineSegments(wireGeo, wireMat);
+        boxMesh.add(wireframe);
+
+        // ═══════════════════════════════════════════════
+        //  PROJECTION PLANE  (semi-transparent gray quad at Z = f)
+        //  Corresponds to the "Projection plane" in the figure.
+        //  It lives at Z = focalLength along the optical axis.
+        // ═══════════════════════════════════════════════
+        let focalLength = 2.0;
+        const planeSize = 5;
+        const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+        const planeMat = new THREE.MeshPhongMaterial({
+            color: 0xaabbcc, transparent: true, opacity: 0.22,
+            side: THREE.DoubleSide, depthWrite: false
+        });
+        const projPlane = new THREE.Mesh(planeGeo, planeMat);
+        // The plane faces -Z by default; rotate so it faces the camera (perpendicular to Z axis)
+        projPlane.position.set(0, 0, focalLength);
+        scene.add(projPlane);
+
+        // Plane border
+        const planeBorderGeo = new THREE.EdgesGeometry(planeGeo);
+        const planeBorderMat = new THREE.LineBasicMaterial({ color: 0x667788 });
+        const planeBorder = new THREE.LineSegments(planeBorderGeo, planeBorderMat);
+        projPlane.add(planeBorder);
+
+        // Label for projection plane
+        const planeLabel = makeLabel('Projection plane', new THREE.Vector3(0, -planeSize / 2 - 0.3, focalLength), '#ccd', '12px');
+
+        // Small x, y axes on the projection plane (green, matching figure)
+        const imgAxisLen = 1.2;
+        const imgAxisGrp = new THREE.Group();
+        scene.add(imgAxisGrp);
+        const imgAxisMatGreen = new THREE.LineBasicMaterial({ color: 0x44ff44 });
+
+        function makeLineSegment(a, b, mat) {
+            const g = new THREE.BufferGeometry().setFromPoints([a, b]);
+            return new THREE.Line(g, mat);
+        }
+        // These will be repositioned whenever focalLength changes
+        const imgAxisX = makeLineSegment(new THREE.Vector3(0, 0, 0), new THREE.Vector3(imgAxisLen, 0, 0), imgAxisMatGreen);
+        const imgAxisY = makeLineSegment(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, imgAxisLen, 0), imgAxisMatGreen);
+        imgAxisGrp.add(imgAxisX, imgAxisY);
+        const imgXLabel = makeLabel('x', new THREE.Vector3(imgAxisLen + 0.15, 0, focalLength), '#44ff44', '14px');
+        const imgYLabel = makeLabel('y', new THREE.Vector3(0, imgAxisLen + 0.15, focalLength), '#44ff44', '14px');
+
+        // ═══════════════════════════════════════════════
+        //  PROJECTION RAYS  (dashed lines from origin through box corners to projection plane)
+        //  These show HOW each 3D corner maps to a 2D point.
+        // ═══════════════════════════════════════════════
+        const rayGroup = new THREE.Group();
+        scene.add(rayGroup);
+        const rayMat = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.15, gapSize: 0.1, transparent: true, opacity: 0.5 });
+
+        // We'll recompute rays each frame based on box position
+        function getBoxCorners() {
+            // 8 corners of the box in world space
+            const hw = boxW / 2, hh = boxH / 2, hd = boxD / 2;
+            const corners = [
+                new THREE.Vector3(-hw, -hh, -hd),
+                new THREE.Vector3(hw, -hh, -hd),
+                new THREE.Vector3(hw, hh, -hd),
+                new THREE.Vector3(-hw, hh, -hd),
+                new THREE.Vector3(-hw, -hh, hd),
+                new THREE.Vector3(hw, -hh, hd),
+                new THREE.Vector3(hw, hh, hd),
+                new THREE.Vector3(-hw, hh, hd),
+            ];
+            const wm = boxMesh.matrixWorld;
+            return corners.map(c => c.applyMatrix4(wm));
+        }
+
+        // Project a 3D point through the pinhole (origin) onto Z = f plane
+        function projectPoint(p, f) {
+            // x_proj = f * X / Z,  y_proj = f * Y / Z
+            if (p.z <= 0) return null; // behind camera
+            return new THREE.Vector3(f * p.x / p.z, f * p.y / p.z, f);
+        }
+
+        // Build ray lines and the projected polygon faces
+        let rayLines = [];
+        function rebuildRays() {
+            // Remove old
+            while (rayGroup.children.length) rayGroup.remove(rayGroup.children[0]);
+            rayLines = [];
+            const corners = getBoxCorners();
+            corners.forEach(c => {
+                const proj = projectPoint(c, focalLength);
+                if (!proj) return;
+                // Ray from origin (0,0,0) through projected point and on to the 3D corner
+                const pts = [new THREE.Vector3(0, 0, 0), proj.clone(), c.clone()];
+                const geo = new THREE.BufferGeometry().setFromPoints(pts);
+                const line = new THREE.Line(geo, rayMat.clone());
+                line.computeLineDistances();
+                rayGroup.add(line);
+                rayLines.push(line);
+            });
+        }
+
+        // ═══════════════════════════════════════════════
+        //  PROJECTED IMAGE  (colored faces on the projection plane)
+        //  We project the box faces onto the Z = f plane and draw them as
+        //  filled polygons, showing the perspective-reduced image.
+        // ═══════════════════════════════════════════════
+        const projImgGroup = new THREE.Group();
+        scene.add(projImgGroup);
+
+        // Box face definitions: indices into the 8-corner array, and color
+        const facesDef = [
+            // front face (+Z) – cyan – corners 4,5,6,7
+            { idx: [4, 5, 6, 7], color: 0x22ccff },
+            // back face (-Z) – cyan – corners 0,1,2,3 (usually occluded but we project all)
+            { idx: [0, 3, 2, 1], color: 0x22ccff },
+            // top face (+Y) – green – 3,2,6,7
+            { idx: [3, 7, 6, 2], color: 0x22dd22 },
+            // bottom face (-Y) – green – 0,1,5,4
+            { idx: [0, 1, 5, 4], color: 0x22dd22 },
+            // right face (+X) – red – 1,2,6,5
+            { idx: [1, 5, 6, 2], color: 0xff2222 },
+            // left face (-X) – red – 0,3,7,4
+            { idx: [0, 4, 7, 3], color: 0xff2222 },
+        ];
+
+        function rebuildProjectedImage() {
+            while (projImgGroup.children.length) projImgGroup.remove(projImgGroup.children[0]);
+            const corners = getBoxCorners();
+            const projCorners = corners.map(c => projectPoint(c, focalLength));
+
+            facesDef.forEach(face => {
+                const pts = face.idx.map(i => projCorners[i]);
+                if (pts.some(p => !p)) return;
+                // Create a filled quad from two triangles
+                const shape = new THREE.Shape();
+                shape.moveTo(pts[0].x, pts[0].y);
+                for (let i = 1; i < pts.length; i++) shape.lineTo(pts[i].x, pts[i].y);
+                shape.closePath();
+                const geo = new THREE.ShapeGeometry(shape);
+                const mat = new THREE.MeshBasicMaterial({
+                    color: face.color, transparent: true, opacity: 0.7,
+                    side: THREE.DoubleSide, depthWrite: false
+                });
+                const mesh = new THREE.Mesh(geo, mat);
+                // Position the mesh at Z = focalLength (on the projection plane)
+                mesh.position.z = focalLength + 0.005; // tiny offset to avoid z-fight
+                projImgGroup.add(mesh);
+
+                // Outline
+                const edgePts = [...pts.map(p => new THREE.Vector3(p.x, p.y, 0.01)), new THREE.Vector3(pts[0].x, pts[0].y, 0.01)];
+                const edgeGeo = new THREE.BufferGeometry().setFromPoints(edgePts);
+                const edgeLine = new THREE.Line(edgeGeo, new THREE.LineBasicMaterial({ color: 0x000000 }));
+                edgeLine.position.z = focalLength + 0.006;
+                projImgGroup.add(edgeLine);
+            });
+        }
+
+        // ═══════════════════════════════════════════════
+        //  ORIGIN MARKER  (pinhole / camera center)
+        // ═══════════════════════════════════════════════
+        const originSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0xffdd44 })
+        );
+        scene.add(originSphere);
+        makeLabel('O (camera)', new THREE.Vector3(0, -0.3, 0), '#ffdd44', '11px');
+
+        // ═══════════════════════════════════════════════
+        //  GRID  (subtle reference grid on Y=0 plane)
+        // ═══════════════════════════════════════════════
+        const gridHelper = new THREE.GridHelper(30, 30, 0x333355, 0x222244);
+        gridHelper.position.y = -boxH / 2 - 0.01;
+        scene.add(gridHelper);
+
+        // ═══════════════════════════════════════════════
+        //  UPDATE FUNCTIONS
+        // ═══════════════════════════════════════════════
+        function updateScene() {
+            // Read slider values
+            const zVal = parseFloat(document.getElementById('sliderZ').value);
+            const yVal = parseFloat(document.getElementById('sliderY').value);
+            const xVal = parseFloat(document.getElementById('sliderX').value);
+            focalLength = parseFloat(document.getElementById('sliderF').value);
+
+            document.getElementById('valZ').textContent = zVal.toFixed(1);
+            document.getElementById('valY').textContent = yVal.toFixed(1);
+            document.getElementById('valX').textContent = xVal.toFixed(1);
+            document.getElementById('valF').textContent = focalLength.toFixed(1);
+
+            // Move box
+            boxMesh.position.set(xVal, yVal, zVal);
+
+            // Move projection plane to Z = f
+            projPlane.position.set(0, 0, focalLength);
+            planeLabel.position.set(0, -planeSize / 2 - 0.3, focalLength);
+
+            // Image-plane local axes
+            imgAxisGrp.position.set(0, 0, focalLength);
+            imgXLabel.position.set(imgAxisLen + 0.15, 0, focalLength);
+            imgYLabel.position.set(0, imgAxisLen + 0.15, focalLength);
+
+            // Rebuild dynamic geometry
+            rebuildRays();
+            rebuildProjectedImage();
+        }
+
+        // ═══════════════════════════════════════════════
+        //  TOGGLE BUTTONS
+        // ═══════════════════════════════════════════════
+        function toggleBtn(id, target) {
+            const btn = document.getElementById(id);
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('active');
+                const vis = btn.classList.contains('active');
+                if (Array.isArray(target)) target.forEach(t => { t.visible = vis; });
+                else target.visible = vis;
+            });
+        }
+        toggleBtn('togRays', rayGroup);
+        toggleBtn('togProjection', projImgGroup);
+        toggleBtn('togLabels', labelGroup);
+        toggleBtn('togPlane', [projPlane]);
+
+        // ═══════════════════════════════════════════════
+        //  RESET TO TEXTBOOK VIEW
+        //  Restores default slider values and camera position.
+        // ═══════════════════════════════════════════════
+        document.getElementById('btnReset').addEventListener('click', () => {
+            // Slider defaults
+            document.getElementById('sliderZ').value = 7;
+            document.getElementById('sliderY').value = 0;
+            document.getElementById('sliderX').value = 0;
+            document.getElementById('sliderF').value = 2;
+
+            // Camera
+            camera.position.set(-6, 5, -4);
+            controls.target.set(0, 0, 4);
+            controls.update();
+
+            // Ensure all toggles are on
+            ['togRays', 'togProjection', 'togLabels', 'togPlane'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (!btn.classList.contains('active')) btn.click();
+            });
+
+            demoStep = -1;
+            document.getElementById('btnNext').style.display = 'none';
+            document.getElementById('btnDemo').style.display = '';
+            document.getElementById('step-info').innerHTML = 'Click <b>Start Step-Through</b> to learn how perspective projection works.';
+
+            updateScene();
+        });
+
+        // ═══════════════════════════════════════════════
+        //  GUIDED STEP-THROUGH DEMO
+        //  Walks the learner through the concept in 6 steps,
+        //  animating sliders and camera to illustrate each idea.
+        // ═══════════════════════════════════════════════
+        let demoStep = -1;
+        const demoSteps = [
+            {
+                title: 'Step 1 / 6 — The 3D Scene',
+                text: 'A colored 3D box sits in front of the camera (origin <b>O</b>). Its faces are <span style="color:#f44">red</span>, <span style="color:#4f4">green</span>, and <span style="color:#4df">cyan</span>.',
+                action: () => {
+                    setSlider('sliderZ', 7); setSlider('sliderY', 0); setSlider('sliderX', 0); setSlider('sliderF', 2);
+                    animateCamera(new THREE.Vector3(-8, 5, -2), new THREE.Vector3(0, 0, 5));
+                }
+            },
+            {
+                title: 'Step 2 / 6 — Projection Plane',
+                text: 'A translucent <b>projection plane</b> at distance <b>f</b> (focal length) from the camera captures the image. It acts like the sensor in a pinhole camera.',
+                action: () => {
+                    animateCamera(new THREE.Vector3(-4, 3, -1), new THREE.Vector3(0, 0, 2));
+                }
+            },
+            {
+                title: 'Step 3 / 6 — Projection Rays',
+                text: 'Dashed <b>projection rays</b> connect each 3D corner to the camera center. Where they pierce the plane, the 2D image point appears: <code>x = f·X/Z</code>.',
+                action: () => {
+                    animateCamera(new THREE.Vector3(-5, 4, -3), new THREE.Vector3(0, 0, 4));
+                    if (!document.getElementById('togRays').classList.contains('active')) document.getElementById('togRays').click();
+                }
+            },
+            {
+                title: 'Step 4 / 6 — Depth affects size',
+                text: 'Watch the projected image <b>shrink</b> as the box moves farther away. Farther objects project smaller — the hallmark of perspective.',
+                action: () => {
+                    animateSlider('sliderZ', 7, 13, 2000);
+                }
+            },
+            {
+                title: 'Step 5 / 6 — Focal length',
+                text: 'Increasing <b>f</b> magnifies the projection (like zooming in). Decreasing <b>f</b> gives a wider field of view.',
+                action: () => {
+                    setSlider('sliderZ', 7);
+                    animateSlider('sliderF', 2, 4, 1500).then(() => animateSlider('sliderF', 4, 1.5, 1500));
+                }
+            },
+            {
+                title: 'Step 6 / 6 — Explore!',
+                text: 'Drag the sliders and orbit the camera to build intuition. Notice how moving in X or Y shifts the projected image off-center.',
+                action: () => {
+                    setSlider('sliderF', 2);
+                    animateCamera(new THREE.Vector3(-6, 5, -4), new THREE.Vector3(0, 0, 4));
+                }
+            }
+        ];
+
+        document.getElementById('btnDemo').addEventListener('click', () => {
+            demoStep = 0;
+            document.getElementById('btnDemo').style.display = 'none';
+            document.getElementById('btnNext').style.display = '';
+            runDemoStep();
+        });
+        document.getElementById('btnNext').addEventListener('click', () => {
+            demoStep++;
+            if (demoStep >= demoSteps.length) {
+                demoStep = -1;
+                document.getElementById('btnNext').style.display = 'none';
+                document.getElementById('btnDemo').style.display = '';
+                document.getElementById('step-info').innerHTML = 'Demo complete! Click <b>Start Step-Through</b> to replay.';
+                return;
+            }
+            runDemoStep();
+        });
+
+        function runDemoStep() {
+            const s = demoSteps[demoStep];
+            document.getElementById('step-info').innerHTML = `<b>${s.title}</b><br/>${s.text}`;
+            s.action();
+        }
+
+        // Smooth slider animation helper
+        function animateSlider(id, from, to, duration) {
+            return new Promise(resolve => {
+                const el = document.getElementById(id);
+                const start = performance.now();
+                function tick(t) {
+                    const p = Math.min((t - start) / duration, 1);
+                    const ease = p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p; // ease in-out
+                    el.value = from + (to - from) * ease;
+                    updateScene();
+                    if (p < 1) requestAnimationFrame(tick);
+                    else resolve();
+                }
+                requestAnimationFrame(tick);
+            });
+        }
+        function setSlider(id, val) {
+            document.getElementById(id).value = val;
+            updateScene();
+        }
+
+        // Smooth camera animation
+        function animateCamera(toPos, toTarget, duration = 1200) {
+            const startPos = camera.position.clone();
+            const startTarget = controls.target.clone();
+            const start = performance.now();
+            function tick(t) {
+                const p = Math.min((t - start) / duration, 1);
+                const ease = p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
+                camera.position.lerpVectors(startPos, toPos, ease);
+                controls.target.lerpVectors(startTarget, toTarget, ease);
+                controls.update();
+                if (p < 1) requestAnimationFrame(tick);
+            }
+            requestAnimationFrame(tick);
+        }
+
+        // ═══════════════════════════════════════════════
+        //  SLIDER EVENT LISTENERS
+        // ═══════════════════════════════════════════════
+        ['sliderZ', 'sliderY', 'sliderX', 'sliderF'].forEach(id => {
+            document.getElementById(id).addEventListener('input', updateScene);
+        });
+
+        // ═══════════════════════════════════════════════
+        //  RENDER LOOP
+        // ═══════════════════════════════════════════════
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        // Initial build
+        updateScene();
+        animate();
+
+        // ═══════════════════════════════════════════════
+        //  RESIZE HANDLER
+        // ═══════════════════════════════════════════════
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

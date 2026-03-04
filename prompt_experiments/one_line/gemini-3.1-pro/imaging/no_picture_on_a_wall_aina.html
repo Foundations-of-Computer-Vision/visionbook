@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Three.js Pinhole Camera Demo</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            display: block;
+            pointer-events: none;
+        }
+
+        #controls {
+            position: absolute;
+            top: 50px;
+            right: 10px;
+            width: 200px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            pointer-events: auto;
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: inline-block;
+            width: 100px;
+            font-weight: bold;
+        }
+
+        button {
+            padding: 8px 12px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button.active {
+            background: #004494;
+            box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
+        }
+    </style>
+    <!-- Import Map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="info">
+        <h2>Pinhole Camera Visualization</h2>
+        <p>Rotate to view the scene from different angles.</p>
+    </div>
+    <div id="controls">
+        <div class="control-group">
+            <button id="btn-no-pinhole">No Pinhole (Blur)</button>
+        </div>
+        <div class="control-group">
+            <button id="btn-pinhole">Pinhole (Image)</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+
+        // Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf0f0f0);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(20, 10, 30);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 5, 0);
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // --- Objects ---
+
+        // 1. The Tree
+        const treeGroup = new THREE.Group();
+        treeGroup.position.set(0, 0, 15); // Place tree at Z=15
+
+        // Trunk
+        const trunkGeo = new THREE.CylinderGeometry(0.8, 1.2, 6, 8);
+        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.position.y = 3;
+        trunk.castShadow = true;
+        treeGroup.add(trunk);
+
+        // Leaves
+        const leavesGeo = new THREE.DodecahedronGeometry(4);
+        const leavesMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+        const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+        leaves.position.y = 8;
+        leaves.castShadow = true;
+        treeGroup.add(leaves);
+
+        scene.add(treeGroup);
+
+        // Define source points for rays
+        const sourcePoints = [
+            { pos: new THREE.Vector3(0, 8, 0), color: 0x32CD32 }, // Top (Green) - relative to tree positions
+            { pos: new THREE.Vector3(1, 8.5, 1), color: 0x32CD32 },
+            { pos: new THREE.Vector3(-1, 7.5, -0.5), color: 0x32CD32 },
+
+            { pos: new THREE.Vector3(0, 2, 0.8), color: 0x8B4513 }, // Bottom (Brown) - relative to tree
+            { pos: new THREE.Vector3(0.5, 3, -0.8), color: 0x8B4513 },
+            { pos: new THREE.Vector3(-0.5, 1.5, 0), color: 0x8B4513 },
+        ];
+
+        // 2. The Wall (Screen)
+        const wallGeo = new THREE.PlaneGeometry(20, 20);
+        const wallMat = new THREE.MeshPhongMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+        const wall = new THREE.Mesh(wallGeo, wallMat);
+        wall.position.set(0, 5, -15); // Wall at Z=-15
+        wall.receiveShadow = true;
+        scene.add(wall);
+
+        // Label "Wall"
+        // (Skipping text geometry to keep it simple, or simple HTML overlay? 
+        //  Lets rely on the visual context as per the diagram).
+
+        // 3. The Barrier (Pinhole)
+        // Positioned at Z=0
+        const barrierZ = 0;
+        const holeRadius = 0.5;
+
+        function createBarrierShape() {
+            const shape = new THREE.Shape();
+            const width = 20;
+            const height = 20;
+
+            shape.moveTo(-width / 2, -height / 2 + 5); // +5 y offset to match scene center roughly
+            shape.lineTo(width / 2, -height / 2 + 5);
+            shape.lineTo(width / 2, height / 2 + 5);
+            shape.lineTo(-width / 2, height / 2 + 5);
+            shape.lineTo(-width / 2, -height / 2 + 5);
+
+            const hole = new THREE.Path();
+            hole.absarc(0, 5, holeRadius, 0, Math.PI * 2, true);
+            shape.holes.push(hole);
+            return shape;
+        }
+
+        const barrierGeo = new THREE.ShapeGeometry(createBarrierShape());
+        const barrierMat = new THREE.MeshPhongMaterial({ color: 0x111111, side: THREE.DoubleSide });
+        const barrier = new THREE.Mesh(barrierGeo, barrierMat);
+        barrier.position.set(0, 0, barrierZ);
+        scene.add(barrier);
+
+        // --- Ray Tracing System ---
+
+        const raysGroup = new THREE.Group();
+        scene.add(raysGroup);
+
+        // Configuration
+        let isPinholeMode = true; // Start in pinhole mode (b)
+
+        // Pre-calculated target directions
+        // We want a spread of rays. 
+        // We target a grid on the barrier plane Z=0.
+        const gridPoints = [];
+        const gridSize = 10;
+        const gridStep = 2; // -10 to 10
+        for (let x = -gridSize; x <= gridSize; x += gridStep) {
+            for (let y = -4; y <= 14; y += gridStep) { // Y range around the hole (y=5)
+                // Add some jitter
+                gridPoints.push(new THREE.Vector3(
+                    x + (Math.random() - 0.5),
+                    y + (Math.random() - 0.5),
+                    barrierZ
+                ));
+            }
+        }
+        // Also explicitly add the center point (the hole)
+        gridPoints.push(new THREE.Vector3(0, 5, barrierZ));
+        gridPoints.push(new THREE.Vector3(0.1, 5.1, barrierZ));
+        gridPoints.push(new THREE.Vector3(-0.1, 4.9, barrierZ));
+
+
+        function updateRays() {
+            // Clear old rays
+            while (raysGroup.children.length > 0) {
+                raysGroup.remove(raysGroup.children[0]);
+            }
+
+            // Determine visibility of barrier
+            barrier.visible = isPinholeMode;
+
+            sourcePoints.forEach(src => {
+                // World position of source
+                const worldSrc = src.pos.clone().add(treeGroup.position);
+
+                gridPoints.forEach(targetAtBarrier => {
+
+                    const direction = new THREE.Vector3().subVectors(targetAtBarrier, worldSrc).normalize();
+                    const raycaster = new THREE.Raycaster(worldSrc, direction);
+
+                    // Logic:
+                    // Ray goes from Source -> Barrier Plane.
+                    // If Barrier is OFF: continue to Wall.
+                    // If Barrier is ON:
+                    //    Check distance to hole center (0, 5, 0) on the barrier plane.
+                    //    If dist < holeRadius: pass through to Wall.
+                    //    Else: stop at Barrier.
+
+                    // We need intersection with Wall plane (Z=-15) and Barrier Plane (Z=0)
+                    // Simple math for plane intersection since planes are axis aligned.
+
+                    // T = (PlaneZ - RayOriginZ) / RayDirZ
+
+                    // 1. Intersection with Barrier (Z=0)
+                    const tBarrier = (barrierZ - worldSrc.z) / direction.z;
+                    const hitBarrier = worldSrc.clone().add(direction.clone().multiplyScalar(tBarrier));
+
+                    // 2. Intersection with Wall (Z=-15)
+                    const tWall = (-15 - worldSrc.z) / direction.z;
+                    const hitWall = worldSrc.clone().add(direction.clone().multiplyScalar(tWall));
+
+                    let endPoint = hitWall;
+                    let blocked = false;
+
+                    if (isPinholeMode) {
+                        // Check if hitBarrier is inside the hole
+                        // Hole is at 0, 5, 0
+                        const distToHole = Math.sqrt(Math.pow(hitBarrier.x, 2) + Math.pow(hitBarrier.y - 5, 2));
+
+                        // Small tolerance for visual clarity
+                        if (distToHole > holeRadius) {
+                            endPoint = hitBarrier;
+                            blocked = true;
+                        }
+                    }
+
+                    // Create the line
+                    // To optimize, we don't draw ALL stopped rays in Pinhole mode, creates too much clutter?
+                    // The figure (a) shows converging rays.
+                    // The figure (b) shows diverging rays getting blocked.
+
+                    // Let's filter:
+                    // If blocked, we usually don't draw ALL of them to avoid mess, 
+                    // but for the demo we want to show them hitting the wall.
+
+                    // Optimization: Randomly skip some rays to keep performance up/visuals clean?
+                    if (Math.random() > 0.8) return;
+
+                    // If NO PINHOLE: All rays go to wall.
+                    // If PINHOLE: blocked rays stop at barrier, hole rays go to wall.
+
+                    const points = [worldSrc, endPoint];
+                    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+                    // Material opacity lower for blocked rays
+                    const opacity = blocked ? 0.2 : 0.6;
+                    const material = new THREE.LineBasicMaterial({
+                        color: src.color,
+                        transparent: true,
+                        opacity: opacity
+                    });
+
+                    const line = new THREE.Line(geometry, material);
+                    raysGroup.add(line);
+                });
+            });
+        }
+
+        // --- Interaction ---
+
+        const btnNoPinhole = document.getElementById('btn-no-pinhole');
+        const btnPinhole = document.getElementById('btn-pinhole');
+
+        function setMode(pinhole) {
+            isPinholeMode = pinhole;
+            if (pinhole) {
+                btnPinhole.classList.add('active');
+                btnNoPinhole.classList.remove('active');
+            } else {
+                btnNoPinhole.classList.add('active');
+                btnPinhole.classList.remove('active');
+            }
+            updateRays();
+        }
+
+        btnNoPinhole.addEventListener('click', () => setMode(false));
+        btnPinhole.addEventListener('click', () => setMode(true));
+
+        // Initial render
+        setMode(isPinholeMode); // Start with Pinhole (b)
+
+        // --- Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle Resize
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+    </script>
+</body>
+
+</html>

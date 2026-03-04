@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Perspective Projection</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        .label {
+            color: black;
+            font-family: serif;
+            font-style: italic;
+            font-size: 24px;
+            text-shadow: 0 0 4px white;
+        }
+
+        .label-plane {
+            color: black;
+            font-family: serif;
+            font-size: 18px;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="info">
+        <h3>Perspective Projection</h3>
+        <p>Interactive 3D representation</p>
+        <p>Left Click: Rotate Camera</p>
+        <p>Right Click: Pan</p>
+        <p>Drag the Object to see projection change</p>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+        import { DragControls } from 'three/addons/controls/DragControls.js';
+
+        // --- Configuration ---
+        // We map the Diagram axes to Three.js axes for implementation convenience:
+        // Diagram Z -> Three.js X (Red direction)
+        // Diagram Y -> Three.js Y (Green direction)
+        // Diagram X -> Three.js Z (Blue direction)
+
+        const PLANE_X = 15;
+        const OBJECT_START_X = 30;
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(20, 20, 50); // Angle view similar to diagram
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none'; // Allow clicks to pass through
+        document.body.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(15, 0, 0);
+
+        // --- Axes & Grid ---
+        function createArrow(dir, origin, length, color, labelText) {
+            const arrowHelper = new THREE.ArrowHelper(dir, origin, length, color, 1, 0.5);
+            scene.add(arrowHelper);
+
+            // Axis Label
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = labelText;
+            const label = new CSS2DObject(div);
+            label.position.copy(origin).addScaledVector(dir, length + 1);
+            scene.add(label);
+            return arrowHelper;
+        }
+
+        // Origin
+        const origin = new THREE.Vector3(0, 0, 0);
+
+        // Diagram Z Axis (My X)
+        createArrow(new THREE.Vector3(1, 0, 0), origin, 40, 0x000000, 'Z');
+
+        // Diagram Y Axis (My Y)
+        createArrow(new THREE.Vector3(0, 1, 0), origin, 15, 0x000000, 'Y');
+
+        // Diagram X Axis (My Z)
+        createArrow(new THREE.Vector3(0, 0, 1), origin, 15, 0x000000, 'X');
+
+        // --- Projection Plane ---
+        const planeSize = 25;
+        const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+        // Rotate to be perpendicular to X axis
+        planeGeo.rotateY(-Math.PI / 2);
+        const planeMat = new THREE.MeshBasicMaterial({
+            color: 0xeeeeee,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const projectionPlane = new THREE.Mesh(planeGeo, planeMat);
+        projectionPlane.position.set(PLANE_X, 0, 0);
+        scene.add(projectionPlane);
+
+        // Plane Border
+        const planeBorderGeo = new THREE.EdgesGeometry(planeGeo);
+        const planeBorderMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 });
+        const planeBorder = new THREE.LineSegments(planeBorderGeo, planeBorderMat);
+        projectionPlane.add(planeBorder);
+
+        // Plane Axes (x, y)
+        // Local x on plane -> World Z (diagram X)
+        // Local y on plane -> World Y
+        const planeOrigin = new THREE.Vector3(PLANE_X, 0, 0);
+
+        // Small axes on plane
+        const planeAxisLen = 5;
+        // Plane x (Diagram x, correlates to 3D X/Z?) 
+        // In diagram, little 'x' is horizontal on the plane. Since plane is YZ (in diagram coords), horizontal is Z (diagram) or X (diagram). 
+        // Diagram: Plane is cut by Z axis. Plane 'x' points along Diagram X (My Z).
+        const planeXArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), planeOrigin, planeAxisLen, 0x00aa00, 0.5, 0.3);
+        scene.add(planeXArrow);
+        const pxLabelDiv = document.createElement('div');
+        pxLabelDiv.className = 'label';
+        pxLabelDiv.style.color = 'green';
+        pxLabelDiv.style.fontSize = '20px';
+        pxLabelDiv.textContent = 'x';
+        const pxLabel = new CSS2DObject(pxLabelDiv);
+        pxLabel.position.set(PLANE_X, 0, planeAxisLen + 0.5);
+        scene.add(pxLabel);
+
+        // Plane y (Diagram y)
+        const planeYArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), planeOrigin, planeAxisLen, 0x00aa00, 0.5, 0.3);
+        scene.add(planeYArrow);
+        const pyLabelDiv = document.createElement('div');
+        pyLabelDiv.className = 'label';
+        pyLabelDiv.style.color = 'green';
+        pyLabelDiv.style.fontSize = '20px';
+        pyLabelDiv.textContent = 'y';
+        const pyLabel = new CSS2DObject(pyLabelDiv);
+        pyLabel.position.set(PLANE_X, planeAxisLen + 0.5, 0);
+        scene.add(pyLabel);
+
+        const planeLabelDiv = document.createElement('div');
+        planeLabelDiv.className = 'label-plane';
+        planeLabelDiv.textContent = 'Projection plane';
+        const planeLabelObj = new CSS2DObject(planeLabelDiv);
+        planeLabelObj.position.set(PLANE_X, -planeSize / 2 - 2, 0);
+        scene.add(planeLabelObj);
+
+
+        // --- The 3D Object (The Steps) ---
+        // Constructing custom geometry to ensure clean faces for projection
+        // Two steps:
+        // Lower step (front): Width(Z)=4, Height(Y)=3, Depth(X-axis... wait diagram Z is X). 
+        // Let's define local dimensions.
+        // Step 1: 4 wide (my Z), 3 high (my Y), 2 deep (my X).
+        // Step 2: 4 wide (my Z), 6 high (my Y), 2 deep (my X). 
+        // Structure:
+        // Positioned at some X > PLANE_X.
+
+        const objGroup = new THREE.Group();
+        objGroup.position.set(OBJECT_START_X, 0, 0);
+        scene.add(objGroup);
+
+        // Materials matching the diagram colors
+        const matRed = new THREE.MeshBasicMaterial({ color: 0xff3300 }); // Front faces (facing -X)
+        const matGreen = new THREE.MeshBasicMaterial({ color: 0x33ff00 }); // Top faces (facing +Y)
+        const matBlue = new THREE.MeshBasicMaterial({ color: 0x33ccff }); // Side faces (facing +Z)
+
+        // We build the L-shape from 2 boxes for simplicity, but put them in one logical object to drag.
+
+        // Geometry specs
+        const stepWidth = 4; // Along Z dimension
+        const stepHeight = 2.5;
+        const stepDepth = 4; // Along X dimension
+
+        // Box 1 (Front/Low)
+        // Local Pos: x=0 (centered in depth? no, "front" is towards origin).
+        // Let's say origin of group is bottom-front-left corner?
+        // Let's center the group vertically on the Z axis line? No, sits on Z-X plane usually.
+        // Let's center geometry around (0,0,0) of the group, which sits at (30, 0, 0).
+
+        // Lower Step
+        const box1Geometry = new THREE.BoxGeometry(stepDepth, stepHeight, stepWidth);
+        // Materials: Right, Left, Top, Bottom, Front, Back
+        // My X+ (Back), X- (Front=Red), Y+ (Top=Green), Y- (Bot), Z+ (Side=Blue), Z- (Side=Inv)
+        const materials1 = [
+            new THREE.MeshBasicMaterial({ color: 0x888888 }), // X+ (Back)
+            matRed,                                           // X- (Front) -> Visible to camera
+            matGreen,                                         // Y+ (Top) -> Visible
+            new THREE.MeshBasicMaterial({ color: 0x888888 }), // Y-
+            matBlue,                                          // Z+ (Side) -> Visible
+            new THREE.MeshBasicMaterial({ color: 0x888888 })  // Z-
+        ];
+        const step1 = new THREE.Mesh(box1Geometry, materials1);
+        step1.position.set(0, stepHeight / 2, stepWidth / 2); // Shift Z so side aligns
+
+        // Upper Step
+        // Sits behind Step 1 (in X)
+        const box2Geometry = new THREE.BoxGeometry(stepDepth, stepHeight, stepWidth);
+        const step2 = new THREE.Mesh(box2Geometry, materials1);
+        step2.position.set(stepDepth, stepHeight * 1.5, stepWidth / 2); // Moved +X (away from origin) and +Y
+
+        // Actually, looking at diagram:
+        // The side face (Blue) is continuous. 
+        // My construction has a seam. 
+        // Better: Custom Geometry for the whole thing.
+        // But for projection logic, distinct faces are easier. 
+        // Let's stick with grouped meshes.
+
+        objGroup.add(step1);
+        objGroup.add(step2);
+
+        // Drag Controls
+        // We want to allow dragging the object along X axis mainly, maybe small Z/Y?
+        // Let's allow generic drag but limit to "positive" quadrant roughly?
+        const dragControls = new DragControls([objGroup], camera, renderer.domElement);
+        dragControls.addEventListener('dragstart', function (event) { controls.enabled = false; });
+        dragControls.addEventListener('dragend', function (event) { controls.enabled = true; });
+
+
+        // --- Projection Logic ---
+
+        // We need to project specific faces onto the plane.
+        // We have:
+        // 1. Front Face of Step 1 (Red)
+        // 2. Top Face of Step 1 (Green) - Proj will be flat line if eye is at y=0? 
+        //    Wait, eye is at (0,0,0). Object is at (30, >0, ...). 
+        //    So top faces are visible.
+        //    Diagram projection: Only Red and Blue are colored filling the shape.
+        //    The Green tops don't seem to be filled in the projection on the plane.
+        //    So I will only project the Red and Blue faces to match the diagram style.
+
+        const projectionGroup = new THREE.Group();
+        scene.add(projectionGroup);
+
+        const linesGroup = new THREE.Group();
+        scene.add(linesGroup);
+
+        // Helper to get world vertices of a BoxGeometry
+        // Returns array of Vector3
+        function getBoxVertices(mesh) {
+            const geom = mesh.geometry;
+            const vertices = [];
+            const pos = geom.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                const v = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i));
+                v.applyMatrix4(mesh.matrixWorld);
+                vertices.push(v);
+            }
+            return vertices;
+        }
+
+        // We need to know which vertices form the specific faces we care about.
+        // BoxGeometry indices: 
+        // 0,1,2,3: +x face (Right) 
+        // 4,5,6,7: -x face (Left) -> This is our RED Front face
+        // 8,9,10,11: +y face (Top)
+        // 12,13,14,15: -y face (Bottom)
+        // 16,17,18,19: +z face (Front in 3js default) -> This is our BLUE Side face
+        // 20,21,22,23: -z face (Back)
+
+        // Indices for box faces are typically 2 triangles (6 verts).
+        // But Position attribute has 24 vertices (4 per face x 6 faces).
+        // Order: +x, -x, +y, -y, +z, -z. 4 verts each.
+        // -X Face (Red): Vertices 4, 5, 6, 7.
+        // +Z Face (Blue): Vertices 16, 17, 18, 19.
+
+        function getFaceVertices(mesh, faceIndex) {
+            const geom = mesh.geometry;
+            const pos = geom.attributes.position;
+            const verts = [];
+            // Each face has 4 vertices in the buffer geometry (non-indexed usually for BoxGeometry default)
+            const offset = faceIndex * 4;
+            for (let i = 0; i < 4; i++) {
+                const v = new THREE.Vector3(pos.getX(offset + i), pos.getY(offset + i), pos.getZ(offset + i));
+                v.applyMatrix4(mesh.matrixWorld);
+                verts.push(v);
+            }
+            // Sort or order: BoxGeometry vertices for a face come in counter-clockwise order: 0,1,2,3?
+            // Actually usually: TL, BL, BR, TR? 
+            // We just need the cycle to draw the shape. 
+            // 0, 2, 1? No, let's grab them and project.
+            // Triangles are (a,b,d) (b,c,d). 
+            // Indices: a, b, c, d corresponds to corners. 
+            // Let's assume 0,1,2,3 form a quad cycle 0-1-3-2 or something.
+            // We'll fix order by convex hull or known order if needed.
+            // BoxGeometry faces are usually defined: [0, 2, 1], [2, 3, 1].
+            // Vertices: 0:TopLeft, 1:BotLeft, 2:TopRight, 3:BotRight ??
+            return verts;
+        }
+
+        // Face Indices
+        const FACE_NEG_X = 1; // Red
+        const FACE_POS_Z = 4; // Blue
+
+        // Ordered indices to make a quad loop from buffer geometry vertices
+        // Default BoxGeometry Face: 0: top-front-left, 1: bot-front-left... 
+        // Actually, just standard quad: 0, 1, 3, 2 is usually the loop order.
+        const QUAD_INDICES = [0, 2, 3, 1];
+        // Check: 0,1,2 triangle 1; 2,1,3 triangle 2? 
+        // Let's try 0->1->3->2->0.
+        // NOTE: we need check proper winding.
+
+        function projectPoint(p) {
+            // Project p onto plane x = PLANE_X
+            // Line from (0,0,0) to p.
+            // p_proj = p * (PLANE_X / p.x)
+            if (p.x === 0) return p.clone(); // Avoid div zero
+            const scalar = PLANE_X / p.x;
+            return new THREE.Vector3(PLANE_X, p.y * scalar, p.z * scalar);
+        }
+
+        function createProjectedMesh(color) {
+            const geom = new THREE.BufferGeometry();
+            const vertices = new Float32Array(18); // 2 triangles * 3 verts * 3 coords
+            geom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            const mat = new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide });
+            const mesh = new THREE.Mesh(geom, mat);
+            // Slight offset x to prevent z-fighting with plane
+            mesh.position.x = 0.05;
+            return mesh;
+        }
+
+        function updateProjectedMesh(mesh, worldVerts) {
+            // Project vertices
+            const projVerts = worldVerts.map(v => projectPoint(v));
+
+            // Build 2 triangles for the quad
+            // Quad order hypothesis: 0(TL), 1(BL), 2(TR), 3(BR).
+            // Tri 1: 0, 1, 2. Tri 2: 2, 1, 3.
+            // BoxGeo Face 4 (-X): 
+            //   4: +y, -z (Top-Back) ? No.
+            //   Let's just use the vertices from standard BoxGeometry logic.
+            //   Standard: 0: +x+y+z. 
+            //   Actually, let's just grab the 4 corners, sort them angularly around center to ensure convex quad?
+            //   Or just rely on consistent BoxGeometry layout.
+            // Layout typically:
+            //   TopL, BotL, TopR, BotR is plausible depending on face.
+
+            // Let's assume standard 0, 2, 1 and 2, 3, 1 topology for the 4 source verts.
+            const p = projVerts;
+            const positions = mesh.geometry.attributes.position.array;
+
+            // Triangle 1 (0, 2, 1)
+            let i = 0;
+            positions[i++] = p[0].x; positions[i++] = p[0].y; positions[i++] = p[0].z;
+            positions[i++] = p[1].x; positions[i++] = p[1].y; positions[i++] = p[1].z; // 1 is BL?
+            positions[i++] = p[2].x; positions[i++] = p[2].y; positions[i++] = p[2].z;
+
+            // Triangle 2 (2, 1, 3)
+            positions[i++] = p[2].x; positions[i++] = p[2].y; positions[i++] = p[2].z;
+            positions[i++] = p[1].x; positions[i++] = p[1].y; positions[i++] = p[1].z;
+            positions[i++] = p[3].x; positions[i++] = p[3].y; positions[i++] = p[3].z;
+
+            mesh.geometry.attributes.position.needsUpdate = true;
+            mesh.geometry.computeBoundingSphere();
+        }
+
+        // Create projection meshes
+        const projMeshRed1 = createProjectedMesh(0xff3300);
+        projectionGroup.add(projMeshRed1);
+
+        const projMeshRed2 = createProjectedMesh(0xff3300);
+        projectionGroup.add(projMeshRed2);
+
+        const projMeshBlue1 = createProjectedMesh(0x33ccff);
+        projectionGroup.add(projMeshBlue1);
+
+        const projMeshBlue2 = createProjectedMesh(0x33ccff);
+        projectionGroup.add(projMeshBlue2);
+
+        // Lines
+        // We'll use a pool of Line objects or build a single BufferGeometry for lines.
+        // Single geometry is faster.
+        const linesGeo = new THREE.BufferGeometry();
+        const MAX_LINES = 16;
+        linesGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAX_LINES * 2 * 3), 3));
+        // Use Dashed Material
+        const linesMat = new THREE.LineDashedMaterial({
+            color: 0x000000,
+            dashSize: 1,
+            gapSize: 0.5,
+            scale: 1
+        });
+        const projectionLines = new THREE.LineSegments(linesGeo, linesMat);
+        linesGroup.add(projectionLines);
+
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Refresh geometry matrices
+            objGroup.updateMatrixWorld(true);
+
+            // 1. Get Source Vertices
+            const redFace1 = getFaceVertices(step1, FACE_NEG_X);
+            const redFace2 = getFaceVertices(step2, FACE_NEG_X);
+            const blueFace1 = getFaceVertices(step1, FACE_POS_Z);
+            const blueFace2 = getFaceVertices(step2, FACE_POS_Z);
+
+            // 2. Update Projection Meshes
+            updateProjectedMesh(projMeshRed1, redFace1);
+            updateProjectedMesh(projMeshRed2, redFace2);
+            updateProjectedMesh(projMeshBlue1, blueFace1);
+            updateProjectedMesh(projMeshBlue2, blueFace2);
+
+            // 3. Update Lines
+            // Draw lines from object corners to Origin.
+            // We combine all relevant vertices.
+            const allVerts = [...redFace1, ...redFace2, ...blueFace1, ...blueFace2];
+            // Remove duplicates approximately to avoid dense lines? No, draw all for wireframe effect.
+            // Drawing 16 lines (4 per face).
+
+            const linePos = linesGeo.attributes.position.array;
+            let idx = 0;
+            allVerts.forEach(v => {
+                // Point 1: Origin
+                linePos[idx++] = 0; linePos[idx++] = 0; linePos[idx++] = 0;
+                // Point 2: Vertex
+                linePos[idx++] = v.x; linePos[idx++] = v.y; linePos[idx++] = v.z;
+            });
+            linesGeo.attributes.position.needsUpdate = true;
+            linesGeo.computeBoundingSphere();
+
+            // Recompute line distances for dashing
+            projectionLines.computeLineDistances();
+
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

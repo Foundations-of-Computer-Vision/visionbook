@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>3D Projection Geometry</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // Orthographic camera
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 3;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 20);
+        camera.position.set(3, 3.5, 3);
+        camera.lookAt(0, 0, 0);
+        camera.zoom = 1.2;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Axes
+        const axisLength = 2.5;
+        const arrowSize = 0.15;
+        const axes = [
+            { dir: [1, 0, 0], color: 0x000000, label: 'X', pos: [axisLength, 0, 0] },
+            { dir: [0, 1, 0], color: 0x000000, label: 'Y', pos: [0, axisLength, 0] },
+            { dir: [0, 0, 1], color: 0x000000, label: 'Z', pos: [0, 0, axisLength] }
+        ];
+        axes.forEach(a => {
+            const arrow = new THREE.ArrowHelper(
+                new THREE.Vector3(...a.dir), new THREE.Vector3(0, 0, 0),
+                axisLength, a.color, arrowSize, arrowSize * 0.6
+            );
+            scene.add(arrow);
+        });
+
+        // Projection plane (z = f)
+        const f = 1.2;
+        const planeSize = 2.2;
+        const planeGeometry = new THREE.PlaneGeometry(planeSize, planeSize);
+        const planeMaterial = new THREE.MeshBasicMaterial({ color: 0xdddddd, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.position.set(0, 0, f);
+        scene.add(plane);
+
+        // Red triangle (XZ plane)
+        const redTriShape = new THREE.Shape();
+        redTriShape.moveTo(0, 0);
+        redTriShape.lineTo(axisLength, 0);
+        redTriShape.lineTo(axisLength, axisLength);
+        redTriShape.lineTo(0, 0);
+        const redTriGeom = new THREE.ShapeGeometry(redTriShape);
+        const redTriMat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide, opacity: 0.3, transparent: true });
+        const redTri = new THREE.Mesh(redTriGeom, redTriMat);
+        redTri.rotation.x = -Math.PI / 2;
+        scene.add(redTri);
+
+        // Cyan triangle (YZ plane)
+        const cyanTriShape = new THREE.Shape();
+        cyanTriShape.moveTo(0, 0);
+        cyanTriShape.lineTo(0, axisLength);
+        cyanTriShape.lineTo(axisLength, axisLength);
+        cyanTriShape.lineTo(0, 0);
+        const cyanTriGeom = new THREE.ShapeGeometry(cyanTriShape);
+        const cyanTriMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, side: THREE.DoubleSide, opacity: 0.3, transparent: true });
+        const cyanTri = new THREE.Mesh(cyanTriGeom, cyanTriMat);
+        cyanTri.rotation.y = Math.PI / 2;
+        scene.add(cyanTri);
+
+        // Green cone (projection from origin to plane)
+        const coneMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: 0.2, transparent: true });
+        const coneGeom = new THREE.ConeGeometry(0.7, f, 32, 1, true);
+        const cone = new THREE.Mesh(coneGeom, coneMat);
+        cone.position.set(0, 0, f / 2);
+        cone.rotation.x = Math.PI / 2;
+        scene.add(cone);
+
+        // Points
+        const pointGeom = new THREE.SphereGeometry(0.08, 32, 32);
+        const redPointMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const brownPointMat = new THREE.MeshBasicMaterial({ color: 0x8B4513 });
+        const redPoint = new THREE.Mesh(pointGeom, redPointMat);
+        redPoint.position.set(axisLength, axisLength, 0);
+        scene.add(redPoint);
+        const brownPoint = new THREE.Mesh(pointGeom, brownPointMat);
+        brownPoint.position.set(0.5, 0.5, f);
+        scene.add(brownPoint);
+
+        // Dashed lines (projection rays)
+        const dashedMat = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 0.1, gapSize: 0.08 });
+        function addDashedLine(start, end) {
+            const points = [new THREE.Vector3(...start), new THREE.Vector3(...end)];
+            const geom = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geom, dashedMat);
+            line.computeLineDistances();
+            scene.add(line);
+        }
+        addDashedLine([0, 0, 0], [axisLength, axisLength, 0]);
+        addDashedLine([0, 0, 0], [0.5, 0.5, f]);
+
+        // Labels (using CSS2DRenderer or simple sprites, omitted for brevity)
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.left = -d * (w / h);
+            camera.right = d * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

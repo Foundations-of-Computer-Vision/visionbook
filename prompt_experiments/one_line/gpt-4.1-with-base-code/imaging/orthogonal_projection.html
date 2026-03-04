@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>3D Projection Scene</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+        }
+
+        .label {
+            position: absolute;
+            color: #222;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            pointer-events: none;
+            user-select: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // Camera setup
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 3;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 20);
+        camera.position.set(3, 3.5, 3);
+        camera.lookAt(0, 0, 0);
+        camera.zoom = 1.2;
+        camera.updateProjectionMatrix();
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Axes helper
+        const axesLength = 2.5;
+        const axes = new THREE.AxesHelper(axesLength);
+        scene.add(axes);
+
+        // Custom axis arrows and labels
+        function createArrow(dir, color, origin, length) {
+            const arrow = new THREE.ArrowHelper(dir, origin, length, color, 0.15, 0.08);
+            scene.add(arrow);
+        }
+        createArrow(new THREE.Vector3(1, 0, 0), 0x000000, new THREE.Vector3(0, 0, 0), axesLength); // X
+        createArrow(new THREE.Vector3(0, 1, 0), 0x000000, new THREE.Vector3(0, 0, 0), axesLength); // Y
+        createArrow(new THREE.Vector3(0, 0, 1), 0x000000, new THREE.Vector3(0, 0, 0), axesLength); // Z
+
+        // Projection plane
+        const planeGeometry = new THREE.PlaneGeometry(2.2, 2.2);
+        const planeMaterial = new THREE.MeshBasicMaterial({ color: 0xdddddd, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.position.set(0.7, 0, 0);
+        plane.rotation.y = Math.PI / 2;
+        scene.add(plane);
+
+        // Plane axes (x, y)
+        const planeAxisMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+        const planeAxisPointsX = [new THREE.Vector3(0.7, 0, 0), new THREE.Vector3(0.7, 1, 0)];
+        const planeAxisPointsY = [new THREE.Vector3(0.7, 0, 0), new THREE.Vector3(0.7, 0, 1)];
+        const planeAxisX = new THREE.Line(new THREE.BufferGeometry().setFromPoints(planeAxisPointsX), planeAxisMaterial);
+        const planeAxisY = new THREE.Line(new THREE.BufferGeometry().setFromPoints(planeAxisPointsY), planeAxisMaterial);
+        scene.add(planeAxisX);
+        scene.add(planeAxisY);
+
+        // Blocks (step shapes)
+        function createBlock(x, y, z, color) {
+            const geometry = new THREE.BoxGeometry(0.7, 0.4, 1.2);
+            const material = new THREE.MeshPhongMaterial({ color });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+            scene.add(mesh);
+            return mesh;
+        }
+        // Top block (green)
+        createBlock(1.7, 0.6, 0.6, 0x00ff00);
+        // Middle block (red)
+        createBlock(1.7, 0.2, 0.6, 0xff2222);
+        // Bottom block (cyan)
+        createBlock(1.7, -0.2, 0.6, 0x00dfff);
+
+        // Projection lines (dashed)
+        function createDashedLine(start, end) {
+            const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+            const material = new THREE.LineDashedMaterial({ color: 0x222222, dashSize: 0.15, gapSize: 0.08 });
+            const line = new THREE.Line(geometry, material);
+            line.computeLineDistances();
+            scene.add(line);
+        }
+        // Example projection lines from blocks to plane
+        for (let y of [0.6, 0.2, -0.2]) {
+            createDashedLine(
+                new THREE.Vector3(1.7, y, 0.6),
+                new THREE.Vector3(0.7, y, 0.6)
+            );
+        }
+
+        // Lighting
+        const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        dirLight.position.set(3, 5, 2);
+        scene.add(dirLight);
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Responsive resize
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.left = -d * (w / h);
+            camera.right = d * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+
+        // Optional: Add HTML labels for axes (X, Y, Z, x, y, Projection plane)
+        // You can use CSS absolute positioning or Three.js sprites for more advanced labeling.
+
+    </script>
+</body>
+
+</html>

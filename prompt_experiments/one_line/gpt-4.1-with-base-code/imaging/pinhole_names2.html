@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Pinhole Camera 3D</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+        }
+
+        .label {
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            color: #222;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+        import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three/examples/jsm/renderers/CSS2DRenderer';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // Orthographic camera
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 3;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 20);
+        camera.position.set(3, 3.5, 3);
+        camera.lookAt(0, 0, 0);
+        camera.zoom = 1.2;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        // Label renderer
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(container.clientWidth, container.clientHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        container.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Camera body (box)
+        const boxGeometry = new THREE.BoxGeometry(2, 1, 4);
+        const boxMaterial = new THREE.MeshPhongMaterial({ color: 0x8da3a6, opacity: 0.7, transparent: true });
+        const box = new THREE.Mesh(boxGeometry, boxMaterial);
+        box.position.set(0, 0.5, 1.5);
+        scene.add(box);
+
+        // Projection plane (semi-transparent rectangle)
+        const projGeom = new THREE.PlaneGeometry(2, 1);
+        const projMat = new THREE.MeshBasicMaterial({ color: 0x9ebca7, opacity: 0.5, transparent: true });
+        const projPlane = new THREE.Mesh(projGeom, projMat);
+        projPlane.position.set(0, 0.5, -0.5);
+        projPlane.rotation.y = 0;
+        scene.add(projPlane);
+
+        // Pinhole (small black sphere)
+        const pinholeGeom = new THREE.SphereGeometry(0.08, 32, 32);
+        const pinholeMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        const pinhole = new THREE.Mesh(pinholeGeom, pinholeMat);
+        pinhole.position.set(0, 0.5, 0);
+        scene.add(pinhole);
+
+        // Axes
+        function createArrow(dir, color, length, origin) {
+            const arrow = new THREE.ArrowHelper(dir.clone().normalize(), origin, length, color, 0.2, 0.1);
+            scene.add(arrow);
+            return arrow;
+        }
+        // X axis
+        createArrow(new THREE.Vector3(1, 0, 0), 0x222222, 2, new THREE.Vector3(0, 0.5, 0));
+        // Y axis
+        createArrow(new THREE.Vector3(0, 1, 0), 0x222222, 2, new THREE.Vector3(0, 0.5, 0));
+        // Z axis (optical axis)
+        createArrow(new THREE.Vector3(0, 0, 1), 0x222222, 2.5, new THREE.Vector3(0, 0.5, 0));
+
+        // Focal length arrow (red)
+        createArrow(new THREE.Vector3(0, 0, -1), 0xff2222, 0.5, new THREE.Vector3(0, 0.5, 0));
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const light = new THREE.DirectionalLight(0xffffff, 0.7);
+        light.position.set(5, 10, 7);
+        scene.add(light);
+
+        // Labels
+        function addLabel(text, position) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            const label = new CSS2DObject(div);
+            label.position.copy(position);
+            scene.add(label);
+        }
+        addLabel('Pinhole / camera center', new THREE.Vector3(0.2, 0.2, 0));
+        addLabel('Projection plane', new THREE.Vector3(0, 1.1, -0.5));
+        addLabel('Optical / principal axis', new THREE.Vector3(0.1, 0.7, 1.7));
+        addLabel('World coordinates', new THREE.Vector3(1.2, 2.1, 0.2));
+        addLabel('X', new THREE.Vector3(2.1, 0.5, 0));
+        addLabel('Y', new THREE.Vector3(0, 2.1, 0));
+        addLabel('Z', new THREE.Vector3(0, 0.5, 2.7));
+        addLabel('f', new THREE.Vector3(0, 0.2, -0.3));
+        addLabel('Pinhole camera', new THREE.Vector3(-1.2, 1.7, 2.2));
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.left = -d * (w / h);
+            camera.right = d * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+            labelRenderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

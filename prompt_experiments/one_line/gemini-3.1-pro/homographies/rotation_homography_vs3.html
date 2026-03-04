@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Camera Rotation (Homography) Visualization</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: #000;
+            background-color: rgba(255, 255, 255, 0.5);
+            padding: 5px;
+            pointer-events: none;
+            user-select: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info">
+        <b>Camera Rotation Visualization</b><br />
+        Green: Camera 1 | Red: Camera 2<br />
+        Use controls to rotate Camera 2 and move the 3D Point
+    </div>
+
+    <!-- Import maps polyfill -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+        // 1. Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(5, 3, 8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0x404040, 2); // Soft white light
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 10, 7.5);
+        scene.add(dirLight);
+
+        // --- Visualization Components ---
+
+        // Constants
+        const FOCAL_LENGTH = 2;
+        const PLANE_SIZE = 2; // Width/Height of sensor plane
+
+        // Materials
+        const greenMat = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+        const greenBorderMat = new THREE.LineBasicMaterial({ color: 0x00aa00 });
+        const redMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+        const redBorderMat = new THREE.LineBasicMaterial({ color: 0xaa0000 });
+        const pointMat = new THREE.MeshPhongMaterial({ color: 0x00ffff }); // Cyan for 3D point
+        const proj1Mat = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Green dot
+        const proj2Mat = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red dot
+        const rayMat = new THREE.LineBasicMaterial({ color: 0x000000, dashSize: 0.2, gapSize: 0.1 });
+        const centerMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+        // Groups
+        const worldGroup = new THREE.Group();
+        scene.add(worldGroup);
+
+        // 2. Optical Center (The Eye)
+        const opticalCenter = new THREE.Mesh(new THREE.SphereGeometry(0.1), centerMat);
+        worldGroup.add(opticalCenter);
+
+        // 3. Axes at Origin
+        const axesHelper = new THREE.AxesHelper(1);
+        worldGroup.add(axesHelper);
+
+        // 4. Camera 1 (Fixed)
+        // We define the camera looking down +Z for this visualization, with Up being +Y.
+        // Image plane is at Z = FOCAL_LENGTH
+        const cam1Group = new THREE.Group();
+        worldGroup.add(cam1Group);
+
+        const planeGeometry = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE);
+        const cam1Plane = new THREE.Mesh(planeGeometry, greenMat);
+        cam1Plane.position.z = FOCAL_LENGTH;
+        cam1Group.add(cam1Plane);
+
+        // Border for Cam 1
+        const edges1 = new THREE.EdgesGeometry(planeGeometry);
+        const line1 = new THREE.LineSegments(edges1, greenBorderMat);
+        line1.position.z = FOCAL_LENGTH;
+        cam1Group.add(line1);
+
+        // 5. Camera 2 (Rotated)
+        const cam2Group = new THREE.Group();
+        worldGroup.add(cam2Group); // Will be rotated relative to world
+
+        const cam2Plane = new THREE.Mesh(planeGeometry, redMat);
+        cam2Plane.position.z = FOCAL_LENGTH; // Initially coincident with Cam 1
+        cam2Group.add(cam2Plane);
+
+        // Border for Cam 2
+        const edges2 = new THREE.EdgesGeometry(planeGeometry);
+        const line2 = new THREE.LineSegments(edges2, redBorderMat);
+        line2.position.z = FOCAL_LENGTH;
+        cam2Group.add(line2);
+
+        // 6. The 3D Point
+        const point3DGeom = new THREE.SphereGeometry(0.15);
+        const point3D = new THREE.Mesh(point3DGeom, pointMat);
+        // Initial position
+        point3D.position.set(1, 0.5, 4);
+        scene.add(point3D);
+
+        // 7. Ray from Center to Point
+        // We'll update the geometry dynamically
+        const rayGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), point3D.position]);
+        const rayLine = new THREE.Line(rayGeometry, rayMat);
+        scene.add(rayLine);
+
+        // 8. Projected Points
+        const proj1 = new THREE.Mesh(new THREE.SphereGeometry(0.08), proj1Mat);
+        scene.add(proj1);
+
+        const proj2 = new THREE.Mesh(new THREE.SphereGeometry(0.08), proj2Mat);
+        scene.add(proj2);
+
+        // Helper: Plane Intersection
+        // Ray equation: O + t * (P - O). Since O is 0,0,0, Ray = t * P.
+        // Plane 1 equation (in world space): normal1 . X = d1
+        // Plane 2 equation (in world space): normal2 . X = d2
+        // We can also just project using camera matrices, but geometric intersection is easy here since we own the model.
+
+        function updateProjections() {
+            const P = point3D.position.clone();
+
+            // Ray direction
+            const dir = P.clone().normalize();
+
+            // Intersect with Camera 1 Plane
+            // Cam 1 Plane is z = f (in local). In world (since Cam1 is identity), it's z = f.
+            // normal = (0,0,1), point on plane (0,0,f).
+            // P_ray = t * dir.
+            // t * dir.z = f => t = f / dir.z
+            if (dir.z > 0.01) { // Avoid divide by zero or looking backwards
+                const t1 = FOCAL_LENGTH / dir.z;
+                const p1 = dir.clone().multiplyScalar(t1);
+
+                // Constrain to plane size for visual neatness (optional, but diagram implies infinite plane logic, let's keep dot even if outside rectangle)
+                proj1.position.copy(p1);
+                proj1.visible = true;
+            } else {
+                proj1.visible = false;
+            }
+
+            // Intersect with Camera 2 Plane
+            // Cam 2 Plane is at local z = f.
+            // Convert Ray to Cam 2 Local Space.
+            // Inverse of Cam2 World Matrix applied to Ray Direction (rotation only since origin shared)
+            const inverseRot = cam2Group.quaternion.clone().invert();
+            const localDir = dir.clone().applyQuaternion(inverseRot);
+
+            if (localDir.z > 0.01) {
+                const t2 = FOCAL_LENGTH / localDir.z;
+                const localP2 = localDir.clone().multiplyScalar(t2);
+
+                // Convert back to world
+                const worldP2 = localP2.applyQuaternion(cam2Group.quaternion);
+                proj2.position.copy(worldP2);
+                proj2.visible = true;
+            } else {
+                proj2.visible = false;
+            }
+
+            // Update Ray Visual
+            // We extend the ray slightly past the point or to the furthest plane intersection
+            // Let's just draw it to the 3D point for clarity matching the diagram, 
+            // or perhaps extend it to show it going through. The diagram shows ray ending at (X,Y,Z).
+            rayLine.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), P]);
+        }
+
+        // --- GUI ---
+        const gui = new GUI();
+        const params = {
+            cam2Yaw: 20, // degrees
+            cam2Pitch: 0,
+            cam2Roll: 0,
+            pointX: 1,
+            pointY: 0.5,
+            pointZ: 4
+        };
+
+        function updateCam2() {
+            const eul = new THREE.Euler(
+                THREE.MathUtils.degToRad(params.cam2Pitch),
+                THREE.MathUtils.degToRad(params.cam2Yaw),
+                THREE.MathUtils.degToRad(params.cam2Roll),
+                'XYZ'
+            );
+            cam2Group.setRotationFromEuler(eul);
+            updateProjections();
+        }
+
+        function updatePoint() {
+            point3D.position.set(params.pointX, params.pointY, params.pointZ);
+            updateProjections();
+        }
+
+        const folderCam = gui.addFolder('Camera 2 Rotation');
+        folderCam.add(params, 'cam2Yaw', -90, 90).onChange(updateCam2);
+        folderCam.add(params, 'cam2Pitch', -90, 90).onChange(updateCam2);
+        folderCam.add(params, 'cam2Roll', -90, 90).onChange(updateCam2);
+
+        const folderPoint = gui.addFolder('3D Point Position');
+        folderPoint.add(params, 'pointX', -5, 5).onChange(updatePoint);
+        folderPoint.add(params, 'pointY', -5, 5).onChange(updatePoint);
+        folderPoint.add(params, 'pointZ', 1, 10).onChange(updatePoint);
+
+        // Initial update
+        updateCam2();
+        updatePoint();
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle Resize
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+
+</html>

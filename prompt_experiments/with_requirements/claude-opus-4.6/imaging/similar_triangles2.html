@@ -1,0 +1,822 @@
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Pinhole Camera Model – Interactive 3D Visualization</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #1a1a2e;
+      color: #eee;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      overflow: hidden;
+    }
+
+    #canvas3d {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* ---------- overlay panels ---------- */
+    #controls {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(20, 20, 40, 0.92);
+      border-radius: 10px;
+      padding: 14px 16px;
+      max-width: 310px;
+      font-size: 13px;
+      line-height: 1.55;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+      z-index: 10;
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
+    }
+
+    #controls h2 {
+      font-size: 15px;
+      margin-bottom: 8px;
+      color: #7bf;
+    }
+
+    .ctrl-group {
+      margin: 8px 0;
+    }
+
+    .ctrl-group label {
+      display: block;
+      margin-bottom: 3px;
+      color: #aac;
+      font-size: 12px;
+    }
+
+    .ctrl-group input[type=range] {
+      width: 100%;
+      accent-color: #7bf;
+    }
+
+    button {
+      background: #334;
+      border: 1px solid #556;
+      color: #cde;
+      border-radius: 6px;
+      padding: 5px 12px;
+      margin: 3px 2px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background 0.15s;
+    }
+
+    button:hover {
+      background: #445;
+    }
+
+    button.active {
+      background: #268;
+      border-color: #7bf;
+    }
+
+    #info {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20, 20, 40, 0.88);
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 13px;
+      text-align: center;
+      max-width: 620px;
+      box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+      z-index: 10;
+    }
+
+    #info .step-text {
+      min-height: 38px;
+    }
+
+    #info button {
+      margin-top: 6px;
+    }
+
+    .val {
+      color: #7bf;
+      font-weight: 600;
+    }
+
+    .math {
+      font-style: italic;
+      color: #fc6;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas3d"></canvas>
+
+  <!-- Control Panel -->
+  <div id="controls">
+    <h2>Pinhole Camera Model</h2>
+    <p style="font-size:11px;color:#889;margin-bottom:8px;">
+      Drag the <span style="color:#ff4444">red 3D point</span> or use sliders to explore perspective projection.
+    </p>
+
+    <!-- Focal length slider -->
+    <div class="ctrl-group">
+      <label>Focal length <b>f</b> = <span id="fVal" class="val">2.0</span></label>
+      <input type="range" id="fSlider" min="0.5" max="5" step="0.1" value="2.0" />
+    </div>
+
+    <!-- 3D point position sliders -->
+    <div class="ctrl-group">
+      <label>Point <b>X</b> = <span id="pxVal" class="val">3.0</span></label>
+      <input type="range" id="pxSlider" min="-5" max="5" step="0.1" value="3.0" />
+    </div>
+    <div class="ctrl-group">
+      <label>Point <b>Y</b> = <span id="pyVal" class="val">-2.0</span></label>
+      <input type="range" id="pySlider" min="-5" max="5" step="0.1" value="-2.0" />
+    </div>
+    <div class="ctrl-group">
+      <label>Point <b>Z</b> = <span id="pzVal" class="val">6.0</span></label>
+      <input type="range" id="pzSlider" min="1" max="12" step="0.1" value="6.0" />
+    </div>
+
+    <!-- Toggles -->
+    <div style="margin-top:10px;">
+      <button id="btnTriangles" class="active" title="Show the similar-triangle relationship">Similar Triangles</button>
+      <button id="btnRays" class="active" title="Show projection rays">Projection Rays</button>
+      <button id="btnLabels" class="active" title="Toggle axis & point labels">Labels</button>
+      <button id="btnFormula" title="Show projection formula overlay">Formula</button>
+    </div>
+
+    <!-- Projection readout -->
+    <div class="ctrl-group" style="margin-top:10px;background:rgba(0,0,0,0.25);border-radius:6px;padding:8px;">
+      <span style="color:#aac;font-size:11px;">Projected image coords:</span><br />
+      <span class="math">x = f · X / Z = </span><span id="projX" class="val">1.00</span><br />
+      <span class="math">y = f · Y / Z = </span><span id="projY" class="val">−0.67</span>
+    </div>
+
+    <div style="margin-top:8px;text-align:center;">
+      <button id="btnReset" style="background:#246;border-color:#48a;">⟳ Reset to Textbook View</button>
+    </div>
+  </div>
+
+  <!-- Guided-demo bar -->
+  <div id="info">
+    <div class="step-text" id="stepText">
+      Press <b>Start Demo</b> to walk through the pinhole camera concept step by step.
+    </div>
+    <button id="btnPrev" disabled>◀ Prev</button>
+    <button id="btnDemo">▶ Start Demo</button>
+    <button id="btnNext" disabled>Next ▶</button>
+  </div>
+
+  <!-- Formula overlay (hidden by default) -->
+  <div id="formulaOverlay" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  background:rgba(10,10,30,0.95);border-radius:12px;padding:24px 32px;text-align:center;
+  font-size:18px;z-index:20;box-shadow:0 8px 40px rgba(0,0,0,0.6);">
+    <div style="color:#7bf;font-size:13px;margin-bottom:8px;">Perspective Projection Equations</div>
+    <div style="color:#fc6;font-size:22px;font-family:serif;">
+      x = f · X / Z &nbsp;&nbsp;&nbsp; y = f · Y / Z
+    </div>
+    <div style="color:#889;font-size:12px;margin-top:10px;">
+      The image-plane coordinates (x, y) are proportional to the<br />
+      world coordinates (X, Y) scaled by focal length <i>f</i> and divided by depth <i>Z</i>.
+    </div>
+    <button id="btnCloseFormula" style="margin-top:12px;">Close</button>
+  </div>
+
+  <!-- ============================================================
+     Three.js scene – ES module imports from CDN
+     ============================================================ -->
+  <script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { DragControls } from 'three/addons/controls/DragControls.js';
+    import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+    /* ---------------------------------------------------------------
+       SCENE SETUP
+       The pinhole sits at the world origin.
+       The image plane is at z = -f (behind the camera, matching the
+       textbook convention where the image is a virtual image on the
+       same side as the scene for easier visualization).
+       3D world points live at positive Z.
+       --------------------------------------------------------------- */
+    const canvas = document.getElementById('canvas3d');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setClearColor(0x1a1a2e);
+
+    // CSS2D label renderer (overlays HTML labels on 3D positions)
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(innerWidth, innerHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    document.body.appendChild(labelRenderer.domElement);
+
+    const scene = new THREE.Scene();
+
+    // Camera (the viewer's camera, NOT the pinhole camera being demonstrated)
+    const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 200);
+    // Textbook-like view: slightly above and to the side
+    const TEXTBOOK_CAM = new THREE.Vector3(-6, 4, -8);
+    const TEXTBOOK_TARGET = new THREE.Vector3(2, -0.5, 3);
+    cam.position.copy(TEXTBOOK_CAM);
+
+    const controls = new OrbitControls(cam, renderer.domElement);
+    controls.target.copy(TEXTBOOK_TARGET);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.update();
+
+    // Lights
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.6);
+    dl.position.set(5, 10, -5);
+    scene.add(dl);
+
+    /* ---------------------------------------------------------------
+       STATE
+       --------------------------------------------------------------- */
+    let focalLength = 2.0;          // distance from pinhole to image plane
+    let worldPt = new THREE.Vector3(3, -2, 6);  // the 3D scene point
+
+    /* ---------------------------------------------------------------
+       HELPERS – reusable geometry builders
+       --------------------------------------------------------------- */
+    function makeArrow(dir, origin, len, color, headLen = 0.3, headW = 0.12) {
+      const a = new THREE.ArrowHelper(dir.clone().normalize(), origin, len, color, headLen, headW);
+      return a;
+    }
+
+    function makeLabel(text, color = '#fff', fontSize = '13px') {
+      const div = document.createElement('div');
+      div.style.color = color;
+      div.style.fontSize = fontSize;
+      div.style.fontWeight = '700';
+      div.style.fontFamily = 'serif';
+      div.style.textShadow = '0 0 6px rgba(0,0,0,0.9)';
+      div.textContent = text;
+      const obj = new CSS2DObject(div);
+      return obj;
+    }
+
+    /* ---------------------------------------------------------------
+       BUILD SCENE ELEMENTS
+       --------------------------------------------------------------- */
+
+    // ---- 1. Pinhole (origin) ---- //
+    /* The pinhole is the center of projection at the origin. */
+    const pinholeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 });
+    const pinholeMesh = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), pinholeMat);
+    scene.add(pinholeMesh);
+    const pinholeLabel = makeLabel('Pinhole', '#fff', '12px');
+    pinholeLabel.position.set(0, 0.25, 0);
+    scene.add(pinholeLabel);
+
+    // ---- 2. World-coordinate axes (X, Y, Z) ---- //
+    /* These are the 3D world axes shown on the right side of the textbook figure.
+       X points right-down in the figure (we map to +X), Y points up-right (+Y), Z goes into the scene (+Z). */
+    const axisGroup = new THREE.Group();
+    scene.add(axisGroup);
+    // Z axis (depth, pointing away from image plane – main optical axis)
+    axisGroup.add(makeArrow(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 10, 0x00cccc, 0.4, 0.15));
+    const zLabel = makeLabel('Z', '#00cccc', '18px');
+    zLabel.position.set(0, 0.3, 9.5);
+    axisGroup.add(zLabel);
+
+    // X axis
+    axisGroup.add(makeArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 6, 0xff3333, 0.4, 0.15));
+    const XLabel = makeLabel('X', '#ff3333', '18px');
+    XLabel.position.set(6.2, 0.25, 0);
+    axisGroup.add(XLabel);
+
+    // Y axis
+    axisGroup.add(makeArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 6, 0x33ff33, 0.4, 0.15));
+    const YLabel = makeLabel('Y', '#33ff33', '18px');
+    YLabel.position.set(0, 6.3, 0);
+    axisGroup.add(YLabel);
+
+    // ---- 3. Image plane ---- //
+    /* The image plane sits at z = -f. It's the gray rectangle on the left in the textbook figure.
+       We visualize it as a semi-transparent quad. */
+    const imgPlaneGroup = new THREE.Group();
+    scene.add(imgPlaneGroup);
+
+    let imgPlaneMesh, imgPlaneEdges;
+    function buildImagePlane() {
+      // Remove old
+      if (imgPlaneMesh) { imgPlaneGroup.remove(imgPlaneMesh); imgPlaneMesh.geometry.dispose(); }
+      if (imgPlaneEdges) { imgPlaneGroup.remove(imgPlaneEdges); imgPlaneEdges.geometry.dispose(); }
+      const w = 5, h = 5;
+      const geo = new THREE.PlaneGeometry(w, h);
+      imgPlaneMesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+        color: 0x8899bb, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false
+      }));
+      imgPlaneMesh.position.set(0, 0, -focalLength);
+      imgPlaneGroup.add(imgPlaneMesh);
+      // border
+      const edgesGeo = new THREE.EdgesGeometry(geo);
+      imgPlaneEdges = new THREE.LineSegments(edgesGeo, new THREE.LineBasicMaterial({ color: 0xaabbdd }));
+      imgPlaneEdges.position.copy(imgPlaneMesh.position);
+      imgPlaneGroup.add(imgPlaneEdges);
+    }
+    buildImagePlane();
+
+    // Image-plane local axes (x, y) – green, matching the textbook figure
+    const imgAxisGroup = new THREE.Group();
+    scene.add(imgAxisGroup);
+    let imgXArrow, imgYArrow, imgXLabel, imgYLabel, fLabel;
+    function buildImageAxes() {
+      imgAxisGroup.clear();
+      // x axis on image plane
+      imgXArrow = makeArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(-2.3, 0, -focalLength), 4.6, 0x44ff44, 0.2, 0.08);
+      imgAxisGroup.add(imgXArrow);
+      imgXLabel = makeLabel('x', '#44ff44', '16px');
+      imgXLabel.position.set(2.5, 0.15, -focalLength);
+      imgAxisGroup.add(imgXLabel);
+      // y axis on image plane
+      imgYArrow = makeArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -2.3, -focalLength), 4.6, 0x44ff44, 0.2, 0.08);
+      imgAxisGroup.add(imgYArrow);
+      imgYLabel = makeLabel('y', '#44ff44', '16px');
+      imgYLabel.position.set(0.15, 2.5, -focalLength);
+      imgAxisGroup.add(imgYLabel);
+      // f label
+      fLabel = makeLabel('f', '#ffcc44', '16px');
+      fLabel.position.set(0.2, -0.25, -focalLength / 2);
+      imgAxisGroup.add(fLabel);
+      // small line showing f distance along Z
+      const fLineGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -focalLength)
+      ]);
+      const fLine = new THREE.Line(fLineGeo, new THREE.LineBasicMaterial({ color: 0xffcc44, linewidth: 1 }));
+      imgAxisGroup.add(fLine);
+    }
+    buildImageAxes();
+
+    // ---- 4. 3D scene point (red, draggable) ---- //
+    /* The red dot in the textbook figure – a point in the 3D world that gets projected. */
+    const ptMat = new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0xff2222, emissiveIntensity: 0.4 });
+    const scenePtMesh = new THREE.Mesh(new THREE.SphereGeometry(0.18, 24, 24), ptMat);
+    scenePtMesh.position.copy(worldPt);
+    scene.add(scenePtMesh);
+    const scenePtLabel = makeLabel('P = (X, Y, Z)', '#ff6666', '13px');
+    scenePtLabel.position.set(0, 0.35, 0);
+    scenePtMesh.add(scenePtLabel);
+
+    // ---- 5. Projected point on image plane (brown/dark-red) ---- //
+    /* The brown dot on the image plane – projection of the 3D point. */
+    const projMat = new THREE.MeshStandardMaterial({ color: 0x884422, emissive: 0xaa6633, emissiveIntensity: 0.3 });
+    const projPtMesh = new THREE.Mesh(new THREE.SphereGeometry(0.13, 20, 20), projMat);
+    scene.add(projPtMesh);
+    const projPtLabel = makeLabel('p = (x, y)', '#cc9966', '13px');
+    projPtLabel.position.set(0, 0.28, 0);
+    projPtMesh.add(projPtLabel);
+
+    // ---- 6. Projection ray (dotted line from 3D point through pinhole to image plane) ---- //
+    /* Shows how light travels from the scene point through the pinhole to the image plane. */
+    const rayGroup = new THREE.Group();
+    scene.add(rayGroup);
+    let rayLine, rayLineBehind;
+    function buildRays() {
+      rayGroup.clear();
+      const P = worldPt;
+      const Z = P.z;
+      if (Z <= 0.01) return;
+      // Projection: x = -f * X/Z,  y = -f * Y/Z  (inverted because image is behind pinhole)
+      const px = -focalLength * P.x / Z;
+      const py = -focalLength * P.y / Z;
+
+      // Ray from 3D point to pinhole (solid)
+      const pts1 = [P.clone(), new THREE.Vector3(0, 0, 0)];
+      const geo1 = new THREE.BufferGeometry().setFromPoints(pts1);
+      rayLine = new THREE.Line(geo1, new THREE.LineDashedMaterial({ color: 0x222222, dashSize: 0.25, gapSize: 0.15, linewidth: 2 }));
+      rayLine.computeLineDistances();
+      rayGroup.add(rayLine);
+
+      // Ray from pinhole to image plane (dashed continuation)
+      const pts2 = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(px, py, -focalLength)];
+      const geo2 = new THREE.BufferGeometry().setFromPoints(pts2);
+      rayLineBehind = new THREE.Line(geo2, new THREE.LineDashedMaterial({ color: 0x222222, dashSize: 0.25, gapSize: 0.15, linewidth: 2 }));
+      rayLineBehind.computeLineDistances();
+      rayGroup.add(rayLineBehind);
+
+      // Update projected point position
+      projPtMesh.position.set(px, py, -focalLength);
+    }
+    buildRays();
+
+    // ---- 7. Similar triangles (green & cyan) ---- //
+    /* The two triangles in the textbook figure demonstrate that x/f = X/Z (and similarly for y).
+       Green triangle: in the XZ plane, connecting pinhole → scene point → its X-axis foot.
+       Cyan triangle: in the XZ plane on the image side, connecting pinhole → projected point → its x-foot. */
+    const triGroup = new THREE.Group();
+    scene.add(triGroup);
+
+    function buildTriangles() {
+      triGroup.clear();
+      const P = worldPt;
+      const Z = P.z;
+      if (Z <= 0.01) return;
+      const px = -focalLength * P.x / Z;
+      const py = -focalLength * P.y / Z;
+
+      // --- XZ plane triangles (demonstrates x = f·X/Z) ---
+      // Green: Pinhole(0,0,0) → (X, 0, Z) → (X, Y, Z) — i.e., in the scene
+      const greenVerts = new Float32Array([
+        0, 0, 0,          // pinhole
+        P.x, 0, P.z,      // foot of perpendicular from P to XZ plane at scene depth
+        P.x, P.y, P.z     // the 3D point
+      ]);
+      const greenGeo = new THREE.BufferGeometry();
+      greenGeo.setAttribute('position', new THREE.BufferAttribute(greenVerts, 3));
+      greenGeo.computeVertexNormals();
+      const greenTri = new THREE.Mesh(greenGeo, new THREE.MeshBasicMaterial({
+        color: 0x00ff88, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false
+      }));
+      triGroup.add(greenTri);
+      // wireframe
+      const greenEdge = new THREE.LineSegments(
+        new THREE.EdgesGeometry(greenGeo),
+        new THREE.LineBasicMaterial({ color: 0x00ff88, linewidth: 1 })
+      );
+      triGroup.add(greenEdge);
+
+      // Cyan: Pinhole(0,0,0) → (px, 0, -f) → (px, py, -f) — on image plane
+      const cyanVerts = new Float32Array([
+        0, 0, 0,
+        px, 0, -focalLength,
+        px, py, -focalLength
+      ]);
+      const cyanGeo = new THREE.BufferGeometry();
+      cyanGeo.setAttribute('position', new THREE.BufferAttribute(cyanVerts, 3));
+      cyanGeo.computeVertexNormals();
+      const cyanTri = new THREE.Mesh(cyanGeo, new THREE.MeshBasicMaterial({
+        color: 0x00ccff, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false
+      }));
+      triGroup.add(cyanTri);
+      const cyanEdge = new THREE.LineSegments(
+        new THREE.EdgesGeometry(cyanGeo),
+        new THREE.LineBasicMaterial({ color: 0x00ccff, linewidth: 1 })
+      );
+      triGroup.add(cyanEdge);
+
+      // --- YZ plane triangles (demonstrates y = f·Y/Z) ---
+      const green2Verts = new Float32Array([
+        0, 0, 0,
+        0, P.y, P.z,
+        P.x, P.y, P.z
+      ]);
+      const green2Geo = new THREE.BufferGeometry();
+      green2Geo.setAttribute('position', new THREE.BufferAttribute(green2Verts, 3));
+      green2Geo.computeVertexNormals();
+      const green2Tri = new THREE.Mesh(green2Geo, new THREE.MeshBasicMaterial({
+        color: 0x00ff88, transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false
+      }));
+      triGroup.add(green2Tri);
+
+      const cyan2Verts = new Float32Array([
+        0, 0, 0,
+        0, py, -focalLength,
+        px, py, -focalLength
+      ]);
+      const cyan2Geo = new THREE.BufferGeometry();
+      cyan2Geo.setAttribute('position', new THREE.BufferAttribute(cyan2Verts, 3));
+      cyan2Geo.computeVertexNormals();
+      const cyan2Tri = new THREE.Mesh(cyan2Geo, new THREE.MeshBasicMaterial({
+        color: 0x00ccff, transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false
+      }));
+      triGroup.add(cyan2Tri);
+    }
+    buildTriangles();
+
+    // ---- 8. Frustum outline (the red pyramid edges in the textbook) ---- //
+    /* Shows the viewing frustum / projection cone from the textbook figure's red border lines. */
+    const frustumGroup = new THREE.Group();
+    scene.add(frustumGroup);
+    function buildFrustum() {
+      frustumGroup.clear();
+      const hw = 2.5, hh = 2.5; // half-widths of image plane
+      const d = -focalLength;
+      const corners = [
+        new THREE.Vector3(-hw, -hh, d),
+        new THREE.Vector3(hw, -hh, d),
+        new THREE.Vector3(hw, hh, d),
+        new THREE.Vector3(-hw, hh, d),
+      ];
+      const O = new THREE.Vector3(0, 0, 0);
+      const mat = new THREE.LineBasicMaterial({ color: 0xff2222, linewidth: 1, transparent: true, opacity: 0.5 });
+      for (let i = 0; i < 4; i++) {
+        const geo = new THREE.BufferGeometry().setFromPoints([O, corners[i]]);
+        frustumGroup.add(new THREE.Line(geo, mat));
+      }
+      // Also draw frustum on scene side (extending from pinhole into +Z)
+      const sceneDepth = 10;
+      const scale = sceneDepth / focalLength;
+      for (let i = 0; i < 4; i++) {
+        const far = new THREE.Vector3(-corners[i].x * scale, -corners[i].y * scale, sceneDepth);
+        const geo = new THREE.BufferGeometry().setFromPoints([O, far]);
+        frustumGroup.add(new THREE.Line(geo, mat));
+      }
+    }
+    buildFrustum();
+
+    /* ---------------------------------------------------------------
+       DRAGGABLE 3D POINT
+       Allows user to drag the red 3D point and see projection update in real time.
+       --------------------------------------------------------------- */
+    const dragControls = new DragControls([scenePtMesh], cam, renderer.domElement);
+    dragControls.addEventListener('dragstart', () => { controls.enabled = false; });
+    dragControls.addEventListener('dragend', () => { controls.enabled = true; });
+    dragControls.addEventListener('drag', () => {
+      // Clamp Z to positive (point must be in front of pinhole)
+      if (scenePtMesh.position.z < 0.5) scenePtMesh.position.z = 0.5;
+      worldPt.copy(scenePtMesh.position);
+      syncSliders();
+      rebuild();
+    });
+
+    /* ---------------------------------------------------------------
+       UPDATE / REBUILD helpers
+       --------------------------------------------------------------- */
+    function rebuild() {
+      buildImagePlane();
+      buildImageAxes();
+      buildRays();
+      buildTriangles();
+      buildFrustum();
+      updateReadout();
+    }
+
+    function updateReadout() {
+      const Z = worldPt.z;
+      if (Z <= 0.01) return;
+      const px = (focalLength * worldPt.x / Z).toFixed(2);
+      const py = (focalLength * worldPt.y / Z).toFixed(2);
+      document.getElementById('projX').textContent = px;
+      document.getElementById('projY').textContent = py;
+    }
+
+    function syncSliders() {
+      document.getElementById('pxSlider').value = worldPt.x;
+      document.getElementById('pySlider').value = worldPt.y;
+      document.getElementById('pzSlider').value = worldPt.z;
+      document.getElementById('pxVal').textContent = worldPt.x.toFixed(1);
+      document.getElementById('pyVal').textContent = worldPt.y.toFixed(1);
+      document.getElementById('pzVal').textContent = worldPt.z.toFixed(1);
+    }
+
+    /* ---------------------------------------------------------------
+       UI EVENT LISTENERS
+       --------------------------------------------------------------- */
+    document.getElementById('fSlider').addEventListener('input', e => {
+      focalLength = parseFloat(e.target.value);
+      document.getElementById('fVal').textContent = focalLength.toFixed(1);
+      rebuild();
+    });
+    document.getElementById('pxSlider').addEventListener('input', e => {
+      worldPt.x = parseFloat(e.target.value);
+      document.getElementById('pxVal').textContent = worldPt.x.toFixed(1);
+      scenePtMesh.position.copy(worldPt);
+      rebuild();
+    });
+    document.getElementById('pySlider').addEventListener('input', e => {
+      worldPt.y = parseFloat(e.target.value);
+      document.getElementById('pyVal').textContent = worldPt.y.toFixed(1);
+      scenePtMesh.position.copy(worldPt);
+      rebuild();
+    });
+    document.getElementById('pzSlider').addEventListener('input', e => {
+      worldPt.z = parseFloat(e.target.value);
+      document.getElementById('pzVal').textContent = worldPt.z.toFixed(1);
+      scenePtMesh.position.copy(worldPt);
+      rebuild();
+    });
+
+    // Toggle buttons
+    function toggleVis(btn, obj) {
+      btn.classList.toggle('active');
+      obj.visible = !obj.visible;
+    }
+    document.getElementById('btnTriangles').addEventListener('click', function () { toggleVis(this, triGroup); });
+    document.getElementById('btnRays').addEventListener('click', function () { toggleVis(this, rayGroup); });
+    document.getElementById('btnLabels').addEventListener('click', function () {
+      const active = this.classList.toggle('active');
+      // Toggle all CSS2D labels
+      scene.traverse(o => { if (o instanceof CSS2DObject) o.visible = active; });
+    });
+    document.getElementById('btnFormula').addEventListener('click', () => {
+      document.getElementById('formulaOverlay').style.display = 'block';
+    });
+    document.getElementById('btnCloseFormula').addEventListener('click', () => {
+      document.getElementById('formulaOverlay').style.display = 'none';
+    });
+
+    // Reset
+    document.getElementById('btnReset').addEventListener('click', resetToTextbook);
+    function resetToTextbook() {
+      // Reset camera
+      cam.position.copy(TEXTBOOK_CAM);
+      controls.target.copy(TEXTBOOK_TARGET);
+      controls.update();
+      // Reset point
+      worldPt.set(3, -2, 6);
+      scenePtMesh.position.copy(worldPt);
+      focalLength = 2.0;
+      document.getElementById('fSlider').value = 2.0;
+      document.getElementById('fVal').textContent = '2.0';
+      syncSliders();
+      rebuild();
+      // Reset toggles
+      triGroup.visible = true; rayGroup.visible = true;
+      document.getElementById('btnTriangles').classList.add('active');
+      document.getElementById('btnRays').classList.add('active');
+      document.getElementById('btnLabels').classList.add('active');
+      scene.traverse(o => { if (o instanceof CSS2DObject) o.visible = true; });
+      // Reset demo
+      currentStep = -1;
+      updateStepUI();
+    }
+
+    /* ---------------------------------------------------------------
+       GUIDED DEMO (step-through walkthrough)
+       Each step sets slider values and camera angle to teach a concept.
+       --------------------------------------------------------------- */
+    const demoSteps = [
+      {
+        text: '<b>Step 1 — The Pinhole:</b> All light passes through a single point (the pinhole at the origin). This creates a perspective projection.',
+        action: () => {
+          animateCamera(new THREE.Vector3(-3, 2, -3), new THREE.Vector3(0, 0, 0));
+        }
+      },
+      {
+        text: '<b>Step 2 — The Image Plane:</b> A flat surface at distance <i>f</i> behind the pinhole captures the projected image. The image is inverted.',
+        action: () => {
+          animateCamera(new THREE.Vector3(-4, 1, -4), new THREE.Vector3(0, 0, -focalLength));
+          triGroup.visible = false;
+        }
+      },
+      {
+        text: '<b>Step 3 — Projection Ray:</b> A ray of light from the 3D point P passes through the pinhole and hits the image plane at the projected point p.',
+        action: () => {
+          animateCamera(new THREE.Vector3(-5, 3, 2), new THREE.Vector3(1, -0.5, 2));
+          rayGroup.visible = true;
+          triGroup.visible = false;
+        }
+      },
+      {
+        text: '<b>Step 4 — Similar Triangles:</b> The <span style="color:#0f8">green</span> (scene-side) and <span style="color:#0cf">cyan</span> (image-side) triangles are similar. This gives us: <i>x/f = X/Z</i>.',
+        action: () => {
+          animateCamera(new THREE.Vector3(-6, 4, -5), new THREE.Vector3(1.5, -0.5, 2));
+          triGroup.visible = true;
+          rayGroup.visible = true;
+        }
+      },
+      {
+        text: '<b>Step 5 — Move the Point Closer:</b> Watch how the projected image point moves as the 3D point approaches the camera (Z decreases → projection grows).',
+        action: () => {
+          animateCamera(new THREE.Vector3(-7, 3, -6), new THREE.Vector3(1, -0.5, 2));
+          triGroup.visible = true;
+          // Animate Z from 6→2
+          animateSlider('pzSlider', 6, 2, 1500);
+        }
+      },
+      {
+        text: '<b>Step 6 — Change Focal Length:</b> A longer focal length makes the image larger (zoom in). A shorter one gives a wider field of view.',
+        action: () => {
+          // Reset Z first
+          animateSlider('pzSlider', parseFloat(document.getElementById('pzSlider').value), 6, 600, () => {
+            animateSlider('fSlider', parseFloat(document.getElementById('fSlider').value), 4, 1200, () => {
+              setTimeout(() => animateSlider('fSlider', 4, 1, 1200), 800);
+            });
+          });
+        }
+      },
+      {
+        text: '<b>Done!</b> Drag the red point, adjust sliders, or orbit the camera to keep exploring. Press <b>Reset</b> to return to the original view.',
+        action: () => {
+          resetToTextbook();
+          currentStep = demoSteps.length - 1;
+          updateStepUI();
+        }
+      }
+    ];
+
+    let currentStep = -1;
+    const btnPrev = document.getElementById('btnPrev');
+    const btnNext = document.getElementById('btnNext');
+    const btnDemo = document.getElementById('btnDemo');
+    const stepText = document.getElementById('stepText');
+
+    btnDemo.addEventListener('click', () => {
+      currentStep = 0;
+      demoSteps[0].action();
+      updateStepUI();
+    });
+    btnNext.addEventListener('click', () => {
+      if (currentStep < demoSteps.length - 1) {
+        currentStep++;
+        demoSteps[currentStep].action();
+        updateStepUI();
+      }
+    });
+    btnPrev.addEventListener('click', () => {
+      if (currentStep > 0) {
+        currentStep--;
+        demoSteps[currentStep].action();
+        updateStepUI();
+      }
+    });
+
+    function updateStepUI() {
+      if (currentStep < 0) {
+        stepText.innerHTML = 'Press <b>Start Demo</b> to walk through the pinhole camera concept step by step.';
+        btnPrev.disabled = true;
+        btnNext.disabled = true;
+        btnDemo.textContent = '▶ Start Demo';
+      } else {
+        stepText.innerHTML = demoSteps[currentStep].text;
+        btnPrev.disabled = currentStep === 0;
+        btnNext.disabled = currentStep === demoSteps.length - 1;
+        btnDemo.textContent = '⟳ Restart';
+        btnDemo.onclick = () => { currentStep = 0; demoSteps[0].action(); updateStepUI(); };
+      }
+    }
+
+    /* ---------------------------------------------------------------
+       ANIMATION HELPERS
+       --------------------------------------------------------------- */
+    function animateCamera(pos, target, dur = 1200) {
+      const startPos = cam.position.clone();
+      const startTarget = controls.target.clone();
+      const startTime = performance.now();
+      function tick() {
+        const t = Math.min((performance.now() - startTime) / dur, 1);
+        const e = easeInOut(t);
+        cam.position.lerpVectors(startPos, pos, e);
+        controls.target.lerpVectors(startTarget, target, e);
+        controls.update();
+        if (t < 1) requestAnimationFrame(tick);
+      }
+      tick();
+    }
+
+    function easeInOut(t) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
+
+    function animateSlider(id, from, to, dur = 1000, cb) {
+      const slider = document.getElementById(id);
+      const startTime = performance.now();
+      function tick() {
+        const t = Math.min((performance.now() - startTime) / dur, 1);
+        const v = from + (to - from) * easeInOut(t);
+        slider.value = v;
+        slider.dispatchEvent(new Event('input'));
+        if (t < 1) requestAnimationFrame(tick);
+        else if (cb) cb();
+      }
+      tick();
+    }
+
+    /* ---------------------------------------------------------------
+       RENDER LOOP
+       --------------------------------------------------------------- */
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, cam);
+      labelRenderer.render(scene, cam);
+    }
+    animate();
+    updateReadout();
+
+    /* ---------------------------------------------------------------
+       RESIZE HANDLER
+       --------------------------------------------------------------- */
+    window.addEventListener('resize', () => {
+      cam.aspect = innerWidth / innerHeight;
+      cam.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+      labelRenderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+
+</html>

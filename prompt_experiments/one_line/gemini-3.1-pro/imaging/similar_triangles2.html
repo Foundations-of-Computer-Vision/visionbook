@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Pinhole Camera Model</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            color: #333;
+        }
+    </style>
+    <!-- Import Map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="info">
+        <h2>Pinhole Camera Model</h2>
+        <p>Left Click to Rotate | Right Click to Pan | Scroll to Zoom</p>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Configuration ---
+        // Mapping diagram axes to Three.js axes:
+        // Diagram Z (Optical Axis) -> Three.js X axis
+        // Diagram Y (Vertical)     -> Three.js Y axis
+        // Diagram X (Horizontal)   -> Three.js Z axis
+
+        const CONFIG = {
+            f: 3,           // Focal length
+            Z_dist: 8,      // Object distance (along optical axis)
+            X_val: 4,       // Object "depth" offset (Diagram X)
+            Y_val: 3,       // Object "height" offset (Diagram Y)
+            planeSize: 6,
+            colors: {
+                green: 0x44ff44,
+                cyan: 0x44ffff,
+                red: 0xff0000,
+                darkRed: 0x880000,
+                axis: 0x000000,
+                plane: 0xdddddd
+            }
+        };
+
+        let camera, scene, renderer, controls;
+        let textLabels = [];
+
+        init();
+        animate();
+
+        function init() {
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf5f5f5);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(5, 5, 15);
+            camera.lookAt(0, 0, 0);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // --- Geometry Construction ---
+
+            // 0. Coordinate Axes (Custom arrows to match labels)
+            addArrow(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 0, 0), 12, 0x000000); // Z axis
+            addArrow(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 1, 0), 6, 0x000000);  // Y axis
+            addArrow(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 1), 8, 0x000000);  // X axis
+
+            // Labels for axes
+            addLabel("Z", new THREE.Vector3(12.5, 0, 0));
+            addLabel("Y", new THREE.Vector3(0, 6.5, 0));
+            addLabel("X", new THREE.Vector3(0, 0, 8.5));
+
+
+            // 1. Image Plane (at x = -f)
+            const planeGeo = new THREE.PlaneGeometry(CONFIG.planeSize, CONFIG.planeSize);
+            const planeMat = new THREE.MeshBasicMaterial({
+                color: CONFIG.colors.plane,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.3,
+                depthWrite: false
+            });
+            const imagePlane = new THREE.Mesh(planeGeo, planeMat);
+            imagePlane.position.x = -CONFIG.f;
+            imagePlane.rotation.y = Math.PI / 2; // Face the X axis
+            scene.add(imagePlane);
+
+            // Image Plane Border
+            const edges = new THREE.EdgesGeometry(planeGeo);
+            const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000 }));
+            line.position.x = -CONFIG.f;
+            line.rotation.y = Math.PI / 2;
+            scene.add(line);
+
+            // Project 3D point to 2D
+            // Using similar triangles: x_proj / f = X_val / Z_dist
+            // Note projected coords are inverted relative to object
+            const z_proj = -CONFIG.f; // The plane position
+            const x_proj_coord = -CONFIG.f * (CONFIG.X_val / CONFIG.Z_dist);
+            const y_proj_coord = -CONFIG.f * (CONFIG.Y_val / CONFIG.Z_dist);
+
+            // 2. The Green Triangle System (XZ projection / "Horizontal")
+            // Vertices: Origin, Point on Axis, Point with Offset
+
+            // Right side (Object space)
+            const greenTriRightPts = [
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(CONFIG.Z_dist, 0, 0),
+                new THREE.Vector3(CONFIG.Z_dist, 0, CONFIG.X_val)
+            ];
+            addTriangle(greenTriRightPts, CONFIG.colors.green, true); // Outline red
+
+            // Left side (Image space)
+            const greenTriLeftPts = [
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(-CONFIG.f, 0, 0),
+                new THREE.Vector3(-CONFIG.f, 0, x_proj_coord)
+            ];
+            addTriangle(greenTriLeftPts, CONFIG.colors.green, true);
+
+            // 3. The Cyan Triangle System (XY projection / "Vertical")
+
+            // Top side (Object space) - "Right" in our rotated world
+            const cyanTriRightPts = [
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(CONFIG.Z_dist, 0, 0),
+                new THREE.Vector3(CONFIG.Z_dist, CONFIG.Y_val, 0)
+            ];
+            addTriangle(cyanTriRightPts, CONFIG.colors.cyan, true);
+
+            // Bottom side (Image space) - "Left"
+            const cyanTriLeftPts = [
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(-CONFIG.f, 0, 0),
+                new THREE.Vector3(-CONFIG.f, y_proj_coord, 0)
+            ];
+            addTriangle(cyanTriLeftPts, CONFIG.colors.cyan, true);
+
+
+            // 4. Points & Rays
+
+            // The true 3D Point
+            const objectPos = new THREE.Vector3(CONFIG.Z_dist, CONFIG.Y_val, CONFIG.X_val);
+            const objectSphere = new THREE.Mesh(
+                new THREE.SphereGeometry(0.2, 32, 32),
+                new THREE.MeshBasicMaterial({ color: CONFIG.colors.red })
+            );
+            objectSphere.position.copy(objectPos);
+            scene.add(objectSphere);
+
+            // The Projected Point
+            const projPos = new THREE.Vector3(-CONFIG.f, y_proj_coord, x_proj_coord);
+            const projSphere = new THREE.Mesh(
+                new THREE.SphereGeometry(0.15, 32, 32),
+                new THREE.MeshBasicMaterial({ color: CONFIG.colors.darkRed })
+            );
+            projSphere.position.copy(projPos);
+            scene.add(projSphere);
+
+            // Main visual ray (dashed)
+            addLine(objectPos, projPos, 0x000000, true);
+
+            // Connection lines to show components (to help visualize 3D position relative to projections)
+            // Drop lines to the Green plane
+            addLine(objectPos, new THREE.Vector3(CONFIG.Z_dist, 0, CONFIG.X_val), 0xaaaaaa, true);
+            // Drop lines to the Cyan plane
+            addLine(objectPos, new THREE.Vector3(CONFIG.Z_dist, CONFIG.Y_val, 0), 0xaaaaaa, true);
+
+            // 5. Dimension Labels & Indicators
+
+            // Red lines indicating dimensions X, Y, Z
+            // Z dimension (on axis)
+            addLine(new THREE.Vector3(0, 0, 0), new THREE.Vector3(CONFIG.Z_dist, 0, 0), CONFIG.colors.red, false, 2);
+            addLabel("Z", new THREE.Vector3(CONFIG.Z_dist / 2, 0.2, 0));
+
+            // f dimension
+            addLine(new THREE.Vector3(0, 0, 0), new THREE.Vector3(-CONFIG.f, 0, 0), CONFIG.colors.red, false, 2);
+            addLabel("f", new THREE.Vector3(-CONFIG.f / 2, -0.5, 0));
+
+            // X dimension (Green Triangle edge)
+            addLine(new THREE.Vector3(CONFIG.Z_dist, 0, 0), new THREE.Vector3(CONFIG.Z_dist, 0, CONFIG.X_val), CONFIG.colors.red, false, 2);
+            addLabel("X", new THREE.Vector3(CONFIG.Z_dist, 0.2, CONFIG.X_val / 2));
+
+            // Y dimension (Cyan Triangle edge)
+            addLine(new THREE.Vector3(CONFIG.Z_dist, 0, 0), new THREE.Vector3(CONFIG.Z_dist, CONFIG.Y_val, 0), CONFIG.colors.red, false, 2);
+            addLabel("Y", new THREE.Vector3(CONFIG.Z_dist, CONFIG.Y_val / 2, 0.2));
+
+            // x dimension (projected)
+            addLine(new THREE.Vector3(-CONFIG.f, 0, 0), new THREE.Vector3(-CONFIG.f, 0, x_proj_coord), 0x00aa00, false, 1.5);
+            addLabel("x", new THREE.Vector3(-CONFIG.f, 0.2, x_proj_coord / 2));
+
+            // y dimension (projected)
+            addLine(new THREE.Vector3(-CONFIG.f, 0, 0), new THREE.Vector3(-CONFIG.f, y_proj_coord, 0), 0x00aa00, false, 1.5);
+            addLabel("y", new THREE.Vector3(-CONFIG.f, y_proj_coord / 2, 0.2));
+
+
+            // Helper function to create triangles and outlines
+            function addTriangle(vertices, color, outlineRed = false) {
+                const geom = new THREE.BufferGeometry().setFromPoints(vertices);
+                // Compute normals for lighting if needed, but we use BasicMaterial
+                geom.computeVertexNormals();
+
+                const mat = new THREE.MeshBasicMaterial({
+                    color: color,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.3,
+                    depthWrite: false
+                });
+                const mesh = new THREE.Mesh(geom, mat);
+                scene.add(mesh);
+
+                if (outlineRed) {
+                    const edges = [
+                        vertices[0], vertices[1],
+                        vertices[1], vertices[2],
+                        vertices[2], vertices[0]
+                    ];
+                    const lineGeom = new THREE.BufferGeometry().setFromPoints(edges);
+                    const lineMat = new THREE.LineBasicMaterial({ color: CONFIG.colors.red });
+                    const lines = new THREE.LineSegments(lineGeom, lineMat);
+                    scene.add(lines);
+                }
+            }
+
+            // Helper for lines
+            function addLine(v1, v2, color, dashed = false, linewidth = 1) {
+                const points = [v1, v2];
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                let material;
+
+                if (dashed) {
+                    material = new THREE.LineDashedMaterial({
+                        color: color,
+                        linewidth: linewidth,
+                        scale: 1,
+                        dashSize: 0.5,
+                        gapSize: 0.3,
+                    });
+                } else {
+                    material = new THREE.LineBasicMaterial({ color: color, linewidth: linewidth });
+                }
+
+                const line = new THREE.Line(geometry, material);
+                if (dashed) line.computeLineDistances();
+                scene.add(line);
+            }
+
+            function addArrow(origin, dir, length, color) {
+                const arrowHelper = new THREE.ArrowHelper(dir, origin, length, color, 0.5, 0.3);
+                scene.add(arrowHelper);
+            }
+
+            // Simple Sprite Text Label
+            function addLabel(text, position) {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                const size = 64;
+                canvas.width = size;
+                canvas.height = size;
+
+                context.font = 'bold 48px serif';
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillStyle = 'black';
+                context.fillText(text, size / 2, size / 2);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+                const sprite = new THREE.Sprite(spriteMaterial);
+
+                sprite.position.copy(position);
+                sprite.scale.set(1.5, 1.5, 1);
+                scene.add(sprite);
+                textLabels.push({ sprite: sprite, originalPos: position.clone() });
+            }
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Optional: Billboard labels to always face camera
+            // (Sprites do this automatically)
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+
+</html>

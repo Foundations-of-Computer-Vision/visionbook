@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Orthographic Projection – Interactive 3D</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        #info {
+            position: absolute;
+            top: 14px; left: 14px;
+            background: rgba(10,10,30,0.82);
+            padding: 14px 18px;
+            border-radius: 10px;
+            max-width: 340px;
+            font-size: 13.5px;
+            line-height: 1.55;
+            z-index: 10;
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        #info h2 { font-size: 16px; margin-bottom: 6px; color: #7ecbff; }
+        #info p  { margin-bottom: 6px; }
+        #info .eq { font-style: italic; color: #f0d080; }
+
+        #controls {
+            position: absolute;
+            bottom: 14px; left: 14px;
+            background: rgba(10,10,30,0.82);
+            padding: 12px 16px;
+            border-radius: 10px;
+            z-index: 10;
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255,255,255,0.08);
+            font-size: 13px;
+        }
+        #controls label { display: block; margin: 6px 0 2px; }
+        #controls input[type=range] { width: 200px; }
+        #controls .row { display: flex; align-items: center; gap: 8px; }
+        #controls .val { min-width: 32px; text-align: right; color: #7ecbff; }
+        #controls button {
+            margin-top: 10px;
+            padding: 6px 14px;
+            border: none;
+            border-radius: 6px;
+            background: #3a6ea5;
+            color: #fff;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        #controls button:hover { background: #4a8ed5; }
+    </style>
+</head>
+<body>
+
+<div id="info">
+    <h2>Orthographic Projection</h2>
+    <p>Projection is done by <b>parallel rays</b> orthogonal to the image plane.</p>
+    <p class="eq">x = k·X &nbsp;&nbsp; y = k·Y</p>
+    <p style="font-size:12px;color:#aaa;">Drag to orbit · Scroll to zoom · Use sliders below.</p>
+</div>
+
+<div id="controls">
+    <label>Object depth (Z)</label>
+    <div class="row">
+        <input id="sliderZ" type="range" min="2" max="10" step="0.1" value="5"/>
+        <span class="val" id="valZ">5.0</span>
+    </div>
+    <label>Scale factor k</label>
+    <div class="row">
+        <input id="sliderK" type="range" min="0.3" max="1.5" step="0.05" value="1.0"/>
+        <span class="val" id="valK">1.00</span>
+    </div>
+    <label>Show projection rays</label>
+    <div class="row">
+        <input id="toggleRays" type="checkbox" checked/>
+        <span style="font-size:12px;">visible</span>
+    </div>
+    <button id="btnReset">Reset view</button>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+    }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FontLoader }    from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry }  from 'three/addons/geometries/TextGeometry.js';
+
+// ── Scene setup ────────────────────────────────────────────────
+const scene    = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+
+const camera   = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 200);
+camera.position.set(8, 6, 12);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 1.5, 3);
+controls.update();
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+dirLight.position.set(5, 8, 6);
+scene.add(dirLight);
+
+// ── Helpers ────────────────────────────────────────────────────
+const V3 = (x,y,z) => new THREE.Vector3(x,y,z);
+
+function makeLabel(text, pos, color = 0xffffff, size = 0.35) {
+    const canvas  = document.createElement('canvas');
+    const ctx     = canvas.getContext('2d');
+    canvas.width  = 256; canvas.height = 128;
+    ctx.fillStyle = 'transparent'; ctx.fillRect(0,0,256,128);
+    ctx.font      = 'bold 64px sans-serif';
+    ctx.fillStyle = '#' + color.toString(16).padStart(6,'0');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, 128, 64);
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+    const spr = new THREE.Sprite(mat);
+    spr.position.copy(pos);
+    spr.scale.set(size * 2.5, size * 1.25, 1);
+    return spr;
+}
+
+// ── Coordinate axes ────────────────────────────────────────────
+function addAxis(dir, color, label) {
+    const len = 7;
+    const mat = new THREE.LineBasicMaterial({ color });
+    const geo = new THREE.BufferGeometry().setFromPoints([V3(0,0,0), dir.clone().multiplyScalar(len)]);
+    scene.add(new THREE.Line(geo, mat));
+
+    // arrow head
+    const cone = new THREE.ConeGeometry(0.08, 0.3, 12);
+    const mesh = new THREE.Mesh(cone, new THREE.MeshBasicMaterial({ color }));
+    mesh.position.copy(dir.clone().multiplyScalar(len));
+    mesh.quaternion.setFromUnitVectors(V3(0,1,0), dir);
+    scene.add(mesh);
+
+    scene.add(makeLabel(label, dir.clone().multiplyScalar(len + 0.45), color));
+}
+addAxis(V3(1,0,0), 0xff4444, 'X');
+addAxis(V3(0,1,0), 0x44ff44, 'Y');
+addAxis(V3(0,0,1), 0x4488ff, 'Z');
+
+// ── Image / projection plane at Z = 0 ─────────────────────────
+const planeW = 7, planeH = 5;
+const planeGeo = new THREE.PlaneGeometry(planeW, planeH);
+const planeMat = new THREE.MeshPhysicalMaterial({
+    color: 0x88aacc, transparent: true, opacity: 0.22,
+    side: THREE.DoubleSide, roughness: 0.6, depthWrite: false
+});
+const projPlane = new THREE.Mesh(planeGeo, planeMat);
+projPlane.position.set(planeW / 2 - 0.5, planeH / 2 - 0.5, 0);
+scene.add(projPlane);
+
+// plane border
+const borderPts = [
+    V3(-0.5, -0.5, 0), V3(planeW - 0.5, -0.5, 0),
+    V3(planeW - 0.5, planeH - 0.5, 0), V3(-0.5, planeH - 0.5, 0), V3(-0.5, -0.5, 0)
+];
+const borderGeo = new THREE.BufferGeometry().setFromPoints(borderPts);
+scene.add(new THREE.Line(borderGeo, new THREE.LineBasicMaterial({ color: 0x88aacc })));
+
+scene.add(makeLabel('Image Plane (z = 0)', V3(planeW / 2 - 0.5, planeH - 0.1, 0), 0x88ccff, 0.3));
+
+// ── 3D Object: a simple house shape ───────────────────────────
+const houseGroup   = new THREE.Group();
+const projGroup    = new THREE.Group();        // projected silhouette
+const raysGroup    = new THREE.Group();        // ray lines
+
+// House vertices (in local coords centred near origin)
+function houseVertices() {
+    return [
+        // base rectangle
+        V3(-1,  0, -0.6), V3( 1,  0, -0.6),
+        V3( 1,  0,  0.6), V3(-1,  0,  0.6),
+        // top of walls
+        V3(-1,  1.4, -0.6), V3( 1,  1.4, -0.6),
+        V3( 1,  1.4,  0.6), V3(-1,  1.4,  0.6),
+        // roof apex
+        V3( 0,  2.2, -0.6), V3( 0,  2.2,  0.6)
+    ];
+}
+
+// edges as pairs of indices
+const houseEdges = [
+    [0,1],[1,2],[2,3],[3,0],   // bottom
+    [4,5],[5,6],[6,7],[7,4],   // top of walls
+    [0,4],[1,5],[2,6],[3,7],   // vertical walls
+    [4,8],[5,8],[6,9],[7,9],   // roof slopes
+    [8,9]                       // roof ridge
+];
+
+const edgeMat     = new THREE.LineBasicMaterial({ color: 0xffcc44, linewidth: 2 });
+const projEdgeMat = new THREE.LineBasicMaterial({ color: 0xff6644, linewidth: 2 });
+const rayMat      = new THREE.LineBasicMaterial({ color: 0x446688, transparent: true, opacity: 0.45 });
+
+let objectZ = 5.0;
+let scaleK  = 1.0;
+
+function buildHouse() {
+    // clear previous
+    houseGroup.clear(); projGroup.clear(); raysGroup.clear();
+
+    const verts = houseVertices();
+
+    // 3D object edges
+    for (const [a, b] of houseEdges) {
+        const pts = [
+            V3(verts[a].x, verts[a].y, verts[a].z + objectZ),
+            V3(verts[b].x, verts[b].y, verts[b].z + objectZ)
+        ];
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        houseGroup.add(new THREE.Line(geo, edgeMat));
+    }
+
+    // vertices as small spheres
+    const sphereGeo = new THREE.SphereGeometry(0.07, 12, 12);
+    const sphereMat = new THREE.MeshBasicMaterial({ color: 0xffdd55 });
+    for (const v of verts) {
+        const m = new THREE.Mesh(sphereGeo, sphereMat);
+        m.position.set(v.x, v.y, v.z + objectZ);
+        houseGroup.add(m);
+    }
+
+    // projected shape on image plane (z=0)
+    const projSphereGeo = new THREE.SphereGeometry(0.06, 12, 12);
+    const projSphereMat = new THREE.MeshBasicMaterial({ color: 0xff7755 });
+
+    for (const [a, b] of houseEdges) {
+        const pts = [
+            V3(scaleK * verts[a].x, scaleK * verts[a].y, 0),
+            V3(scaleK * verts[b].x, scaleK * verts[b].y, 0)
+        ];
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        projGroup.add(new THREE.Line(geo, projEdgeMat));
+    }
+    for (const v of verts) {
+        const m = new THREE.Mesh(projSphereGeo, projSphereMat);
+        m.position.set(scaleK * v.x, scaleK * v.y, 0);
+        projGroup.add(m);
+    }
+
+    // projection rays (parallel, along -Z)
+    for (const v of verts) {
+        const pts = [
+            V3(scaleK * v.x, scaleK * v.y, 0),
+            V3(v.x, v.y, v.z + objectZ)
+        ];
+        // For true orthographic: rays are parallel along Z.
+        // When k=1 the ray x,y stays constant — perfectly parallel.
+        // When k≠1 we still draw straight connecting lines to show scaling.
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        raysGroup.add(new THREE.Line(geo, rayMat));
+    }
+
+    // "3D Object" label near the house
+    const lbl = makeLabel('3D Object', V3(0, 2.7, objectZ), 0xffcc44, 0.28);
+    houseGroup.add(lbl);
+
+    // "Projected image" label
+    const lbl2 = makeLabel('Projected Image', V3(0, -0.6, 0), 0xff7755, 0.25);
+    projGroup.add(lbl2);
+}
+
+// Shift house so it's centred nicely
+const houseOffset = new THREE.Group();
+houseOffset.position.set(2.5, 0.5, 0);
+houseOffset.add(houseGroup, projGroup, raysGroup);
+scene.add(houseOffset);
+
+// ── Grid on the image plane ────────────────────────────────────
+const gridHelper = new THREE.GridHelper(10, 20, 0x334455, 0x222233);
+gridHelper.rotation.x = Math.PI / 2;
+gridHelper.position.set(2.5, 2, 0);
+scene.add(gridHelper);
+
+// ── Arrow showing ray direction ────────────────────────────────
+{
+    const arrowStart = V3(5.5, 3.5, objectZ + 1.5);
+    const arrowDir   = V3(0, 0, -1);
+    const arrow = new THREE.ArrowHelper(arrowDir, arrowStart, 3.5, 0x6688aa, 0.2, 0.15);
+    scene.add(arrow);
+    scene.add(makeLabel('Parallel rays', V3(5.5, 4.0, objectZ + 1.5), 0x88bbdd, 0.24));
+}
+
+// ── Initial build ──────────────────────────────────────────────
+buildHouse();
+
+// ── UI wiring ──────────────────────────────────────────────────
+const sliderZ = document.getElementById('sliderZ');
+const sliderK = document.getElementById('sliderK');
+const valZ    = document.getElementById('valZ');
+const valK    = document.getElementById('valK');
+const toggleRays = document.getElementById('toggleRays');
+
+sliderZ.addEventListener('input', () => {
+    objectZ = parseFloat(sliderZ.value);
+    valZ.textContent = objectZ.toFixed(1);
+    buildHouse();
+});
+sliderK.addEventListener('input', () => {
+    scaleK = parseFloat(sliderK.value);
+    valK.textContent = scaleK.toFixed(2);
+    buildHouse();
+});
+toggleRays.addEventListener('change', () => {
+    raysGroup.visible = toggleRays.checked;
+});
+document.getElementById('btnReset').addEventListener('click', () => {
+    camera.position.set(8, 6, 12);
+    controls.target.set(0, 1.5, 3);
+    sliderZ.value = 5; sliderK.value = 1;
+    objectZ = 5; scaleK = 1;
+    valZ.textContent = '5.0'; valK.textContent = '1.00';
+    toggleRays.checked = true; raysGroup.visible = true;
+    buildHouse();
+    controls.update();
+});
+
+// ── Animation loop ─────────────────────────────────────────────
+window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+});
+
+(function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+})();
+</script>
+</body>
+</html>

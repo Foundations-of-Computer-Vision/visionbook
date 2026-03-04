@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive 3D Camera Rotation</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+            border: 1px solid #e0e0e0;
+            z-index: 10;
+        }
+
+        h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            color: #333;
+        }
+
+        p.description {
+            font-size: 13px;
+            color: #555;
+            line-height: 1.4;
+            margin-bottom: 15px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 5px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #0078d4;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background-color: #005a9e;
+        }
+
+        .btn-secondary {
+            background-color: #f3f2f1;
+            color: #333;
+            border: 1px solid #ccc;
+        }
+
+        .btn-secondary:hover {
+            background-color: #e1dfdd;
+        }
+
+        /* 3D Labels */
+        .label3d {
+            position: absolute;
+            color: black;
+            font-size: 16px;
+            font-family: 'Times New Roman', Times, serif;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            text-shadow: 2px 2px 0 #fff, -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff;
+            white-space: nowrap;
+            z-index: 5;
+        }
+
+        .label-math {
+            font-style: italic;
+        }
+
+        .label-bold {
+            font-weight: bold;
+            font-size: 18px;
+        }
+    </style>
+
+    <!-- Import Three.js as ES modules -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+</script>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+    <div id="ui-panel">
+        <h2>Pure Camera Rotation</h2>
+        <p class="description">
+            This interactive model demonstrates how a 3D point <strong>(X,Y,Z)</strong> projects onto two different
+            image planes sharing the same center of projection.
+            Because the cameras only rotate relative to each other, the mapping between <strong>(x,y)</strong> and
+            <strong>(x',y')</strong> is a 2D homography independent of the point's depth.
+        </p>
+
+        <div class="control-group">
+            <label>
+                <span>Camera 2 Rotation (R)</span>
+                <span id="val-rotation">25°</span>
+            </label>
+            <input type="range" id="slider-rotation" min="0" max="60" value="25" step="1">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <span>3D Point X</span>
+                <span id="val-x">3.0</span>
+            </label>
+            <input type="range" id="slider-x" min="-5" max="8" value="3" step="0.1">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <span>3D Point Y</span>
+                <span id="val-y">1.5</span>
+            </label>
+            <input type="range" id="slider-y" min="-3" max="5" value="1.5" step="0.1">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <span>3D Point Z (Depth)</span>
+                <span id="val-z">6.0</span>
+            </label>
+            <input type="range" id="slider-z" min="3" max="12" value="6" step="0.1">
+        </div>
+
+        <button class="btn" id="btn-topdown">Toggle Top-Down View (Right Figure)</button>
+        <button class="btn btn-secondary" id="btn-reset">Reset to Textbook View</button>
+    </div>
+
+    <!-- HTML elements for 3D labels -->
+    <div id="labels-container">
+        <div id="label-cam1" class="label3d">Camera 1</div>
+        <div id="label-cam2" class="label3d">Camera 2</div>
+        <div id="label-R" class="label3d label-bold">R</div>
+        <div id="label-P" class="label3d label-math">(X,Y,Z)</div>
+        <div id="label-p1" class="label3d label-math">(x,y)</div>
+        <div id="label-p2" class="label3d label-math">(x',y')</div>
+        <div id="label-X" class="label3d label-math">X</div>
+        <div id="label-Y" class="label3d label-math">Y</div>
+        <div id="label-Z" class="label3d label-math">Z</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Scene Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        scene.add(dirLight);
+
+        // --- Educational Geometry Mapping ---
+        // 1. Center of Projection (Origin)
+        const originGeo = new THREE.SphereGeometry(0.15, 32, 32);
+        const originMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const origin = new THREE.Mesh(originGeo, originMat);
+        scene.add(origin);
+
+        // 2. Coordinate Axes (Green arrows matching the textbook)
+        const axisLength = 2.5;
+        const axisColor = 0x00cc00;
+        const arrowX = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), axisLength, axisColor, 0.4, 0.3);
+        const arrowY = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), axisLength, axisColor, 0.4, 0.3);
+        const arrowZ = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), axisLength, axisColor, 0.4, 0.3);
+        scene.add(arrowX);
+        scene.add(arrowY);
+        scene.add(arrowZ);
+
+        // 3. Image Planes
+        const focalLength = 2.5; // Distance from origin to image planes
+        const planeSize = 4.5;
+        const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+
+        // Camera 1 (Green Plane)
+        const cam1Mat = new THREE.MeshBasicMaterial({
+            color: 0x00ff00,
+            transparent: true,
+            opacity: 0.4,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const cam1Plane = new THREE.Mesh(planeGeo, cam1Mat);
+        cam1Plane.position.set(0, 0, focalLength);
+        scene.add(cam1Plane);
+
+        // Camera 2 (Red Plane) - Attached to a pivot to rotate around the origin
+        const cam2Mat = new THREE.MeshBasicMaterial({
+            color: 0xff0000,
+            transparent: true,
+            opacity: 0.4,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const cam2Pivot = new THREE.Group();
+        scene.add(cam2Pivot);
+        const cam2Plane = new THREE.Mesh(planeGeo, cam2Mat);
+        cam2Plane.position.set(0, 0, focalLength);
+        cam2Pivot.add(cam2Plane);
+
+        // 4. Points (Cyan with black outlines to match textbook)
+        function createPointMesh(radius) {
+            const group = new THREE.Group();
+            const inner = new THREE.Mesh(
+                new THREE.SphereGeometry(radius, 32, 32),
+                new THREE.MeshPhongMaterial({ color: 0x00ffff, shininess: 100 })
+            );
+            const outline = new THREE.Mesh(
+                new THREE.SphereGeometry(radius * 1.15, 32, 32),
+                new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide })
+            );
+            group.add(inner);
+            group.add(outline);
+            return group;
+        }
+
+        const point3D = createPointMesh(0.18); // (X,Y,Z)
+        scene.add(point3D);
+
+        const point1 = createPointMesh(0.12); // (x,y) on Cam 1
+        scene.add(point1);
+
+        const point2 = createPointMesh(0.12); // (x',y') on Cam 2
+        scene.add(point2);
+
+        // 5. Projection Ray (Dashed line from origin to 3D point)
+        const rayGeo = new THREE.BufferGeometry();
+        rayGeo.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, 0], 3));
+        const rayMat = new THREE.LineDashedMaterial({
+            color: 0x000000,
+            linewidth: 2,
+            dashSize: 0.2,
+            gapSize: 0.15
+        });
+        const rayLine = new THREE.Line(rayGeo, rayMat);
+        scene.add(rayLine);
+
+        // 6. Rotation Arrow (R)
+        const rArrowGroup = new THREE.Group();
+        scene.add(rArrowGroup);
+
+        const rArcMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+        const rArcGeo = new THREE.BufferGeometry();
+        const rArcLine = new THREE.Line(rArcGeo, rArcMat);
+        rArrowGroup.add(rArcLine);
+
+        const rHeadGeo = new THREE.ConeGeometry(0.15, 0.4, 16);
+        const rHeadMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const rHead = new THREE.Mesh(rHeadGeo, rHeadMat);
+        rArrowGroup.add(rHead);
+
+        // --- Label Anchors ---
+        const anchors = {
+            cam1: new THREE.Vector3(-planeSize / 2 - 0.5, planeSize / 2, focalLength),
+            cam2: new THREE.Vector3(), // Calculated dynamically
+            R: new THREE.Vector3(),    // Calculated dynamically
+            P: new THREE.Vector3(),
+            p1: new THREE.Vector3(),
+            p2: new THREE.Vector3(),
+            X: new THREE.Vector3(axisLength + 0.3, 0, 0),
+            Y: new THREE.Vector3(0, axisLength + 0.3, 0),
+            Z: new THREE.Vector3(0, 0, axisLength + 0.3)
+        };
+
+        // --- State & Logic ---
+        const state = {
+            theta: 25 * Math.PI / 180,
+            P: new THREE.Vector3(3, 1.5, 6),
+            isTopDown: false
+        };
+
+        // Default camera views
+        const viewTextbook = new THREE.Vector3(10, 6, -8);
+        const viewTopDown = new THREE.Vector3(0, 15, 0.1); // Slight offset to avoid gimbal lock
+        camera.position.copy(viewTextbook);
+        controls.target.set(0, 0, focalLength);
+
+        function updateGeometry() {
+            // 1. Update 3D Point
+            point3D.position.copy(state.P);
+            anchors.P.copy(state.P).add(new THREE.Vector3(0.4, 0.4, 0));
+
+            // 2. Update Ray
+            const positions = rayLine.geometry.attributes.position.array;
+            positions[3] = state.P.x;
+            positions[4] = state.P.y;
+            positions[5] = state.P.z;
+            rayLine.geometry.attributes.position.needsUpdate = true;
+            rayLine.computeLineDistances();
+
+            // 3. Update Camera 2 Rotation
+            cam2Pivot.rotation.y = state.theta;
+
+            // 4. Calculate Intersections (The core educational concept)
+            // Intersection with Cam 1 (z = focalLength)
+            if (state.P.z > 0.1) {
+                const t1 = focalLength / state.P.z;
+                point1.position.copy(state.P).multiplyScalar(t1);
+                point1.visible = true;
+                anchors.p1.copy(point1.position).add(new THREE.Vector3(0, 0.4, 0));
+            } else {
+                point1.visible = false;
+            }
+
+            // Intersection with Cam 2
+            // Plane 2 normal: (sin(theta), 0, cos(theta))
+            // Plane 2 point: (focalLength*sin(theta), 0, focalLength*cos(theta))
+            const n2 = new THREE.Vector3(Math.sin(state.theta), 0, Math.cos(state.theta));
+            const p0 = new THREE.Vector3(focalLength * Math.sin(state.theta), 0, focalLength * Math.cos(state.theta));
+
+            const denom = state.P.dot(n2);
+            if (denom > 0.01) {
+                const t2 = p0.dot(n2) / denom;
+                point2.position.copy(state.P).multiplyScalar(t2);
+                point2.visible = true;
+                anchors.p2.copy(point2.position).add(new THREE.Vector3(0, -0.4, 0));
+            } else {
+                point2.visible = false;
+            }
+
+            // 5. Update Rotation Arrow (R)
+            if (state.theta > 0.05) {
+                rArrowGroup.visible = true;
+                const arcRadius = focalLength + 0.5;
+                const arcHeight = planeSize / 2 + 0.5;
+                const points = [];
+                const segments = 20;
+                for (let i = 0; i <= segments; i++) {
+                    const angle = (i / segments) * state.theta;
+                    points.push(new THREE.Vector3(arcRadius * Math.sin(angle), arcHeight, arcRadius * Math.cos(angle)));
+                }
+                rArcGeo.setFromPoints(points);
+
+                // Position arrowhead
+                const endAngle = state.theta;
+                rHead.position.set(arcRadius * Math.sin(endAngle), arcHeight, arcRadius * Math.cos(endAngle));
+                // Point tangent to the arc
+                rHead.rotation.y = endAngle + Math.PI / 2;
+                rHead.rotation.x = Math.PI / 2;
+
+                // Anchor for R label
+                const midAngle = state.theta / 2;
+                anchors.R.set((arcRadius + 0.4) * Math.sin(midAngle), arcHeight + 0.2, (arcRadius + 0.4) * Math.cos(midAngle));
+            } else {
+                rArrowGroup.visible = false;
+            }
+
+            // 6. Update Cam 2 Label Anchor
+            anchors.cam2.set(
+                (planeSize / 2 + 0.5) * Math.cos(state.theta) + focalLength * Math.sin(state.theta),
+                planeSize / 2,
+                -(planeSize / 2 + 0.5) * Math.sin(state.theta) + focalLength * Math.cos(state.theta)
+            );
+        }
+
+        function updateLabels() {
+            const widthHalf = window.innerWidth / 2;
+            const heightHalf = window.innerHeight / 2;
+
+            for (const [key, pos] of Object.entries(anchors)) {
+                const el = document.getElementById(`label-${key}`);
+                if (!el) continue;
+
+                // Clone vector to avoid modifying the anchor
+                const proj = pos.clone();
+                proj.project(camera);
+
+                // Check if behind camera
+                if (proj.z > 1) {
+                    el.style.display = 'none';
+                    continue;
+                }
+
+                const x = (proj.x * widthHalf) + widthHalf;
+                const y = -(proj.y * heightHalf) + heightHalf;
+
+                el.style.display = 'block';
+                el.style.left = `${x}px`;
+                el.style.top = `${y}px`;
+            }
+        }
+
+        // --- UI Event Listeners ---
+        document.getElementById('slider-rotation').addEventListener('input', (e) => {
+            state.theta = parseFloat(e.target.value) * Math.PI / 180;
+            document.getElementById('val-rotation').innerText = `${e.target.value}°`;
+            updateGeometry();
+        });
+
+        document.getElementById('slider-x').addEventListener('input', (e) => {
+            state.P.x = parseFloat(e.target.value);
+            document.getElementById('val-x').innerText = state.P.x.toFixed(1);
+            updateGeometry();
+        });
+
+        document.getElementById('slider-y').addEventListener('input', (e) => {
+            state.P.y = parseFloat(e.target.value);
+            document.getElementById('val-y').innerText = state.P.y.toFixed(1);
+            updateGeometry();
+        });
+
+        document.getElementById('slider-z').addEventListener('input', (e) => {
+            state.P.z = parseFloat(e.target.value);
+            document.getElementById('val-z').innerText = state.P.z.toFixed(1);
+            updateGeometry();
+        });
+
+        // Camera Animation Variables
+        let isAnimatingCamera = false;
+        let targetCameraPos = new THREE.Vector3();
+        let targetControlsPos = new THREE.Vector3();
+
+        document.getElementById('btn-topdown').addEventListener('click', () => {
+            state.isTopDown = !state.isTopDown;
+            isAnimatingCamera = true;
+            if (state.isTopDown) {
+                targetCameraPos.copy(viewTopDown);
+                targetControlsPos.set(0, 0, focalLength);
+                document.getElementById('btn-topdown').innerText = "Return to 3D View";
+            } else {
+                targetCameraPos.copy(viewTextbook);
+                targetControlsPos.set(0, 0, focalLength);
+                document.getElementById('btn-topdown').innerText = "Toggle Top-Down View (Right Figure)";
+            }
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            // Reset UI
+            document.getElementById('slider-rotation').value = 25;
+            document.getElementById('slider-x').value = 3;
+            document.getElementById('slider-y').value = 1.5;
+            document.getElementById('slider-z').value = 6;
+
+            document.getElementById('val-rotation').innerText = "25°";
+            document.getElementById('val-x').innerText = "3.0";
+            document.getElementById('val-y').innerText = "1.5";
+            document.getElementById('val-z').innerText = "6.0";
+
+            // Reset State
+            state.theta = 25 * Math.PI / 180;
+            state.P.set(3, 1.5, 6);
+            state.isTopDown = false;
+            document.getElementById('btn-topdown').innerText = "Toggle Top-Down View (Right Figure)";
+
+            // Reset Camera
+            isAnimatingCamera = true;
+            targetCameraPos.copy(viewTextbook);
+            targetControlsPos.set(0, 0, focalLength);
+
+            updateGeometry();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- Main Loop ---
+        updateGeometry();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Smooth camera transitions
+            if (isAnimatingCamera) {
+                camera.position.lerp(targetCameraPos, 0.05);
+                controls.target.lerp(targetControlsPos, 0.05);
+                if (camera.position.distanceTo(targetCameraPos) < 0.1) {
+                    isAnimatingCamera = false;
+                }
+            }
+
+            controls.update();
+            updateLabels();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

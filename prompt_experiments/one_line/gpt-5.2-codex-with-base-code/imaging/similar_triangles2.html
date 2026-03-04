@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Pinhole Projection Scene</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+            font-family: 'Georgia', serif;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three@0.161.0';
+        import { OrbitControls } from 'https://esm.sh/three@0.161.0/examples/jsm/controls/OrbitControls.js';
+
+        const container = document.getElementById('container');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 4.2;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 50);
+        camera.position.set(4, 3.8, 4.5);
+        camera.lookAt(0, 1, 0);
+        camera.zoom = 1.2;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minZoom = 0.5;
+        controls.maxZoom = 3.5;
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+        scene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.3);
+        dirLight.position.set(2, 4, 3);
+        scene.add(dirLight);
+
+        const origin = new THREE.Vector3(0, 0, 0);
+        const imagePlaneX = -1.2;
+
+        function makeLabel(text, color = '#111', fontSize = 192) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = color;
+            ctx.font = `${fontSize * 0.45}px Georgia, serif`;
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 20, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            const scale = 0.6;
+            sprite.scale.set((canvas.width / canvas.height) * scale, scale, 1);
+            return sprite;
+        }
+
+        function makeArrow(dir, color, length, label, labelOffset = 0.35) {
+            const arrow = new THREE.ArrowHelper(dir.clone().normalize(), origin, length, color, 0.32, 0.18);
+            scene.add(arrow);
+            if (label) {
+                const sprite = makeLabel(label, `#${color.toString(16).padStart(6, '0')}`);
+                const pos = dir.clone().normalize().multiplyScalar(length + labelOffset);
+                sprite.position.copy(pos);
+                scene.add(sprite);
+            }
+        }
+
+        makeArrow(new THREE.Vector3(1, 0, 0), 0xff2222, 3.4, 'X');
+        makeArrow(new THREE.Vector3(0, 0, 1), 0x111111, 2.2, 'Y');
+        makeArrow(new THREE.Vector3(0, 1, 0), 0x111111, 2.4, 'Z');
+
+        const baseAxisGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(imagePlaneX - 0.2, 0, 0),
+            new THREE.Vector3(3.4, 0, 0)
+        ]);
+        const baseAxis = new THREE.Line(baseAxisGeometry, new THREE.LineBasicMaterial({ color: 0xff2222, linewidth: 2 }));
+        scene.add(baseAxis);
+
+        const fLabel = makeLabel('f', '#111');
+        fLabel.position.set((imagePlaneX) / 2, -0.08, 0);
+        scene.add(fLabel);
+
+        const imagePlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.6, 2.6),
+            new THREE.MeshBasicMaterial({ color: 0xdcdcdc, transparent: true, opacity: 0.92, side: THREE.DoubleSide })
+        );
+        imagePlane.rotation.y = Math.PI / 2;
+        imagePlane.position.set(imagePlaneX, 1.0, 0.35);
+        scene.add(imagePlane);
+
+        const planeEdgeGeometry = new THREE.EdgesGeometry(imagePlane.geometry);
+        const planeEdge = new THREE.LineSegments(
+            planeEdgeGeometry,
+            new THREE.LineBasicMaterial({ color: 0x555555 })
+        );
+        planeEdge.position.copy(imagePlane.position);
+        planeEdge.rotation.copy(imagePlane.rotation);
+        scene.add(planeEdge);
+
+        const planeAxesMaterial = new THREE.LineBasicMaterial({ color: 0x2caa2c });
+        const planeOrigin = new THREE.Vector3(imagePlaneX, 1.0, 0.35);
+        const planeXaxis = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([
+                planeOrigin.clone().add(new THREE.Vector3(0, 0.9, 0)),
+                planeOrigin.clone().add(new THREE.Vector3(0, -0.9, 0))
+            ]),
+            planeAxesMaterial
+        );
+        const planeYaxis = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([
+                planeOrigin.clone().add(new THREE.Vector3(0, 0, -0.9)),
+                planeOrigin.clone().add(new THREE.Vector3(0, 0, 0.9))
+            ]),
+            planeAxesMaterial
+        );
+        scene.add(planeXaxis, planeYaxis);
+
+        const xLabel = makeLabel('x', '#2caa2c');
+        xLabel.position.copy(planeOrigin).add(new THREE.Vector3(0, -1.0, 0));
+        scene.add(xLabel);
+        const yLabel = makeLabel('y', '#2caa2c');
+        yLabel.position.copy(planeOrigin).add(new THREE.Vector3(0, 0, 1.1));
+        scene.add(yLabel);
+
+        const worldPoint = new THREE.Vector3(2.5, 0.9, 1.2);
+        const worldPointMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 32, 32),
+            new THREE.MeshBasicMaterial({ color: 0xff2b2b })
+        );
+        worldPointMesh.position.copy(worldPoint);
+        scene.add(worldPointMesh);
+
+        const projectionPoint = (() => {
+            const dir = origin.clone().sub(worldPoint);
+            const t = (imagePlaneX - worldPoint.x) / dir.x;
+            return worldPoint.clone().add(dir.multiplyScalar(t));
+        })();
+
+        const projectionMarker = new THREE.Mesh(
+            new THREE.SphereGeometry(0.07, 32, 32),
+            new THREE.MeshBasicMaterial({ color: 0x7a4b21 })
+        );
+        projectionMarker.position.copy(projectionPoint);
+        scene.add(projectionMarker);
+
+        const dashedGeometry = new THREE.BufferGeometry().setFromPoints([
+            worldPoint,
+            origin,
+            projectionPoint
+        ]);
+        const dashedLine = new THREE.Line(
+            dashedGeometry,
+            new THREE.LineDashedMaterial({ color: 0x111111, dashSize: 0.12, gapSize: 0.08 })
+        );
+        dashedLine.computeLineDistances();
+        scene.add(dashedLine);
+
+        const dropLineGeom = new THREE.BufferGeometry().setFromPoints([
+            worldPoint,
+            new THREE.Vector3(worldPoint.x, 0, worldPoint.z)
+        ]);
+        const dropLine = new THREE.Line(dropLineGeom, new THREE.LineBasicMaterial({ color: 0xb0b0b0 }));
+        scene.add(dropLine);
+
+        const triangle1 = new THREE.Mesh(
+            new THREE.BufferGeometry().setFromPoints([
+                origin,
+                new THREE.Vector3(worldPoint.x, 0, 0),
+                worldPoint
+            ]).setIndex([0, 1, 2]),
+            new THREE.MeshBasicMaterial({ color: 0x9be066, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+        );
+        scene.add(triangle1);
+
+        const triangle2 = new THREE.Mesh(
+            new THREE.BufferGeometry().setFromPoints([
+                origin,
+                new THREE.Vector3(0, worldPoint.y, 0),
+                worldPoint
+            ]).setIndex([0, 1, 2]),
+            new THREE.MeshBasicMaterial({ color: 0x7bd3f7, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+        );
+        scene.add(triangle2);
+
+        const Zlabel = makeLabel('Z', '#111');
+        Zlabel.position.set(0, 2.6, 0);
+        scene.add(Zlabel);
+        const Ylabel = makeLabel('Y', '#111');
+        Ylabel.position.set(0, 0, 2.4);
+        scene.add(Ylabel);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            const aspect = w / h;
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.top = d;
+            camera.bottom = -d;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

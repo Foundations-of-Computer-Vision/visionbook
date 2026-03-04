@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orthographic Projection Interactive Concept</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #ffffff;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border: 1px solid #ddd;
+            z-index: 10;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            color: #333;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            width: 100%;
+            margin-bottom: 8px;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        button.secondary {
+            background: #6c757d;
+        }
+
+        button.secondary:hover {
+            background: #5a6268;
+        }
+
+        #tutorial-text {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: #333;
+            min-height: 60px;
+            margin-bottom: 10px;
+            border-left: 4px solid #007bff;
+        }
+
+        /* 3D Labels */
+        .label {
+            position: absolute;
+            color: #000;
+            font-family: serif;
+            font-size: 1.5rem;
+            font-style: italic;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+            z-index: 5;
+        }
+
+        .label-green {
+            color: #00aa00;
+        }
+
+        .label-text {
+            font-family: sans-serif;
+            font-size: 1rem;
+            font-style: normal;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="canvas-container"></div>
+
+    <!-- 3D Scene Labels -->
+    <div id="label-Y" class="label">Y</div>
+    <div id="label-Z" class="label">Z</div>
+    <div id="label-X" class="label">X</div>
+    <div id="label-y-plane" class="label label-green">y</div>
+    <div id="label-x-plane" class="label label-green">x</div>
+    <div id="label-plane-text" class="label label-text">Projection plane</div>
+
+    <!-- Interactive UI Panel -->
+    <div id="ui-panel">
+        <h2>Orthographic Projection</h2>
+
+        <div id="tutorial-text">
+            Welcome! This interactive model demonstrates how a 3D object is projected onto a 2D plane. Click "Next Step"
+            to begin the guided tour.
+        </div>
+
+        <button id="btn-next-step">Start Guided Tour</button>
+
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 15px 0;">
+
+        <div class="control-group">
+            <label for="distance-slider">Object Distance from Plane</label>
+            <input type="range" id="distance-slider" min="1" max="12" value="8" step="0.1">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="toggle-lines" checked>
+                Show Projection Lines
+            </label>
+        </div>
+
+        <button id="btn-animate" class="secondary">Animate Distance</button>
+        <button id="btn-reset" class="secondary">Reset to Textbook View</button>
+    </div>
+
+    <!-- Import Three.js as ES module -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Scene Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(10, 20, 15);
+        scene.add(dirLight);
+
+        // --- Materials ---
+        // Using Basic materials to mimic the flat, unshaded look of a textbook diagram
+        const matRed = new THREE.MeshBasicMaterial({ color: 0xff3b30 });
+        const matGreen = new THREE.MeshBasicMaterial({ color: 0x4cd964 });
+        const matBlue = new THREE.MeshBasicMaterial({ color: 0x5ac8fa });
+        const matGray = new THREE.MeshBasicMaterial({ color: 0xdddddd });
+        const matEdge = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+        const matPlane = new THREE.MeshBasicMaterial({ color: 0xf0f0f0, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+        const matPlaneEdge = new THREE.LineBasicMaterial({ color: 0x888888 });
+        const matProjLine = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 0.2, gapSize: 0.2 });
+
+        // --- Coordinate System Mapping ---
+        // To match the textbook drawing's visual layout:
+        // Three.js X axis = Textbook Z axis (Horizontal Right)
+        // Three.js Y axis = Textbook Y axis (Vertical Up)
+        // Three.js Z axis = Textbook X axis (Diagonal Out-Left)
+
+        // --- 1. Projection Plane (at X = 0) ---
+        const planeGroup = new THREE.Group();
+        scene.add(planeGroup);
+
+        const planeGeom = new THREE.PlaneGeometry(12, 10);
+        planeGeom.rotateY(Math.PI / 2); // Face the X direction
+        planeGeom.translate(0, 3, 3); // Center it appropriately
+        const planeMesh = new THREE.Mesh(planeGeom, matPlane);
+        const planeEdges = new THREE.LineSegments(new THREE.EdgesGeometry(planeGeom), matPlaneEdge);
+        planeGroup.add(planeMesh);
+        planeGroup.add(planeEdges);
+
+        // --- 2. 3D Object (The Stepped Block) ---
+        // The object is composed of two blocks to form the L-shape and steps.
+        const objGroup = new THREE.Group();
+        scene.add(objGroup);
+        objGroup.position.x = 8; // Initial distance from plane
+
+        // BoxGeometry materials array: [+x, -x, +y, -y, +z, -z]
+        // -x is the face pointing towards the projection plane (X=0)
+
+        // Block 1: Tall back part
+        const geomBlock1 = new THREE.BoxGeometry(3, 4, 2);
+        geomBlock1.translate(1.5, 2, 1); // Move origin to bottom-front-left corner
+        const matsBlock1 = [matGray, matRed, matGreen, matGray, matGray, matGray];
+        const meshBlock1 = new THREE.Mesh(geomBlock1, matsBlock1);
+        const edgesBlock1 = new THREE.LineSegments(new THREE.EdgesGeometry(geomBlock1), matEdge);
+        objGroup.add(meshBlock1);
+        objGroup.add(edgesBlock1);
+
+        // Block 2: Short front part
+        const geomBlock2 = new THREE.BoxGeometry(3, 2, 2);
+        geomBlock2.translate(1.5, 1, 3); // Positioned in front of Block 1 along Z
+        const matsBlock2 = [matGray, matBlue, matGreen, matGray, matBlue, matGray];
+        const meshBlock2 = new THREE.Mesh(geomBlock2, matsBlock2);
+        const edgesBlock2 = new THREE.LineSegments(new THREE.EdgesGeometry(geomBlock2), matEdge);
+        objGroup.add(meshBlock2);
+        objGroup.add(edgesBlock2);
+
+        // --- 3. 2D Projected Shapes on the Plane ---
+        const projGroup = new THREE.Group();
+        scene.add(projGroup);
+
+        // Projected Red Area (from Block 1)
+        const geomProjRed = new THREE.PlaneGeometry(2, 4);
+        geomProjRed.rotateY(Math.PI / 2);
+        geomProjRed.translate(0, 2, 1);
+        const meshProjRed = new THREE.Mesh(geomProjRed, matRed);
+        const edgesProjRed = new THREE.LineSegments(new THREE.EdgesGeometry(geomProjRed), matEdge);
+        projGroup.add(meshProjRed);
+        projGroup.add(edgesProjRed);
+
+        // Projected Blue Area (from Block 2)
+        const geomProjBlue = new THREE.PlaneGeometry(2, 2);
+        geomProjBlue.rotateY(Math.PI / 2);
+        geomProjBlue.translate(0, 1, 3);
+        const meshProjBlue = new THREE.Mesh(geomProjBlue, matBlue);
+        const edgesProjBlue = new THREE.LineSegments(new THREE.EdgesGeometry(geomProjBlue), matEdge);
+        projGroup.add(meshProjBlue);
+        projGroup.add(edgesProjBlue);
+
+        // --- 4. Projection Lines (Dotted) ---
+        let projectionLines = [];
+        const linesGroup = new THREE.Group();
+        scene.add(linesGroup);
+
+        // Define the key vertices on the 3D object's front faces that project to the plane
+        // Coordinates are relative to objGroup (Y, Z)
+        const projectionPoints = [
+            [4, 0], [4, 2], // Top of red face
+            [2, 0], [2, 2], // Middle split (top of blue face level)
+            [0, 0], [0, 2], // Bottom of red face
+            [2, 4], [0, 4]  // Right side of blue face
+        ];
+
+        function updateProjectionLines() {
+            // Clear old lines
+            while (linesGroup.children.length > 0) {
+                linesGroup.remove(linesGroup.children[0]);
+            }
+            projectionLines = [];
+
+            if (!document.getElementById('toggle-lines').checked) return;
+
+            const currentX = objGroup.position.x;
+
+            projectionPoints.forEach(pt => {
+                const y = pt[0];
+                const z = pt[1];
+
+                const points = [];
+                points.push(new THREE.Vector3(currentX, y, z)); // Point on 3D object
+                points.push(new THREE.Vector3(0, y, z));        // Point on Projection Plane
+
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, matProjLine);
+                line.computeLineDistances(); // Required for dashed lines
+                linesGroup.add(line);
+                projectionLines.push(line);
+            });
+        }
+        updateProjectionLines();
+
+        // --- 5. Axes Arrows ---
+        const axesGroup = new THREE.Group();
+        scene.add(axesGroup);
+
+        const arrowColorBlack = 0x000000;
+        const arrowColorGreen = 0x00aa00;
+
+        // Global Axes (Black)
+        axesGroup.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 9, arrowColorBlack, 0.5, 0.4)); // Y
+        axesGroup.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 14, arrowColorBlack, 0.5, 0.4)); // Z (Textbook)
+        axesGroup.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 9, arrowColorBlack, 0.5, 0.4)); // X (Textbook)
+
+        // Plane Axes (Green)
+        axesGroup.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 7, arrowColorGreen, 0.4, 0.3)); // y
+        axesGroup.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 7, arrowColorGreen, 0.4, 0.3)); // x
+
+        // --- Camera Setup ---
+        function resetCamera() {
+            // Positioned to mimic the isometric/oblique textbook drawing
+            camera.position.set(16, 10, 18);
+            controls.target.set(4, 2, 3);
+            controls.update();
+        }
+        resetCamera();
+
+        // --- Label Positioning Logic ---
+        const labels = [
+            { id: 'label-Y', pos: new THREE.Vector3(0, 9.5, 0) },
+            { id: 'label-Z', pos: new THREE.Vector3(14.5, 0, 0) },
+            { id: 'label-X', pos: new THREE.Vector3(0, 0, 9.5) },
+            { id: 'label-y-plane', pos: new THREE.Vector3(0, 7.5, 0) },
+            { id: 'label-x-plane', pos: new THREE.Vector3(0, 0, 7.5) },
+            { id: 'label-plane-text', pos: new THREE.Vector3(0, -1.5, 4) }
+        ];
+
+        function updateLabels() {
+            labels.forEach(labelData => {
+                const el = document.getElementById(labelData.id);
+                if (!el) return;
+
+                // Clone position and project to 2D screen space
+                const pos = labelData.pos.clone();
+                pos.project(camera);
+
+                // Check if behind camera
+                if (pos.z > 1) {
+                    el.style.display = 'none';
+                    return;
+                }
+
+                el.style.display = 'block';
+                const x = (pos.x * 0.5 + 0.5) * window.innerWidth;
+                const y = -(pos.y * 0.5 - 0.5) * window.innerHeight;
+
+                el.style.left = `${x}px`;
+                el.style.top = `${y}px`;
+            });
+        }
+
+        // --- Interactivity & UI Logic ---
+        const slider = document.getElementById('distance-slider');
+        const toggleLines = document.getElementById('toggle-lines');
+        const btnAnimate = document.getElementById('btn-animate');
+        const btnReset = document.getElementById('btn-reset');
+        const btnNextStep = document.getElementById('btn-next-step');
+        const tutorialText = document.getElementById('tutorial-text');
+
+        // Slider
+        slider.addEventListener('input', (e) => {
+            objGroup.position.x = parseFloat(e.target.value);
+            updateProjectionLines();
+        });
+
+        // Toggle Lines
+        toggleLines.addEventListener('change', updateProjectionLines);
+
+        // Reset View
+        btnReset.addEventListener('click', resetCamera);
+
+        // Animation Logic
+        let isAnimating = false;
+        let animDirection = -1;
+
+        btnAnimate.addEventListener('click', () => {
+            isAnimating = !isAnimating;
+            btnAnimate.textContent = isAnimating ? "Stop Animation" : "Animate Distance";
+        });
+
+        // Tutorial Step-Through Logic
+        const tutorialSteps = [
+            "Welcome! This interactive model demonstrates how a 3D object is projected onto a 2D plane. Click 'Next Step' to begin.",
+            "<b>Step 1: The Setup</b><br>On the right is a 3D stepped block. On the left is a translucent 2D 'Projection plane'.",
+            "<b>Step 2: Projection Lines</b><br>Orthographic projection draws parallel lines (dotted) from the 3D object straight onto the 2D plane.",
+            "<b>Step 3: Mapping Faces</b><br>Notice how the Red and Blue faces of the 3D object map exactly to the Red and Blue areas on the 2D plane.",
+            "<b>Step 4: Distance Invariance</b><br>Try moving the slider! Because projection lines are parallel, moving the object closer or further doesn't change its 2D footprint."
+        ];
+        let currentStep = 0;
+
+        btnNextStep.addEventListener('click', () => {
+            currentStep++;
+            if (currentStep >= tutorialSteps.length) {
+                currentStep = 0; // Loop back
+                btnNextStep.textContent = "Start Guided Tour";
+            } else {
+                btnNextStep.textContent = currentStep === tutorialSteps.length - 1 ? "Restart Tour" : "Next Step";
+            }
+
+            tutorialText.innerHTML = tutorialSteps[currentStep];
+
+            // Trigger specific visual states based on step
+            if (currentStep === 1) {
+                toggleLines.checked = false;
+                updateProjectionLines();
+                slider.value = 8;
+                objGroup.position.x = 8;
+            } else if (currentStep === 2) {
+                toggleLines.checked = true;
+                updateProjectionLines();
+            } else if (currentStep === 4) {
+                isAnimating = true;
+                btnAnimate.textContent = "Stop Animation";
+            } else {
+                isAnimating = false;
+                btnAnimate.textContent = "Animate Distance";
+            }
+        });
+
+        // --- Main Render Loop ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Handle Distance Animation
+            if (isAnimating) {
+                let currentX = objGroup.position.x;
+                currentX += animDirection * 0.05;
+
+                if (currentX <= 1) {
+                    currentX = 1;
+                    animDirection = 1;
+                } else if (currentX >= 12) {
+                    currentX = 12;
+                    animDirection = -1;
+                }
+
+                objGroup.position.x = currentX;
+                slider.value = currentX;
+                updateProjectionLines();
+            }
+
+            updateLabels();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

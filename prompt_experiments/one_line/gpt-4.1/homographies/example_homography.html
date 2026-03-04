@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>3D Grid Transformation - Three.js</title>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.154.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 10, 25);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+        // Draw a grid as lines
+        function createGridLines(rows, cols, width, height, offsetX = 0, offsetY = 0, skew = false) {
+            const grid = new THREE.Group();
+            const material = new THREE.LineBasicMaterial({ color: 0x000000 });
+
+            // Vertical lines
+            for (let c = 0; c <= cols; c++) {
+                const points = [];
+                for (let r = 0; r <= rows; r++) {
+                    let x = offsetX + (c * width / cols);
+                    let y = offsetY + (r * height / rows);
+                    let z = 0;
+                    if (skew) {
+                        // Apply perspective skew: farther rows are higher and closer together
+                        z = (r * 1.2);
+                        x += r * 0.7;
+                        y += r * 0.3;
+                    }
+                    points.push(new THREE.Vector3(x, y, z));
+                }
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                grid.add(new THREE.Line(geometry, material));
+            }
+
+            // Horizontal lines
+            for (let r = 0; r <= rows; r++) {
+                const points = [];
+                for (let c = 0; c <= cols; c++) {
+                    let x = offsetX + (c * width / cols);
+                    let y = offsetY + (r * height / rows);
+                    let z = 0;
+                    if (skew) {
+                        z = (r * 1.2);
+                        x += r * 0.7;
+                        y += r * 0.3;
+                    }
+                    points.push(new THREE.Vector3(x, y, z));
+                }
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                grid.add(new THREE.Line(geometry, material));
+            }
+            return grid;
+        }
+
+        // Left: regular grid
+        const leftGrid = createGridLines(3, 3, 8, 8, -10, -4, false);
+        scene.add(leftGrid);
+
+        // Right: skewed grid
+        const rightGrid = createGridLines(3, 3, 8, 8, 5, -4, true);
+        scene.add(rightGrid);
+
+        // Arrow between grids
+        const arrowMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const arrowPoints = [
+            new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(3, 0, 0)
+        ];
+        const arrowGeometry = new THREE.BufferGeometry().setFromPoints(arrowPoints);
+        const arrow = new THREE.Line(arrowGeometry, arrowMaterial);
+        scene.add(arrow);
+
+        // Arrowhead
+        const arrowHeadGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(3, 0, 0),
+            new THREE.Vector3(2.7, 0.2, 0),
+            new THREE.Vector3(3, 0, 0),
+            new THREE.Vector3(2.7, -0.2, 0)
+        ]);
+        const arrowHead = new THREE.Line(arrowHeadGeometry, arrowMaterial);
+        scene.add(arrowHead);
+
+        // Render loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Responsive resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

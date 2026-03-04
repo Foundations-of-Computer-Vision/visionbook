@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>3D Stereo Camera Visualization</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // Orthographic camera
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 4;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 20);
+        camera.position.set(6, 6, 6);
+        camera.lookAt(0, 0, 0);
+        camera.zoom = 1.2;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Helper function to draw axes
+        function addAxes(origin, color, length = 2) {
+            const axes = new THREE.Group();
+            const arrowX = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), origin, length, color[0]);
+            const arrowY = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), origin, length, color[1]);
+            const arrowZ = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), origin, length, color[2]);
+            axes.add(arrowX, arrowY, arrowZ);
+            return axes;
+        }
+
+        // Camera 1
+        const cam1Origin = new THREE.Vector3(0, 0, 0);
+        const cam1Axes = addAxes(cam1Origin, [0x00ff00, 0x00ff00, 0x00ff00]);
+        scene.add(cam1Axes);
+
+        // Camera 1 image plane
+        const planeGeom1 = new THREE.PlaneGeometry(2, 2);
+        const planeMat1 = new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: 0.3, transparent: true, side: THREE.DoubleSide });
+        const plane1 = new THREE.Mesh(planeGeom1, planeMat1);
+        plane1.position.set(0, 0, 1.2);
+        scene.add(plane1);
+
+        // Camera 2 (rotated)
+        const cam2Origin = new THREE.Vector3(0, 0, 0);
+        const cam2Axes = addAxes(cam2Origin, [0xff0000, 0xff0000, 0xff0000]);
+        cam2Axes.rotation.y = Math.PI / 4; // rotate around Y axis
+        scene.add(cam2Axes);
+
+        // Camera 2 image plane
+        const planeGeom2 = new THREE.PlaneGeometry(2, 2);
+        const planeMat2 = new THREE.MeshBasicMaterial({ color: 0xff0000, opacity: 0.3, transparent: true, side: THREE.DoubleSide });
+        const plane2 = new THREE.Mesh(planeGeom2, planeMat2);
+        plane2.position.set(0, 0, 1.2);
+        plane2.rotation.y = Math.PI / 4;
+        scene.add(plane2);
+
+        // 3D Point
+        const pointGeom = new THREE.SphereGeometry(0.1, 16, 16);
+        const pointMat = new THREE.MeshBasicMaterial({ color: 0x00bfff });
+        const point = new THREE.Mesh(pointGeom, pointMat);
+        point.position.set(1.2, 0.8, 2.5);
+        scene.add(point);
+
+        // Projection lines from cameras to point
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const points1 = [cam1Origin, point.position];
+        const lineGeom1 = new THREE.BufferGeometry().setFromPoints(points1);
+        const line1 = new THREE.Line(lineGeom1, lineMat);
+        scene.add(line1);
+
+        const points2 = [cam2Origin, point.position];
+        const lineGeom2 = new THREE.BufferGeometry().setFromPoints(points2);
+        const line2 = new THREE.Line(lineGeom2, lineMat);
+        line2.rotation.y = Math.PI / 4;
+        scene.add(line2);
+
+        // Projected points on image planes
+        const projPointGeom = new THREE.SphereGeometry(0.07, 16, 16);
+        const projPointMat = new THREE.MeshBasicMaterial({ color: 0x00bfff });
+        // Camera 1 projection
+        const proj1 = new THREE.Mesh(projPointGeom, projPointMat);
+        proj1.position.set(0.6, 0.4, 1.2);
+        scene.add(proj1);
+        // Camera 2 projection
+        const proj2 = new THREE.Mesh(projPointGeom, projPointMat);
+        proj2.position.set(0.6, 0.4, 1.2);
+        proj2.rotation.y = Math.PI / 4;
+        scene.add(proj2);
+
+        // Animate
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.left = -d * (w / h);
+            camera.right = d * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

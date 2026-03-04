@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Surface Reflectance Explorer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            background: radial-gradient(circle at top, #ffffff 0%, #f8fff1 60%, #ecffe0 100%);
+            color: #111;
+        }
+
+        #container {
+            position: fixed;
+            inset: 0;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #labels {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+            font-family: "Georgia", serif;
+            color: #0a0a0a;
+        }
+
+        .label {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            font-size: 1rem;
+            font-style: italic;
+            text-shadow: 0 1px 3px rgba(255, 255, 255, 0.9);
+            white-space: nowrap;
+        }
+
+        .label.formula {
+            font-size: 1.05rem;
+        }
+
+        #ui {
+            position: fixed;
+            top: 18px;
+            left: 18px;
+            width: 320px;
+            max-width: calc(100vw - 36px);
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            border-radius: 14px;
+            box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+            padding: 18px 20px;
+            z-index: 10;
+            backdrop-filter: blur(6px);
+        }
+
+        #ui h1 {
+            font-family: "Georgia", serif;
+            font-size: 1.15rem;
+            margin: 0 0 10px 0;
+            color: #0b5200;
+        }
+
+        .control {
+            margin-bottom: 12px;
+        }
+
+        .control label {
+            font-size: 0.88rem;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: #1a9f00;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 8px;
+            padding: 9px 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            color: #fff;
+            background: linear-gradient(120deg, #1a9f00, #0b5200);
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+
+        button.secondary {
+            background: linear-gradient(120deg, #ff9533, #ff6b00);
+            margin-top: 6px;
+        }
+
+        button:active {
+            transform: translateY(1px);
+            box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25);
+        }
+
+        #demoText {
+            margin-top: 12px;
+            font-size: 0.85rem;
+            font-style: italic;
+            line-height: 1.35;
+            color: #1d3b18;
+        }
+
+        @media (max-width: 540px) {
+            #ui {
+                font-size: 0.9rem;
+            }
+
+            .label {
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="labels"></div>
+    <div id="ui">
+        <h1>Surface Reflectance Explorer</h1>
+        <div class="control">
+            <label>Incidence Angle <span id="incidenceValue">42°</span></label>
+            <input type="range" id="incidenceSlider" min="15" max="75" value="42">
+        </div>
+        <div class="control">
+            <label>Surface Roughness <span id="roughnessValue">0.35</span></label>
+            <input type="range" id="roughnessSlider" min="0.05" max="1" step="0.01" value="0.35">
+        </div>
+        <button type="button" id="demoButton" class="secondary">Next Guided Step</button>
+        <button type="button" id="resetButton">Reset to Textbook View</button>
+        <p id="demoText">Tap “Next Guided Step” to walk through how ℓ_in(λ) transforms into ℓ_out.</p>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three@0.161.0';
+        import { OrbitControls } from 'https://esm.sh/three@0.161.0/examples/jsm/controls/OrbitControls.js';
+
+        const container = document.getElementById('container');
+        const labelLayer = document.getElementById('labels');
+        const incidenceSlider = document.getElementById('incidenceSlider');
+        const roughnessSlider = document.getElementById('roughnessSlider');
+        const incidenceValue = document.getElementById('incidenceValue');
+        const roughnessValue = document.getElementById('roughnessValue');
+        const demoButton = document.getElementById('demoButton');
+        const resetButton = document.getElementById('resetButton');
+        const demoText = document.getElementById('demoText');
+
+        const defaults = { incidence: 42, roughness: 0.35 };
+        let incidenceAngle = defaults.incidence;
+        let roughness = defaults.roughness;
+        let currentDemoStep = -1;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const d = 3.6;
+        let aspect = window.innerWidth / window.innerHeight;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 40);
+        camera.position.set(4, 4.5, 3.6);
+        camera.lookAt(0, 0, 0);
+        camera.zoom = 1.1;
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.enablePan = false;
+        controls.target.set(0, 0.08, 0);
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.65);
+        scene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(4, 6, 4);
+        scene.add(dirLight);
+
+        const planeGeometry = new THREE.PlaneGeometry(6, 4.4);
+        const planeMaterial = new THREE.MeshPhongMaterial({
+            color: 0x9bff2b,
+            side: THREE.DoubleSide,
+            shininess: 60
+        });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.rotation.x = -Math.PI / 2;
+        scene.add(plane); // Bright green rectangle stands in for the planar surface patch from the 2D illustration.
+
+        const planeOutline = new THREE.LineSegments(
+            new THREE.EdgesGeometry(planeGeometry),
+            new THREE.LineBasicMaterial({ color: 0x111111 })
+        );
+        planeOutline.rotation.x = -Math.PI / 2;
+        planeOutline.position.y = 0.002;
+        scene.add(planeOutline);
+
+        const hitPoint = new THREE.Vector3(0, 0.05, 0);
+        const impactRing = new THREE.Mesh(
+            new THREE.RingGeometry(0.18, 0.22, 48),
+            new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide })
+        );
+        impactRing.rotation.x = -Math.PI / 2;
+        impactRing.position.copy(hitPoint);
+        impactRing.position.y = 0.051;
+        scene.add(impactRing); // Thin ring marks the infinitesimal surface element highlighted in the figure.
+
+        const normalArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), hitPoint, 1.6, 0x111111, 0.3, 0.15);
+        scene.add(normalArrow); // Upward arrow visualizes the normal n exactly as in the drawing.
+
+        const pDir = new THREE.Vector3(-0.75, 0, -0.25).normalize();
+        const qDir = new THREE.Vector3(0.6, 0, 0.35).normalize();
+        const pqLength = 1.0;
+
+        const pArrow = new THREE.ArrowHelper(pDir, hitPoint, pqLength, 0x222222, 0.18, 0.09);
+        pArrow.position.y = hitPoint.y;
+        scene.add(pArrow);
+
+        const qArrow = new THREE.ArrowHelper(qDir, hitPoint, pqLength * 0.9, 0x0a7f32, 0.18, 0.09);
+        qArrow.position.y = hitPoint.y;
+        scene.add(qArrow);
+
+        const incomingArrow = new THREE.ArrowHelper(new THREE.Vector3(-1, -1, 0.3).normalize(), new THREE.Vector3(-1, 2, 0.3), 2.4, 0xffc200, 0.35, 0.18);
+        scene.add(incomingArrow); // Slanted arrow recreates ℓ_in(λ) striking the patch.
+
+        const outgoingGroup = new THREE.Group();
+        const outgoingArrows = [];
+        for (let i = 0; i < 5; i++) {
+            const arrow = new THREE.ArrowHelper(new THREE.Vector3(0.2, 1, 0).normalize(), hitPoint, 1.2 + i * 0.1, 0x1a9f00, 0.25, 0.12);
+            outgoingGroup.add(arrow);
+            outgoingArrows.push(arrow);
+        }
+        scene.add(outgoingGroup); // Fan of green arrows depicts ℓ_out directions parameterized by the BRDF.
+
+        const incoming = {
+            azimuth: Math.PI * 0.82,
+            length: 2.4,
+            dir: new THREE.Vector3(),
+            origin: new THREE.Vector3()
+        };
+
+        const highlightState = { normal: false, incoming: false, outgoing: false };
+        function applyHighlightColors() {
+            normalArrow.setColor(new THREE.Color(highlightState.normal ? 0xff3b6a : 0x111111));
+            incomingArrow.setColor(new THREE.Color(highlightState.incoming ? 0xff7a00 : 0xffc200));
+            outgoingArrows.forEach(arrow => {
+                arrow.setColor(new THREE.Color(highlightState.outgoing ? 0x00ff9c : 0x1a9f00));
+            });
+        }
+        function clearHighlight() {
+            highlightState.normal = false;
+            highlightState.incoming = false;
+            highlightState.outgoing = false;
+            applyHighlightColors();
+        }
+        function setHighlight(flags) {
+            highlightState.normal = !!flags.normal;
+            highlightState.incoming = !!flags.incoming;
+            highlightState.outgoing = !!flags.outgoing;
+            applyHighlightColors();
+        }
+
+        const labelEntries = [];
+        function createLabel(text, extraClass) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            if (extraClass) div.classList.add(extraClass);
+            div.textContent = text;
+            labelLayer.appendChild(div);
+            return div;
+        }
+
+        const incomingLabelPos = new THREE.Vector3();
+        const outgoingLabelPos = new THREE.Vector3(1.3, 0.85, 0.4);
+        const nLabelPos = hitPoint.clone().add(new THREE.Vector3(0, 1.7, 0));
+        const pLabelPos = hitPoint.clone().add(pDir.clone().multiplyScalar(pqLength + 0.1));
+        const qLabelPos = hitPoint.clone().add(qDir.clone().multiplyScalar(pqLength + 0.15));
+
+        labelEntries.push({ element: createLabel('p'), position: pLabelPos });
+        labelEntries.push({ element: createLabel('q'), position: qLabelPos });
+        labelEntries.push({ element: createLabel('n'), position: nLabelPos });
+        labelEntries.push({ element: createLabel('ℓ_in(λ)'), position: incomingLabelPos });
+        labelEntries.push({ element: createLabel('ℓ_out = F(ℓ_in, n, λ, p, q)', 'formula'), position: outgoingLabelPos });
+
+        function updateLabels() {
+            const width = renderer.domElement.clientWidth;
+            const height = renderer.domElement.clientHeight;
+            labelEntries.forEach(entry => {
+                const projected = entry.position.clone().project(camera);
+                if (projected.z < 1) {
+                    const x = (projected.x * 0.5 + 0.5) * width;
+                    const y = (-projected.y * 0.5 + 0.5) * height;
+                    entry.element.style.display = 'block';
+                    entry.element.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+                } else {
+                    entry.element.style.display = 'none';
+                }
+            });
+        }
+
+        function updateIncomingArrow() {
+            const theta = THREE.MathUtils.degToRad(incidenceAngle);
+            const dir = new THREE.Vector3(
+                Math.cos(incoming.azimuth) * Math.sin(theta),
+                -Math.cos(theta),
+                Math.sin(incoming.azimuth) * Math.sin(theta)
+            ).normalize();
+            incoming.dir.copy(dir);
+            incoming.origin.copy(hitPoint).sub(dir.clone().multiplyScalar(incoming.length));
+            incomingArrow.position.copy(incoming.origin);
+            incomingArrow.setDirection(dir);
+            incomingArrow.setLength(incoming.length, 0.35, 0.18);
+            incomingLabelPos.copy(incoming.origin).add(dir.clone().multiplyScalar(incoming.length * 0.55));
+        }
+
+        const outgoingLabelVec = new THREE.Vector3();
+        function updateOutgoingArrows() {
+            const normal = new THREE.Vector3(0, 1, 0);
+            const reflectionDir = incoming.dir.clone().reflect(normal).normalize();
+            const fanSpread = THREE.MathUtils.lerp(0.08, 0.55, roughness);
+            outgoingArrows.forEach((arrow, index) => {
+                let dir;
+                if (index === 0) {
+                    dir = reflectionDir.clone();
+                } else {
+                    const tier = Math.ceil(index / 2);
+                    const side = index % 2 === 0 ? 1 : -1;
+                    dir = reflectionDir.clone().applyAxisAngle(normal, side * tier * 0.4 * (0.5 + roughness));
+                    dir.lerp(normal, fanSpread * tier);
+                    dir.normalize();
+                }
+                const length = 1.25 + index * 0.18;
+                arrow.position.copy(hitPoint);
+                arrow.setDirection(dir);
+                arrow.setLength(length, 0.25, 0.12);
+                if (index === 0) {
+                    outgoingLabelVec.copy(hitPoint).add(dir.clone().multiplyScalar(length * 0.9));
+                }
+            });
+            outgoingLabelPos.copy(outgoingLabelVec);
+            applyHighlightColors();
+        }
+
+        function setDisplayValues() {
+            incidenceValue.textContent = `${Math.round(incidenceAngle)}°`;
+            roughnessValue.textContent = roughness.toFixed(2);
+        }
+
+        function applyDefaults() {
+            incidenceAngle = defaults.incidence;
+            roughness = defaults.roughness;
+            incidenceSlider.value = defaults.incidence;
+            roughnessSlider.value = defaults.roughness;
+            setDisplayValues();
+            clearHighlight();
+            updateIncomingArrow();
+            updateOutgoingArrows();
+            demoText.textContent = 'Textbook view restored: ℓ_in meets the patch, n defines orientation, and ℓ_out spreads nearby.';
+        }
+
+        incidenceSlider.addEventListener('input', event => {
+            incidenceAngle = Number(event.target.value);
+            currentDemoStep = -1;
+            setDisplayValues();
+            clearHighlight();
+            updateIncomingArrow();
+            updateOutgoingArrows();
+            demoText.textContent = 'Manual: tilting ℓ_in around n changes the mirror direction and therefore ℓ_out.';
+        }); // Slider tilts ℓ_in to teach how incidence affects the BRDF response.
+
+        roughnessSlider.addEventListener('input', event => {
+            roughness = Number(event.target.value);
+            currentDemoStep = -1;
+            setDisplayValues();
+            clearHighlight();
+            updateOutgoingArrows();
+            demoText.textContent = 'Manual: adjusting roughness widens or narrows the ℓ_out fan to mimic different materials.';
+        }); // Slider widens/narrows the scatter fan to relate roughness to ℓ_out spread.
+
+        const demoSteps = [
+            {
+                text: 'Step 1 — The surface normal n is the reference for every angle on the patch.',
+                angle: 35,
+                rough: 0.15,
+                highlight: { normal: true }
+            },
+            {
+                text: 'Step 2 — Aim ℓ_in(λ) toward the patch; moving it changes the mirrored direction.',
+                angle: 55,
+                rough: 0.22,
+                highlight: { incoming: true }
+            },
+            {
+                text: 'Step 3 — ℓ_out = F(ℓ_in, n, λ, p, q) fans outward, especially for rougher surfaces.',
+                angle: 55,
+                rough: 0.7,
+                highlight: { outgoing: true }
+            }
+        ];
+
+        demoButton.addEventListener('click', () => {
+            currentDemoStep = (currentDemoStep + 1) % demoSteps.length;
+            const step = demoSteps[currentDemoStep];
+            incidenceAngle = step.angle;
+            roughness = step.rough;
+            incidenceSlider.value = step.angle;
+            roughnessSlider.value = step.rough;
+            setDisplayValues();
+            setHighlight(step.highlight);
+            updateIncomingArrow();
+            updateOutgoingArrows();
+            demoText.textContent = step.text;
+        }); // Guided button walks through the textbook explanation beat-by-beat.
+
+        resetButton.addEventListener('click', () => {
+            currentDemoStep = -1;
+            applyDefaults();
+        }); // Reset button snaps everything back to the canonical textbook view.
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            updateLabels();
+        }
+
+        window.addEventListener('resize', () => {
+            aspect = window.innerWidth / window.innerHeight;
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.top = d;
+            camera.bottom = -d;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        updateIncomingArrow();
+        updateOutgoingArrows();
+        applyHighlightColors();
+        animate();
+    </script>
+</body>
+
+</html>

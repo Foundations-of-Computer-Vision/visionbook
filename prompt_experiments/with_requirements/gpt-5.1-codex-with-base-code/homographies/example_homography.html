@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Planar Homography Explorer</title>
+  <style>
+    :root {
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      color: #111;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #fdfaf4;
+    }
+
+    #container {
+      width: 100%;
+      height: 100%;
+    }
+
+    #ui {
+      position: absolute;
+      top: 1.2rem;
+      left: 1.2rem;
+      width: 330px;
+      padding: 1rem 1.2rem 1.2rem;
+      border-radius: 1rem;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 12px 30px rgba(17, 17, 17, 0.15);
+      backdrop-filter: blur(8px);
+    }
+
+    #ui h1 {
+      margin: 0 0 0.3rem;
+      font-size: 1.2rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    #ui p.subtitle {
+      margin: 0 0 0.6rem;
+      font-size: 0.85rem;
+      color: #444;
+    }
+
+    label.control {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-top: 0.5rem;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    label.control span.value {
+      width: 3ch;
+      text-align: right;
+      font-weight: 600;
+    }
+
+    input[type="range"] {
+      flex: 1;
+    }
+
+    input[type="range"]:disabled {
+      opacity: 0.35;
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .buttons button {
+      flex: 1 1 47%;
+      border: 1px solid #111;
+      background: #fff;
+      border-radius: 999px;
+      padding: 0.45rem 0.3rem;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .buttons button.active {
+      background: #111;
+      color: #fff;
+    }
+
+    .buttons button:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    #instructionText {
+      margin-top: 0.75rem;
+      font-size: 0.85rem;
+      line-height: 1.35;
+      min-height: 3rem;
+      color: #1b1b1b;
+    }
+
+    @media (max-width: 720px) {
+      #ui {
+        width: calc(100% - 2.4rem);
+        right: 1.2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  <div id="ui">
+    <h1>Planar Homography</h1>
+    <p class="subtitle">Tilt the world plane to see how the same grid is warped after projection.</p>
+    <label class="control">Tilt / yaw
+      <input id="tiltRange" type="range" min="0" max="75" step="1" value="48" />
+      <span class="value" id="tiltValue">48°</span>
+    </label>
+    <label class="control">Slant / pitch
+      <input id="pitchRange" type="range" min="-25" max="20" step="1" value="-12" />
+      <span class="value" id="pitchValue">-12°</span>
+    </label>
+    <div class="buttons">
+      <button id="toggleLines">Show correspondences</button>
+      <button id="animate">Loop warp</button>
+      <button id="guided">Guided demo (Step 1/4)</button>
+      <button id="reset">Reset to textbook view</button>
+    </div>
+    <p id="instructionText">Drag the scene to orbit, adjust the sliders to tilt the plane, and toggle the correspondences to see a homography in action.</p>
+  </div>
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xfaf6ef);
+
+    const aspect = container.clientWidth / container.clientHeight;
+    const frustumSize = 4.2;
+    const camera = new THREE.OrthographicCamera(
+      -frustumSize * aspect,
+      frustumSize * aspect,
+      frustumSize,
+      -frustumSize,
+      0.1,
+      50
+    );
+    const defaults = {
+      tilt: 48,
+      pitch: -12,
+      zoom: 1.05,
+      cameraPos: new THREE.Vector3(5, 3.6, 5.2),
+      target: new THREE.Vector3(0, 0.15, 0)
+    };
+    camera.position.copy(defaults.cameraPos);
+    camera.zoom = defaults.zoom;
+    camera.updateProjectionMatrix();
+    camera.lookAt(defaults.target);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.target.copy(defaults.target);
+    controls.update();
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+    sun.position.set(5, 6, 4);
+    scene.add(sun);
+
+    // Helper to build a rectangular wire grid so each 2D textbook square becomes a 3D line segment.
+    function buildGrid(width, height, xDivs, yDivs, color) {
+      const positions = [];
+      for (let i = 0; i <= xDivs; i++) {
+        const x = -width / 2 + (width / xDivs) * i;
+        positions.push(x, -height / 2, 0, x, height / 2, 0);
+      }
+      for (let j = 0; j <= yDivs; j++) {
+        const y = -height / 2 + (height / yDivs) * j;
+        positions.push(-width / 2, y, 0, width / 2, y, 0);
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color }));
+    }
+
+    const planeWidth = 2.6;
+    const planeHeight = 2.6;
+
+    // Source plane mimics the left orthographic grid.
+    const sourcePlane = new THREE.Group();
+    const sourceSurface = new THREE.Mesh(
+      new THREE.PlaneGeometry(planeWidth, planeHeight),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        roughness: 0.95,
+        metalness: 0,
+        side: THREE.DoubleSide
+      })
+    );
+    sourceSurface.position.z = -0.01;
+    sourcePlane.add(sourceSurface);
+    const sourceGrid = buildGrid(planeWidth, planeHeight, 4, 4, 0x111111);
+    sourcePlane.add(sourceGrid);
+    sourcePlane.position.set(-2.1, 0.05, 0.1);
+    scene.add(sourcePlane);
+
+    // Warped plane mimics the right skewed grid after perspective projection.
+    const worldPlane = new THREE.Group();
+    const warpSurface = new THREE.Mesh(
+      new THREE.PlaneGeometry(planeWidth, planeHeight),
+      new THREE.MeshStandardMaterial({
+        color: 0xf6ecd8,
+        roughness: 0.9,
+        metalness: 0,
+        transparent: true,
+        opacity: 0.92,
+        side: THREE.DoubleSide
+      })
+    );
+    warpSurface.position.z = 0.01;
+    worldPlane.add(warpSurface);
+    const warpedGrid = buildGrid(planeWidth, planeHeight, 4, 4, 0x111111);
+    worldPlane.add(warpedGrid);
+    worldPlane.position.set(1.8, -0.2, -0.5);
+    scene.add(worldPlane);
+
+    // Text label helper used for plane titles and the homography arrow label.
+    function makeLabel(text, color = '#111', background = 'rgba(255,255,255,0.8)') {
+      const canvas = document.createElement('canvas');
+      const size = 256;
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = color;
+      ctx.font = 'bold 36px Space Grotesk';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, size / 2, size / 2);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
+      const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(1.2, 0.35, 1);
+      return sprite;
+    }
+
+    const sourceLabel = makeLabel('image plane');
+    sourceLabel.position.set(0, planeHeight / 2 + 0.4, 0);
+    sourcePlane.add(sourceLabel);
+
+    const worldLabel = makeLabel('tilted world plane', '#0e5a49');
+    worldLabel.position.set(0, planeHeight / 2 + 0.4, 0);
+    worldPlane.add(worldLabel);
+
+    // Arrow shows the mapping direction enforced by the homography H.
+    const arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 2, 0xf57f17, 0.3, 0.18);
+    scene.add(arrow);
+    const arrowLabel = makeLabel('homography H(u,v)', '#f57f17', 'rgba(255,255,255,0.9)');
+    scene.add(arrowLabel);
+
+    // Create corresponding feature points to highlight how planar points link through H.
+    const pointOffsets = [
+      [-planeWidth / 2, -planeHeight / 2],
+      [planeWidth / 2, -planeHeight / 2],
+      [-planeWidth / 2, planeHeight / 2],
+      [planeWidth / 2, planeHeight / 2],
+      [0, 0]
+    ];
+    const pointGeometry = new THREE.SphereGeometry(0.05, 24, 24);
+    const sourcePointMaterial = new THREE.MeshStandardMaterial({ color: 0x1565c0, roughness: 0.6 });
+    const targetPointMaterial = new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.5 });
+    const mappingGroup = new THREE.Group();
+    scene.add(mappingGroup);
+
+    const correspondences = [];
+    pointOffsets.forEach(([x, y]) => {
+      const src = new THREE.Mesh(pointGeometry, sourcePointMaterial);
+      src.position.set(x, y, 0.02);
+      sourcePlane.add(src);
+
+      const dst = new THREE.Mesh(pointGeometry, targetPointMaterial);
+      dst.position.set(x, y, 0.02);
+      worldPlane.add(dst);
+
+      const lineGeometry = new THREE.BufferGeometry();
+      const attr = new THREE.Float32BufferAttribute(6, 3);
+      lineGeometry.setAttribute('position', attr);
+      const line = new THREE.Line(
+        lineGeometry,
+        new THREE.LineBasicMaterial({ color: 0x43a047, transparent: true, opacity: 0.85 })
+      );
+      mappingGroup.add(line);
+      correspondences.push({ src, dst, line });
+    });
+    mappingGroup.visible = false;
+
+    const tempSrc = new THREE.Vector3();
+    const tempDst = new THREE.Vector3();
+
+    function updateCorrespondenceLines() {
+      correspondences.forEach(({ src, dst, line }) => {
+        src.getWorldPosition(tempSrc);
+        dst.getWorldPosition(tempDst);
+        const positions = line.geometry.attributes.position;
+        positions.setXYZ(0, tempSrc.x, tempSrc.y, tempSrc.z);
+        positions.setXYZ(1, tempDst.x, tempDst.y, tempDst.z);
+        positions.needsUpdate = true;
+      });
+    }
+
+    const srcCenter = new THREE.Vector3();
+    const dstCenter = new THREE.Vector3();
+    const arrowDir = new THREE.Vector3();
+    const arrowMid = new THREE.Vector3();
+
+    function updateArrow() {
+      sourcePlane.localToWorld(srcCenter.set(0, 0, 0));
+      worldPlane.localToWorld(dstCenter.set(0, 0, 0));
+      arrowDir.subVectors(dstCenter, srcCenter);
+      const length = arrowDir.length();
+      if (length === 0) return;
+      arrow.position.copy(srcCenter);
+      arrow.setDirection(arrowDir.clone().normalize());
+      arrow.setLength(length * 0.95, 0.25, 0.15);
+      arrowMid.copy(srcCenter).addScaledVector(arrowDir, 0.5).add(new THREE.Vector3(0, 0.15, 0));
+      arrowLabel.position.copy(arrowMid);
+    }
+
+    const tiltSlider = document.getElementById('tiltRange');
+    const pitchSlider = document.getElementById('pitchRange');
+    const tiltValue = document.getElementById('tiltValue');
+    const pitchValue = document.getElementById('pitchValue');
+    const toggleLinesBtn = document.getElementById('toggleLines');
+    const animateBtn = document.getElementById('animate');
+    const resetBtn = document.getElementById('reset');
+    const guidedBtn = document.getElementById('guided');
+    const instructionText = document.getElementById('instructionText');
+
+    const state = {
+      tilt: defaults.tilt,
+      pitch: defaults.pitch,
+      animationLoop: false
+    };
+
+    let warpLoopBase = { tilt: defaults.tilt, pitch: defaults.pitch };
+    let warpTween = null;
+    let guidedIndex = 0;
+
+    function applyWarp() {
+      worldPlane.rotation.set(
+        THREE.MathUtils.degToRad(state.pitch - 5),
+        THREE.MathUtils.degToRad(-state.tilt - 8),
+        THREE.MathUtils.degToRad(3)
+      );
+      worldPlane.position.set(
+        1.8 + state.tilt * 0.01,
+        -0.25 + state.pitch * 0.012,
+        -0.5 - state.tilt * 0.018
+      );
+      updateCorrespondenceLines();
+      updateArrow();
+    }
+
+    function updateSliderLabels() {
+      tiltValue.textContent = `${state.tilt.toFixed(0)}°`;
+      pitchValue.textContent = `${state.pitch.toFixed(0)}°`;
+      if (!tiltSlider.disabled) tiltSlider.value = state.tilt;
+      if (!pitchSlider.disabled) pitchSlider.value = state.pitch;
+    }
+
+    function setSliderEnabled(enabled) {
+      tiltSlider.disabled = pitchSlider.disabled = !enabled;
+    }
+
+    function stopLoopingAnimation() {
+      if (!state.animationLoop) return;
+      state.animationLoop = false;
+      animateBtn.classList.remove('active');
+      animateBtn.textContent = 'Loop warp';
+      setSliderEnabled(true);
+      state.tilt = warpLoopBase.tilt;
+      state.pitch = warpLoopBase.pitch;
+      applyWarp();
+      updateSliderLabels();
+    }
+
+    function animateTo(targetTilt, targetPitch, duration = 1.1) {
+      warpTween = {
+        startTilt: state.tilt,
+        startPitch: state.pitch,
+        targetTilt,
+        targetPitch,
+        start: performance.now(),
+        duration: duration * 1000
+      };
+    }
+
+    function restoreDefaultCamera() {
+      camera.position.copy(defaults.cameraPos);
+      camera.zoom = defaults.zoom;
+      camera.updateProjectionMatrix();
+      controls.target.copy(defaults.target);
+      controls.update();
+    }
+
+    function setFrontCamera() {
+      camera.position.set(0, 0, 8);
+      camera.zoom = 1.35;
+      camera.updateProjectionMatrix();
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+
+    function resetView() {
+      stopLoopingAnimation();
+      warpTween = null;
+      state.tilt = defaults.tilt;
+      state.pitch = defaults.pitch;
+      tiltSlider.value = defaults.tilt;
+      pitchSlider.value = defaults.pitch;
+      updateSliderLabels();
+      mappingGroup.visible = false;
+      toggleLinesBtn.textContent = 'Show correspondences';
+      instructionText.textContent = 'Drag the scene to orbit, adjust the sliders to tilt the plane, and toggle the correspondences to see a homography in action.';
+      guidedIndex = 0;
+      guidedBtn.textContent = 'Guided demo (Step 1/4)';
+      restoreDefaultCamera();
+      applyWarp();
+    }
+
+    tiltSlider.addEventListener('input', () => {
+      stopLoopingAnimation();
+      warpTween = null;
+      state.tilt = parseFloat(tiltSlider.value);
+      applyWarp();
+      updateSliderLabels();
+    });
+
+    pitchSlider.addEventListener('input', () => {
+      stopLoopingAnimation();
+      warpTween = null;
+      state.pitch = parseFloat(pitchSlider.value);
+      applyWarp();
+      updateSliderLabels();
+    });
+
+    toggleLinesBtn.addEventListener('click', () => {
+      mappingGroup.visible = !mappingGroup.visible;
+      toggleLinesBtn.textContent = mappingGroup.visible ? 'Hide correspondences' : 'Show correspondences';
+    });
+
+    animateBtn.addEventListener('click', () => {
+      state.animationLoop = !state.animationLoop;
+      animateBtn.classList.toggle('active', state.animationLoop);
+      animateBtn.textContent = state.animationLoop ? 'Stop warp loop' : 'Loop warp';
+      if (state.animationLoop) {
+        warpLoopBase = { tilt: state.tilt, pitch: state.pitch };
+        setSliderEnabled(false);
+      } else {
+        setSliderEnabled(true);
+        state.tilt = warpLoopBase.tilt;
+        state.pitch = warpLoopBase.pitch;
+        applyWarp();
+        updateSliderLabels();
+      }
+    });
+
+    resetBtn.addEventListener('click', resetView);
+
+    const guidedSteps = [
+      {
+        text: 'Step 1/4 – Start with the orthographic image plane; every square is still axis-aligned.',
+        action: () => {
+          setFrontCamera();
+          mappingGroup.visible = false;
+          toggleLinesBtn.textContent = 'Show correspondences';
+          state.tilt = 0;
+          state.pitch = 0;
+          applyWarp();
+          updateSliderLabels();
+        }
+      },
+      {
+        text: 'Step 2/4 – Tilt the physical plane; parallel lines meet at a vanishing point.',
+        action: () => {
+          restoreDefaultCamera();
+          animateTo(40, -5, 1.2);
+        }
+      },
+      {
+        text: 'Step 3/4 – Connect matching points; their linkage is the homography that camera geometry enforces.',
+        action: () => {
+          mappingGroup.visible = true;
+          toggleLinesBtn.textContent = 'Hide correspondences';
+          animateTo(55, -12, 1.2);
+        }
+      },
+      {
+        text: 'Step 4/4 – Return to the textbook comparison view for both grids.',
+        action: () => {
+          restoreDefaultCamera();
+          animateTo(defaults.tilt, defaults.pitch, 1);
+        }
+      }
+    ];
+
+    guidedBtn.addEventListener('click', () => {
+      stopLoopingAnimation();
+      setSliderEnabled(true);
+      const step = guidedSteps[guidedIndex];
+      instructionText.textContent = step.text;
+      step.action();
+      guidedIndex = (guidedIndex + 1) % guidedSteps.length;
+      guidedBtn.textContent = `Guided demo (Step ${guidedIndex + 1}/${guidedSteps.length})`;
+    });
+
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      const newAspect = w / h;
+      camera.left = -frustumSize * newAspect;
+      camera.right = frustumSize * newAspect;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+
+    const clock = new THREE.Clock();
+
+    function renderLoop() {
+      requestAnimationFrame(renderLoop);
+      const elapsed = clock.getElapsedTime();
+      if (state.animationLoop) {
+        state.tilt = warpLoopBase.tilt + Math.sin(elapsed * 0.8) * 10;
+        state.pitch = warpLoopBase.pitch + Math.cos(elapsed * 0.6) * 4;
+        applyWarp();
+        updateSliderLabels();
+      } else if (warpTween) {
+        const now = performance.now();
+        const t = Math.min((now - warpTween.start) / warpTween.duration, 1);
+        const eased = 0.5 - 0.5 * Math.cos(Math.PI * t);
+        state.tilt = THREE.MathUtils.lerp(warpTween.startTilt, warpTween.targetTilt, eased);
+        state.pitch = THREE.MathUtils.lerp(warpTween.startPitch, warpTween.targetPitch, eased);
+        applyWarp();
+        updateSliderLabels();
+        if (t >= 1) {
+          warpTween = null;
+          tiltSlider.value = state.tilt;
+          pitchSlider.value = state.pitch;
+        }
+      }
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    resetView();
+    renderLoop();
+  </script>
+</body>
+</html>

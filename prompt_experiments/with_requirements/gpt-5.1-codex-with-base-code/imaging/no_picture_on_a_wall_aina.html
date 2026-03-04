@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pinhole Projection Explorer</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #fefefe;
+      font-family: "Source Sans Pro", "Segoe UI", sans-serif;
+    }
+    #container {
+      width: 100%;
+      height: 100%;
+    }
+    #ui {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid #d0d0d0;
+      border-radius: 10px;
+      max-width: 340px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+    }
+    #ui h1 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+    #ui p {
+      margin: 4px 0 10px;
+      font-size: 13px;
+      color: #444;
+    }
+    #controls {
+      display: grid;
+      gap: 6px;
+    }
+    button {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #bbb;
+      background: #fff;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s, border 0.2s;
+    }
+    button:hover {
+      background: #f0f0f0;
+      border-color: #888;
+    }
+    label {
+      font-size: 12px;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    input[type="range"] {
+      width: 100%;
+    }
+    #stepText {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #2b2b2b;
+      padding-top: 6px;
+      border-top: 1px solid #e0e0e0;
+    }
+    @media (max-width: 600px) {
+      #ui {
+        top: auto;
+        bottom: 16px;
+        max-width: calc(100% - 32px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  <div id="ui">
+    <h1>Pinhole Projection Explorer</h1>
+    <p>Step through how a wall sees the tree with and without a pinhole. Adjust the opening to feel the blur.</p>
+    <div id="controls">
+      <button id="apertureBtn">Show wide aperture blur</button>
+      <button id="pinholeBtn">Show pinhole focus</button>
+      <label>
+        Aperture size <span id="apertureValue">0.60</span>
+        <input type="range" id="apertureSize" min="0.20" max="1.00" step="0.01" value="0.60" />
+      </label>
+      <button id="stepBtn">Next guided step</button>
+      <button id="resetBtn">Reset to textbook view</button>
+    </div>
+    <div id="stepText">1. Rays from the tree spread to the wall, creating overlapping blur.</div>
+  </div>
+  <script type="module">
+    // Base scene setup derived from provided starter template
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+    const container = document.getElementById('container');
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf8fbff);
+
+    const aspect = container.clientWidth / container.clientHeight;
+    const frustum = 3;
+    const camera = new THREE.OrthographicCamera(-frustum * aspect, frustum * aspect, frustum, -frustum, 0.1, 40);
+    camera.position.set(4, 3.3, 4);
+    camera.lookAt(0, 1, 0);
+    camera.zoom = 1.0;
+    camera.updateProjectionMatrix();
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 1, 0);
+    controls.saveState();
+
+    // Lighting to keep geometry legible, not realistic shading
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.85));
+    scene.add(new THREE.DirectionalLight(0xffffff, 0.4));
+
+    // Helper grid for spatial context (intentionally subtle)
+    const grid = new THREE.GridHelper(12, 12, 0xdedede, 0xeeeeee);
+    grid.position.y = -0.01;
+    scene.add(grid);
+
+    // Tree approximated with a trunk cylinder and leaf spheres to map 2D foliage blobs into 3D
+    const treeGroup = new THREE.Group();
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.15, 0.2, 2.6, 12),
+      new THREE.MeshLambertMaterial({ color: 0x8c4a21 })
+    );
+    trunk.position.set(1.8, 1.3, 0);
+    treeGroup.add(trunk);
+
+    const leafMaterial = new THREE.MeshLambertMaterial({ color: 0x66dd32 });
+    const darkerLeafMaterial = new THREE.MeshLambertMaterial({ color: 0x2fa321 });
+
+    const leafSpheres = [
+      { pos: [1.6, 2.2, 0.2], scale: [1.2, 1.0, 1.0], mat: leafMaterial },
+      { pos: [2.0, 2.0, -0.2], scale: [1.0, 0.9, 1.1], mat: leafMaterial },
+      { pos: [1.8, 2.3, -0.6], scale: [0.9, 0.9, 0.9], mat: darkerLeafMaterial },
+      { pos: [1.5, 1.7, -0.2], scale: [0.8, 0.7, 0.9], mat: darkerLeafMaterial }
+    ];
+
+    leafSpheres.forEach(({ pos, scale, mat }) => {
+      const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.6, 24, 24), mat);
+      sphere.position.set(...pos);
+      sphere.scale.set(...scale);
+      treeGroup.add(sphere);
+    });
+
+    scene.add(treeGroup);
+
+    // Wall representing the screen in the textbook drawing
+    const wall = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.8, 4.0),
+      new THREE.MeshLambertMaterial({ color: 0xf7f5f5, side: THREE.DoubleSide })
+    );
+    wall.position.set(-2.4, 1.9, 0);
+    wall.rotation.y = Math.PI / 2;
+    scene.add(wall);
+
+    // Projection groups mapping the drawn blurred blobs vs sharp pinhole image
+    const blurGroup = new THREE.Group();
+    const sharpGroup = new THREE.Group();
+
+    const blurBases = [
+      new THREE.Vector3(-2.39, 2.4, 0.4),
+      new THREE.Vector3(-2.39, 1.8, 0.8),
+      new THREE.Vector3(-2.39, 1.2, -0.4),
+      new THREE.Vector3(-2.39, 0.8, -0.9)
+    ];
+
+    const sharpTargets = [
+      new THREE.Vector3(-2.41, 0.9, -0.2),
+      new THREE.Vector3(-2.41, 0.7, 0.1),
+      new THREE.Vector3(-2.41, 0.5, 0.4),
+      new THREE.Vector3(-2.41, 0.3, 0.7)
+    ];
+
+    const blurMaterial = new THREE.MeshBasicMaterial({ color: 0x90ff72, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+    blurBases.forEach((base, idx) => {
+      const circle = new THREE.Mesh(new THREE.CircleGeometry(0.55, 32), blurMaterial.clone());
+      circle.position.copy(base);
+      circle.rotation.y = Math.PI / 2;
+      blurGroup.add(circle);
+    });
+    scene.add(blurGroup);
+
+    const sharpMaterial = new THREE.MeshBasicMaterial({ color: 0x5edc35, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+    sharpTargets.forEach((target) => {
+      const leaf = new THREE.Mesh(new THREE.CircleGeometry(0.28, 32), sharpMaterial.clone());
+      leaf.position.copy(target);
+      leaf.rotation.y = Math.PI / 2;
+      sharpGroup.add(leaf);
+    });
+    sharpGroup.visible = false;
+    scene.add(sharpGroup);
+
+    // Aperture panel to mimic the open doorway in part (a)
+    const aperturePanel = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.2, 2.8),
+      new THREE.MeshBasicMaterial({ color: 0xb77f49, transparent: true, opacity: 0.22, side: THREE.DoubleSide })
+    );
+    aperturePanel.position.set(-0.6, 1.8, 0);
+    aperturePanel.rotation.y = Math.PI / 2;
+    scene.add(aperturePanel);
+
+    // Pinhole board (part b) plus the glowing circular opening
+    const pinholePanel = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.2, 2.8),
+      new THREE.MeshLambertMaterial({ color: 0x151515, side: THREE.DoubleSide })
+    );
+    pinholePanel.position.set(-0.2, 1.8, 0);
+    pinholePanel.rotation.y = Math.PI / 2;
+    pinholePanel.visible = false;
+    scene.add(pinholePanel);
+
+    const pinholeCircle = new THREE.Mesh(
+      new THREE.CircleGeometry(0.08, 48),
+      new THREE.MeshBasicMaterial({ color: 0xffffff })
+    );
+    pinholeCircle.position.set(-0.19, 1.1, 0);
+    pinholeCircle.rotation.y = Math.PI / 2;
+    pinholeCircle.visible = false;
+    scene.add(pinholeCircle);
+
+    // Rays illustrating the optical paths (wide aperture vs pinhole)
+    const treeSamplePoints = [
+      new THREE.Vector3(1.8, 2.4, 0.0),
+      new THREE.Vector3(1.9, 2.0, 0.5),
+      new THREE.Vector3(1.7, 1.4, -0.4),
+      new THREE.Vector3(1.9, 0.9, -0.8)
+    ];
+
+    const pinholePoint = new THREE.Vector3(-0.19, 1.1, 0);
+
+    const apertureRaysGroup = new THREE.Group();
+    const apertureLines = [];
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x8d511f });
+
+    treeSamplePoints.forEach((start, idx) => {
+      const target = blurBases[idx].clone();
+      const geometry = new THREE.BufferGeometry().setFromPoints([start, target]);
+      const line = new THREE.Line(geometry, lineMaterial);
+      apertureLines.push({ line, targetBase: blurBases[idx].clone() });
+      apertureRaysGroup.add(line);
+    });
+    scene.add(apertureRaysGroup);
+
+    const pinholeRaysGroup = new THREE.Group();
+    const pinholeMaterial = new THREE.LineBasicMaterial({ color: 0x2f7c2f });
+    treeSamplePoints.forEach((start, idx) => {
+      const target = sharpTargets[idx].clone();
+      const geometry = new THREE.BufferGeometry().setFromPoints([start, pinholePoint, target]);
+      const line = new THREE.Line(geometry, pinholeMaterial);
+      pinholeRaysGroup.add(line);
+    });
+    pinholeRaysGroup.visible = false;
+    scene.add(pinholeRaysGroup);
+
+    // Labels rendered as sprites generated from 2D canvas for clarity
+    function makeLabel(text, color) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'rgba(0,0,0,0)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = color;
+      ctx.font = '28px "Source Sans Pro"';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+      const texture = new THREE.CanvasTexture(canvas);
+      const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      const sprite = new THREE.Sprite(spriteMaterial);
+      sprite.scale.set(1.4, 0.35, 1);
+      return sprite;
+    }
+
+    const wallLabel = makeLabel('Wall', '#333333');
+    wallLabel.position.set(-2.7, 3.4, 0);
+    scene.add(wallLabel);
+
+    const treeLabel = makeLabel('Tree', '#2f7c2f');
+    treeLabel.position.set(1.9, 3.3, 0.2);
+    scene.add(treeLabel);
+
+    const pinholeLabel = makeLabel('Pinhole', '#ffffff');
+    pinholeLabel.position.set(-0.2, 2.9, 0.1);
+    pinholeLabel.visible = false;
+    scene.add(pinholeLabel);
+
+    const rayLabel = makeLabel('Light rays', '#8d511f');
+    rayLabel.position.set(0.2, 2.7, 0.8);
+    scene.add(rayLabel);
+
+    // UI elements
+    const apertureBtn = document.getElementById('apertureBtn');
+    const pinholeBtn = document.getElementById('pinholeBtn');
+    const apertureSlider = document.getElementById('apertureSize');
+    const apertureValue = document.getElementById('apertureValue');
+    const stepBtn = document.getElementById('stepBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const stepText = document.getElementById('stepText');
+
+    let currentMode = 'aperture';
+    const defaultSlider = 0.6;
+    let stepIndex = 0;
+
+    function setMode(mode) {
+      currentMode = mode;
+      const pinholeActive = mode === 'pinhole';
+      aperturePanel.visible = !pinholeActive;
+      blurGroup.visible = !pinholeActive;
+      apertureRaysGroup.visible = !pinholeActive;
+      rayLabel.material.color.set(pinholeActive ? 0x2f7c2f : 0x8d511f);
+
+      pinholePanel.visible = pinholeActive;
+      pinholeCircle.visible = pinholeActive;
+      pinholeLabel.visible = pinholeActive;
+      sharpGroup.visible = pinholeActive;
+      pinholeRaysGroup.visible = pinholeActive;
+    }
+
+    function updateApertureSpread(value) {
+      const numeric = parseFloat(value);
+      apertureValue.textContent = numeric.toFixed(2);
+      const spread = THREE.MathUtils.mapLinear(numeric, 0.2, 1.0, 0.35, 1.25);
+      apertureLines.forEach(({ line, targetBase }) => {
+        const pos = line.geometry.attributes.position.array;
+        pos[3] = -2.39;
+        pos[4] = targetBase.y * spread;
+        pos[5] = targetBase.z * spread;
+        line.geometry.attributes.position.needsUpdate = true;
+      });
+      blurGroup.children.forEach((mesh, idx) => {
+        const base = blurBases[idx];
+        mesh.position.set(-2.39, base.y * spread, base.z * spread);
+        mesh.scale.set(spread, spread, 1);
+      });
+      const holeScale = THREE.MathUtils.mapLinear(numeric, 0.2, 1.0, 0.4, 1.4);
+      pinholeCircle.scale.set(holeScale, holeScale, 1);
+      aperturePanel.scale.y = THREE.MathUtils.mapLinear(numeric, 0.2, 1.0, 0.8, 1.1);
+    }
+
+    function resetView() {
+      controls.reset();
+      camera.zoom = 1.0;
+      camera.updateProjectionMatrix();
+      setMode('aperture');
+      apertureSlider.value = defaultSlider.toFixed(2);
+      updateApertureSpread(apertureSlider.value);
+      stepIndex = 0;
+      stepText.textContent = steps[0].text;
+      steps[0].action();
+    }
+
+    apertureBtn.addEventListener('click', () => {
+      setMode('aperture');
+      stepText.textContent = 'Wide opening lets many rays overlap, copying the blur from part (a).';
+    });
+
+    pinholeBtn.addEventListener('click', () => {
+      setMode('pinhole');
+      stepText.textContent = 'Opaque board forces rays through one point, matching part (b).';
+    });
+
+    apertureSlider.addEventListener('input', (event) => {
+      // Interaction to let learners feel how aperture diameter affects ray spread & sharpness
+      updateApertureSpread(event.target.value);
+      stepText.textContent = currentMode === 'pinhole'
+        ? 'Smaller holes reduce ray spread and sharpen the inverted image.'
+        : 'Large openings send light to many wall points and increase blur.';
+    });
+
+    const steps = [
+      {
+        text: '1. Rays from the tree spread to the wall, creating overlapping blur.',
+        action: () => {
+          setMode('aperture');
+          apertureSlider.value = '1.00';
+          updateApertureSpread('1.00');
+        }
+      },
+      {
+        text: '2. Narrow the doorway to limit rays, reducing the smear.',
+        action: () => {
+          setMode('aperture');
+          apertureSlider.value = '0.60';
+          updateApertureSpread('0.60');
+        }
+      },
+      {
+        text: '3. Insert a dark board with a single pinhole.',
+        action: () => {
+          setMode('pinhole');
+          apertureSlider.value = '0.30';
+          updateApertureSpread('0.30');
+        }
+      },
+      {
+        text: '4. Observe the sharper, inverted tree on the wall.',
+        action: () => {
+          setMode('pinhole');
+          apertureSlider.value = '0.20';
+          updateApertureSpread('0.20');
+        }
+      }
+    ];
+
+    stepBtn.addEventListener('click', () => {
+      stepIndex = (stepIndex + 1) % steps.length;
+      steps[stepIndex].action();
+      stepText.textContent = steps[stepIndex].text;
+    });
+
+    resetBtn.addEventListener('click', resetView);
+
+    // Initial state to match textbook panel (a)
+    updateApertureSpread(apertureSlider.value);
+    steps[0].action();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      const { clientWidth, clientHeight } = container;
+      const newAspect = clientWidth / clientHeight;
+      camera.left = -frustum * newAspect;
+      camera.right = frustum * newAspect;
+      camera.top = frustum;
+      camera.bottom = -frustum;
+      camera.updateProjectionMatrix();
+      renderer.setSize(clientWidth, clientHeight);
+    });
+  </script>
+</body>
+</html>

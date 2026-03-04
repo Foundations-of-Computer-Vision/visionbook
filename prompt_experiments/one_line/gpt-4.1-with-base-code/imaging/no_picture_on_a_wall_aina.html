@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Camera Obscura 3D Scene</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // Orthographic camera
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 6;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 50);
+        camera.position.set(10, 10, 10);
+        camera.lookAt(0, 0, 0);
+        camera.zoom = 1.2;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Wall
+        const wallGeometry = new THREE.BoxGeometry(0.2, 6, 6);
+        const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x222222 });
+        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+        wall.position.set(-3, 3, 0);
+        scene.add(wall);
+
+        // Pinhole wall
+        const pinholeWallGeometry = new THREE.BoxGeometry(0.2, 6, 6);
+        const pinholeWallMaterial = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        const pinholeWall = new THREE.Mesh(pinholeWallGeometry, pinholeWallMaterial);
+        pinholeWall.position.set(3, 3, 0);
+        scene.add(pinholeWall);
+
+        // Pinhole
+        const pinholeGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+        const pinholeMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const pinhole = new THREE.Mesh(pinholeGeometry, pinholeMaterial);
+        pinhole.position.set(3, 3, 0);
+        scene.add(pinhole);
+
+        // Tree trunk
+        const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.4, 3, 16);
+        const trunkMaterial = new THREE.MeshBasicMaterial({ color: 0x8B5A2B });
+        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+        trunk.position.set(0, 1.5, 0);
+        scene.add(trunk);
+
+        // Tree foliage (three spheres)
+        const foliageColors = [0x22cc22, 0x44ee44, 0x66ff66];
+        const foliagePositions = [
+            [0, 3.5, 0],
+            [0.7, 3.2, 0.7],
+            [-0.7, 3.2, -0.7]
+        ];
+        for (let i = 0; i < 3; i++) {
+            const sphereGeometry = new THREE.SphereGeometry(1.2, 32, 32);
+            const sphereMaterial = new THREE.MeshBasicMaterial({ color: foliageColors[i] });
+            const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphere.position.set(...foliagePositions[i]);
+            scene.add(sphere);
+        }
+
+        // Rays from tree to wall
+        const rayMaterial = new THREE.LineBasicMaterial({ color: 0x228B22 });
+        const rayMaterial2 = new THREE.LineBasicMaterial({ color: 0x8B5A2B });
+        const rayPoints = [
+            [0, 3.5, 0], // top foliage
+            [0.7, 3.2, 0.7], // right foliage
+            [-0.7, 3.2, -0.7], // left foliage
+            [0, 0, 0], // trunk base
+        ];
+        const wallPoints = [
+            [-3, 6, 0],
+            [-3, 3, 3],
+            [-3, 3, -3],
+            [-3, 0, 0],
+        ];
+        for (let i = 0; i < rayPoints.length; i++) {
+            const points = [
+                new THREE.Vector3(...rayPoints[i]),
+                new THREE.Vector3(...wallPoints[i])
+            ];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = i === 3 ? rayMaterial2 : rayMaterial;
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+        }
+
+        // Rays from tree through pinhole to wall
+        const pinholePoints = [
+            [0, 3.5, 0],
+            [0.7, 3.2, 0.7],
+            [-0.7, 3.2, -0.7],
+            [0, 0, 0],
+        ];
+        const wallPoints2 = [
+            [3, 6, 0],
+            [3, 3, 3],
+            [3, 3, -3],
+            [3, 0, 0],
+        ];
+        for (let i = 0; i < pinholePoints.length; i++) {
+            // Tree to pinhole
+            const points1 = [
+                new THREE.Vector3(...pinholePoints[i]),
+                new THREE.Vector3(3, 3, 0)
+            ];
+            const geometry1 = new THREE.BufferGeometry().setFromPoints(points1);
+            const material1 = i === 3 ? rayMaterial2 : rayMaterial;
+            const line1 = new THREE.Line(geometry1, material1);
+            scene.add(line1);
+
+            // Pinhole to wall
+            const points2 = [
+                new THREE.Vector3(3, 3, 0),
+                new THREE.Vector3(...wallPoints2[i])
+            ];
+            const geometry2 = new THREE.BufferGeometry().setFromPoints(points2);
+            const material2 = i === 3 ? rayMaterial2 : rayMaterial;
+            const line2 = new THREE.Line(geometry2, material2);
+            scene.add(line2);
+        }
+
+        // Labels (optional, simple text sprites)
+        function createLabel(text, color, position) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.font = 'bold 32px Arial';
+            ctx.fillStyle = color;
+            ctx.fillText(text, 10, 40);
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.set(...position);
+            sprite.scale.set(2, 0.5, 1);
+            scene.add(sprite);
+        }
+        createLabel('Wall', '#222222', [-3, 6.5, 0]);
+        createLabel('Pinhole', '#111111', [3, 6.5, 0]);
+        createLabel('Tree', '#228B22', [0, 5, 0]);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.left = -d * (w / h);
+            camera.right = d * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

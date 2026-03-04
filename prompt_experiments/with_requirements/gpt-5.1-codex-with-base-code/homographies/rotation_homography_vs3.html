@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Rotation-Induced Homography Explorer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap');
+
+        :root {
+            color-scheme: light;
+            --green: #00a65a;
+            --red: #d94b4b;
+            --charcoal: #1b1f24;
+            --sky: #00d1ff;
+            --panel: rgba(255, 255, 255, 0.9);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Space Grotesk', 'Futura', sans-serif;
+            background: radial-gradient(circle at top, #f8fff5 0%, #e4f4ff 60%, #d6e0ff 100%);
+            color: var(--charcoal);
+        }
+
+        #container {
+            position: absolute;
+            inset: 0;
+        }
+
+        .ui {
+            position: absolute;
+            top: 1.4rem;
+            left: 1.4rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding: 1.1rem 1.3rem;
+            border-radius: 1.1rem;
+            background: var(--panel);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+            max-width: 320px;
+        }
+
+        .ui h1 {
+            margin: 0 0 0.3rem;
+            font-size: 1.1rem;
+            letter-spacing: 0.02em;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+
+        label {
+            font-size: 0.85rem;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(90deg, var(--green), var(--red));
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--charcoal);
+            cursor: pointer;
+        }
+
+        button {
+            border: none;
+            border-radius: 999px;
+            padding: 0.55rem 1rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--charcoal);
+            color: white;
+            transition: transform 0.15s ease, background 0.15s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            background: #000;
+        }
+
+        button.alt {
+            background: var(--red);
+        }
+
+        .stepper {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .toggles {
+            display: flex;
+            gap: 0.4rem;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        #stepText {
+            position: absolute;
+            left: 1.4rem;
+            bottom: 1.4rem;
+            max-width: 360px;
+            background: rgba(27, 31, 36, 0.78);
+            color: white;
+            padding: 0.85rem 1rem;
+            border-radius: 0.9rem;
+            font-size: 0.9rem;
+            line-height: 1.35;
+            letter-spacing: 0.01em;
+            backdrop-filter: blur(4px);
+        }
+
+        @media (max-width: 640px) {
+            .ui {
+                max-width: 90vw;
+            }
+
+            #stepText {
+                right: 1.4rem;
+                max-width: calc(100vw - 2.8rem);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div class="ui">
+        <h1>Rotation Homography</h1>
+        <div class="control-group">
+            <label for="rotationSlider">Rotate Camera 2 (degrees)</label>
+            <input type="range" id="rotationSlider" min="-40" max="10" step="0.5" value="-28" />
+        </div>
+        <button id="animateBtn">Auto rotate</button>
+        <label class="toggles">
+            <input type="checkbox" id="epipToggle" />
+            Highlight epipolar plane
+        </label>
+        <div class="stepper">
+            <button id="stepPrev">Prev step</button>
+            <button id="stepNext">Next step</button>
+        </div>
+        <button class="alt" id="resetBtn">Reset to textbook view</button>
+    </div>
+    <div id="stepText"></div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three@0.160.0';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+        const container = document.getElementById('container');
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xfdfdfd);
+
+        // Orthographic viewer to emulate the flattened textbook perspective.
+        const aspect = container.clientWidth / container.clientHeight;
+        const orthoSize = 4;
+        const camera = new THREE.OrthographicCamera(-orthoSize * aspect, orthoSize * aspect, orthoSize, -orthoSize, 0.1, 100);
+        camera.position.set(5, 4.5, 5);
+        camera.lookAt(0.5, 0.3, 1.8);
+        camera.zoom = 1.15;
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0.4, 0.4, 1.8);
+
+        const schematic = new THREE.Group();
+        scene.add(schematic);
+
+        const origin = new THREE.Vector3(0, 0, 0);
+        const planeDistance = 1.2;
+        const defaultAngle = -28;
+        let currentAngle = defaultAngle;
+
+        // Helper builds axis arrows (all green to mirror the textbook convention).
+        const arrowLength = 1.8;
+        const axisMaterial = new THREE.MeshBasicMaterial({ color: 0x00a651 });
+        createAxis(new THREE.Vector3(1, 0, 0), 'X', 0.15);
+        createAxis(new THREE.Vector3(0, 1, 0), 'Y', 0.1);
+        createAxis(new THREE.Vector3(0, 0, 1), 'Z', 0.1);
+
+        function createAxis(direction, labelText, labelOffset) {
+            const unitDir = direction.clone().normalize();
+            const shaftGeometry = new THREE.CylinderGeometry(0.02, 0.02, arrowLength - 0.25, 12);
+            const shaft = new THREE.Mesh(shaftGeometry, axisMaterial);
+            shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), unitDir);
+            shaft.position.copy(unitDir.clone().multiplyScalar((arrowLength - 0.25) / 2));
+            schematic.add(shaft);
+
+            const coneGeometry = new THREE.ConeGeometry(0.06, 0.25, 16);
+            const cone = new THREE.Mesh(coneGeometry, axisMaterial);
+            cone.quaternion.copy(shaft.quaternion);
+            cone.position.copy(unitDir.clone().multiplyScalar(arrowLength - 0.1));
+            schematic.add(cone);
+
+            const label = createLabel(labelText, '#006837', 0.45);
+            label.position.copy(unitDir.clone().multiplyScalar(arrowLength + labelOffset));
+            schematic.add(label);
+        }
+
+        const cameraCenter = new THREE.Mesh(new THREE.SphereGeometry(0.08, 24, 16), new THREE.MeshBasicMaterial({ color: 0x1b1f24 }));
+        schematic.add(cameraCenter);
+
+        // Camera 1 sensor plane (green rectangle from the textbook figure).
+        const planeGeometry = new THREE.PlaneGeometry(2.6, 2.6);
+        const camera1Plane = new THREE.Mesh(
+            planeGeometry,
+            new THREE.MeshBasicMaterial({ color: 0x00c46c, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+        );
+        camera1Plane.position.set(0, 0, planeDistance);
+        schematic.add(camera1Plane);
+        camera1Plane.add(new THREE.LineSegments(new THREE.EdgesGeometry(planeGeometry), new THREE.LineBasicMaterial({ color: 0x007b43 })));
+
+        const camera1Label = createLabel('Camera 1', '#006837', 0.6);
+        camera1Label.position.set(-1.3, 1.25, planeDistance);
+        schematic.add(camera1Label);
+
+        // Camera 2 plane (red) mounted on a rotating group to illustrate R.
+        const camera2Group = new THREE.Group();
+        schematic.add(camera2Group);
+        const camera2Plane = new THREE.Mesh(
+            planeGeometry,
+            new THREE.MeshBasicMaterial({ color: 0xff5555, transparent: true, opacity: 0.32, side: THREE.DoubleSide })
+        );
+        camera2Plane.position.set(0, 0, planeDistance);
+        camera2Group.add(camera2Plane);
+        camera2Plane.add(new THREE.LineSegments(new THREE.EdgesGeometry(planeGeometry), new THREE.LineBasicMaterial({ color: 0xaa1f1f })));
+
+        const camera2Label = createLabel('Camera 2', '#8c1a1a', 0.6);
+        camera2Label.position.set(1.35, 1.25, planeDistance);
+        camera2Group.add(camera2Label);
+
+        // Curved arrow and label "R" describing the rotation between the two sensors.
+        const rotationArcMaterial = new THREE.LineBasicMaterial({ color: 0x151515 });
+        const rotationArc = new THREE.Line(new THREE.BufferGeometry(), rotationArcMaterial);
+        schematic.add(rotationArc);
+        const arcLabel = createLabel('R', '#1b1f24', 0.5);
+        schematic.add(arcLabel);
+
+        // Cyan world point (X, Y, Z).
+        const worldPoint = new THREE.Vector3(1.15, 0.55, 3.4);
+        const worldPointMesh = new THREE.Mesh(new THREE.SphereGeometry(0.08, 32, 16), new THREE.MeshBasicMaterial({ color: 0x00d6ff }));
+        worldPointMesh.position.copy(worldPoint);
+        schematic.add(worldPointMesh);
+        const worldPointLabel = createLabel('(X, Y, Z)', '#007798', 0.6);
+        worldPointLabel.position.copy(worldPoint.clone().add(new THREE.Vector3(0.15, 0.15, 0)));
+        schematic.add(worldPointLabel);
+
+        // Dashed line representing the actual spatial ray.
+        const worldRay = createLine(true, 0x333333);
+        updateLine(worldRay, origin, worldPoint);
+        schematic.add(worldRay);
+
+        // Rays to each image plane.
+        const rayToPlane1 = createLine(false, 0x006f3c);
+        schematic.add(rayToPlane1);
+        const rayToPlane2 = createLine(false, 0xaa1f1f);
+        schematic.add(rayToPlane2);
+
+        // Projection markers and labels.
+        const projectionMarker1 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 12), new THREE.MeshBasicMaterial({ color: 0x00994f }));
+        schematic.add(projectionMarker1);
+        const projectionMarker2 = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 12), new THREE.MeshBasicMaterial({ color: 0xc41e1e }));
+        schematic.add(projectionMarker2);
+        const labelXY = createLabel('(x, y)', '#00552d', 0.5);
+        schematic.add(labelXY);
+        const labelXPrime = createLabel("(x', y')", '#7a0909', 0.5);
+        schematic.add(labelXPrime);
+
+        // Epipolar plane patch (toggleable for clarity).
+        const epipPositions = new Float32Array(18);
+        const epipGeometry = new THREE.BufferGeometry();
+        epipGeometry.setAttribute('position', new THREE.BufferAttribute(epipPositions, 3));
+        const epipPlane = new THREE.Mesh(
+            epipGeometry,
+            new THREE.MeshBasicMaterial({ color: 0xffb6c1, transparent: true, opacity: 0.22, side: THREE.DoubleSide })
+        );
+        epipPlane.visible = false;
+        schematic.add(epipPlane);
+
+        // UI elements.
+        const rotationSlider = document.getElementById('rotationSlider');
+        const epipToggle = document.getElementById('epipToggle');
+        const resetBtn = document.getElementById('resetBtn');
+        const stepPrev = document.getElementById('stepPrev');
+        const stepNext = document.getElementById('stepNext');
+        const animateBtn = document.getElementById('animateBtn');
+        const stepTextEl = document.getElementById('stepText');
+
+        let autoAnimating = false;
+        let autoDirection = 1;
+        let stepIndex = 1;
+
+        // Guided walkthrough that mirrors the textbook explanation.
+        const steps = [
+            {
+                title: 'Step 1 · Camera 1 reference',
+                text: 'Lock the sensor until the green plane alone is visible. The ray meets it at (x, y).',
+                apply: () => {
+                    setAutoAnimating(false);
+                    updateCameraRotation(0);
+                    epipToggle.checked = false;
+                    toggleEpipolarPlane(false);
+                }
+            },
+            {
+                title: 'Step 2 · Rotate into Camera 2',
+                text: 'Pure rotation carries the sensor to the red plane, shifting the hit point to (x\', y\').',
+                apply: () => {
+                    setAutoAnimating(false);
+                    updateCameraRotation(defaultAngle);
+                    epipToggle.checked = false;
+                    toggleEpipolarPlane(false);
+                }
+            },
+            {
+                title: 'Step 3 · Epipolar slice',
+                text: 'The ray and both intersections span the epipolar plane constraining the homography.',
+                apply: () => {
+                    setAutoAnimating(false);
+                    updateCameraRotation(defaultAngle);
+                    epipToggle.checked = true;
+                    toggleEpipolarPlane(true);
+                }
+            }
+        ];
+
+        rotationSlider.addEventListener('input', () => {
+            setAutoAnimating(false);
+            updateCameraRotation(parseFloat(rotationSlider.value));
+            stepIndex = -1;
+            updateStepText();
+        });
+
+        epipToggle.addEventListener('change', () => {
+            toggleEpipolarPlane(epipToggle.checked);
+        });
+
+        resetBtn.addEventListener('click', () => {
+            setAutoAnimating(false);
+            updateCameraRotation(defaultAngle);
+            epipToggle.checked = false;
+            toggleEpipolarPlane(false);
+            stepIndex = 1;
+            updateStepText();
+        });
+
+        stepPrev.addEventListener('click', () => {
+            stepIndex = Math.max(0, stepIndex - 1);
+            steps[stepIndex].apply();
+            updateStepText();
+        });
+
+        stepNext.addEventListener('click', () => {
+            stepIndex = Math.min(steps.length - 1, stepIndex + 1);
+            steps[stepIndex].apply();
+            updateStepText();
+        });
+
+        animateBtn.addEventListener('click', () => {
+            setAutoAnimating(!autoAnimating);
+        });
+
+        function toggleEpipolarPlane(visible) {
+            epipPlane.visible = visible;
+        }
+
+        function updateStepText() {
+            if (stepIndex >= 0) {
+                stepTextEl.textContent = `${steps[stepIndex].title}\n${steps[stepIndex].text}`;
+            } else {
+                stepTextEl.textContent = 'Free explore · Drag the slider, toggle the plane, or spin the view to test your intuition.';
+            }
+        }
+
+        function setAutoAnimating(state) {
+            autoAnimating = state;
+            animateBtn.textContent = autoAnimating ? 'Pause rotation' : 'Auto rotate';
+        }
+
+        function createLabel(text, color, scale) {
+            const size = 256;
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, size, size);
+            ctx.fillStyle = color;
+            ctx.font = 'bold 120px Space Grotesk, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, size / 2, size / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+            sprite.scale.set(scale, scale, scale);
+            return sprite;
+        }
+
+        function createLine(dashed, color) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+            const material = dashed
+                ? new THREE.LineDashedMaterial({ color, dashSize: 0.16, gapSize: 0.08 })
+                : new THREE.LineBasicMaterial({ color });
+            const line = new THREE.Line(geometry, material);
+            if (dashed) line.computeLineDistances();
+            return line;
+        }
+
+        function updateLine(line, start, end) {
+            const arr = line.geometry.attributes.position.array;
+            arr[0] = start.x; arr[1] = start.y; arr[2] = start.z;
+            arr[3] = end.x; arr[4] = end.y; arr[5] = end.z;
+            line.geometry.attributes.position.needsUpdate = true;
+            if (line.computeLineDistances) line.computeLineDistances();
+        }
+
+        function updateCameraRotation(angleDeg) {
+            currentAngle = angleDeg;
+            camera2Group.rotation.y = THREE.MathUtils.degToRad(angleDeg);
+            if (parseFloat(rotationSlider.value) !== angleDeg) {
+                rotationSlider.value = angleDeg;
+            }
+            updateRotationArc(angleDeg);
+            updateProjections();
+        }
+
+        function updateRotationArc(angleDeg) {
+            const angleRad = THREE.MathUtils.degToRad(angleDeg);
+            const segments = 32;
+            const radius = 1.6;
+            const dir = Math.sign(angleRad) || 1;
+            const total = Math.max(Math.abs(angleRad), 0.01);
+            const points = [];
+            for (let i = 0; i <= segments; i++) {
+                const fraction = total * (i / segments);
+                const actual = dir < 0 ? -fraction : fraction;
+                points.push(new THREE.Vector3(Math.sin(actual) * radius, 0.95, Math.cos(actual) * radius));
+            }
+            rotationArc.geometry.setFromPoints(points);
+            rotationArcMaterial.color.set(angleDeg < 0 ? 0xaa1f1f : 0x151515);
+            const midPoint = points[Math.floor(points.length / 2)] || new THREE.Vector3(0, 0.95, radius);
+            arcLabel.position.copy(midPoint.clone().add(new THREE.Vector3(0.05, 0.2, 0)));
+        }
+
+        function updateProjections() {
+            camera2Plane.updateMatrixWorld(true);
+            const plane1Point = new THREE.Vector3(0, 0, planeDistance);
+            const plane1Normal = new THREE.Vector3(0, 0, 1);
+            const plane2Point = new THREE.Vector3();
+            camera2Plane.getWorldPosition(plane2Point);
+            const plane2Normal = new THREE.Vector3(0, 0, 1).applyQuaternion(camera2Plane.getWorldQuaternion(new THREE.Quaternion()));
+
+            const direction = worldPoint.clone().sub(origin).normalize();
+            const proj1 = intersectRayWithPlane(origin, direction, plane1Point, plane1Normal);
+            const proj2 = intersectRayWithPlane(origin, direction, plane2Point, plane2Normal);
+
+            if (proj1) {
+                projectionMarker1.position.copy(proj1);
+                updateLine(rayToPlane1, origin, proj1);
+                labelXY.position.copy(proj1.clone().add(new THREE.Vector3(0.08, 0.08, 0)));
+            }
+            if (proj2) {
+                projectionMarker2.position.copy(proj2);
+                updateLine(rayToPlane2, origin, proj2);
+                labelXPrime.position.copy(proj2.clone().add(new THREE.Vector3(0.08, -0.08, 0)));
+            }
+            updateEpipolarGeometry(proj1, proj2);
+        }
+
+        function intersectRayWithPlane(rayOrigin, rayDir, planePoint, planeNormal) {
+            const denom = planeNormal.dot(rayDir);
+            if (Math.abs(denom) < 1e-4) return null;
+            const t = planeNormal.dot(planePoint.clone().sub(rayOrigin)) / denom;
+            if (t < 0) return null;
+            return rayOrigin.clone().add(rayDir.clone().multiplyScalar(t));
+        }
+
+        function updateEpipolarGeometry(p1, p2) {
+            if (!p1 || !p2) return;
+            const vertices = [origin, p1, worldPoint, origin, worldPoint, p2];
+            for (let i = 0; i < vertices.length; i++) {
+                epipPositions[i * 3] = vertices[i].x;
+                epipPositions[i * 3 + 1] = vertices[i].y;
+                epipPositions[i * 3 + 2] = vertices[i].z;
+            }
+            epipGeometry.attributes.position.needsUpdate = true;
+            epipGeometry.computeVertexNormals();
+        }
+
+        function clampAutoDirection() {
+            if (currentAngle <= -38) autoDirection = 1;
+            if (currentAngle >= 6) autoDirection = -1;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (autoAnimating) {
+                clampAutoDirection();
+                updateCameraRotation(currentAngle + 0.25 * autoDirection);
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            const { clientWidth, clientHeight } = container;
+            const newAspect = clientWidth / clientHeight;
+            camera.left = -orthoSize * newAspect;
+            camera.right = orthoSize * newAspect;
+            camera.top = orthoSize;
+            camera.bottom = -orthoSize;
+            camera.updateProjectionMatrix();
+            renderer.setSize(clientWidth, clientHeight);
+        });
+
+        // Initialize default state.
+        updateCameraRotation(defaultAngle);
+        updateStepText();
+        animate();
+
+        // Interaction summary:
+        // - Slider rotates the red camera plane to show rotation-induced homographies.
+        // - Auto rotate performs a hands-free sweep of R.
+        // - Toggle reveals the epipolar plane that constrains corresponding points.
+        // - Stepper walks through the textbook story beats.
+        // - Reset snaps everything back to the original illustration.
+    </script>
+</body>
+
+</html>

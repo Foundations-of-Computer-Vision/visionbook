@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Camera Rotation &amp; Homography — Interactive 3D</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1a1a2e; font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; color: #e0e0e0; }
+  #info {
+    position: absolute; top: 12px; left: 12px; z-index: 100;
+    background: rgba(10,10,30,0.85); padding: 16px 20px; border-radius: 10px;
+    max-width: 340px; backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  #info h2 { font-size: 15px; margin-bottom: 8px; color: #82aaff; }
+  #info p, #info label { font-size: 12.5px; line-height: 1.55; color: #b0b8d0; }
+  #info label { display: flex; align-items: center; margin-top: 8px; gap: 8px; }
+  #info input[type=range] { flex: 1; accent-color: #82aaff; }
+  #info .val { min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; color: #fff; }
+  #legend { position: absolute; bottom: 14px; left: 12px; z-index: 100;
+    background: rgba(10,10,30,0.85); padding: 12px 16px; border-radius: 10px;
+    font-size: 12px; line-height: 1.8; backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  #legend span { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+
+<div id="info">
+  <h2>Camera Rotation generates a Homography</h2>
+  <p>Two cameras share the same optical center. Camera 2 is rotated relative to Camera 1 by <b>R</b>. A 3D point <b>P</b> projects to <b>(x, y)</b> on image plane 1 and <b>(x', y')</b> on image plane 2.</p>
+  <label>Rotation angle <input type="range" id="rotAngle" min="-60" max="60" value="30" step="1"><span class="val" id="rotAngleVal">30°</span></label>
+  <label>Point P depth <input type="range" id="pDepth" min="3" max="10" value="6" step="0.2"><span class="val" id="pDepthVal">6.0</span></label>
+  <label>Point P height <input type="range" id="pHeight" min="-2" max="3" value="1.5" step="0.1"><span class="val" id="pHeightVal">1.5</span></label>
+  <label>Point P lateral <input type="range" id="pLateral" min="-3" max="3" value="1.0" step="0.1"><span class="val" id="pLateralVal">1.0</span></label>
+  <label>Focal length <input type="range" id="focalLen" min="0.5" max="3" value="1.5" step="0.1"><span class="val" id="focalVal">1.5</span></label>
+</div>
+
+<div id="legend">
+  <span style="background:#4fc3f7"></span>Camera 1 image plane &nbsp;
+  <span style="background:#ff8a65"></span>Camera 2 image plane<br>
+  <span style="background:#fff176"></span>3D Point P &nbsp;
+  <span style="background:#81c784"></span>Projected point (x, y)<br>
+  <span style="background:#ef5350"></span>Projected point (x', y') &nbsp;
+  <span style="background:#aaa"></span>Projection rays
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+// ─── Scene setup ──────────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a2e);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+camera.position.set(6, 4, 8);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+document.body.appendChild(labelRenderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0.5, 2);
+
+// ─── Lighting ─────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(5, 8, 6);
+scene.add(dirLight);
+
+// ─── Reusable helpers ─────────────────────────────────────────
+function makeLabel(text, color = '#fff', fontSize = '13px') {
+  const div = document.createElement('div');
+  div.textContent = text;
+  div.style.cssText = `color:${color};font-family:'Segoe UI',system-ui,sans-serif;font-size:${fontSize};font-weight:600;
+    text-shadow:0 0 6px rgba(0,0,0,0.9);pointer-events:none;white-space:nowrap;`;
+  const obj = new CSS2DObject(div);
+  return obj;
+}
+
+function makeLineBetween(a, b, color, dashed = false) {
+  const mat = dashed
+    ? new THREE.LineDashedMaterial({ color, dashSize: 0.15, gapSize: 0.1, transparent: true, opacity: 0.7 })
+    : new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7 });
+  const geom = new THREE.BufferGeometry().setFromPoints([a, b]);
+  const line = new THREE.Line(geom, mat);
+  if (dashed) line.computeLineDistances();
+  return line;
+}
+
+function makePlane(w, h, color, opacity = 0.25) {
+  const geom = new THREE.PlaneGeometry(w, h);
+  const mat = new THREE.MeshPhongMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false });
+  return new THREE.Mesh(geom, mat);
+}
+
+function makePlaneOutline(w, h, color) {
+  const hw = w / 2, hh = h / 2;
+  const pts = [
+    new THREE.Vector3(-hw, -hh, 0), new THREE.Vector3(hw, -hh, 0),
+    new THREE.Vector3(hw, hh, 0), new THREE.Vector3(-hw, hh, 0),
+    new THREE.Vector3(-hw, -hh, 0)
+  ];
+  const geom = new THREE.BufferGeometry().setFromPoints(pts);
+  return new THREE.Line(geom, new THREE.LineBasicMaterial({ color }));
+}
+
+function makeDot(pos, color, radius = 0.08) {
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 16, 16),
+    new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: 0.4 })
+  );
+  mesh.position.copy(pos);
+  return mesh;
+}
+
+// ─── Dynamic scene group ──────────────────────────────────────
+const dynGroup = new THREE.Group();
+scene.add(dynGroup);
+
+// ─── World axes (static) ──────────────────────────────────────
+const axisLen = 1.2;
+function makeAxis(dir, color, label) {
+  const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), axisLen, color, 0.12, 0.07);
+  scene.add(arrow);
+  const lbl = makeLabel(label, '#' + color.toString(16).padStart(6, '0'), '12px');
+  lbl.position.copy(dir.clone().multiplyScalar(axisLen + 0.15));
+  scene.add(lbl);
+}
+makeAxis(new THREE.Vector3(1, 0, 0), 0xff4444, 'X');
+makeAxis(new THREE.Vector3(0, 1, 0), 0x44ff44, 'Y');
+makeAxis(new THREE.Vector3(0, 0, 1), 0x4488ff, 'Z');
+
+// Camera center dot
+const originDot = makeDot(new THREE.Vector3(0, 0, 0), 0xffffff, 0.07);
+scene.add(originDot);
+const originLabel = makeLabel('O (camera center)', '#ccc', '11px');
+originLabel.position.set(0, -0.22, 0);
+scene.add(originLabel);
+
+// ─── Grid helper ──────────────────────────────────────────────
+const grid = new THREE.GridHelper(14, 28, 0x333355, 0x222244);
+grid.position.y = -2.5;
+scene.add(grid);
+
+// ─── Build / rebuild dynamic geometry ─────────────────────────
+function rebuild() {
+  // Clear previous
+  while (dynGroup.children.length) {
+    const c = dynGroup.children[0];
+    dynGroup.remove(c);
+    if (c.geometry) c.geometry.dispose();
+    if (c.material) { if (c.material.dispose) c.material.dispose(); }
+  }
+
+  const angleDeg = parseFloat(document.getElementById('rotAngle').value);
+  const angleRad = THREE.MathUtils.degToRad(angleDeg);
+  const pZ = parseFloat(document.getElementById('pDepth').value);
+  const pY = parseFloat(document.getElementById('pHeight').value);
+  const pX = parseFloat(document.getElementById('pLateral').value);
+  const f = parseFloat(document.getElementById('focalLen').value);
+
+  // Update display values
+  document.getElementById('rotAngleVal').textContent = angleDeg + '°';
+  document.getElementById('pDepthVal').textContent = pZ.toFixed(1);
+  document.getElementById('pHeightVal').textContent = pY.toFixed(1);
+  document.getElementById('pLateralVal').textContent = pX.toFixed(1);
+  document.getElementById('focalVal').textContent = f.toFixed(1);
+
+  const planeW = 3.0, planeH = 2.2;
+
+  // ── Camera 1 image plane (at z = f, aligned with world) ──
+  const plane1 = makePlane(planeW, planeH, 0x4fc3f7, 0.18);
+  plane1.position.set(0, 0, f);
+  dynGroup.add(plane1);
+
+  const outline1 = makePlaneOutline(planeW, planeH, 0x4fc3f7);
+  outline1.position.set(0, 0, f);
+  dynGroup.add(outline1);
+
+  const lbl1 = makeLabel('Image Plane 1', '#4fc3f7', '12px');
+  lbl1.position.set(0, planeH / 2 + 0.18, f);
+  dynGroup.add(lbl1);
+
+  // Optical axis for camera 1 (dashed line from origin through image plane)
+  const axis1End = new THREE.Vector3(0, 0, f + 0.5);
+  dynGroup.add(makeLineBetween(new THREE.Vector3(0, 0, 0), axis1End, 0x4fc3f7, true));
+
+  // Camera 1 frustum edges
+  const hw = planeW / 2, hh = planeH / 2;
+  const corners1 = [
+    new THREE.Vector3(-hw, -hh, f), new THREE.Vector3(hw, -hh, f),
+    new THREE.Vector3(hw, hh, f), new THREE.Vector3(-hw, hh, f)
+  ];
+  for (const c of corners1) {
+    dynGroup.add(makeLineBetween(new THREE.Vector3(0, 0, 0), c, 0x4fc3f7, true));
+  }
+
+  // ── Camera 2 image plane (rotated by R about Y-axis) ──
+  const rotMatrix = new THREE.Matrix4().makeRotationY(angleRad);
+  const cam2Dir = new THREE.Vector3(0, 0, f).applyMatrix4(rotMatrix);
+
+  const plane2 = makePlane(planeW, planeH, 0xff8a65, 0.18);
+  plane2.position.copy(cam2Dir);
+  plane2.quaternion.setFromRotationMatrix(rotMatrix);
+  dynGroup.add(plane2);
+
+  const outline2 = makePlaneOutline(planeW, planeH, 0xff8a65);
+  outline2.position.copy(cam2Dir);
+  outline2.quaternion.setFromRotationMatrix(rotMatrix);
+  dynGroup.add(outline2);
+
+  const lbl2Pos = new THREE.Vector3(0, planeH / 2 + 0.18, f).applyMatrix4(rotMatrix);
+  const lbl2 = makeLabel('Image Plane 2', '#ff8a65', '12px');
+  lbl2.position.copy(lbl2Pos);
+  dynGroup.add(lbl2);
+
+  // Optical axis for camera 2
+  const axis2End = new THREE.Vector3(0, 0, f + 0.5).applyMatrix4(rotMatrix);
+  dynGroup.add(makeLineBetween(new THREE.Vector3(0, 0, 0), axis2End, 0xff8a65, true));
+
+  // Camera 2 frustum edges
+  const corners2 = corners1.map(c => c.clone().applyMatrix4(rotMatrix));
+  for (const c of corners2) {
+    dynGroup.add(makeLineBetween(new THREE.Vector3(0, 0, 0), c, 0xff8a65, true));
+  }
+
+  // ── Rotation arc ──
+  const arcSegs = 40;
+  const arcPts = [];
+  const arcStart = 0, arcEnd = angleRad;
+  for (let i = 0; i <= arcSegs; i++) {
+    const t = arcStart + (arcEnd - arcStart) * (i / arcSegs);
+    arcPts.push(new THREE.Vector3(Math.sin(t) * (f * 0.5), 0, Math.cos(t) * (f * 0.5)));
+  }
+  if (arcPts.length > 1) {
+    const arcGeom = new THREE.BufferGeometry().setFromPoints(arcPts);
+    const arcLine = new THREE.Line(arcGeom, new THREE.LineBasicMaterial({ color: 0xffcc00 }));
+    dynGroup.add(arcLine);
+    const arcMid = arcPts[Math.floor(arcPts.length / 2)].clone().normalize().multiplyScalar(f * 0.5 + 0.25);
+    const arcLabel = makeLabel('R (rotation)', '#ffcc00', '11px');
+    arcLabel.position.copy(arcMid);
+    dynGroup.add(arcLabel);
+  }
+
+  // ── 3D Point P ──
+  const P = new THREE.Vector3(pX, pY, pZ);
+  const pDot = makeDot(P, 0xfff176, 0.1);
+  dynGroup.add(pDot);
+  const pLabel = makeLabel('P = [X, Y, Z]ᵀ', '#fff176', '13px');
+  pLabel.position.copy(P.clone().add(new THREE.Vector3(0.15, 0.2, 0)));
+  dynGroup.add(pLabel);
+
+  // ── Projection onto Camera 1 ──
+  // Ray from origin to P intersects z = f plane
+  const t1 = f / P.z;
+  const proj1 = new THREE.Vector3(P.x * t1, P.y * t1, f);
+
+  // Check if within image plane bounds
+  const inPlane1 = Math.abs(proj1.x) <= hw && Math.abs(proj1.y) <= hh;
+
+  // Ray from origin through P
+  const rayEnd1 = P.clone().normalize().multiplyScalar(P.length() + 0.5);
+  dynGroup.add(makeLineBetween(new THREE.Vector3(0, 0, 0), P, 0xaaaaaa, false));
+  dynGroup.add(makeLineBetween(P, rayEnd1, 0xaaaaaa, true));
+
+  // Projected point on plane 1
+  const proj1Dot = makeDot(proj1, 0x81c784, 0.07);
+  dynGroup.add(proj1Dot);
+  const proj1Label = makeLabel('(x, y)', '#81c784', '12px');
+  proj1Label.position.copy(proj1.clone().add(new THREE.Vector3(0.18, -0.18, 0)));
+  dynGroup.add(proj1Label);
+
+  // Dashed vertical from projected point to show it's on the plane
+  dynGroup.add(makeLineBetween(new THREE.Vector3(0, 0, 0), proj1, 0x81c784, true));
+
+  // ── Projection onto Camera 2 ──
+  // We need to find where the ray from origin through P intersects camera 2's image plane.
+  // Camera 2's plane has normal = rotMatrix * [0,0,1] and passes through cam2Dir.
+  const planeNormal2 = new THREE.Vector3(0, 0, 1).applyMatrix4(new THREE.Matrix4().extractRotation(rotMatrix));
+  const rayDir = P.clone().normalize();
+  const denom = planeNormal2.dot(rayDir);
+  let proj2 = null;
+  if (Math.abs(denom) > 1e-6) {
+    const t2 = planeNormal2.dot(cam2Dir) / denom;
+    if (t2 > 0) {
+      proj2 = rayDir.clone().multiplyScalar(t2);
+    }
+  }
+
+  if (proj2) {
+    // Convert to plane-local coords to check bounds
+    const localProj = proj2.clone().sub(cam2Dir);
+    const invRot = rotMatrix.clone().invert();
+    const localCoord = localProj.clone().applyMatrix4(new THREE.Matrix4().extractRotation(invRot));
+    const inPlane2 = Math.abs(localCoord.x) <= hw && Math.abs(localCoord.y) <= hh;
+
+    const proj2Dot = makeDot(proj2, 0xef5350, 0.07);
+    dynGroup.add(proj2Dot);
+    const proj2Label = makeLabel("(x', y')", '#ef5350', '12px');
+    proj2Label.position.copy(proj2.clone().add(new THREE.Vector3(0.18, -0.18, 0)));
+    dynGroup.add(proj2Label);
+
+    // Line from origin to projected point on plane 2
+    dynGroup.add(makeLineBetween(new THREE.Vector3(0, 0, 0), proj2, 0xef5350, true));
+  }
+
+  // ── Homography label ──
+  const hLabel = makeLabel("p' = H p,   H = K R K⁻¹", '#e0e0e0', '12px');
+  hLabel.position.set(0, -1.8, f * 0.5);
+  dynGroup.add(hLabel);
+
+  // ── Camera body indicators (small pyramids) ──
+  // Camera 1 body indicator
+  const cam1Arrow = new THREE.ArrowHelper(
+    new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), f * 0.3, 0x4fc3f7, 0.1, 0.06
+  );
+  dynGroup.add(cam1Arrow);
+
+  // Camera 2 body indicator
+  const cam2ArrowDir = new THREE.Vector3(0, 0, 1).applyMatrix4(new THREE.Matrix4().extractRotation(rotMatrix));
+  const cam2Arrow = new THREE.ArrowHelper(cam2ArrowDir, new THREE.Vector3(0, 0, 0), f * 0.3, 0xff8a65, 0.1, 0.06);
+  dynGroup.add(cam2Arrow);
+
+  // Labels for cameras
+  const cam1LblPos = new THREE.Vector3(0, -hh - 0.2, f);
+  const cam1Lbl = makeLabel('Camera 1', '#4fc3f7', '11px');
+  cam1Lbl.position.copy(cam1LblPos);
+  dynGroup.add(cam1Lbl);
+
+  const cam2LblPos = new THREE.Vector3(0, -hh - 0.2, f).applyMatrix4(rotMatrix);
+  const cam2Lbl = makeLabel('Camera 2', '#ff8a65', '11px');
+  cam2Lbl.position.copy(cam2LblPos);
+  dynGroup.add(cam2Lbl);
+
+  // ── Focal length indicator ──
+  const fLabelPos = new THREE.Vector3(-0.25, -0.1, f / 2);
+  const fLabel = makeLabel('f', '#888', '11px');
+  fLabel.position.copy(fLabelPos);
+  dynGroup.add(fLabel);
+}
+
+// ─── Slider event listeners ───────────────────────────────────
+['rotAngle', 'pDepth', 'pHeight', 'pLateral', 'focalLen'].forEach(id => {
+  document.getElementById(id).addEventListener('input', rebuild);
+});
+
+// ─── Animation loop ───────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+}
+
+// ─── Resize handling ──────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ─── Initialize ───────────────────────────────────────────────
+rebuild();
+animate();
+</script>
+</body>
+</html>
