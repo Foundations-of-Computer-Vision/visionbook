@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Similar Triangles &amp; Perspective Projection – Interactive 3D</title>
+  <style>
+    html, body, #container {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: white;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+    #controls {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(255,255,255,0.93);
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-size: 13px;
+      z-index: 10;
+      max-width: 280px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      line-height: 1.55;
+    }
+    #controls h3 { margin: 0 0 8px 0; font-size: 15px; }
+    #controls label { display: block; margin: 5px 0 2px; }
+    #controls input[type=range] { width: 100%; }
+    #controls button {
+      margin: 3px 2px;
+      padding: 5px 10px;
+      cursor: pointer;
+      border: 1px solid #999;
+      border-radius: 4px;
+      background: #f5f5f5;
+      font-size: 12px;
+    }
+    #controls button:hover { background: #e0e0e0; }
+    #controls button.active { background: #c8ddf0; border-color: #5588bb; }
+    .ctrl-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+    .ctrl-row span { min-width: 28px; text-align: right; font-family: monospace; }
+    #info-box {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(255,255,255,0.93);
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      z-index: 10;
+      max-width: 260px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      line-height: 1.6;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+    #info-box h4 { margin: 0 0 6px 0; font-size: 14px; }
+    #guide-box {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.94);
+      border: 1px solid #aaa;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 13px;
+      z-index: 10;
+      text-align: center;
+      max-width: 620px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+    }
+    #guide-box button { margin: 0 4px; }
+    .eq { font-family: 'Times New Roman', serif; font-style: italic; }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+
+  <!-- Control panel -->
+  <div id="controls">
+    <h3>Similar Triangles</h3>
+    <div style="font-size:11px; color:#666; margin-bottom:6px;">
+      Perspective projection via similar triangles:<br>
+      <span class="eq">x/f = X/Z</span> &nbsp; <span class="eq">y/f = Y/Z</span>
+    </div>
+
+    <!-- Focal length slider: changes distance of image plane from pinhole -->
+    <label>Focal length <i>f</i></label>
+    <div class="ctrl-row">
+      <input type="range" id="focalSlider" min="0.4" max="2.5" step="0.05" value="1.2" />
+      <span id="focalVal">1.2</span>
+    </div>
+
+    <!-- World point P position sliders: move the 3D point to see similar triangles change -->
+    <label>World point <b>P</b> = (X, Y, Z)</label>
+    <div class="ctrl-row">X: <input type="range" id="pxSlider" min="-2.5" max="2.5" step="0.1" value="1.5" /><span id="pxVal">1.5</span></div>
+    <div class="ctrl-row">Y: <input type="range" id="pySlider" min="-2.5" max="2.5" step="0.1" value="-1.2" /><span id="pyVal">-1.2</span></div>
+    <div class="ctrl-row">Z: <input type="range" id="pzSlider" min="1.0" max="6.0" step="0.1" value="3.5" /><span id="pzVal">3.5</span></div>
+
+    <!-- Toggle which similar triangle pair is shown -->
+    <label style="margin-top:8px">Show / Hide</label>
+    <button id="toggleGreen" class="active">X-Z Triangle (green)</button>
+    <button id="toggleCyan" class="active">Y-Z Triangle (cyan)</button>
+    <button id="togglePlane" class="active">Image Plane</button>
+    <button id="toggleAxes" class="active">Axes &amp; Labels</button>
+
+    <div style="margin-top:10px;">
+      <button id="resetBtn" style="background:#ddeeff;">&#x27F3; Reset to Textbook View</button>
+    </div>
+    <div style="margin-top:4px;">
+      <button id="guideBtn" style="background:#e8f5e9;">&#x25B6; Guided Demo</button>
+    </div>
+  </div>
+
+  <!-- Live equations readout -->
+  <div id="info-box">
+    <h4>Projection Equations</h4>
+    <div id="eqDisplay"></div>
+  </div>
+
+  <!-- Guided demo overlay -->
+  <div id="guide-box" style="display:none;">
+    <span id="guide-text"></span><br/>
+    <button id="guidePrev">&larr; Prev</button>
+    <button id="guideNext">Next &rarr;</button>
+    <button id="guideClose">Close</button>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+    // ── Scene setup (based on base_scene.html) ──
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    const aspect = container.clientWidth / container.clientHeight;
+    const d = 4.5;
+    const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+    // Textbook-like 3/4 view matching the figure's viewpoint
+    const defaultCamPos = new THREE.Vector3(5, 3, -6);
+    const defaultTarget = new THREE.Vector3(1.0, -0.2, 1.5);
+    camera.position.copy(defaultCamPos);
+    camera.lookAt(defaultTarget);
+    camera.zoom = 1.1;
+    camera.updateProjectionMatrix();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const orbitControls = new OrbitControls(camera, renderer.domElement);
+    orbitControls.enableDamping = true;
+    orbitControls.dampingFactor = 0.05;
+    orbitControls.target.copy(defaultTarget);
+
+    // ── State ──
+    let focalLength = 1.2;
+    let pointP = new THREE.Vector3(1.5, -1.2, 3.5);
+    let showGreen = true, showCyan = true, showPlane = true, showAxes = true;
+
+    // ── Groups for toggling visibility ──
+    const greenTriGroup = new THREE.Group();   // X-Z similar triangle pair (green)
+    const cyanTriGroup = new THREE.Group();    // Y-Z similar triangle pair (cyan)
+    const planeGroup = new THREE.Group();      // Image plane
+    const axesGroup = new THREE.Group();       // World axes & labels
+    const raysGroup = new THREE.Group();       // Projection rays and point markers
+    scene.add(greenTriGroup, cyanTriGroup, planeGroup, axesGroup, raysGroup);
+
+    // ── Helper: text sprite label ──
+    function makeLabel(text, fontSize, color, bold) {
+      const canvas = document.createElement('canvas');
+      const sz = 256;
+      canvas.width = sz; canvas.height = sz;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, sz, sz);
+      ctx.font = (bold ? 'bold ' : '') + fontSize + 'px serif';
+      ctx.fillStyle = color || '#000';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, sz/2, sz/2);
+      const tex = new THREE.CanvasTexture(canvas);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+      sprite.scale.set(0.9, 0.9, 1);
+      return sprite;
+    }
+
+    // ── Helper: line between two points ──
+    function makeLine(pts, color, linewidth) {
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineBasicMaterial({ color, linewidth: linewidth || 1 });
+      return new THREE.Line(geo, mat);
+    }
+
+    // ── Helper: dashed line ──
+    function makeDashedLine(pts, color) {
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineDashedMaterial({ color, dashSize: 0.15, gapSize: 0.1 });
+      const line = new THREE.Line(geo, mat);
+      line.computeLineDistances();
+      return line;
+    }
+
+    // ── Helper: filled triangle mesh ──
+    function makeTriangleMesh(a, b, c, color, opacity) {
+      const geo = new THREE.BufferGeometry();
+      const vertices = new Float32Array([
+        a.x, a.y, a.z,
+        b.x, b.y, b.z,
+        c.x, c.y, c.z
+      ]);
+      geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      geo.computeVertexNormals();
+      const mat = new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false
+      });
+      return new THREE.Mesh(geo, mat);
+    }
+
+    // ── Helper: triangle edge outline ──
+    function makeTriangleOutline(a, b, c, color) {
+      return makeLine([a, b, c, a], color, 2);
+    }
+
+    // ── Build world coordinate axes (X, Y, Z from pinhole at origin) ──
+    // Maps to the bold black arrows in the figure
+    function buildAxes() {
+      axesGroup.clear();
+      const axisLen = 3.5;
+
+      // Z axis (horizontal, pointing into scene – the optical axis)
+      const zArrow = new THREE.ArrowHelper(
+        new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), axisLen + 2, 0x000000, 0.25, 0.12
+      );
+      axesGroup.add(zArrow);
+      const zLabel = makeLabel('Z', 52, '#000', true);
+      zLabel.position.set(0, 0.35, axisLen + 2.2);
+      axesGroup.add(zLabel);
+
+      // Y axis (vertical up)
+      const yArrow = new THREE.ArrowHelper(
+        new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), axisLen, 0x000000, 0.25, 0.12
+      );
+      axesGroup.add(yArrow);
+      const yLabel = makeLabel('Y', 52, '#000', true);
+      yLabel.position.set(0, axisLen + 0.3, 0);
+      axesGroup.add(yLabel);
+
+      // X axis (to the right)
+      const xArrow = new THREE.ArrowHelper(
+        new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), axisLen, 0x000000, 0.25, 0.12
+      );
+      axesGroup.add(xArrow);
+      const xLabel = makeLabel('X', 52, '#000', true);
+      xLabel.position.set(axisLen + 0.3, 0, 0);
+      axesGroup.add(xLabel);
+
+      // Image plane local axes: x (green, along image plane)
+      const imgZ = -focalLength;
+      const imgAxLen = 1.0;
+      // x axis on image plane (same direction as world X for virtual plane convention)
+      const xImgArrow = new THREE.ArrowHelper(
+        new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, imgZ), imgAxLen, 0x00aa00, 0.12, 0.06
+      );
+      axesGroup.add(xImgArrow);
+      const xImgLabel = makeLabel('x', 44, '#00aa00', true);
+      xImgLabel.position.set(imgAxLen + 0.2, 0, imgZ);
+      xImgLabel.scale.set(0.6, 0.6, 1);
+      axesGroup.add(xImgLabel);
+
+      // y axis on image plane
+      const yImgArrow = new THREE.ArrowHelper(
+        new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, imgZ), imgAxLen, 0x00aa00, 0.12, 0.06
+      );
+      axesGroup.add(yImgArrow);
+      const yImgLabel = makeLabel('y', 44, '#00aa00', true);
+      yImgLabel.position.set(0, -imgAxLen - 0.2, imgZ);
+      yImgLabel.scale.set(0.6, 0.6, 1);
+      axesGroup.add(yImgLabel);
+
+      // Pinhole label at origin
+      const pinholeDot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.06, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0x000000 })
+      );
+      axesGroup.add(pinholeDot);
+
+      // Focal length label "f"
+      const fLabel = makeLabel('f', 44, '#000', true);
+      fLabel.position.set(0.3, 0.25, -focalLength / 2);
+      fLabel.scale.set(0.6, 0.6, 1);
+      axesGroup.add(fLabel);
+
+      // Focal length bracket line along Z from origin to image plane
+      const fLine = makeDashedLine(
+        [new THREE.Vector3(0.15, 0.15, 0), new THREE.Vector3(0.15, 0.15, -focalLength)],
+        0x333333
+      );
+      axesGroup.add(fLine);
+    }
+
+    // ── Build image (projection) plane at z = -f ──
+    // Maps to the gray rectangle on the left side of the figure
+    function buildImagePlane() {
+      planeGroup.clear();
+      const zPos = -focalLength;
+      const planeW = 4.0, planeH = 4.0;
+      const geo = new THREE.PlaneGeometry(planeW, planeH);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xcccccc, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(0, 0, zPos);
+      planeGroup.add(mesh);
+
+      // Border (red outline matching figure)
+      const hw = planeW / 2, hh = planeH / 2;
+      const borderPts = [
+        new THREE.Vector3(-hw, -hh, zPos),
+        new THREE.Vector3( hw, -hh, zPos),
+        new THREE.Vector3( hw,  hh, zPos),
+        new THREE.Vector3(-hw,  hh, zPos),
+        new THREE.Vector3(-hw, -hh, zPos),
+      ];
+      planeGroup.add(makeLine(borderPts, 0xcc0000, 2));
+
+      // Label
+      const plLabel = makeLabel('Image plane', 30, '#555', false);
+      plLabel.position.set(0, hh + 0.3, zPos);
+      plLabel.scale.set(1.4, 0.5, 1);
+      planeGroup.add(plLabel);
+    }
+
+    // ── Build the projected point p and world point P, with connecting rays ──
+    function buildPointsAndRays() {
+      raysGroup.clear();
+
+      const Z = pointP.z;
+      const X = pointP.x;
+      const Y = pointP.y;
+
+      // Computed projected coordinates on virtual image plane at z = -f
+      // Using perspective projection: x = f * X/Z, y = f * Y/Z
+      // (virtual plane, non-inverted for clarity, placed at z = -f for the figure)
+      const x_proj = focalLength * X / Z;
+      const y_proj = focalLength * Y / Z;
+      const imgZ = -focalLength;
+
+      // World point P (red dot, matching figure)
+      const pMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0xcc0000 })
+      );
+      pMesh.position.copy(pointP);
+      raysGroup.add(pMesh);
+      const pLabel = makeLabel('P (X,Y,Z)', 32, '#cc0000', true);
+      pLabel.position.set(X + 0.4, Y - 0.4, Z);
+      pLabel.scale.set(1.2, 0.5, 1);
+      raysGroup.add(pLabel);
+
+      // Projected point p on image plane (brown dot, matching figure)
+      const projPt = new THREE.Vector3(x_proj, y_proj, imgZ);
+      const ppMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.08, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0x8B4513 })
+      );
+      ppMesh.position.copy(projPt);
+      raysGroup.add(ppMesh);
+      const ppLabel = makeLabel('p (x,y)', 32, '#8B4513', true);
+      ppLabel.position.set(x_proj + 0.35, y_proj + 0.35, imgZ);
+      ppLabel.scale.set(1.0, 0.45, 1);
+      raysGroup.add(ppLabel);
+
+      // Main projection ray: dotted line from P through pinhole to p on image plane
+      // Matches the thick dotted black line in the figure
+      raysGroup.add(makeDashedLine([pointP.clone(), new THREE.Vector3(0, 0, 0)], 0x000000));
+      raysGroup.add(makeDashedLine([new THREE.Vector3(0, 0, 0), projPt], 0x000000));
+
+      // Vertical drop from P to Z axis (to show Y component)
+      raysGroup.add(makeLine(
+        [pointP.clone(), new THREE.Vector3(X, 0, Z)],
+        0xaaaaaa, 1
+      ));
+      // Horizontal drop from P to Y-Z plane (to show X component)
+      raysGroup.add(makeLine(
+        [pointP.clone(), new THREE.Vector3(0, Y, Z)],
+        0xaaaaaa, 1
+      ));
+
+      // Vertical drop from p to optical axis on image plane
+      raysGroup.add(makeLine(
+        [projPt, new THREE.Vector3(x_proj, 0, imgZ)],
+        0xaaaaaa, 1
+      ));
+      // Horizontal drop from p
+      raysGroup.add(makeLine(
+        [projPt, new THREE.Vector3(0, y_proj, imgZ)],
+        0xaaaaaa, 1
+      ));
+    }
+
+    // ── Build the GREEN similar triangle pair (X-Z plane) ──
+    // These triangles teach: x/f = X/Z  (from the X-Z cross section)
+    // Large triangle: vertices at origin, (X, 0, Z), (0, 0, Z) → in world
+    // Small triangle: vertices at origin, (x, 0, -f), (0, 0, -f) → on image plane
+    function buildGreenTriangles() {
+      greenTriGroup.clear();
+
+      const Z = pointP.z;
+      const X = pointP.x;
+      const x_proj = focalLength * X / Z;
+      const imgZ = -focalLength;
+
+      // Large triangle in X-Z plane: origin → (X, 0, Z) → (0, 0, Z)
+      const A1 = new THREE.Vector3(0, 0, 0);
+      const B1 = new THREE.Vector3(X, 0, Z);
+      const C1 = new THREE.Vector3(0, 0, Z);
+
+      // Filled triangle (semi-transparent green)
+      greenTriGroup.add(makeTriangleMesh(A1, B1, C1, 0x00cc44, 0.25));
+      greenTriGroup.add(makeTriangleOutline(A1, B1, C1, 0x00aa33));
+
+      // Small similar triangle on image plane: origin → (x, 0, -f) → (0, 0, -f)
+      const A2 = new THREE.Vector3(0, 0, 0);
+      const B2 = new THREE.Vector3(x_proj, 0, imgZ);
+      const C2 = new THREE.Vector3(0, 0, imgZ);
+
+      greenTriGroup.add(makeTriangleMesh(A2, B2, C2, 0x00cc44, 0.35));
+      greenTriGroup.add(makeTriangleOutline(A2, B2, C2, 0x00aa33));
+
+      // Labels for the sides
+      // "X" label on large triangle's base
+      const xlbl = makeLabel('X', 42, '#00aa33', true);
+      xlbl.position.set(X / 2, -0.3, Z);
+      xlbl.scale.set(0.7, 0.7, 1);
+      greenTriGroup.add(xlbl);
+
+      // "Z" label on large triangle's depth
+      const zlbl = makeLabel('Z', 42, '#00aa33', true);
+      zlbl.position.set(-0.3, -0.3, Z / 2);
+      zlbl.scale.set(0.7, 0.7, 1);
+      greenTriGroup.add(zlbl);
+
+      // "x" label on small triangle's base
+      const xslbl = makeLabel('x', 38, '#00aa33', true);
+      xslbl.position.set(x_proj / 2, -0.25, imgZ);
+      xslbl.scale.set(0.55, 0.55, 1);
+      greenTriGroup.add(xslbl);
+
+      // "f" label on small triangle's depth
+      const fslbl = makeLabel('f', 38, '#00aa33', true);
+      fslbl.position.set(-0.25, -0.25, imgZ / 2);
+      fslbl.scale.set(0.55, 0.55, 1);
+      greenTriGroup.add(fslbl);
+
+      // Equation label
+      const eqlbl = makeLabel('x/f = X/Z', 30, '#00aa33', true);
+      eqlbl.position.set(X / 2 + 0.5, -0.65, Z / 2);
+      eqlbl.scale.set(1.2, 0.5, 1);
+      greenTriGroup.add(eqlbl);
+    }
+
+    // ── Build the CYAN similar triangle pair (Y-Z plane) ──
+    // These triangles teach: y/f = Y/Z  (from the Y-Z cross section)
+    // Large triangle: origin → (0, Y, Z) → (0, 0, Z)
+    // Small triangle: origin → (0, y, -f) → (0, 0, -f)
+    function buildCyanTriangles() {
+      cyanTriGroup.clear();
+
+      const Z = pointP.z;
+      const Y = pointP.y;
+      const y_proj = focalLength * Y / Z;
+      const imgZ = -focalLength;
+
+      // Large triangle in Y-Z plane: origin → (0, Y, Z) → (0, 0, Z)
+      const A1 = new THREE.Vector3(0, 0, 0);
+      const B1 = new THREE.Vector3(0, Y, Z);
+      const C1 = new THREE.Vector3(0, 0, Z);
+
+      cyanTriGroup.add(makeTriangleMesh(A1, B1, C1, 0x00ccdd, 0.25));
+      cyanTriGroup.add(makeTriangleOutline(A1, B1, C1, 0x00aacc));
+
+      // Small similar triangle on image plane: origin → (0, y, -f) → (0, 0, -f)
+      const A2 = new THREE.Vector3(0, 0, 0);
+      const B2 = new THREE.Vector3(0, y_proj, imgZ);
+      const C2 = new THREE.Vector3(0, 0, imgZ);
+
+      cyanTriGroup.add(makeTriangleMesh(A2, B2, C2, 0x00ccdd, 0.35));
+      cyanTriGroup.add(makeTriangleOutline(A2, B2, C2, 0x00aacc));
+
+      // "Y" label
+      const ylbl = makeLabel('Y', 42, '#00aacc', true);
+      ylbl.position.set(-0.3, Y / 2, Z);
+      ylbl.scale.set(0.7, 0.7, 1);
+      cyanTriGroup.add(ylbl);
+
+      // "Z" label
+      const zlbl = makeLabel('Z', 42, '#00aacc', true);
+      zlbl.position.set(0.3, -0.3, Z / 2);
+      zlbl.scale.set(0.7, 0.7, 1);
+      cyanTriGroup.add(zlbl);
+
+      // "y" label
+      const yslbl = makeLabel('y', 38, '#00aacc', true);
+      yslbl.position.set(-0.25, y_proj / 2, imgZ);
+      yslbl.scale.set(0.55, 0.55, 1);
+      cyanTriGroup.add(yslbl);
+
+      // "f" label
+      const fslbl = makeLabel('f', 38, '#00aacc', true);
+      fslbl.position.set(0.25, -0.25, imgZ / 2);
+      fslbl.scale.set(0.55, 0.55, 1);
+      cyanTriGroup.add(fslbl);
+
+      // Equation label
+      const eqlbl = makeLabel('y/f = Y/Z', 30, '#00aacc', true);
+      eqlbl.position.set(-0.7, Y / 2, Z / 2);
+      eqlbl.scale.set(1.2, 0.5, 1);
+      cyanTriGroup.add(eqlbl);
+    }
+
+    // ── Update everything ──
+    function rebuildAll() {
+      buildAxes();
+      buildImagePlane();
+      buildPointsAndRays();
+      buildGreenTriangles();
+      buildCyanTriangles();
+      updateEquationDisplay();
+      applyVisibility();
+    }
+
+    // ── Live equation readout in top-right info box ──
+    function updateEquationDisplay() {
+      const Z = pointP.z;
+      const X = pointP.x;
+      const Y = pointP.y;
+      const x_proj = (focalLength * X / Z).toFixed(3);
+      const y_proj = (focalLength * Y / Z).toFixed(3);
+      const f = focalLength.toFixed(2);
+
+      document.getElementById('eqDisplay').innerHTML = `
+        <b>P</b> = (${X.toFixed(1)}, ${Y.toFixed(1)}, ${Z.toFixed(1)})<br>
+        <i>f</i> = ${f}<br><br>
+        <span class="eq">x = f &middot; X/Z</span><br>
+        &nbsp; = ${f} &times; ${X.toFixed(1)} / ${Z.toFixed(1)} = <b>${x_proj}</b><br><br>
+        <span class="eq">y = f &middot; Y/Z</span><br>
+        &nbsp; = ${f} &times; ${Y.toFixed(1)} / ${Z.toFixed(1)} = <b>${y_proj}</b><br><br>
+        <span style="font-size:11px; color:#888;">
+          Ratio: x/f = X/Z = ${(X/Z).toFixed(3)}<br>
+          Ratio: y/f = Y/Z = ${(Y/Z).toFixed(3)}
+        </span>
+      `;
+    }
+
+    // ── Visibility toggles ──
+    function applyVisibility() {
+      greenTriGroup.visible = showGreen;
+      cyanTriGroup.visible = showCyan;
+      planeGroup.visible = showPlane;
+      axesGroup.visible = showAxes;
+    }
+
+    // ── Initial build ──
+    rebuildAll();
+
+    // ── Animation loop ──
+    function animate() {
+      requestAnimationFrame(animate);
+      orbitControls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // ── Resize ──
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth, h = container.clientHeight;
+      camera.left = -d * (w/h);
+      camera.right = d * (w/h);
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+
+    // ── Controls wiring ──
+
+    // Focal length slider: teaches how f scales the projected image
+    document.getElementById('focalSlider').addEventListener('input', e => {
+      focalLength = parseFloat(e.target.value);
+      document.getElementById('focalVal').textContent = focalLength.toFixed(2);
+      rebuildAll();
+    });
+
+    // Point P sliders: teaches how moving the world point changes projection
+    document.getElementById('pxSlider').addEventListener('input', e => {
+      pointP.x = parseFloat(e.target.value);
+      document.getElementById('pxVal').textContent = pointP.x.toFixed(1);
+      rebuildAll();
+    });
+    document.getElementById('pySlider').addEventListener('input', e => {
+      pointP.y = parseFloat(e.target.value);
+      document.getElementById('pyVal').textContent = pointP.y.toFixed(1);
+      rebuildAll();
+    });
+    document.getElementById('pzSlider').addEventListener('input', e => {
+      pointP.z = parseFloat(e.target.value);
+      document.getElementById('pzVal').textContent = pointP.z.toFixed(1);
+      rebuildAll();
+    });
+
+    // Toggle buttons
+    function wireToggle(id, getter, setter) {
+      document.getElementById(id).addEventListener('click', () => {
+        setter(!getter());
+        document.getElementById(id).classList.toggle('active');
+        applyVisibility();
+      });
+    }
+    wireToggle('toggleGreen', () => showGreen, v => { showGreen = v; });
+    wireToggle('toggleCyan',  () => showCyan,  v => { showCyan = v; });
+    wireToggle('togglePlane', () => showPlane,  v => { showPlane = v; });
+    wireToggle('toggleAxes',  () => showAxes,   v => { showAxes = v; });
+
+    // Reset to textbook view
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      // Reset point and focal length
+      focalLength = 1.2;
+      pointP.set(1.5, -1.2, 3.5);
+      document.getElementById('focalSlider').value = 1.2;
+      document.getElementById('focalVal').textContent = '1.2';
+      document.getElementById('pxSlider').value = 1.5;
+      document.getElementById('pxVal').textContent = '1.5';
+      document.getElementById('pySlider').value = -1.2;
+      document.getElementById('pyVal').textContent = '-1.2';
+      document.getElementById('pzSlider').value = 3.5;
+      document.getElementById('pzVal').textContent = '3.5';
+      // Reset visibility
+      showGreen = true; showCyan = true; showPlane = true; showAxes = true;
+      ['toggleGreen','toggleCyan','togglePlane','toggleAxes'].forEach(id =>
+        document.getElementById(id).classList.add('active')
+      );
+      // Reset camera
+      camera.position.copy(defaultCamPos);
+      camera.zoom = 1.1;
+      camera.updateProjectionMatrix();
+      orbitControls.target.copy(defaultTarget);
+      orbitControls.update();
+      rebuildAll();
+    });
+
+    // ── Guided Demo: step-through sequence teaching the concept ──
+    const guideSteps = [
+      {
+        text: '<b>Step 1:</b> This is a pinhole camera. The <b>pinhole</b> is at the origin. The <b>image plane</b> (gray) is at distance <i>f</i> behind it.',
+        action: () => {
+          showGreen = false; showCyan = false; showPlane = true; showAxes = true;
+          applyVisibility();
+          camera.position.set(5, 3, -6);
+          orbitControls.target.set(1, -0.2, 1.5);
+          camera.zoom = 1.1;
+          camera.updateProjectionMatrix();
+        }
+      },
+      {
+        text: '<b>Step 2:</b> A world point <b>P = (X, Y, Z)</b> (red dot) projects through the pinhole onto the image plane as <b>p = (x, y)</b> (brown dot).',
+        action: () => {
+          showGreen = false; showCyan = false; showPlane = true; showAxes = true;
+          applyVisibility();
+        }
+      },
+      {
+        text: '<b>Step 3:</b> In the <b style="color:#00aa33">X-Z plane</b>, the large triangle (origin, P_xz, Z-axis) and the small triangle (origin, p_x, image plane) are <em>similar</em>. This gives <b style="color:#00aa33">x/f = X/Z</b>.',
+        action: () => {
+          showGreen = true; showCyan = false;
+          applyVisibility();
+          // Rotate to show XZ plane nicely
+          camera.position.set(0, 6, 0);
+          orbitControls.target.set(0.5, 0, 1.5);
+          camera.zoom = 1.0;
+          camera.updateProjectionMatrix();
+        }
+      },
+      {
+        text: '<b>Step 4:</b> In the <b style="color:#00aacc">Y-Z plane</b>, a second pair of similar triangles gives <b style="color:#00aacc">y/f = Y/Z</b>.',
+        action: () => {
+          showGreen = false; showCyan = true;
+          applyVisibility();
+          // Rotate to show YZ plane
+          camera.position.set(6, 0, 0);
+          orbitControls.target.set(0, -0.3, 1.5);
+          camera.zoom = 1.0;
+          camera.updateProjectionMatrix();
+        }
+      },
+      {
+        text: '<b>Step 5:</b> Together, both triangle pairs establish the <b>perspective projection equations</b>: <i>x = f&middot;X/Z</i> and <i>y = f&middot;Y/Z</i>. Distant objects (larger Z) project smaller.',
+        action: () => {
+          showGreen = true; showCyan = true; showPlane = true; showAxes = true;
+          applyVisibility();
+          camera.position.copy(defaultCamPos);
+          orbitControls.target.copy(defaultTarget);
+          camera.zoom = 1.1;
+          camera.updateProjectionMatrix();
+        }
+      },
+      {
+        text: '<b>Step 6:</b> Try it! Move the <b>Z slider</b> to see how depth affects projection size. Move <b>X</b> and <b>Y</b> to shift the projected point. Change <b>f</b> to zoom in/out.',
+        action: () => {
+          showGreen = true; showCyan = true; showPlane = true; showAxes = true;
+          applyVisibility();
+        }
+      }
+    ];
+
+    let guideIdx = 0;
+    const guideBox = document.getElementById('guide-box');
+    const guideText = document.getElementById('guide-text');
+
+    function showGuideStep(idx) {
+      guideIdx = Math.max(0, Math.min(idx, guideSteps.length - 1));
+      guideText.innerHTML = guideSteps[guideIdx].text;
+      guideSteps[guideIdx].action();
+      updateToggleButtons();
+    }
+
+    function updateToggleButtons() {
+      document.getElementById('toggleGreen').classList.toggle('active', showGreen);
+      document.getElementById('toggleCyan').classList.toggle('active', showCyan);
+      document.getElementById('togglePlane').classList.toggle('active', showPlane);
+      document.getElementById('toggleAxes').classList.toggle('active', showAxes);
+    }
+
+    document.getElementById('guideBtn').addEventListener('click', () => {
+      guideBox.style.display = 'block';
+      guideIdx = 0;
+      showGuideStep(0);
+    });
+    document.getElementById('guideNext').addEventListener('click', () => showGuideStep(guideIdx + 1));
+    document.getElementById('guidePrev').addEventListener('click', () => showGuideStep(guideIdx - 1));
+    document.getElementById('guideClose').addEventListener('click', () => {
+      guideBox.style.display = 'none';
+      showGreen = true; showCyan = true; showPlane = true; showAxes = true;
+      applyVisibility();
+      updateToggleButtons();
+    });
+  </script>
+</body>
+</html>

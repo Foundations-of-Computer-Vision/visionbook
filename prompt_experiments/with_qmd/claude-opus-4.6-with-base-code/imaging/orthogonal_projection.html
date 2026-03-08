@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Orthographic Projection – Interactive 3D Visualization</title>
+  <style>
+    html, body, #container {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: white;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    /* Control panel */
+    #controls {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 14px 18px;
+      z-index: 10;
+      max-width: 300px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    #controls h3 { margin: 0 0 8px; font-size: 15px; }
+    #controls label { display: block; margin: 4px 0; cursor: pointer; }
+    #controls button {
+      margin: 4px 4px 4px 0;
+      padding: 5px 12px;
+      border: 1px solid #999;
+      border-radius: 4px;
+      background: #f5f5f5;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #controls button:hover { background: #e0e0e0; }
+    #controls button.active { background: #4a90d9; color: #fff; border-color: #3670b0; }
+    .slider-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+    .slider-row input[type=range] { flex: 1; }
+    .slider-row .val { min-width: 30px; text-align: right; font-variant-numeric: tabular-nums; }
+    #guide-box {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.94);
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      padding: 10px 18px;
+      z-index: 10;
+      max-width: 520px;
+      text-align: center;
+      font-size: 13px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+    }
+    #guide-box button { margin: 0 4px; }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+
+  <!-- Interactive control panel -->
+  <div id="controls">
+    <h3>Orthographic Projection</h3>
+
+    <!-- Toggle: show / hide projection rays -->
+    <label><input type="checkbox" id="toggleRays" checked /> Show projection rays</label>
+
+    <!-- Toggle: show / hide projected image on plane -->
+    <label><input type="checkbox" id="toggleProjection" checked /> Show projected image</label>
+
+    <!-- Slider: move object along Z to demonstrate size invariance -->
+    <div class="slider-row">
+      <span>Object depth (Z):</span>
+      <input type="range" id="sliderZ" min="2.5" max="7" step="0.1" value="4.5" />
+      <span class="val" id="valZ">4.5</span>
+    </div>
+
+    <!-- Toggle: compare orthographic vs perspective -->
+    <label><input type="checkbox" id="togglePerspective" /> Compare with perspective projection</label>
+
+    <!-- Guided demo -->
+    <button id="btnDemo">▶ Guided Demo</button>
+    <!-- Reset camera -->
+    <button id="btnReset">⟲ Reset to textbook view</button>
+  </div>
+
+  <!-- Guided-demo overlay -->
+  <div id="guide-box" style="display:none;">
+    <div id="guide-text"></div>
+    <div style="margin-top:6px;">
+      <button id="guidePrev">← Prev</button>
+      <button id="guideNext">Next →</button>
+      <button id="guideClose">Close</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+    // ── Scene setup (mirrors base_scene.html) ──────────────────────────
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    const aspect = container.clientWidth / container.clientHeight;
+    const d = 4;
+    const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 40);
+
+    // Textbook-like viewpoint: slightly above and to the left
+    const RESET_POS = new THREE.Vector3(5.5, 4.5, 6);
+    const RESET_TARGET = new THREE.Vector3(2, 0, 2);
+    camera.position.copy(RESET_POS);
+    camera.lookAt(RESET_TARGET);
+    camera.zoom = 1.1;
+    camera.updateProjectionMatrix();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.copy(RESET_TARGET);
+    controls.update();
+
+    // ── Helpers: create text sprites for labels ────────────────────────
+    function makeLabel(text, fontSize = 48, color = '#000') {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.font = `bold ${fontSize}px Arial`;
+      const metrics = ctx.measureText(text);
+      canvas.width = metrics.width + 12;
+      canvas.height = fontSize * 1.4;
+      ctx.font = `bold ${fontSize}px Arial`;
+      ctx.fillStyle = color;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 4, canvas.height / 2);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(canvas.width / canvas.height * 0.6, 0.6, 1);
+      return sprite;
+    }
+
+    // ── Axis arrows (world coordinates X, Y, Z) ───────────────────────
+    // World axes originate at the pinhole / projection-plane origin
+    const ORIGIN = new THREE.Vector3(0, 0, 0);
+
+    function addAxis(dir, color, labelText, length = 3) {
+      const arrow = new THREE.ArrowHelper(dir, ORIGIN, length, color, 0.22, 0.14);
+      scene.add(arrow);
+      const lbl = makeLabel(labelText, 54, color === 0x000000 ? '#000' : '#' + color.toString(16).padStart(6, '0'));
+      lbl.position.copy(ORIGIN).addScaledVector(dir, length + 0.35);
+      scene.add(lbl);
+    }
+    // X axis points left-forward, Y up, Z to the right (depth axis)
+    addAxis(new THREE.Vector3(1, 0, 0), 0x000000, 'X', 2.8);
+    addAxis(new THREE.Vector3(0, 1, 0), 0x000000, 'Y', 3.2);
+    addAxis(new THREE.Vector3(0, 0, 1), 0x000000, 'Z', 8.5);
+
+    // ── Projection plane (semi-transparent gray quad at Z = 1) ────────
+    // The projection plane is the surface on which the orthographic image forms.
+    const planeZ = 1;
+    const planeGeo = new THREE.PlaneGeometry(5, 5);
+    const planeMat = new THREE.MeshBasicMaterial({
+      color: 0xd0d0d0, transparent: true, opacity: 0.30, side: THREE.DoubleSide
+    });
+    const projPlane = new THREE.Mesh(planeGeo, planeMat);
+    // Plane faces +Z, positioned at Z = planeZ
+    projPlane.position.set(0, 0, planeZ);
+    scene.add(projPlane);
+
+    // Plane border
+    const planeBorderGeo = new THREE.EdgesGeometry(planeGeo);
+    const planeBorder = new THREE.LineSegments(planeBorderGeo, new THREE.LineBasicMaterial({ color: 0x888888 }));
+    planeBorder.position.copy(projPlane.position);
+    scene.add(planeBorder);
+
+    // Label: "Projection plane"
+    const planeLabel = makeLabel('Projection plane', 40, '#555');
+    planeLabel.position.set(0, -2.9, planeZ);
+    scene.add(planeLabel);
+
+    // Camera-plane axes labels (x, y) in green, matching textbook figure
+    const xLabel = makeLabel('x', 44, '#22aa22');
+    xLabel.position.set(1.7, 0.15, planeZ + 0.05);
+    scene.add(xLabel);
+    const yLabel = makeLabel('y', 44, '#22aa22');
+    yLabel.position.set(0.15, 1.7, planeZ + 0.05);
+    scene.add(yLabel);
+
+    // Small x and y axis arrows on the projection plane
+    const xArrow = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,planeZ+0.02), 1.5, 0x22aa22, 0.15, 0.10);
+    scene.add(xArrow);
+    const yArrow = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,planeZ+0.02), 1.5, 0x22aa22, 0.15, 0.10);
+    scene.add(yArrow);
+
+    // ── 3D Object: a stepped box matching the textbook figure ─────────
+    // The figure shows a box with a notch cut from the top-front, creating
+    // an L / step shape. Faces are colored: red (front/back), green (top),
+    // cyan/light-blue (side).
+    const objGroup = new THREE.Group();
+
+    // Build the stepped shape from two boxes:
+    //  Bottom slab (full width) + upper-back block
+    const matRed   = new THREE.MeshBasicMaterial({ color: 0xff3333, side: THREE.DoubleSide });
+    const matGreen = new THREE.MeshBasicMaterial({ color: 0x33dd33, side: THREE.DoubleSide });
+    const matCyan  = new THREE.MeshBasicMaterial({ color: 0x33ccff, side: THREE.DoubleSide });
+    const matEdge  = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 });
+
+    // Helper: box with per-face materials [+x, -x, +y, -y, +z, -z]
+    function coloredBox(w, h, dep, materials) {
+      const geo = new THREE.BoxGeometry(w, h, dep);
+      const mesh = new THREE.Mesh(geo, materials);
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), matEdge);
+      mesh.add(edges);
+      return mesh;
+    }
+
+    // Bottom slab: full width, half height
+    const bottomSlab = coloredBox(2, 1, 3, [
+      matCyan,  // +x face (right side) → cyan
+      matRed,   // -x face (left side) → red
+      matGreen, // +y face (top) → green
+      matRed,   // -y face (bottom) → red
+      matRed,   // +z face (front) → red
+      matCyan   // -z face (back) → cyan
+    ]);
+    bottomSlab.position.set(0, -0.5, 0);
+    objGroup.add(bottomSlab);
+
+    // Upper-back block: same width, half height, shorter depth
+    const upperBlock = coloredBox(2, 1, 1.5, [
+      matCyan,  // +x
+      matRed,   // -x
+      matGreen, // +y (top) → green
+      matGreen, // -y (hidden, but green feels right)
+      matRed,   // +z (front face of upper step) → red
+      matCyan   // -z (back)
+    ]);
+    upperBlock.position.set(0, 0.5, -0.75);
+    objGroup.add(upperBlock);
+
+    // Default object position along Z
+    let currentZ = 4.5;
+    objGroup.position.set(0, 0, currentZ);
+    scene.add(objGroup);
+
+    // ── Projection rays (dashed lines from object corners to plane) ───
+    // These parallel rays illustrate that every point projects straight
+    // onto the plane along -Z, which is the defining property of
+    // orthographic projection.
+    const raysGroup = new THREE.Group();
+    scene.add(raysGroup);
+
+    // The eight unique exterior corners of the stepped shape
+    function getCorners() {
+      // Bottom slab corners (local)
+      // slab center (0, -0.5, 0), size 2×1×3  → half-extents 1, 0.5, 1.5
+      const bs = [
+        [-1, -1,  1.5], [ 1, -1,  1.5], [-1, 0,  1.5], [ 1, 0,  1.5],
+        [-1, -1, -1.5], [ 1, -1, -1.5], [-1, 0, -1.5], [ 1, 0, -1.5],
+      ];
+      // Upper block corners (local)
+      // center (0, 0.5, -0.75), size 2×1×1.5 → half 1, 0.5, 0.75
+      const ub = [
+        [-1, 0, 0],     [ 1, 0, 0],     [-1, 1, 0],    [ 1, 1, 0],
+        [-1, 0, -1.5],  [ 1, 0, -1.5],  [-1, 1, -1.5], [ 1, 1, -1.5],
+      ];
+      // Combine unique points (some overlap at the junction)
+      const set = new Map();
+      for (const c of [...bs, ...ub]) {
+        const key = c.join(',');
+        if (!set.has(key)) set.set(key, c);
+      }
+      return [...set.values()];
+    }
+
+    const dashedMat = new THREE.LineDashedMaterial({ color: 0x444444, dashSize: 0.15, gapSize: 0.1, linewidth: 1 });
+
+    function buildRays() {
+      // Remove old rays
+      while (raysGroup.children.length) raysGroup.remove(raysGroup.children[0]);
+
+      const corners = getCorners();
+      for (const c of corners) {
+        const worldPt = new THREE.Vector3(c[0], c[1], c[2] + currentZ);
+        const projPt  = new THREE.Vector3(c[0], c[1], planeZ);
+        const geo = new THREE.BufferGeometry().setFromPoints([worldPt, projPt]);
+        const line = new THREE.Line(geo, dashedMat);
+        line.computeLineDistances();
+        raysGroup.add(line);
+      }
+    }
+    buildRays();
+
+    // ── Projected image on the projection plane ───────────────────────
+    // Under orthographic projection the projected shape is identical
+    // regardless of Z — we draw it as flat colored quads on the plane.
+    const projImgGroup = new THREE.Group();
+    scene.add(projImgGroup);
+
+    // Also build a comparison perspective-projected image
+    const perspImgGroup = new THREE.Group();
+    perspImgGroup.visible = false;
+    scene.add(perspImgGroup);
+
+    function buildProjectedImage() {
+      // Clear
+      while (projImgGroup.children.length) projImgGroup.remove(projImgGroup.children[0]);
+      while (perspImgGroup.children.length) perspImgGroup.remove(perspImgGroup.children[0]);
+
+      const eps = 0.02; // slight offset so it sits on the plane surface
+
+      // ── Orthographic projection (x = X, y = Y) ──
+      // Bottom slab front face (red): rectangle from (-1,-1) to (1,0)
+      addQuad(projImgGroup, -1, -1, 1, 0, planeZ - eps, 0xff3333, 0.85);
+      // Upper block front face (red): (-1, 0) to (1, 1)
+      // But the upper block is set back, so in ortho the front face of the step
+      // is at the junction (y=0 to y=1).  The visible front is the step.
+      addQuad(projImgGroup, -1, 0, 1, 1, planeZ - eps, 0xff3333, 0.85);
+
+      // The top of bottom slab visible between the step (green strip):
+      // Actually in strict front-on ortho, the top faces are not visible.
+      // But the textbook figure shows a 3/4 view projected shape.
+      // We replicate the textbook: the projected silhouette is the full
+      // front face of the compound shape = a rectangle with a step.
+
+      // The textbook shows the projected shape with colored faces matching
+      // the 3D object's visible faces from the Z direction:
+      // Front-facing surfaces → red at bottom half, red at upper half,
+      // combined they make a full rectangle. The cyan side is not visible
+      // from the Z direction. The green top is also not visible.
+      // So the projected image is a solid red rectangle + step silhouette.
+      // But the attached figure actually shows colored patches. Let me
+      // replicate the figure's projected image more faithfully:
+
+      // The textbook projected image mirrors the 3D object's front face
+      // exactly — a stepped shape in red (matching the front faces).
+      // Additionally, the top of the bottom slab shows green where the
+      // upper block doesn't cover it, and the side shows cyan.
+
+      // For clarity, draw the full step outline and the colored projected face:
+      // Already added above. Let's also add the top strip (green) and side (cyan)
+      // visible from a slight 3/4 angle.
+
+      // Green strip on top of bottom slab (between upper block front and slab front)
+      addQuad(projImgGroup, -1, 0, 1, 0, planeZ - eps, 0x33dd33, 0.0); // zero-height, skip
+
+      // Outline of the projected shape
+      const outlineShape = new THREE.Shape();
+      outlineShape.moveTo(-1, -1);
+      outlineShape.lineTo(1, -1);
+      outlineShape.lineTo(1, 1);
+      outlineShape.lineTo(-1, 1);
+      outlineShape.lineTo(-1, -1);
+      const outlineGeo = new THREE.ShapeGeometry(outlineShape);
+      // Draw as line
+      const pts = [
+        new THREE.Vector3(-1, -1, planeZ - eps),
+        new THREE.Vector3( 1, -1, planeZ - eps),
+        new THREE.Vector3( 1,  1, planeZ - eps),
+        new THREE.Vector3(-1,  1, planeZ - eps),
+        new THREE.Vector3(-1, -1, planeZ - eps),
+      ];
+      const outlineLineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const outlineLine = new THREE.Line(outlineLineGeo, new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 }));
+      projImgGroup.add(outlineLine);
+
+      // ── Perspective projection for comparison ──
+      // Under perspective, with pinhole at origin and image plane at Z = planeZ,
+      // a point (X, Y, Z_obj) projects to (planeZ * X / Z_obj, planeZ * Y / Z_obj).
+      // The object gets smaller as it moves farther away.
+      const zObj = currentZ;
+
+      // Front face corners of the full step shape
+      const perspCorners = [
+        [-1, -1], [1, -1], [1, 1], [-1, 1]
+      ];
+      const scaledCorners = perspCorners.map(([cx, cy]) => [
+        planeZ * cx / (zObj - 1.5), // front face of bottom slab is at zObj - 1.5... 
+        planeZ * cy / (zObj - 1.5)  // actually let's use zObj as the average
+      ]);
+
+      // Scale factor for perspective: f/Z where f = planeZ
+      const sFront = planeZ / (zObj - 1.5); // front face Z in world
+      
+      // Bottom slab front face
+      addQuad(perspImgGroup,
+        -1 * sFront, -1 * sFront,
+         1 * sFront,  0 * sFront,
+        planeZ - eps, 0xff3333, 0.75);
+      // Upper step front face
+      addQuad(perspImgGroup,
+        -1 * sFront,  0 * sFront,
+         1 * sFront,  1 * sFront,
+        planeZ - eps, 0xff3333, 0.75);
+
+      // Perspective outline
+      const pPts = [
+        new THREE.Vector3(-1*sFront, -1*sFront, planeZ - eps),
+        new THREE.Vector3( 1*sFront, -1*sFront, planeZ - eps),
+        new THREE.Vector3( 1*sFront,  1*sFront, planeZ - eps),
+        new THREE.Vector3(-1*sFront,  1*sFront, planeZ - eps),
+        new THREE.Vector3(-1*sFront, -1*sFront, planeZ - eps),
+      ];
+      const pLineGeo = new THREE.BufferGeometry().setFromPoints(pPts);
+      const pLine = new THREE.Line(pLineGeo, new THREE.LineBasicMaterial({ color: 0x0000ff, linewidth: 2 }));
+      perspImgGroup.add(pLine);
+
+      // Label
+      const perspLabel = makeLabel('Perspective', 36, '#0000ff');
+      perspLabel.position.set(1.3 * sFront, -1.2 * sFront, planeZ - eps);
+      perspImgGroup.add(perspLabel);
+    }
+
+    function addQuad(parent, x1, y1, x2, y2, z, color, opacity) {
+      if (Math.abs(x2 - x1) < 0.001 || Math.abs(y2 - y1) < 0.001) return;
+      const w = x2 - x1, h = y2 - y1;
+      const geo = new THREE.PlaneGeometry(Math.abs(w), Math.abs(h));
+      const mat = new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set((x1 + x2) / 2, (y1 + y2) / 2, z);
+      parent.add(mesh);
+    }
+
+    buildProjectedImage();
+
+    // ── Equation label (x = X, y = Y) on screen ──────────────────────
+    const eqLabel = makeLabel('x = X,  y = Y', 42, '#333');
+    eqLabel.position.set(0, -2.3, planeZ);
+    scene.add(eqLabel);
+
+    // ── Perspective rays for comparison mode ──────────────────────────
+    const perspRaysGroup = new THREE.Group();
+    perspRaysGroup.visible = false;
+    scene.add(perspRaysGroup);
+
+    function buildPerspRays() {
+      while (perspRaysGroup.children.length) perspRaysGroup.remove(perspRaysGroup.children[0]);
+      const corners = getCorners();
+      const perspDashedMat = new THREE.LineDashedMaterial({ color: 0x0000cc, dashSize: 0.15, gapSize: 0.1 });
+      for (const c of corners) {
+        const worldPt = new THREE.Vector3(c[0], c[1], c[2] + currentZ);
+        // Perspective ray converges to origin (pinhole)
+        const geo = new THREE.BufferGeometry().setFromPoints([worldPt, ORIGIN.clone()]);
+        const line = new THREE.Line(geo, perspDashedMat);
+        line.computeLineDistances();
+        perspRaysGroup.add(line);
+      }
+    }
+    buildPerspRays();
+
+    // ── UI Controls ───────────────────────────────────────────────────
+
+    // Toggle projection rays visibility
+    // Interaction teaches: rays are parallel in ortho projection
+    document.getElementById('toggleRays').addEventListener('change', e => {
+      raysGroup.visible = e.target.checked;
+      if (document.getElementById('togglePerspective').checked) {
+        perspRaysGroup.visible = e.target.checked;
+      }
+    });
+
+    // Toggle projected image on plane
+    // Interaction teaches: the silhouette on the plane
+    document.getElementById('toggleProjection').addEventListener('change', e => {
+      projImgGroup.visible = e.target.checked;
+      if (document.getElementById('togglePerspective').checked) {
+        perspImgGroup.visible = e.target.checked;
+      }
+    });
+
+    // Slider: move object along Z axis
+    // KEY INTERACTION: demonstrates that in orthographic projection,
+    // the projected size does NOT change with distance — the defining
+    // property distinguishing it from perspective projection.
+    const sliderZ = document.getElementById('sliderZ');
+    const valZ = document.getElementById('valZ');
+    sliderZ.addEventListener('input', () => {
+      currentZ = parseFloat(sliderZ.value);
+      valZ.textContent = currentZ.toFixed(1);
+      objGroup.position.z = currentZ;
+      buildRays();
+      buildProjectedImage();
+      buildPerspRays();
+      // Restore visibility states
+      raysGroup.visible = document.getElementById('toggleRays').checked;
+      projImgGroup.visible = document.getElementById('toggleProjection').checked;
+      const perspOn = document.getElementById('togglePerspective').checked;
+      perspRaysGroup.visible = perspOn && document.getElementById('toggleRays').checked;
+      perspImgGroup.visible = perspOn && document.getElementById('toggleProjection').checked;
+    });
+
+    // Toggle: compare with perspective projection
+    // Interaction teaches: difference between ortho and perspective —
+    // perspective projection shrinks distant objects (1/Z scaling)
+    document.getElementById('togglePerspective').addEventListener('change', e => {
+      const on = e.target.checked;
+      perspImgGroup.visible = on && document.getElementById('toggleProjection').checked;
+      perspRaysGroup.visible = on && document.getElementById('toggleRays').checked;
+    });
+
+    // Reset camera to textbook view
+    document.getElementById('btnReset').addEventListener('click', () => {
+      camera.position.copy(RESET_POS);
+      controls.target.copy(RESET_TARGET);
+      camera.zoom = 1.1;
+      camera.updateProjectionMatrix();
+      controls.update();
+      // Reset slider
+      sliderZ.value = 4.5;
+      valZ.textContent = '4.5';
+      currentZ = 4.5;
+      objGroup.position.z = currentZ;
+      buildRays();
+      buildProjectedImage();
+      buildPerspRays();
+      // Reset toggles
+      document.getElementById('toggleRays').checked = true;
+      document.getElementById('toggleProjection').checked = true;
+      document.getElementById('togglePerspective').checked = false;
+      raysGroup.visible = true;
+      projImgGroup.visible = true;
+      perspImgGroup.visible = false;
+      perspRaysGroup.visible = false;
+    });
+
+    // ── Guided Demo (step-through sequence) ───────────────────────────
+    const guideSteps = [
+      {
+        text: '<b>Step 1/5 — The 3D Object:</b> A colored box sits in 3D space along the Z axis. Red faces are front/back, green faces are on top, cyan faces are on the side.',
+        action: () => {
+          raysGroup.visible = false;
+          projImgGroup.visible = false;
+          perspImgGroup.visible = false;
+          perspRaysGroup.visible = false;
+          document.getElementById('toggleRays').checked = false;
+          document.getElementById('toggleProjection').checked = false;
+          document.getElementById('togglePerspective').checked = false;
+          sliderZ.value = 4.5; valZ.textContent = '4.5';
+          currentZ = 4.5; objGroup.position.z = currentZ;
+          buildRays(); buildProjectedImage(); buildPerspRays();
+          camera.position.set(4, 3, 8);
+          controls.target.set(0, 0, 4.5);
+          camera.zoom = 1.3;
+          camera.updateProjectionMatrix();
+          controls.update();
+        }
+      },
+      {
+        text: '<b>Step 2/5 — Projection Rays:</b> Parallel dashed lines show how every point on the object projects straight along −Z onto the projection plane. Notice the rays are all <em>parallel</em> — this is the hallmark of orthographic projection.',
+        action: () => {
+          raysGroup.visible = true;
+          document.getElementById('toggleRays').checked = true;
+          camera.position.copy(RESET_POS);
+          controls.target.copy(RESET_TARGET);
+          camera.zoom = 1.1;
+          camera.updateProjectionMatrix();
+          controls.update();
+        }
+      },
+      {
+        text: '<b>Step 3/5 — Projected Image:</b> The red silhouette on the projection plane is the orthographic projection. Its size equals the real object size: <b>x = X, y = Y</b>.',
+        action: () => {
+          projImgGroup.visible = true;
+          document.getElementById('toggleProjection').checked = true;
+        }
+      },
+      {
+        text: '<b>Step 4/5 — Size Invariance:</b> Move the object along Z with the slider and watch. The projected image does <em>not</em> change size — this is the key property of orthographic projection.',
+        action: () => {
+          // Animate object moving back and forth
+          let t = 0;
+          const anim = setInterval(() => {
+            t += 0.05;
+            currentZ = 4.5 + 2 * Math.sin(t);
+            sliderZ.value = currentZ;
+            valZ.textContent = currentZ.toFixed(1);
+            objGroup.position.z = currentZ;
+            buildRays(); buildProjectedImage();
+            raysGroup.visible = true;
+            projImgGroup.visible = true;
+            if (t > Math.PI * 2) { clearInterval(anim); currentZ = 4.5; sliderZ.value = 4.5; valZ.textContent = '4.5'; objGroup.position.z = currentZ; buildRays(); buildProjectedImage(); }
+          }, 40);
+        }
+      },
+      {
+        text: '<b>Step 5/5 — Ortho vs Perspective:</b> Compare with perspective projection (blue outline). Under perspective, the image <em>shrinks</em> as the object moves farther away (1/Z scaling). Under orthographic projection, size stays constant.',
+        action: () => {
+          document.getElementById('togglePerspective').checked = true;
+          perspImgGroup.visible = true;
+          perspRaysGroup.visible = true;
+          buildPerspRays();
+          buildProjectedImage();
+        }
+      }
+    ];
+
+    let guideIdx = 0;
+    const guideBox = document.getElementById('guide-box');
+    const guideText = document.getElementById('guide-text');
+
+    function showGuideStep() {
+      guideText.innerHTML = guideSteps[guideIdx].text;
+      guideSteps[guideIdx].action();
+      document.getElementById('guidePrev').disabled = guideIdx === 0;
+      document.getElementById('guideNext').disabled = guideIdx === guideSteps.length - 1;
+    }
+
+    document.getElementById('btnDemo').addEventListener('click', () => {
+      guideIdx = 0;
+      guideBox.style.display = 'block';
+      showGuideStep();
+    });
+    document.getElementById('guideNext').addEventListener('click', () => {
+      if (guideIdx < guideSteps.length - 1) { guideIdx++; showGuideStep(); }
+    });
+    document.getElementById('guidePrev').addEventListener('click', () => {
+      if (guideIdx > 0) { guideIdx--; showGuideStep(); }
+    });
+    document.getElementById('guideClose').addEventListener('click', () => {
+      guideBox.style.display = 'none';
+    });
+
+    // ── Render loop ──────────────────────────────────────────────────
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // ── Resize handler ───────────────────────────────────────────────
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth, h = container.clientHeight;
+      camera.left = -d * (w / h);
+      camera.right = d * (w / h);
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+  </script>
+</body>
+</html>

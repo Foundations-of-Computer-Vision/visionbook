@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Homography – Interactive 3D Visualization</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+
+        /* UI panel */
+        #ui {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid #bbb;
+            border-radius: 8px;
+            padding: 14px 16px;
+            max-width: 310px;
+            font-size: 13px;
+            line-height: 1.5;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+            user-select: none;
+        }
+
+        #ui h3 {
+            margin: 0 0 8px;
+            font-size: 15px;
+        }
+
+        #ui p {
+            margin: 4px 0;
+            color: #333;
+        }
+
+        #ui button {
+            margin: 3px 2px;
+            padding: 5px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            border: 1px solid #999;
+            border-radius: 4px;
+            background: #f5f5f5;
+        }
+
+        #ui button:hover {
+            background: #e0e0e0;
+        }
+
+        #ui button.active {
+            background: #4a90d9;
+            color: #fff;
+            border-color: #4a90d9;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin: 4px 0;
+        }
+
+        .slider-row label {
+            min-width: 90px;
+            font-size: 12px;
+        }
+
+        .slider-row input[type=range] {
+            flex: 1;
+        }
+
+        .slider-row .val {
+            min-width: 36px;
+            text-align: right;
+            font-size: 11px;
+            font-family: monospace;
+        }
+
+        #step-info {
+            margin-top: 8px;
+            padding: 8px;
+            background: #f0f4ff;
+            border-radius: 5px;
+            font-size: 12px;
+            min-height: 36px;
+        }
+
+        .section-label {
+            font-weight: 600;
+            margin-top: 8px;
+            margin-bottom: 2px;
+            font-size: 13px;
+        }
+
+        #legend {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.90);
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 12px;
+        }
+
+        #legend span {
+            margin-right: 14px;
+        }
+
+        .dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 3px;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+
+    <!-- Controls panel -->
+    <div id="ui">
+        <h3>Homography Transform</h3>
+        <p>A homography preserves <b>straight lines</b> but not angles or lengths.</p>
+
+        <div class="section-label">Preset Homographies</div>
+        <button id="btn-identity">Identity</button>
+        <button id="btn-perspective">Perspective</button>
+        <button id="btn-affine">Affine (shear)</button>
+        <button id="btn-rotation">Rotation</button>
+
+        <div class="section-label" style="margin-top:10px;">Manual Control</div>
+        <!-- Sliders for the bottom row of H: g, h control perspective -->
+        <div class="slider-row">
+            <label>Perspective g</label>
+            <input type="range" id="sl-g" min="-0.3" max="0.3" step="0.01" value="0">
+            <span class="val" id="val-g">0.00</span>
+        </div>
+        <div class="slider-row">
+            <label>Perspective h</label>
+            <input type="range" id="sl-h" min="-0.3" max="0.3" step="0.01" value="0">
+            <span class="val" id="val-h">0.00</span>
+        </div>
+        <div class="slider-row">
+            <label>Shear (b)</label>
+            <input type="range" id="sl-b" min="-1" max="1" step="0.05" value="0">
+            <span class="val" id="val-b">0.00</span>
+        </div>
+        <div class="slider-row">
+            <label>Rotation θ</label>
+            <input type="range" id="sl-theta" min="-180" max="180" step="1" value="0">
+            <span class="val" id="val-theta">0°</span>
+        </div>
+
+        <div style="margin-top:8px;">
+            <button id="btn-animate">▶ Animate</button>
+            <button id="btn-step">Step-through Demo</button>
+            <button id="btn-reset">Reset to Textbook View</button>
+        </div>
+        <div style="margin-top:4px;">
+            <button id="btn-toggle-labels">Toggle Labels</button>
+            <button id="btn-toggle-angles">Show Angles</button>
+        </div>
+        <div id="step-info">Drag sliders or pick a preset to see the homography in action.</div>
+    </div>
+
+    <div id="legend">
+        <span><span class="dot" style="background:#222;"></span>Original grid</span>
+        <span><span class="dot" style="background:#d9534f;"></span>Transformed grid</span>
+        <span><span class="dot" style="background:#5cb85c;"></span>Corner points</span>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+        /* ── Scene setup (from base_scene.html) ── */
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 4;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 40);
+        // Textbook view: looking straight down at the XZ plane
+        const textbookPos = new THREE.Vector3(0, 10, 0.01);
+        const textbookTarget = new THREE.Vector3(0, 0, 0);
+        camera.position.copy(textbookPos);
+        camera.lookAt(textbookTarget);
+        camera.zoom = 0.85;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.copy(textbookTarget);
+
+        /* ── Grid parameters ── */
+        const GRID_COLS = 4;   // 4 columns → matches the textbook 4×4 grid
+        const GRID_ROWS = 4;
+        const CELL = 1.0;      // size of each cell
+        const OX = -2.5;       // offset so original grid is on the left
+        const OZ = -2.0;
+        const TX = 2.5;        // offset so transformed grid is on the right
+
+        /* ── Helper: build a grid of lines in the XZ plane ──
+           Each grid cell maps to one square in the textbook figure.
+           Returns an array of THREE.Line objects and corner positions. */
+        function buildGridLines(cols, rows, cellSize, offsetX, offsetZ, color) {
+            const lines = [];
+            const mat = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+            // Horizontal lines (along X)
+            for (let r = 0; r <= rows; r++) {
+                const z = offsetZ + r * cellSize;
+                const pts = [new THREE.Vector3(offsetX, 0, z),
+                new THREE.Vector3(offsetX + cols * cellSize, 0, z)];
+                const geo = new THREE.BufferGeometry().setFromPoints(pts);
+                lines.push(new THREE.Line(geo, mat));
+            }
+            // Vertical lines (along Z)
+            for (let c = 0; c <= cols; c++) {
+                const x = offsetX + c * cellSize;
+                const pts = [new THREE.Vector3(x, 0, offsetZ),
+                new THREE.Vector3(x, 0, offsetZ + rows * cellSize)];
+                const geo = new THREE.BufferGeometry().setFromPoints(pts);
+                lines.push(new THREE.Line(geo, mat));
+            }
+            return lines;
+        }
+
+        /* ── Build original (left) grid – black lines ── */
+        const origLines = buildGridLines(GRID_COLS, GRID_ROWS, CELL, OX, OZ, 0x222222);
+        origLines.forEach(l => scene.add(l));
+
+        /* ── Arrow between the two grids ── */
+        const arrowDir = new THREE.Vector3(1, 0, 0);
+        const arrowOrigin = new THREE.Vector3(OX + GRID_COLS * CELL + 0.4, 0, OZ + GRID_ROWS * CELL / 2);
+        const arrow = new THREE.ArrowHelper(arrowDir, arrowOrigin, 1.2, 0x333333, 0.25, 0.18);
+        scene.add(arrow);
+
+        /* ── Transformed grid – red lines, updated by the homography ── */
+        // We'll store a dense set of points per line and transform them.
+        // The transformed grid uses line segments connecting homography-mapped points.
+        const SUBDIV = 40; // subdivisions per line for smooth display
+
+        // Collect all "conceptual" lines of the grid as arrays of (u,v) in [0,1]×[0,1]
+        function gridUVLines(cols, rows) {
+            const lines = [];
+            for (let r = 0; r <= rows; r++) {
+                const pts = [];
+                for (let i = 0; i <= SUBDIV; i++) {
+                    pts.push([i / SUBDIV, r / rows]);
+                }
+                lines.push(pts);
+            }
+            for (let c = 0; c <= cols; c++) {
+                const pts = [];
+                for (let i = 0; i <= SUBDIV; i++) {
+                    pts.push([c / cols, i / SUBDIV]);
+                }
+                lines.push(pts);
+            }
+            return lines;
+        }
+        const uvLines = gridUVLines(GRID_COLS, GRID_ROWS);
+
+        // Create THREE.Line objects for the transformed grid
+        const transMat = new THREE.LineBasicMaterial({ color: 0xd9534f, linewidth: 2 });
+        const transLineObjs = [];
+        uvLines.forEach(() => {
+            const geo = new THREE.BufferGeometry();
+            const positions = new Float32Array((SUBDIV + 1) * 3);
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const line = new THREE.Line(geo, transMat);
+            scene.add(line);
+            transLineObjs.push(line);
+        });
+
+        /* ── Corner markers (green spheres) on the transformed grid ── */
+        const cornerSpheres = [];
+        const sphereGeo = new THREE.SphereGeometry(0.07, 16, 16);
+        const sphereMat = new THREE.MeshBasicMaterial({ color: 0x5cb85c });
+        for (let r = 0; r <= GRID_ROWS; r++) {
+            for (let c = 0; c <= GRID_COLS; c++) {
+                const mesh = new THREE.Mesh(sphereGeo, sphereMat);
+                scene.add(mesh);
+                cornerSpheres.push({ mesh, u: c / GRID_COLS, v: r / GRID_ROWS });
+            }
+        }
+
+        /* ── Labels using sprites ── */
+        let labelsVisible = true;
+        function makeLabel(text, position, color = '#333') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.font = 'bold 28px Segoe UI, Arial, sans-serif';
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.fillText(text, 128, 42);
+            const tex = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+            const sprite = new THREE.Sprite(mat);
+            sprite.position.copy(position);
+            sprite.scale.set(2, 0.5, 1);
+            scene.add(sprite);
+            return sprite;
+        }
+        const labels = [];
+        labels.push(makeLabel('Original Grid', new THREE.Vector3(OX + GRID_COLS * CELL / 2, 0, OZ - 0.5), '#222'));
+        labels.push(makeLabel('H · p', new THREE.Vector3(TX + GRID_COLS * CELL / 2, 0, OZ - 0.5), '#c0392b'));
+        labels.push(makeLabel('p', new THREE.Vector3(OX + GRID_COLS * CELL / 2, 0, OZ + GRID_ROWS * CELL + 0.5), '#222'));
+        labels.push(makeLabel("p' = H p", new THREE.Vector3(TX + GRID_COLS * CELL / 2, 0, OZ + GRID_ROWS * CELL + 0.5), '#c0392b'));
+
+        /* ── Angle indicator arcs ── */
+        let anglesVisible = false;
+        const angleGroup = new THREE.Group();
+        scene.add(angleGroup);
+        angleGroup.visible = false;
+
+        // We'll draw angle arcs at one corner of each grid to show angle distortion
+        function createAngleArc(center, v1, v2, color, radius) {
+            const a1 = Math.atan2(v1.z - center.z, v1.x - center.x);
+            const a2 = Math.atan2(v2.z - center.z, v2.x - center.x);
+            const pts = [];
+            const steps = 30;
+            let start = a1, end = a2;
+            // Ensure we go the shorter way
+            if (end - start > Math.PI) end -= 2 * Math.PI;
+            if (start - end > Math.PI) start -= 2 * Math.PI;
+            for (let i = 0; i <= steps; i++) {
+                const a = start + (end - start) * (i / steps);
+                pts.push(new THREE.Vector3(center.x + radius * Math.cos(a), 0.01, center.z + radius * Math.sin(a)));
+            }
+            const geo = new THREE.BufferGeometry().setFromPoints(pts);
+            const mat = new THREE.LineBasicMaterial({ color });
+            return new THREE.Line(geo, mat);
+        }
+
+        function makeAngleLabel(angle, position, color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 48;
+            const ctx = canvas.getContext('2d');
+            ctx.font = 'bold 22px monospace';
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.fillText(angle.toFixed(1) + '°', 64, 32);
+            const tex = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+            const sprite = new THREE.Sprite(mat);
+            sprite.position.copy(position);
+            sprite.scale.set(1.2, 0.45, 1);
+            return sprite;
+        }
+
+        /* ── Homography math ──
+           Apply H to a point (u,v) in [0,1]×[0,1], return (x', z') in world coords.
+           H operates on homogeneous coords of the unit square then maps to world space. */
+        let H = [1, 0, 0, 0, 1, 0, 0, 0, 1]; // identity
+
+        function applyH(u, v) {
+            // Map (u,v) to the same coordinate range as the original grid
+            const px = u * GRID_COLS * CELL;
+            const py = v * GRID_ROWS * CELL;
+
+            // Apply homography in homogeneous coordinates
+            const wx = H[0] * px + H[1] * py + H[2];
+            const wy = H[3] * px + H[4] * py + H[5];
+            const w = H[6] * px + H[7] * py + H[8];
+
+            // De-homogenize
+            const xp = wx / w;
+            const yp = wy / w;
+
+            // Place in world coords offset to the right
+            return new THREE.Vector3(TX + xp, 0, OZ + yp);
+        }
+
+        /* ── Recompute the transformed grid from H ── */
+        function updateTransformedGrid() {
+            // Update line vertices
+            uvLines.forEach((uvPts, idx) => {
+                const posArr = transLineObjs[idx].geometry.attributes.position.array;
+                uvPts.forEach((uv, i) => {
+                    const p = applyH(uv[0], uv[1]);
+                    posArr[i * 3] = p.x;
+                    posArr[i * 3 + 1] = p.y;
+                    posArr[i * 3 + 2] = p.z;
+                });
+                transLineObjs[idx].geometry.attributes.position.needsUpdate = true;
+                transLineObjs[idx].geometry.computeBoundingSphere();
+            });
+
+            // Update corner spheres
+            cornerSpheres.forEach(cs => {
+                const p = applyH(cs.u, cs.v);
+                cs.mesh.position.copy(p);
+            });
+
+            // Update angle arcs if visible
+            if (anglesVisible) updateAngles();
+        }
+
+        /* ── Angle indicators at bottom-left corner ── */
+        function updateAngles() {
+            // Clear old
+            while (angleGroup.children.length) angleGroup.remove(angleGroup.children[0]);
+
+            // Original grid angle at bottom-left corner (always 90°)
+            const oC = new THREE.Vector3(OX, 0, OZ);
+            const oR = new THREE.Vector3(OX + CELL, 0, OZ);
+            const oU = new THREE.Vector3(OX, 0, OZ + CELL);
+            angleGroup.add(createAngleArc(oC, oR, oU, '#222', 0.35));
+            angleGroup.add(makeAngleLabel(90, new THREE.Vector3(OX + 0.55, 0, OZ + 0.55), '#222'));
+
+            // Transformed grid angle at corresponding corner
+            const tC = applyH(0, 0);
+            const tR = applyH(1 / GRID_COLS, 0);
+            const tU = applyH(0, 1 / GRID_ROWS);
+            const vR = new THREE.Vector2(tR.x - tC.x, tR.z - tC.z).normalize();
+            const vU = new THREE.Vector2(tU.x - tC.x, tU.z - tC.z).normalize();
+            const dot = vR.dot(vU);
+            const angle = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI;
+            angleGroup.add(createAngleArc(tC, tR, tU, '#c0392b', 0.35));
+            const mid = new THREE.Vector3((tC.x + tR.x + tU.x) / 3 + 0.15, 0, (tC.z + tR.z + tU.z) / 3 + 0.15);
+            angleGroup.add(makeAngleLabel(angle, mid, '#c0392b'));
+        }
+
+        /* ── Build H from slider values ── */
+        function buildHFromSliders() {
+            const g = parseFloat(document.getElementById('sl-g').value);
+            const h_val = parseFloat(document.getElementById('sl-h').value);
+            const b = parseFloat(document.getElementById('sl-b').value);
+            const theta = parseFloat(document.getElementById('sl-theta').value) * Math.PI / 180;
+            const cosT = Math.cos(theta), sinT = Math.sin(theta);
+
+            // H = [cosT, b+(-sinT), 0;  sinT, cosT, 0;  g, h, 1]
+            // Combines rotation, shear, and perspective
+            H[0] = cosT; H[1] = b + (-sinT); H[2] = 0;
+            H[3] = sinT; H[4] = cosT; H[5] = 0;
+            H[6] = g; H[7] = h_val; H[8] = 1;
+
+            document.getElementById('val-g').textContent = g.toFixed(2);
+            document.getElementById('val-h').textContent = h_val.toFixed(2);
+            document.getElementById('val-b').textContent = b.toFixed(2);
+            document.getElementById('val-theta').textContent = Math.round(theta * 180 / Math.PI) + '°';
+
+            updateTransformedGrid();
+        }
+
+        function setSliders(g, h, b, theta) {
+            document.getElementById('sl-g').value = g;
+            document.getElementById('sl-h').value = h;
+            document.getElementById('sl-b').value = b;
+            document.getElementById('sl-theta').value = theta;
+            buildHFromSliders();
+        }
+
+        /* ── Presets ── */
+        // Identity: no transformation
+        document.getElementById('btn-identity').addEventListener('click', () => {
+            setSliders(0, 0, 0, 0);
+            document.getElementById('step-info').textContent = 'Identity: the grid is unchanged. H = I.';
+        });
+
+        // Perspective: matches the textbook figure (converging lines on the right)
+        document.getElementById('btn-perspective').addEventListener('click', () => {
+            setSliders(0, -0.15, 0, 0);
+            document.getElementById('step-info').textContent =
+                'Perspective warp: parallel vertical lines converge. Lines stay straight, but angles change.';
+        });
+
+        // Affine (shear)
+        document.getElementById('btn-affine').addEventListener('click', () => {
+            setSliders(0, 0, 0.5, 0);
+            document.getElementById('step-info').textContent =
+                'Affine shear: an affine transform (g=h=0) preserves parallelism. Still a homography!';
+        });
+
+        // Rotation
+        document.getElementById('btn-rotation').addEventListener('click', () => {
+            setSliders(0, 0, 0, 30);
+            document.getElementById('step-info').textContent =
+                'Rotation: a special homography. Angles AND lengths are preserved.';
+        });
+
+        /* ── Animate: smooth interpolation from identity to a perspective homography ── */
+        let animating = false;
+        let animT = 0;
+        const animTargetG = 0, animTargetH = -0.15, animTargetB = 0.15, animTargetTheta = 15;
+        document.getElementById('btn-animate').addEventListener('click', () => {
+            if (animating) { animating = false; return; }
+            animating = true;
+            animT = 0;
+            document.getElementById('step-info').textContent = 'Animating homography... watch lines stay straight while angles change.';
+        });
+
+        /* ── Step-through demo ── */
+        let stepIdx = -1;
+        const steps = [
+            {
+                g: 0, h: 0, b: 0, theta: 0,
+                info: 'Step 1/5: Identity – the original square grid is unchanged.'
+            },
+            {
+                g: 0, h: 0, b: 0, theta: 25,
+                info: 'Step 2/5: Rotation – a rigid rotation preserves angles (90°) and lengths.'
+            },
+            {
+                g: 0, h: 0, b: 0.5, theta: 0,
+                info: 'Step 3/5: Shear – an affine transform. Parallelism is preserved, but right angles are not.'
+            },
+            {
+                g: 0, h: -0.15, b: 0, theta: 0,
+                info: 'Step 4/5: Perspective – perspective distortion from the H matrix bottom row. Parallel lines converge.'
+            },
+            {
+                g: 0.08, h: -0.12, b: 0.15, theta: 10,
+                info: 'Step 5/5: General homography – combines rotation, shear, and perspective. Lines stay straight!'
+            },
+        ];
+        document.getElementById('btn-step').addEventListener('click', () => {
+            stepIdx = (stepIdx + 1) % steps.length;
+            const s = steps[stepIdx];
+            animating = false;
+            setSliders(s.g, s.h, s.b, s.theta);
+            document.getElementById('step-info').textContent = s.info;
+        });
+
+        /* ── Reset to textbook view ── */
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            // Reset camera
+            camera.position.copy(textbookPos);
+            controls.target.copy(textbookTarget);
+            camera.zoom = 0.85;
+            camera.updateProjectionMatrix();
+            controls.update();
+            // Set perspective preset (matches the textbook figure)
+            animating = false;
+            setSliders(0, -0.15, 0, 0);
+            stepIdx = -1;
+            document.getElementById('step-info').textContent =
+                'Reset to textbook view: perspective homography matching the figure.';
+        });
+
+        /* ── Toggle labels ── */
+        document.getElementById('btn-toggle-labels').addEventListener('click', () => {
+            labelsVisible = !labelsVisible;
+            labels.forEach(l => l.visible = labelsVisible);
+        });
+
+        /* ── Toggle angles ── */
+        document.getElementById('btn-toggle-angles').addEventListener('click', () => {
+            anglesVisible = !anglesVisible;
+            angleGroup.visible = anglesVisible;
+            if (anglesVisible) updateAngles();
+        });
+
+        /* ── Slider events ── */
+        ['sl-g', 'sl-h', 'sl-b', 'sl-theta'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                animating = false;
+                buildHFromSliders();
+            });
+        });
+
+        /* ── Initial state: perspective preset to match textbook figure ── */
+        setSliders(0, -0.15, 0, 0);
+
+        /* ── Render loop ── */
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (animating) {
+                animT += 0.008;
+                if (animT > 2) animT = 0; // loop
+                // Ping-pong: 0→1 forward, 1→2 backward
+                const t = animT <= 1 ? animT : 2 - animT;
+                const eased = t * t * (3 - 2 * t); // smoothstep
+                setSliders(
+                    animTargetG * eased,
+                    animTargetH * eased,
+                    animTargetB * eased,
+                    animTargetTheta * eased
+                );
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        /* ── Resize ── */
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.left = -d * (w / h);
+            camera.right = d * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

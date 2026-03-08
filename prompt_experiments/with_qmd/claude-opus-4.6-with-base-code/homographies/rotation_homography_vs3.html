@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Camera Rotation Homography</title>
+  <style>
+    html, body, #container {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: white;
+      font-family: Arial, sans-serif;
+    }
+    #controls {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 14px 18px;
+      z-index: 10;
+      max-width: 320px;
+      font-size: 13px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    #controls h3 { margin: 0 0 8px 0; font-size: 15px; }
+    #controls label { display: block; margin: 6px 0 2px 0; font-weight: bold; }
+    #controls input[type=range] { width: 100%; }
+    #controls .val { font-weight: normal; color: #555; }
+    #controls button {
+      margin: 4px 4px 4px 0;
+      padding: 5px 12px;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+      background: #f5f5f5;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #controls button:hover { background: #e0e0e0; }
+    #controls button.active { background: #c0dff0; border-color: #5a9; }
+    #guide-box {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.95);
+      border: 1px solid #aaa;
+      border-radius: 8px;
+      padding: 10px 20px;
+      z-index: 10;
+      font-size: 13px;
+      max-width: 600px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    #guide-box button { margin: 0 6px; padding: 4px 14px; border-radius: 4px; border: 1px solid #aaa; background: #f5f5f5; cursor: pointer; }
+    #guide-box button:hover { background: #e0e0e0; }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+
+  <!-- Control panel -->
+  <div id="controls">
+    <h3>Camera Rotation Homography</h3>
+
+    <!-- Slider: rotation angle of Camera 2 about Y-axis -->
+    <label>Camera 2 Rotation (°): <span class="val" id="rot-val">30</span></label>
+    <input type="range" id="rot-slider" min="-80" max="80" value="30" step="1" />
+
+    <!-- Slider: move the 3D point along X -->
+    <label>3D Point X: <span class="val" id="px-val">1.8</span></label>
+    <input type="range" id="px-slider" min="-3" max="3" value="1.8" step="0.1" />
+
+    <!-- Slider: move the 3D point along Y -->
+    <label>3D Point Y: <span class="val" id="py-val">1.0</span></label>
+    <input type="range" id="py-slider" min="-2" max="3" value="1.0" step="0.1" />
+
+    <div style="margin-top:8px;">
+      <button id="btn-rays" class="active">Show Rays</button>
+      <button id="btn-grid">Show Grid</button>
+    </div>
+    <div>
+      <button id="btn-reset">Reset to Textbook View</button>
+      <button id="btn-guide">Guided Demo</button>
+    </div>
+  </div>
+
+  <!-- Guided demo overlay -->
+  <div id="guide-box" style="display:none;">
+    <div id="guide-text"></div>
+    <div style="margin-top:8px;">
+      <button id="guide-prev">← Prev</button>
+      <button id="guide-next">Next →</button>
+      <button id="guide-close">Close</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+    import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three/examples/jsm/renderers/CSS2DRenderer';
+
+    // ——— Scene setup (from base_scene.html) ———
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    const aspect = container.clientWidth / container.clientHeight;
+    const d = 4;
+    const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 50);
+    camera.position.set(4, 4, 5);
+    camera.lookAt(0, 0, 1.5);
+    camera.zoom = 0.95;
+    camera.updateProjectionMatrix();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    // CSS2D label renderer for text labels
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(container.clientWidth, container.clientHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    container.appendChild(labelRenderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // ——— Helper: create a CSS2D text label ———
+    function makeLabel(text, color = '#000', fontSize = '13px', bold = false) {
+      const div = document.createElement('div');
+      div.style.color = color;
+      div.style.fontSize = fontSize;
+      div.style.fontFamily = 'Arial, sans-serif';
+      if (bold) div.style.fontWeight = 'bold';
+      div.style.background = 'rgba(255,255,255,0.7)';
+      div.style.padding = '1px 4px';
+      div.style.borderRadius = '3px';
+      div.textContent = text;
+      const label = new CSS2DObject(div);
+      return label;
+    }
+
+    // ——— Constants ———
+    // Camera image plane is at distance focalLength along the camera's Z-axis
+    const focalLength = 2.5; // distance from origin to image plane
+    const planeHalfW = 1.2;  // half-width of image plane rectangle
+    const planeHalfH = 0.9;  // half-height of image plane rectangle
+
+    // ——— World-coordinate axes (green arrows, matching figure) ———
+    // The figure shows X right, Y up, Z forward from the common camera center
+    const axisLen = 1.4;
+    const axisColors = { x: 0x00aa00, y: 0x00aa00, z: 0x00aa00 };
+
+    function makeArrow(dir, origin, length, color, headLen = 0.18, headW = 0.08) {
+      return new THREE.ArrowHelper(dir, origin, length, color, headLen, headW);
+    }
+    const origin = new THREE.Vector3(0, 0, 0);
+    scene.add(makeArrow(new THREE.Vector3(1,0,0), origin, axisLen, axisColors.x));
+    scene.add(makeArrow(new THREE.Vector3(0,1,0), origin, axisLen, axisColors.y));
+    scene.add(makeArrow(new THREE.Vector3(0,0,1), origin, axisLen, axisColors.z));
+
+    // Axis labels
+    const lX = makeLabel('X', '#008800', '14px', true);
+    lX.position.set(axisLen + 0.15, 0, 0);
+    scene.add(lX);
+    const lY = makeLabel('Y', '#008800', '14px', true);
+    lY.position.set(0, axisLen + 0.15, 0);
+    scene.add(lY);
+    const lZ = makeLabel('Z', '#008800', '14px', true);
+    lZ.position.set(0, 0, axisLen + 0.15);
+    scene.add(lZ);
+
+    // Common center of projection (black dot at origin)
+    const centerDot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.07, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0x000000 })
+    );
+    scene.add(centerDot);
+
+    // ——— Camera 1 image plane (green, aligned with world Z-axis) ———
+    // Camera 1 looks along +Z; its image plane is at Z = focalLength
+    const cam1PlaneGeo = new THREE.PlaneGeometry(planeHalfW * 2, planeHalfH * 2);
+    const cam1PlaneMat = new THREE.MeshBasicMaterial({
+      color: 0x00cc00, transparent: true, opacity: 0.25, side: THREE.DoubleSide
+    });
+    const cam1Plane = new THREE.Mesh(cam1PlaneGeo, cam1PlaneMat);
+    cam1Plane.position.set(0, 0, focalLength);
+    scene.add(cam1Plane);
+
+    // Camera 1 plane border (green wireframe)
+    const cam1Border = new THREE.LineSegments(
+      new THREE.EdgesGeometry(cam1PlaneGeo),
+      new THREE.LineBasicMaterial({ color: 0x009900, linewidth: 2 })
+    );
+    cam1Border.position.copy(cam1Plane.position);
+    scene.add(cam1Border);
+
+    const lCam1 = makeLabel('Camera 1', '#006600', '14px', true);
+    lCam1.position.set(-planeHalfW, planeHalfH + 0.15, focalLength);
+    scene.add(lCam1);
+
+    // ——— Camera 2 image plane (red, rotated about Y-axis) ———
+    // We'll put Camera 2's elements in a group that rotates about origin
+    const cam2Group = new THREE.Group();
+    scene.add(cam2Group);
+
+    const cam2PlaneGeo = new THREE.PlaneGeometry(planeHalfW * 2, planeHalfH * 2);
+    const cam2PlaneMat = new THREE.MeshBasicMaterial({
+      color: 0xdd0000, transparent: true, opacity: 0.25, side: THREE.DoubleSide
+    });
+    const cam2Plane = new THREE.Mesh(cam2PlaneGeo, cam2PlaneMat);
+    cam2Plane.position.set(0, 0, focalLength);
+    cam2Group.add(cam2Plane);
+
+    const cam2Border = new THREE.LineSegments(
+      new THREE.EdgesGeometry(cam2PlaneGeo),
+      new THREE.LineBasicMaterial({ color: 0x990000, linewidth: 2 })
+    );
+    cam2Border.position.copy(cam2Plane.position);
+    cam2Group.add(cam2Border);
+
+    const lCam2 = makeLabel('Camera 2', '#990000', '14px', true);
+    lCam2.position.set(planeHalfW + 0.1, planeHalfH + 0.15, focalLength);
+    cam2Group.add(lCam2);
+
+    // Rotation arc indicator (curved arrow showing R)
+    const lR = makeLabel('R', '#000', '16px', true);
+    lR.position.set(0, planeHalfH + 0.6, focalLength);
+    scene.add(lR);
+
+    // ——— 3D point (cyan sphere) ———
+    let point3D = new THREE.Vector3(1.8, 1.0, 5.0);
+    const pointMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0x00cccc })
+    );
+    pointMesh.position.copy(point3D);
+    scene.add(pointMesh);
+
+    const lPoint = makeLabel('(X, Y, Z)', '#008888', '13px', true);
+    lPoint.position.set(point3D.x + 0.2, point3D.y + 0.2, point3D.z);
+    scene.add(lPoint);
+
+    // ——— Projection rays and projected points ———
+    // Ray from origin through Camera 1 plane to 3D point (dashed black line)
+    const ray1Material = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 0.15, gapSize: 0.08 });
+    let ray1Geometry = new THREE.BufferGeometry();
+    const ray1Line = new THREE.Line(ray1Geometry, ray1Material);
+    ray1Line.computeLineDistances();
+    scene.add(ray1Line);
+
+    // Ray from origin through Camera 2 plane to 3D point (dashed black line)
+    const ray2Material = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 0.15, gapSize: 0.08 });
+    let ray2Geometry = new THREE.BufferGeometry();
+    const ray2Line = new THREE.Line(ray2Geometry, ray2Material);
+    ray2Line.computeLineDistances();
+    scene.add(ray2Line);
+
+    // Projected point on Camera 1 (cyan dot)
+    const proj1Mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0x00cccc })
+    );
+    scene.add(proj1Mesh);
+
+    const lProj1 = makeLabel('(x, y)', '#008888', '12px', true);
+    scene.add(lProj1);
+
+    // Projected point on Camera 2 (cyan dot)
+    const proj2Mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 16, 16),
+      new THREE.MeshBasicMaterial({ color: 0x00cccc })
+    );
+    scene.add(proj2Mesh);
+
+    const lProj2 = makeLabel("(x', y')", '#008888', '12px', true);
+    scene.add(lProj2);
+
+    // ——— Right-angle markers at projection points ———
+    // Small square to show the ray hits the plane at a right angle
+    const rightAngleMat = new THREE.LineBasicMaterial({ color: 0x000000 });
+
+    function makeRightAngleMarker() {
+      const geo = new THREE.BufferGeometry();
+      const line = new THREE.Line(geo, rightAngleMat);
+      scene.add(line);
+      return line;
+    }
+    const rightAngle1 = makeRightAngleMarker();
+    const rightAngle2 = makeRightAngleMarker();
+
+    // ——— Grid on Camera 1 plane (to show homography distortion) ———
+    const gridGroup1 = new THREE.Group();
+    const gridGroup2 = new THREE.Group();
+    scene.add(gridGroup1);
+    scene.add(gridGroup2);
+    gridGroup1.visible = false;
+    gridGroup2.visible = false;
+
+    function buildGrid(group, gridColor, nLines = 5) {
+      // Remove old children
+      while (group.children.length) group.remove(group.children[0]);
+
+      const mat = new THREE.LineBasicMaterial({ color: gridColor, transparent: true, opacity: 0.6 });
+      // Horizontal lines
+      for (let i = 0; i <= nLines; i++) {
+        const t = -planeHalfH + (2 * planeHalfH) * i / nLines;
+        const pts = [
+          new THREE.Vector3(-planeHalfW, t, focalLength),
+          new THREE.Vector3(planeHalfW, t, focalLength)
+        ];
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        group.add(new THREE.Line(geo, mat));
+      }
+      // Vertical lines
+      for (let i = 0; i <= nLines; i++) {
+        const t = -planeHalfW + (2 * planeHalfW) * i / nLines;
+        const pts = [
+          new THREE.Vector3(t, -planeHalfH, focalLength),
+          new THREE.Vector3(t, planeHalfH, focalLength)
+        ];
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        group.add(new THREE.Line(geo, mat));
+      }
+    }
+
+    // Build a homography-warped grid on Camera 2
+    // Each grid point on Camera 1 plane is unprojected to a ray,
+    // then projected onto Camera 2 plane, showing the homography mapping.
+    function buildHomographyGrid(groupSrc, groupDst, rotY, gridColor, nLines = 5) {
+      while (groupDst.children.length) groupDst.remove(groupDst.children[0]);
+
+      const mat = new THREE.LineBasicMaterial({ color: gridColor, transparent: true, opacity: 0.6 });
+      const cosR = Math.cos(rotY);
+      const sinR = Math.sin(rotY);
+
+      // Map a point on Camera 1 plane to Camera 2 plane via homography
+      // Camera 1 plane: point at (px, py, focalLength)
+      // Ray: direction = (px, py, focalLength) (from origin)
+      // Camera 2 plane normal in world coords: n = R * (0,0,1) = (sinR, 0, cosR)
+      // Camera 2 plane passes through R * (0,0,focalLength) = (focalLength*sinR, 0, focalLength*cosR)
+      // Intersection: t such that dot(t*dir - planePoint, n) = 0
+      function mapPoint(px, py) {
+        const dirX = px, dirY = py, dirZ = focalLength;
+        const nx = sinR, nz = cosR;
+        const planePtX = focalLength * sinR;
+        const planePtZ = focalLength * cosR;
+        const denom = dirX * nx + dirZ * nz;
+        if (Math.abs(denom) < 1e-8) return null;
+        const t = (planePtX * nx + planePtZ * nz) / denom;
+        if (t < 0) return null;
+        // World intersection point
+        const wx = t * dirX, wy = t * dirY, wz = t * dirZ;
+        // Convert to Camera 2 local coordinates
+        // Camera 2 local frame: right = R*(1,0,0) = (cosR,0,-sinR), up = (0,1,0), forward = (sinR,0,cosR)
+        // Local coords relative to plane center:
+        const dx = wx - planePtX, dy = wy, dz = wz - planePtZ;
+        const localX = dx * cosR + dz * (-sinR);
+        const localY = dy;
+        // Check if within bounds (with some margin)
+        if (Math.abs(localX) > planeHalfW * 2.5 || Math.abs(localY) > planeHalfH * 2.5) return null;
+        return new THREE.Vector3(wx, wy, wz);
+      }
+
+      // Horizontal lines
+      for (let i = 0; i <= nLines; i++) {
+        const py = -planeHalfH + (2 * planeHalfH) * i / nLines;
+        const pts = [];
+        const nSeg = 20;
+        for (let j = 0; j <= nSeg; j++) {
+          const px = -planeHalfW + (2 * planeHalfW) * j / nSeg;
+          const p = mapPoint(px, py);
+          if (p) pts.push(p);
+        }
+        if (pts.length >= 2) {
+          const geo = new THREE.BufferGeometry().setFromPoints(pts);
+          groupDst.add(new THREE.Line(geo, mat));
+        }
+      }
+      // Vertical lines
+      for (let i = 0; i <= nLines; i++) {
+        const px = -planeHalfW + (2 * planeHalfW) * i / nLines;
+        const pts = [];
+        const nSeg = 20;
+        for (let j = 0; j <= nSeg; j++) {
+          const py = -planeHalfH + (2 * planeHalfH) * j / nSeg;
+          const p = mapPoint(px, py);
+          if (p) pts.push(p);
+        }
+        if (pts.length >= 2) {
+          const geo = new THREE.BufferGeometry().setFromPoints(pts);
+          groupDst.add(new THREE.Line(geo, mat));
+        }
+      }
+    }
+
+    buildGrid(gridGroup1, 0x009900);
+
+    // ——— Rotation arc (visual indicator of rotation angle) ———
+    let arcLine = null;
+    function updateArc(rotY) {
+      if (arcLine) scene.remove(arcLine);
+      const nSeg = 30;
+      const radius = focalLength * 0.5;
+      const pts = [];
+      const startAngle = 0; // Camera 1 direction along +Z
+      const endAngle = -rotY; // negative because rotation about Y
+      for (let i = 0; i <= nSeg; i++) {
+        const a = startAngle + (endAngle - startAngle) * i / nSeg;
+        pts.push(new THREE.Vector3(radius * Math.sin(a), planeHalfH + 0.35, radius * Math.cos(a)));
+      }
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      arcLine = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x000000 }));
+      scene.add(arcLine);
+
+      // Add arrowhead at the end of the arc
+      if (Math.abs(rotY) > 0.05) {
+        const lastPt = pts[pts.length - 1];
+        const prevPt = pts[pts.length - 2];
+        const dir = new THREE.Vector3().subVectors(lastPt, prevPt).normalize();
+        const arrow = new THREE.ArrowHelper(dir, prevPt, 0.2, 0x000000, 0.15, 0.06);
+        arcLine.add(arrow);
+      }
+    }
+
+    // ——— Connecting lines from origin to image plane corners (camera FOV lines) ———
+    // Camera 1 FOV lines (green)
+    function makeFovLines(color) {
+      const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.4 });
+      const corners = [
+        new THREE.Vector3(-planeHalfW, -planeHalfH, focalLength),
+        new THREE.Vector3(planeHalfW, -planeHalfH, focalLength),
+        new THREE.Vector3(planeHalfW, planeHalfH, focalLength),
+        new THREE.Vector3(-planeHalfW, planeHalfH, focalLength),
+      ];
+      const lines = [];
+      for (const c of corners) {
+        const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), c]);
+        const line = new THREE.Line(geo, mat);
+        lines.push(line);
+      }
+      return lines;
+    }
+
+    const fov1Lines = makeFovLines(0x009900);
+    fov1Lines.forEach(l => scene.add(l));
+
+    const fov2LineGroup = new THREE.Group();
+    scene.add(fov2LineGroup);
+
+    function updateFov2Lines(rotY) {
+      while (fov2LineGroup.children.length) fov2LineGroup.remove(fov2LineGroup.children[0]);
+      const mat = new THREE.LineBasicMaterial({ color: 0x990000, transparent: true, opacity: 0.4 });
+      const cosR = Math.cos(rotY);
+      const sinR = Math.sin(rotY);
+      const corners = [
+        [-planeHalfW, -planeHalfH, focalLength],
+        [planeHalfW, -planeHalfH, focalLength],
+        [planeHalfW, planeHalfH, focalLength],
+        [-planeHalfW, planeHalfH, focalLength],
+      ];
+      for (const [lx, ly, lz] of corners) {
+        // Rotate corner by rotY about Y
+        const wx = lx * cosR + lz * sinR;
+        const wy = ly;
+        const wz = -lx * sinR + lz * cosR;
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0,0,0),
+          new THREE.Vector3(wx, wy, wz)
+        ]);
+        fov2LineGroup.add(new THREE.Line(geo, mat));
+      }
+    }
+
+    // ——— State ———
+    let rotAngleDeg = 30;
+    let showRays = true;
+    let showGrid = false;
+
+    // ——— Update function: recompute all dynamic geometry ———
+    function updateScene() {
+      const rotY = THREE.MathUtils.degToRad(rotAngleDeg);
+
+      // Rotate Camera 2 group about Y-axis
+      cam2Group.rotation.set(0, -rotY, 0);
+
+      // Update arc
+      updateArc(rotY);
+      lR.position.set(
+        0.3 * Math.sin(-rotY / 2),
+        planeHalfH + 0.65,
+        focalLength * 0.5 * Math.cos(rotY / 2)
+      );
+
+      // Update FOV lines for camera 2
+      updateFov2Lines(-rotY);
+
+      // ——— Project 3D point onto Camera 1 plane ———
+      // Camera 1 looks along +Z, plane at z = focalLength
+      // Projection: ray from origin to point3D, intersect z = focalLength
+      const t1 = focalLength / point3D.z;
+      const proj1X = point3D.x * t1;
+      const proj1Y = point3D.y * t1;
+      const proj1 = new THREE.Vector3(proj1X, proj1Y, focalLength);
+
+      proj1Mesh.position.copy(proj1);
+      lProj1.position.set(proj1X - 0.3, proj1Y - 0.2, focalLength);
+
+      // ——— Project 3D point onto Camera 2 plane ———
+      // Camera 2 is rotated by -rotY about Y.
+      // Camera 2 local forward: (sin(-rotY), 0, cos(-rotY)) = (-sinR, 0, cosR)
+      const cosR = Math.cos(rotY);
+      const sinR = Math.sin(rotY);
+      // Camera 2 forward direction (after rotation by -rotY about Y)
+      const fwdX = -sinR, fwdZ = cosR;
+      // Camera 2 right direction
+      const rightX = cosR, rightZ = sinR;
+      // Plane center of Camera 2
+      const planeCX = fwdX * focalLength;
+      const planeCY = 0;
+      const planeCZ = fwdZ * focalLength;
+      // Plane normal = forward direction
+      // Ray: origin + t * point3D direction
+      // dot((t*P - planeCenter), normal) = 0
+      const denom2 = point3D.x * fwdX + point3D.z * fwdZ;
+      let proj2 = new THREE.Vector3(0, 0, 0);
+      let proj2Valid = false;
+      if (Math.abs(denom2) > 1e-8) {
+        const t2 = (planeCX * fwdX + planeCZ * fwdZ) / denom2;
+        if (t2 > 0) {
+          proj2.set(point3D.x * t2, point3D.y * t2, point3D.z * t2);
+          proj2Valid = true;
+        }
+      }
+
+      proj2Mesh.position.copy(proj2);
+      proj2Mesh.visible = proj2Valid;
+      lProj2.position.set(proj2.x - 0.3, proj2.y - 0.25, proj2.z);
+      lProj2.visible = proj2Valid;
+
+      // ——— Update projection rays ———
+      // Ray 1: origin -> proj1 -> point3D (dashed beyond plane)
+      ray1Line.geometry.dispose();
+      ray1Line.geometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0), proj1, point3D
+      ]);
+      ray1Line.computeLineDistances();
+      ray1Line.visible = showRays;
+
+      // Ray 2: origin -> proj2 -> point3D
+      ray2Line.geometry.dispose();
+      if (proj2Valid) {
+        ray2Line.geometry = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, 0, 0), proj2, point3D
+        ]);
+        ray2Line.computeLineDistances();
+      }
+      ray2Line.visible = showRays && proj2Valid;
+
+      // ——— Right angle markers ———
+      // For Camera 1: marker at proj1, plane normal is (0,0,1), ray direction in plane
+      {
+        const rayDir = new THREE.Vector3().copy(point3D).normalize();
+        // Component of ray direction in the image plane (XY)
+        const inPlane = new THREE.Vector3(rayDir.x, rayDir.y, 0).normalize().multiplyScalar(0.12);
+        const normal = new THREE.Vector3(0, 0, -0.12);
+        const p0 = proj1.clone().add(inPlane);
+        const p1 = proj1.clone().add(inPlane).add(normal);
+        const p2 = proj1.clone().add(normal);
+        rightAngle1.geometry.dispose();
+        rightAngle1.geometry = new THREE.BufferGeometry().setFromPoints([p0, p1, p2]);
+        rightAngle1.visible = showRays;
+      }
+
+      // For Camera 2: marker at proj2
+      if (proj2Valid) {
+        const normal2 = new THREE.Vector3(-fwdX, 0, -fwdZ).normalize().multiplyScalar(0.12);
+        const right2 = new THREE.Vector3(rightX, 0, rightZ).normalize();
+        // Project ray onto plane to get in-plane component
+        const rayDir2 = new THREE.Vector3().copy(point3D).normalize();
+        const rayInPlane = new THREE.Vector3(
+          rayDir2.x - fwdX * (rayDir2.x * fwdX + rayDir2.z * fwdZ),
+          rayDir2.y,
+          rayDir2.z - fwdZ * (rayDir2.x * fwdX + rayDir2.z * fwdZ)
+        ).normalize().multiplyScalar(0.12);
+        const p0 = proj2.clone().add(rayInPlane);
+        const p1 = proj2.clone().add(rayInPlane).add(normal2);
+        const p2 = proj2.clone().add(normal2);
+        rightAngle2.geometry.dispose();
+        rightAngle2.geometry = new THREE.BufferGeometry().setFromPoints([p0, p1, p2]);
+        rightAngle2.visible = showRays;
+      } else {
+        rightAngle2.visible = false;
+      }
+
+      // ——— Update 3D point label ———
+      lPoint.position.set(point3D.x + 0.2, point3D.y + 0.2, point3D.z);
+      pointMesh.position.copy(point3D);
+
+      // ——— Grid visibility ———
+      gridGroup1.visible = showGrid;
+      gridGroup2.visible = showGrid;
+      if (showGrid) {
+        buildGrid(gridGroup1, 0x009900);
+        buildHomographyGrid(gridGroup1, gridGroup2, -rotY, 0x990000);
+      }
+    }
+
+    // ——— UI event handlers ———
+    const rotSlider = document.getElementById('rot-slider');
+    const pxSlider = document.getElementById('px-slider');
+    const pySlider = document.getElementById('py-slider');
+    const rotVal = document.getElementById('rot-val');
+    const pxVal = document.getElementById('px-val');
+    const pyVal = document.getElementById('py-val');
+    const btnRays = document.getElementById('btn-rays');
+    const btnGrid = document.getElementById('btn-grid');
+    const btnReset = document.getElementById('btn-reset');
+    const btnGuide = document.getElementById('btn-guide');
+
+    rotSlider.addEventListener('input', () => {
+      rotAngleDeg = parseFloat(rotSlider.value);
+      rotVal.textContent = rotAngleDeg;
+      updateScene();
+    });
+
+    pxSlider.addEventListener('input', () => {
+      point3D.x = parseFloat(pxSlider.value);
+      pxVal.textContent = point3D.x.toFixed(1);
+      updateScene();
+    });
+
+    pySlider.addEventListener('input', () => {
+      point3D.y = parseFloat(pySlider.value);
+      pyVal.textContent = point3D.y.toFixed(1);
+      updateScene();
+    });
+
+    btnRays.addEventListener('click', () => {
+      showRays = !showRays;
+      btnRays.classList.toggle('active', showRays);
+      updateScene();
+    });
+
+    // Toggle grid: shows a regular grid on Camera 1 and its homography-warped
+    // version on Camera 2 — teaching that a homography maps straight lines to
+    // straight lines but distorts angles and spacing.
+    btnGrid.addEventListener('click', () => {
+      showGrid = !showGrid;
+      btnGrid.classList.toggle('active', showGrid);
+      updateScene();
+    });
+
+    // Reset to the default textbook view angle and parameters
+    btnReset.addEventListener('click', () => {
+      rotAngleDeg = 30;
+      point3D.set(1.8, 1.0, 5.0);
+      rotSlider.value = 30;
+      pxSlider.value = 1.8;
+      pySlider.value = 1.0;
+      rotVal.textContent = '30';
+      pxVal.textContent = '1.8';
+      pyVal.textContent = '1.0';
+      camera.position.set(4, 4, 5);
+      camera.lookAt(0, 0, 1.5);
+      camera.zoom = 0.95;
+      camera.updateProjectionMatrix();
+      controls.target.set(0, 0, 1.5);
+      controls.update();
+      showRays = true;
+      showGrid = false;
+      btnRays.classList.add('active');
+      btnGrid.classList.remove('active');
+      updateScene();
+    });
+
+    // ——— Guided demo: step-by-step walkthrough ———
+    const guideSteps = [
+      {
+        text: '<b>Step 1:</b> Both cameras share the same center of projection (the black dot at the origin). Camera 1 (green) looks along +Z.',
+        action: () => {
+          rotSlider.value = 0; rotAngleDeg = 0; rotVal.textContent = '0';
+          showRays = false; btnRays.classList.remove('active');
+          showGrid = false; btnGrid.classList.remove('active');
+          updateScene();
+        }
+      },
+      {
+        text: '<b>Step 2:</b> Camera 2 (red) is rotated by 30° about the Y-axis. Both cameras still share the same origin — there is no translation.',
+        action: () => {
+          rotSlider.value = 30; rotAngleDeg = 30; rotVal.textContent = '30';
+          updateScene();
+        }
+      },
+      {
+        text: '<b>Step 3:</b> A 3D point (cyan) projects onto both image planes. The projection rays (dashed) pass through the common center.',
+        action: () => {
+          showRays = true; btnRays.classList.add('active');
+          updateScene();
+        }
+      },
+      {
+        text: '<b>Step 4:</b> Move the 3D point — notice both projections change, but they are always related by the <i>same</i> homography H = K R K⁻¹.',
+        action: () => {
+          // Animate moving the point
+          point3D.set(-1.0, 1.5, 5.0);
+          pxSlider.value = -1.0; pySlider.value = 1.5;
+          pxVal.textContent = '-1.0'; pyVal.textContent = '1.5';
+          updateScene();
+        }
+      },
+      {
+        text: '<b>Step 5:</b> The grid on Camera 1 maps to a warped grid on Camera 2 via the homography. Note that straight lines stay straight (a defining property of homographies).',
+        action: () => {
+          showGrid = true; btnGrid.classList.add('active');
+          point3D.set(1.8, 1.0, 5.0);
+          pxSlider.value = 1.8; pySlider.value = 1.0;
+          pxVal.textContent = '1.8'; pyVal.textContent = '1.0';
+          updateScene();
+        }
+      },
+      {
+        text: '<b>Step 6:</b> Try changing the rotation angle — a larger rotation produces more distortion in the warped grid but lines remain straight. This is because the homography H changes with R.',
+        action: () => {
+          rotSlider.value = 55; rotAngleDeg = 55; rotVal.textContent = '55';
+          updateScene();
+        }
+      }
+    ];
+
+    let guideStep = 0;
+    const guideBox = document.getElementById('guide-box');
+    const guideText = document.getElementById('guide-text');
+
+    function showGuideStep(idx) {
+      guideStep = Math.max(0, Math.min(guideSteps.length - 1, idx));
+      guideText.innerHTML = guideSteps[guideStep].text;
+      guideSteps[guideStep].action();
+    }
+
+    btnGuide.addEventListener('click', () => {
+      guideBox.style.display = 'block';
+      guideStep = 0;
+      showGuideStep(0);
+    });
+
+    document.getElementById('guide-next').addEventListener('click', () => {
+      showGuideStep(guideStep + 1);
+    });
+    document.getElementById('guide-prev').addEventListener('click', () => {
+      showGuideStep(guideStep - 1);
+    });
+    document.getElementById('guide-close').addEventListener('click', () => {
+      guideBox.style.display = 'none';
+    });
+
+    // ——— Initial update ———
+    updateScene();
+
+    // ——— Animation loop ———
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    }
+    animate();
+
+    // ——— Resize handler ———
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth, h = container.clientHeight;
+      camera.left = -d * (w / h);
+      camera.right = d * (w / h);
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      labelRenderer.setSize(w, h);
+    });
+  </script>
+</body>
+</html>

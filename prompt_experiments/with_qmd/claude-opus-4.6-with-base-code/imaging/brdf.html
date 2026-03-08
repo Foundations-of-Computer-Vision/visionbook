@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>BRDF – Bidirectional Reflection Distribution Function</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: white;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+    #container {
+      width: 100%;
+      height: 100%;
+    }
+    /* --- Control panel --- */
+    #controls {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      line-height: 1.6;
+      max-width: 310px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      z-index: 10;
+      user-select: none;
+    }
+    #controls h3 { margin: 0 0 6px; font-size: 15px; }
+    #controls label { display: block; margin: 4px 0; }
+    #controls input[type=range] { width: 100%; }
+    #controls button {
+      margin: 4px 4px 4px 0;
+      padding: 5px 12px;
+      border: 1px solid #999;
+      border-radius: 4px;
+      background: #f5f5f5;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #controls button:hover { background: #e0e0e0; }
+    #controls button.active { background: #c5dff5; border-color: #5a9fd4; }
+    .section { margin-top: 8px; padding-top: 6px; border-top: 1px solid #ddd; }
+    #info {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.88);
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 6px 16px;
+      font-size: 13px;
+      z-index: 10;
+      text-align: center;
+      max-width: 600px;
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+
+  <!-- Interactive controls -->
+  <div id="controls">
+    <h3>BRDF Explorer</h3>
+
+    <div class="section">
+      <label>Incoming angle (θ<sub>in</sub>):
+        <input type="range" id="sliderInAngle" min="5" max="85" value="45" />
+      </label>
+      <label>Surface albedo (a):
+        <input type="range" id="sliderAlbedo" min="5" max="100" value="60" />
+      </label>
+      <label>Phong exponent (α):
+        <input type="range" id="sliderPhong" min="1" max="128" value="16" />
+      </label>
+    </div>
+
+    <div class="section">
+      <strong>Reflection model:</strong><br/>
+      <button id="btnLambert" class="active">Lambertian</button>
+      <button id="btnPhong">Phong</button>
+      <button id="btnBoth">Both</button>
+    </div>
+
+    <div class="section">
+      <button id="btnDemo">▶ Guided Demo</button>
+      <button id="btnReset">↺ Reset View</button>
+    </div>
+  </div>
+
+  <div id="info">Orbit to explore. Use controls to change incoming angle, albedo, and reflection model.</div>
+
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+    // ─── Scene setup (from base_scene.html) ─────────────────────────
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    const aspect = container.clientWidth / container.clientHeight;
+    const d = 3;
+    const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 40);
+    camera.position.set(3, 3.5, 3);
+    camera.lookAt(0, 0, 0);
+    camera.zoom = 1.2;
+    camera.updateProjectionMatrix();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // ─── Lighting (subtle, non-interfering with our custom colors) ──
+    scene.add(new THREE.AmbientLight(0xffffff, 1));
+
+    // ─── Helper: create an arrow from origin along direction ────────
+    function makeArrow(dir, origin, length, color, headLen, headW) {
+      headLen = headLen || 0.15;
+      headW = headW || 0.08;
+      const arrow = new THREE.ArrowHelper(
+        dir.clone().normalize(), origin, length, color, headLen, headW
+      );
+      return arrow;
+    }
+
+    // ─── Helper: create a text sprite label ─────────────────────────
+    function makeLabel(text, position, fontSize, color) {
+      fontSize = fontSize || 48;
+      color = color || '#000';
+      const canvas = document.createElement('canvas');
+      const sz = 512;
+      canvas.width = sz;
+      canvas.height = sz;
+      const ctx = canvas.getContext('2d');
+      ctx.font = `bold ${fontSize}px serif`;
+      ctx.fillStyle = color;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, sz / 2, sz / 2);
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.position.copy(position);
+      sprite.scale.set(0.7, 0.7, 1);
+      return sprite;
+    }
+
+    // ─── The green surface plane (maps to the green parallelogram) ──
+    const planeGeo = new THREE.PlaneGeometry(5, 5);
+    const planeMat = new THREE.MeshBasicMaterial({
+      color: 0x44cc44, side: THREE.DoubleSide, transparent: true, opacity: 0.75
+    });
+    const planeMesh = new THREE.Mesh(planeGeo, planeMat);
+    planeMesh.rotation.x = -Math.PI / 2; // lay flat in XZ
+    scene.add(planeMesh);
+
+    // Plane border
+    const edgesGeo = new THREE.EdgesGeometry(planeGeo);
+    const edgesMat = new THREE.LineBasicMaterial({ color: 0x111111, linewidth: 2 });
+    const edges = new THREE.LineSegments(edgesGeo, edgesMat);
+    edges.rotation.x = -Math.PI / 2;
+    scene.add(edges);
+
+    // ─── Surface normal n (vertical arrow at origin) ────────────────
+    // Maps to the bold "n" arrow pointing straight up from the surface
+    const normalArrow = makeArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 1.3, 0x000000, 0.18, 0.1);
+    scene.add(normalArrow);
+    const labelN = makeLabel('n', new THREE.Vector3(0.15, 1.5, 0), 64, '#000');
+    scene.add(labelN);
+
+    // ─── Dynamic objects group ──────────────────────────────────────
+    const dynamicGroup = new THREE.Group();
+    scene.add(dynamicGroup);
+
+    // ─── State ──────────────────────────────────────────────────────
+    let inAngleDeg = 45;
+    let albedo = 0.6;
+    let phongExp = 16;
+    let mode = 'lambert'; // 'lambert' | 'phong' | 'both'
+
+    // ─── Build / rebuild the reflection arrows ──────────────────────
+    function rebuild() {
+      // Clear previous dynamic objects
+      while (dynamicGroup.children.length) dynamicGroup.remove(dynamicGroup.children[0]);
+
+      const thetaIn = THREE.MathUtils.degToRad(inAngleDeg);
+      const origin = new THREE.Vector3(0, 0, 0);
+      const n = new THREE.Vector3(0, 1, 0);
+
+      // Incoming direction p (points toward light source, in XY plane)
+      // Light comes from upper-left, so p points toward it
+      const p = new THREE.Vector3(-Math.sin(thetaIn), Math.cos(thetaIn), 0);
+
+      // ── Incoming ray (yellow→red gradient line) ─────────────────
+      // This maps to the ℓ_in(λ) ray in the figure
+      const rayLen = 2.5;
+      const inEnd = p.clone().multiplyScalar(rayLen);
+      const inGeo = new THREE.BufferGeometry();
+      const inColors = new Float32Array([
+        1, 0.2, 0,  // red/orange at surface
+        1, 0.85, 0  // yellow at far end
+      ]);
+      inGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+        0, 0, 0, inEnd.x, inEnd.y, inEnd.z
+      ], 3));
+      inGeo.setAttribute('color', new THREE.Float32BufferAttribute(inColors, 3));
+      const inMat = new THREE.LineBasicMaterial({ vertexColors: true, linewidth: 3 });
+      const inLine = new THREE.Line(inGeo, inMat);
+      dynamicGroup.add(inLine);
+
+      // Arrow head for incoming ray (pointing downward toward surface)
+      const inArrowHead = makeArrow(
+        p.clone().negate(), inEnd, 0.001, 0xff6600, 0.22, 0.11
+      );
+      dynamicGroup.add(inArrowHead);
+
+      // Label ℓ_in(λ)
+      const labelIn = makeLabel('ℓ_in(λ)', inEnd.clone().add(new THREE.Vector3(-0.3, 0.3, 0)), 44, '#cc6600');
+      dynamicGroup.add(labelIn);
+
+      // ── p direction arrow (on surface) ──────────────────────────
+      // Maps to the bold "p" arrow in the figure
+      const pArrow = makeArrow(p, origin, 1.0, 0xcc0000, 0.14, 0.08);
+      dynamicGroup.add(pArrow);
+      const labelP = makeLabel('p', p.clone().multiplyScalar(1.15).add(new THREE.Vector3(-0.15, 0, 0)), 56, '#cc0000');
+      dynamicGroup.add(labelP);
+
+      // ── Specular reflection direction r = 2(p·n)n − p ──────────
+      const pDotN = p.dot(n);
+      const r = n.clone().multiplyScalar(2 * pDotN).sub(p).normalize();
+
+      // ── q direction arrow (pick a representative outgoing dir) ──
+      // Maps to the bold "q" arrow in the figure
+      const q = r.clone(); // default q = specular direction
+      const qArrow = makeArrow(q, origin, 1.0, 0x006600, 0.14, 0.08);
+      dynamicGroup.add(qArrow);
+      const labelQ = makeLabel('q', q.clone().multiplyScalar(1.15).add(new THREE.Vector3(0.15, 0, 0)), 56, '#006600');
+      dynamicGroup.add(labelQ);
+
+      // ── Compute and draw reflected distribution arrows ──────────
+      // These map to the fan of green arrows in the figure
+      const numArrows = 36;
+      const cosThetaIn = Math.max(0, pDotN);
+
+      for (let i = 0; i < numArrows; i++) {
+        // Sample hemisphere directions
+        const phi = (i / numArrows) * Math.PI * 2;
+        const nTheta = 5;
+        for (let j = 1; j <= nTheta; j++) {
+          const theta = (j / (nTheta + 1)) * (Math.PI / 2);
+          const dir = new THREE.Vector3(
+            Math.sin(theta) * Math.cos(phi),
+            Math.cos(theta),
+            Math.sin(theta) * Math.sin(phi)
+          ).normalize();
+
+          // Lambertian intensity: a * (n·p) — constant for all outgoing dirs
+          const lambertIntensity = albedo * cosThetaIn;
+
+          // Phong specular intensity: ks * (r·q)^alpha
+          const rDotDir = Math.max(0, r.dot(dir));
+          const specIntensity = 0.5 * Math.pow(rDotDir, phongExp);
+
+          let intensity = 0;
+          if (mode === 'lambert') intensity = lambertIntensity;
+          else if (mode === 'phong') intensity = specIntensity;
+          else intensity = lambertIntensity + specIntensity; // both
+
+          const len = 0.15 + intensity * 1.6;
+          if (len < 0.18) continue;
+
+          // Color: brighter green for stronger reflection
+          const g = 0.3 + 0.7 * Math.min(1, intensity);
+          const color = new THREE.Color(0, g, 0);
+
+          const arrow = makeArrow(dir, origin, len, color, 0.07, 0.04);
+          arrow.userData.isReflectionArrow = true;
+          // Make translucent for visual clarity
+          arrow.children.forEach(child => {
+            if (child.material) {
+              child.material.transparent = true;
+              child.material.opacity = 0.45 + 0.55 * Math.min(1, intensity);
+            }
+          });
+          dynamicGroup.add(arrow);
+        }
+      }
+
+      // ── Main outgoing ray (bright green, the ℓ_out arrow) ──────
+      // Maps to the prominent ℓ_out arrow in the figure
+      const mainOutDir = r.clone();
+      let mainIntensity;
+      if (mode === 'lambert') mainIntensity = albedo * cosThetaIn;
+      else if (mode === 'phong') mainIntensity = 0.5;
+      else mainIntensity = albedo * cosThetaIn + 0.5;
+      const mainLen = 0.3 + mainIntensity * 2.0;
+
+      const mainOutArrow = makeArrow(mainOutDir, origin, mainLen, 0x00aa00, 0.2, 0.1);
+      dynamicGroup.add(mainOutArrow);
+
+      const labelOut = makeLabel(
+        'ℓ_out=F(ℓ_in,n,λ,p,q)',
+        mainOutDir.clone().multiplyScalar(mainLen + 0.5).add(new THREE.Vector3(0.3, 0.2, 0)),
+        36, '#007700'
+      );
+      dynamicGroup.add(labelOut);
+
+      // ── Small angle arc showing θ_in between n and p ────────────
+      const arcCurve = new THREE.EllipseCurve(0, 0, 0.4, 0.4,
+        Math.PI / 2 - thetaIn, Math.PI / 2, false);
+      const arcPoints = arcCurve.getPoints(32);
+      // Rotate arc points into the XY plane (our incoming ray plane)
+      const arcGeo = new THREE.BufferGeometry().setFromPoints(
+        arcPoints.map(pt => new THREE.Vector3(pt.x, pt.y, 0))
+      );
+      const arcLine = new THREE.Line(arcGeo, new THREE.LineBasicMaterial({ color: 0x666666 }));
+      dynamicGroup.add(arcLine);
+
+      // θ label
+      const midAngle = Math.PI / 2 - thetaIn / 2;
+      const arcLabel = makeLabel('θ',
+        new THREE.Vector3(0.55 * Math.cos(midAngle), 0.55 * Math.sin(midAngle), 0),
+        48, '#555'
+      );
+      dynamicGroup.add(arcLabel);
+
+      // ── Dashed circle at surface showing reflection lobe ────────
+      const circleGeo = new THREE.RingGeometry(0.48, 0.5, 64);
+      const circleMat = new THREE.MeshBasicMaterial({
+        color: 0x999999, side: THREE.DoubleSide, transparent: true, opacity: 0.3
+      });
+      const circle = new THREE.Mesh(circleGeo, circleMat);
+      circle.rotation.x = -Math.PI / 2;
+      circle.position.y = 0.01;
+      dynamicGroup.add(circle);
+
+      updateInfo();
+    }
+
+    // ─── Info text ──────────────────────────────────────────────────
+    function updateInfo() {
+      const infoEl = document.getElementById('info');
+      const cosThetaIn = Math.cos(THREE.MathUtils.degToRad(inAngleDeg));
+      if (mode === 'lambert') {
+        infoEl.innerHTML = `<b>Lambertian:</b> ℓ<sub>out</sub> = a · ℓ<sub>in</sub> · (n·p) = ${albedo.toFixed(2)} × cos(${inAngleDeg}°) = ${(albedo * cosThetaIn).toFixed(3)}  — uniform in all outgoing directions`;
+      } else if (mode === 'phong') {
+        infoEl.innerHTML = `<b>Phong specular:</b> ℓ<sub>spec</sub> = k<sub>s</sub>(r·q)<sup>${phongExp}</sup> — concentrated around mirror direction r`;
+      } else {
+        infoEl.innerHTML = `<b>Both:</b> ℓ<sub>out</sub> = a·ℓ<sub>in</sub>·(n·p) + k<sub>s</sub>(r·q)<sup>${phongExp}</sup>  — diffuse + specular`;
+      }
+    }
+
+    // ─── Wire up controls ───────────────────────────────────────────
+    const sliderInAngle = document.getElementById('sliderInAngle');
+    const sliderAlbedo = document.getElementById('sliderAlbedo');
+    const sliderPhong = document.getElementById('sliderPhong');
+
+    sliderInAngle.addEventListener('input', () => {
+      inAngleDeg = +sliderInAngle.value;
+      rebuild();
+    });
+    sliderAlbedo.addEventListener('input', () => {
+      albedo = +sliderAlbedo.value / 100;
+      rebuild();
+    });
+    sliderPhong.addEventListener('input', () => {
+      phongExp = +sliderPhong.value;
+      rebuild();
+    });
+
+    // Mode buttons
+    // Interaction: switching between Lambertian, Phong, and combined
+    // teaches how each BRDF component contributes to reflected light
+    const btnLambert = document.getElementById('btnLambert');
+    const btnPhong = document.getElementById('btnPhong');
+    const btnBoth = document.getElementById('btnBoth');
+
+    function setMode(m) {
+      mode = m;
+      btnLambert.classList.toggle('active', m === 'lambert');
+      btnPhong.classList.toggle('active', m === 'phong');
+      btnBoth.classList.toggle('active', m === 'both');
+      rebuild();
+    }
+    btnLambert.addEventListener('click', () => setMode('lambert'));
+    btnPhong.addEventListener('click', () => setMode('phong'));
+    btnBoth.addEventListener('click', () => setMode('both'));
+
+    // ─── Reset to textbook view ─────────────────────────────────────
+    function resetView() {
+      camera.position.set(3, 3.5, 3);
+      camera.lookAt(0, 0, 0);
+      camera.zoom = 1.2;
+      camera.updateProjectionMatrix();
+      controls.target.set(0, 0, 0);
+      controls.update();
+      sliderInAngle.value = 45; inAngleDeg = 45;
+      sliderAlbedo.value = 60; albedo = 0.6;
+      sliderPhong.value = 16; phongExp = 16;
+      setMode('lambert');
+    }
+    document.getElementById('btnReset').addEventListener('click', resetView);
+
+    // ─── Guided demo sequence ───────────────────────────────────────
+    // Steps teach: (1) Lambertian uniform reflection, (2) effect of
+    // incoming angle, (3) Phong specular lobe, (4) combined model
+    let demoRunning = false;
+    document.getElementById('btnDemo').addEventListener('click', async () => {
+      if (demoRunning) return;
+      demoRunning = true;
+      const btn = document.getElementById('btnDemo');
+      const infoEl = document.getElementById('info');
+      btn.textContent = '⏸ Demo running…';
+
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+
+      // Step 1: Lambertian at 45°
+      setMode('lambert');
+      sliderInAngle.value = 45; inAngleDeg = 45;
+      sliderAlbedo.value = 60; albedo = 0.6;
+      rebuild();
+      infoEl.innerHTML = '<b>Step 1/5:</b> Lambertian reflection — outgoing intensity is the same in every direction (uniform hemisphere).';
+      await wait(3000);
+
+      // Step 2: Change incoming angle — shows n·p dependency
+      infoEl.innerHTML = '<b>Step 2/5:</b> Moving incoming ray toward grazing angle — brightness drops as cos(θ) decreases.';
+      for (let a = 45; a <= 80; a += 2) {
+        inAngleDeg = a; sliderInAngle.value = a;
+        rebuild();
+        await wait(80);
+      }
+      await wait(1500);
+
+      // Step 3: Bring back to 30° and increase albedo
+      infoEl.innerHTML = '<b>Step 3/5:</b> Increasing albedo — a brighter surface reflects more light.';
+      inAngleDeg = 30; sliderInAngle.value = 30;
+      for (let a = 30; a <= 95; a += 3) {
+        albedo = a / 100; sliderAlbedo.value = a;
+        rebuild();
+        await wait(80);
+      }
+      await wait(1500);
+
+      // Step 4: Switch to Phong
+      albedo = 0.6; sliderAlbedo.value = 60;
+      inAngleDeg = 45; sliderInAngle.value = 45;
+      setMode('phong');
+      infoEl.innerHTML = '<b>Step 4/5:</b> Phong specular — reflection is concentrated around the mirror direction r = 2(p·n)n − p.';
+      await wait(2000);
+
+      // Sweep Phong exponent
+      for (let e = 2; e <= 100; e += 3) {
+        phongExp = e; sliderPhong.value = e;
+        rebuild();
+        await wait(60);
+      }
+      infoEl.innerHTML = '<b>Step 4/5:</b> Higher α makes the specular highlight sharper and more mirror-like.';
+      await wait(2000);
+
+      // Step 5: Both
+      phongExp = 16; sliderPhong.value = 16;
+      setMode('both');
+      infoEl.innerHTML = '<b>Step 5/5:</b> Combined: Lambertian diffuse + Phong specular = realistic reflection.';
+      await wait(3500);
+
+      // Finish
+      infoEl.innerHTML = 'Demo complete. Explore with the controls!';
+      btn.textContent = '▶ Guided Demo';
+      demoRunning = false;
+    });
+
+    // ─── Animation loop ─────────────────────────────────────────────
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // ─── Resize handler ─────────────────────────────────────────────
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth, h = container.clientHeight;
+      camera.left = -d * (w / h);
+      camera.right = d * (w / h);
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+
+    // ─── Initial build ──────────────────────────────────────────────
+    rebuild();
+
+  </script>
+</body>
+</html>

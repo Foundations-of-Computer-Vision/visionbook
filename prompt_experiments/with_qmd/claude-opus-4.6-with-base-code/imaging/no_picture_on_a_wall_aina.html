@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Why No Pictures on Walls? — Pinhole Camera</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #1a1a2e;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            color: #eee;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Control panel */
+        #controls {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(20, 20, 40, 0.92);
+            border-radius: 10px;
+            padding: 14px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+            max-width: 280px;
+            box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+        }
+
+        #controls h3 {
+            margin: 0 0 4px 0;
+            font-size: 15px;
+            color: #fff;
+        }
+
+        #controls button {
+            padding: 7px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background 0.15s;
+        }
+
+        #controls button:hover {
+            filter: brightness(1.15);
+        }
+
+        .btn-mode {
+            background: #3a86ff;
+            color: #fff;
+        }
+
+        .btn-mode.active {
+            background: #ff6b35;
+        }
+
+        .btn-action {
+            background: #444;
+            color: #eee;
+        }
+
+        .btn-step {
+            background: #8338ec;
+            color: #fff;
+        }
+
+        .btn-reset {
+            background: #555;
+            color: #fff;
+        }
+
+        #info-box {
+            position: absolute;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 40, 0.9);
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-size: 14px;
+            max-width: 600px;
+            text-align: center;
+            z-index: 10;
+            line-height: 1.5;
+        }
+
+        #info-box em {
+            color: #ff6b35;
+            font-style: normal;
+            font-weight: 600;
+        }
+
+        label {
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .slider-row {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .slider-label {
+            font-size: 12px;
+            color: #aaa;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+
+    <div id="controls">
+        <h3>Pinhole Camera Demo</h3>
+        <!-- Mode toggle: wall vs pinhole -->
+        <button id="btnMode" class="btn-mode" onclick="toggleMode()">Mode: Open Wall (no image)</button>
+        <!-- Pinhole size slider (visible in pinhole mode) -->
+        <div id="pinhole-slider" class="slider-row" style="display:none;">
+            <span class="slider-label">Pinhole size</span>
+            <input type="range" id="pinholeSize" min="0.05" max="1.5" step="0.01" value="0.15"
+                oninput="updatePinholeSize(this.value)" />
+        </div>
+        <!-- Toggle ray visibility -->
+        <label><input type="checkbox" id="chkRays" checked onchange="toggleRays()"> Show light rays</label>
+        <!-- Toggle labels -->
+        <label><input type="checkbox" id="chkLabels" checked onchange="toggleLabels()"> Show labels</label>
+        <!-- Step-through guided demo -->
+        <button class="btn-step" id="btnStep" onclick="stepDemo()">▶ Guided Demo</button>
+        <!-- Reset camera -->
+        <button class="btn-reset" onclick="resetView()">⟲ Reset to textbook view</button>
+    </div>
+
+    <div id="info-box">
+        Click <em>Guided Demo</em> to walk through the concept step by step, or toggle between <em>Open Wall</em> and
+        <em>Pinhole</em> modes.
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+        import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three/examples/jsm/renderers/CSS2DRenderer';
+
+        // ─── Scene setup (from base_scene.html) ───
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 4.5;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+        // Textbook-style default view: looking from slightly above / to the side
+        const defaultCamPos = new THREE.Vector3(8, 5, 10);
+        const defaultTarget = new THREE.Vector3(0, 1.0, 0);
+        camera.position.copy(defaultCamPos);
+        camera.lookAt(defaultTarget);
+        camera.zoom = 1.0;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        // CSS2D label renderer
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(container.clientWidth, container.clientHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.target.copy(defaultTarget);
+        controls.update();
+
+        // ─── Lighting ───
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 8, 5);
+        scene.add(dirLight);
+
+        // ─── State ───
+        let isPinholeMode = false;   // false = open wall (no image), true = pinhole
+        let pinholeRadius = 0.15;
+        let showRays = true;
+        let showLabels = true;
+        let demoStep = -1;           // -1 = not in demo
+
+        // ─── Groups for organized toggling ───
+        const rayGroup = new THREE.Group();       // all light-ray lines
+        const labelGroup = new THREE.Group();     // all CSS2D labels
+        const wallGroup = new THREE.Group();      // wall + barrier
+        const projectionGroup = new THREE.Group();// projected image on wall
+        scene.add(rayGroup, labelGroup, wallGroup, projectionGroup);
+
+        // ═══════════════════════════════════════════
+        // TREE — 3D representation of the 2D tree
+        // The tree in the figure: brown trunk + green foliage blobs
+        // Placed at positive X, the wall at negative X
+        // ═══════════════════════════════════════════
+        const treeGroup = new THREE.Group();
+        scene.add(treeGroup);
+
+        // Trunk (cylinder) — maps to the brown trunk in the 2D figure
+        const trunkGeo = new THREE.CylinderGeometry(0.12, 0.18, 2.2, 12);
+        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8B5E3C });
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.position.set(0, 1.1, 0);
+        treeGroup.add(trunk);
+
+        // Foliage (three overlapping spheres) — maps to the green blobs in the 2D figure
+        const foliageColor1 = 0x2d8a2d;
+        const foliageColor2 = 0x4caf50;
+        const foliageColor3 = 0x66cc66;
+
+        function makeFoliage(x, y, z, r, color) {
+            const geo = new THREE.SphereGeometry(r, 24, 16);
+            const mat = new THREE.MeshLambertMaterial({ color });
+            const m = new THREE.Mesh(geo, mat);
+            m.position.set(x, y, z);
+            return m;
+        }
+        treeGroup.add(makeFoliage(0, 2.8, 0, 0.85, foliageColor1));
+        treeGroup.add(makeFoliage(-0.45, 2.4, 0.3, 0.7, foliageColor2));
+        treeGroup.add(makeFoliage(0.45, 2.5, -0.2, 0.65, foliageColor3));
+
+        // Position tree to the right side of the scene
+        treeGroup.position.set(4, 0, 0);
+
+        // Ground plane
+        const groundGeo = new THREE.PlaneGeometry(16, 10);
+        const groundMat = new THREE.MeshLambertMaterial({ color: 0x3a5a3a });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.set(0, 0, 0);
+        scene.add(ground);
+
+        // ═══════════════════════════════════════════
+        // WALL — the projection surface (left side)
+        // In the figure: the rectangular wall on the left
+        // ═══════════════════════════════════════════
+        const wallWidth = 4;
+        const wallHeight = 4;
+        const wallX = -4; // wall is at x = -4
+
+        // Wall surface (slightly translucent so we can see projected image)
+        const wallGeo = new THREE.PlaneGeometry(wallWidth, wallHeight);
+        const wallMat = new THREE.MeshLambertMaterial({
+            color: 0xdddddd,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.85
+        });
+        const wall = new THREE.Mesh(wallGeo, wallMat);
+        wall.position.set(wallX, wallHeight / 2, 0);
+        wall.rotation.y = Math.PI / 2; // face toward tree
+        wallGroup.add(wall);
+
+        // ═══════════════════════════════════════════
+        // BARRIER — the opaque screen with pinhole
+        // In the figure (b): the black barrier between tree and wall
+        // Only visible in pinhole mode
+        // ═══════════════════════════════════════════
+        const barrierX = 0; // barrier at x=0
+        let barrierMeshes = [];
+        let pinholeSphere = null;
+
+        function buildBarrier() {
+            // Remove old barrier meshes
+            barrierMeshes.forEach(m => wallGroup.remove(m));
+            barrierMeshes = [];
+            if (pinholeSphere) { wallGroup.remove(pinholeSphere); pinholeSphere = null; }
+
+            if (!isPinholeMode) return;
+
+            // Build the barrier as a large plane with a hole. We approximate
+            // the hole by building 4 rectangular panels around the pinhole.
+            const bH = 5;  // total barrier height
+            const bW = 5;  // total barrier width
+            const hr = pinholeRadius; // hole radius (used as half-side for square hole)
+
+            const barrierMat = new THREE.MeshLambertMaterial({
+                color: 0x111111,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.92
+            });
+
+            // Pinhole center at (barrierX, 1.8, 0)
+            const pcy = 1.8;
+
+            // Bottom panel
+            const bBot = new THREE.Mesh(
+                new THREE.PlaneGeometry(bW, pcy - hr),
+                barrierMat
+            );
+            bBot.rotation.y = Math.PI / 2;
+            bBot.position.set(barrierX, (pcy - hr) / 2, 0);
+            wallGroup.add(bBot);
+            barrierMeshes.push(bBot);
+
+            // Top panel
+            const topStart = pcy + hr;
+            const topH = bH - topStart;
+            const bTop = new THREE.Mesh(
+                new THREE.PlaneGeometry(bW, topH),
+                barrierMat
+            );
+            bTop.rotation.y = Math.PI / 2;
+            bTop.position.set(barrierX, topStart + topH / 2, 0);
+            wallGroup.add(bTop);
+            barrierMeshes.push(bTop);
+
+            // Left panel (between bottom and top, left of hole)
+            const midH = 2 * hr;
+            const sideW = (bW / 2 - hr);
+            const bLeft = new THREE.Mesh(
+                new THREE.PlaneGeometry(sideW, midH),
+                barrierMat
+            );
+            bLeft.rotation.y = Math.PI / 2;
+            bLeft.position.set(barrierX, pcy, -(hr + sideW / 2));
+            wallGroup.add(bLeft);
+            barrierMeshes.push(bLeft);
+
+            // Right panel
+            const bRight = new THREE.Mesh(
+                new THREE.PlaneGeometry(sideW, midH),
+                barrierMat
+            );
+            bRight.rotation.y = Math.PI / 2;
+            bRight.position.set(barrierX, pcy, hr + sideW / 2);
+            wallGroup.add(bRight);
+            barrierMeshes.push(bRight);
+
+            // Small sphere to mark the pinhole
+            const phGeo = new THREE.RingGeometry(0, hr, 32);
+            const phMat = new THREE.MeshBasicMaterial({ color: 0xffee58, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+            pinholeSphere = new THREE.Mesh(phGeo, phMat);
+            pinholeSphere.rotation.y = Math.PI / 2;
+            pinholeSphere.position.set(barrierX, pcy, 0);
+            wallGroup.add(pinholeSphere);
+        }
+
+        // ═══════════════════════════════════════════
+        // LIGHT RAYS
+        // 2D figure shows colored rays (green from foliage, brown from trunk)
+        // going from the tree through the pinhole to the wall.
+        // ═══════════════════════════════════════════
+
+        // Source points on the tree (world positions)
+        const treeSourcePoints = [
+            // Foliage points (green rays)
+            { pos: new THREE.Vector3(4, 3.4, 0), color: 0x44bb44, type: 'foliage' },     // top of foliage
+            { pos: new THREE.Vector3(3.55, 2.8, 0.3), color: 0x66cc44, type: 'foliage' },
+            { pos: new THREE.Vector3(4.45, 2.7, -0.2), color: 0x33aa33, type: 'foliage' },
+            { pos: new THREE.Vector3(4, 2.3, 0), color: 0x55cc55, type: 'foliage' },
+            // Trunk points (brown rays)
+            { pos: new THREE.Vector3(4, 1.6, 0), color: 0x9b7653, type: 'trunk' },
+            { pos: new THREE.Vector3(4, 0.8, 0), color: 0x8B5E3C, type: 'trunk' },
+            { pos: new THREE.Vector3(4, 0.3, 0), color: 0x7a5030, type: 'trunk' },
+        ];
+
+        // Target points on the wall where rays end up
+        const wallTargetGrid = [];
+        for (let iy = 0; iy < 5; iy++) {
+            for (let iz = 0; iz < 3; iz++) {
+                wallTargetGrid.push(new THREE.Vector3(
+                    wallX,
+                    0.5 + iy * 0.8,
+                    -1.0 + iz * 1.0
+                ));
+            }
+        }
+
+        let rayLines = [];
+
+        function buildRays() {
+            // Clear old rays
+            rayLines.forEach(l => rayGroup.remove(l));
+            rayLines = [];
+
+            if (!showRays) return;
+
+            const pinholeCenter = new THREE.Vector3(barrierX, 1.8, 0);
+
+            if (!isPinholeMode) {
+                // Open wall mode: many rays from each source point scatter to
+                // multiple wall positions, showing the mixing of light.
+                // This teaches: without a pinhole, each wall point gets light
+                // from ALL directions → no image.
+                treeSourcePoints.forEach(src => {
+                    wallTargetGrid.forEach(tgt => {
+                        const lineMat = new THREE.LineBasicMaterial({
+                            color: src.color,
+                            transparent: true,
+                            opacity: 0.35
+                        });
+                        const geom = new THREE.BufferGeometry().setFromPoints([src.pos, tgt]);
+                        const line = new THREE.Line(geom, lineMat);
+                        rayGroup.add(line);
+                        rayLines.push(line);
+                    });
+                });
+            } else {
+                // Pinhole mode: rays pass through the pinhole only.
+                // Each source point → pinhole → projected (inverted) position on wall.
+                // This teaches: the pinhole restricts each wall point to receive
+                // light from only ONE direction → image forms (inverted).
+                treeSourcePoints.forEach(src => {
+                    // Direction from source through pinhole
+                    const dir = new THREE.Vector3().subVectors(pinholeCenter, src.pos);
+                    // Extend ray from pinhole to wall
+                    const t = (wallX - pinholeCenter.x) / dir.x;
+                    const wallHit = new THREE.Vector3(
+                        wallX,
+                        pinholeCenter.y + dir.y * t,
+                        pinholeCenter.z + dir.z * t
+                    );
+
+                    // Check if ray actually passes through the pinhole aperture
+                    // (for large pinhole, more rays get through → blurrier)
+                    const lineMat = new THREE.LineBasicMaterial({
+                        color: src.color,
+                        transparent: true,
+                        opacity: 0.7
+                    });
+
+                    // Source → pinhole segment
+                    const geom1 = new THREE.BufferGeometry().setFromPoints([src.pos, pinholeCenter]);
+                    const line1 = new THREE.Line(geom1, lineMat);
+                    rayGroup.add(line1);
+                    rayLines.push(line1);
+
+                    // Pinhole → wall segment
+                    const geom2 = new THREE.BufferGeometry().setFromPoints([pinholeCenter, wallHit]);
+                    const line2 = new THREE.Line(geom2, lineMat);
+                    rayGroup.add(line2);
+                    rayLines.push(line2);
+
+                    // Add arrowhead at wall hit
+                    const arrowDir = new THREE.Vector3().subVectors(wallHit, pinholeCenter).normalize();
+                    const arrowHelper = new THREE.ArrowHelper(arrowDir, wallHit.clone().sub(arrowDir.clone().multiplyScalar(0.3)), 0.3, src.color, 0.15, 0.08);
+                    rayGroup.add(arrowHelper);
+                    rayLines.push(arrowHelper);
+                });
+            }
+        }
+
+        // ═══════════════════════════════════════════
+        // PROJECTED IMAGE ON WALL
+        // In pinhole mode, show an inverted tree image on the wall
+        // In open wall mode, show uniform color (no image)
+        // ═══════════════════════════════════════════
+
+        let projectedObjects = [];
+
+        function buildProjection() {
+            projectedObjects.forEach(o => projectionGroup.remove(o));
+            projectedObjects = [];
+
+            const pinholeCenter = new THREE.Vector3(barrierX, 1.8, 0);
+
+            if (isPinholeMode) {
+                // Project the tree through the pinhole onto the wall.
+                // The projection inverts: top of tree → bottom of wall, etc.
+                // Projection scale = distance(pinhole→wall) / distance(tree→pinhole)
+                const dWall = Math.abs(wallX - barrierX);
+                const dTree = Math.abs(treeGroup.position.x - barrierX);
+                const scale = dWall / dTree;
+
+                // Projected (inverted) trunk
+                const projTrunkH = 2.2 * scale;
+                const projTrunkGeo = new THREE.CylinderGeometry(0.12 * scale * 0.7, 0.18 * scale * 0.7, projTrunkH, 8);
+                const projTrunkMat = new THREE.MeshLambertMaterial({ color: 0x8B5E3C, transparent: true, opacity: 0.6 });
+                const projTrunk = new THREE.Mesh(projTrunkGeo, projTrunkMat);
+                // Invert: trunk center (1.1) → pinhole maps to 1.8 - (1.1-1.8)*scale = 1.8 + 0.7*scale
+                const trunkProjY = pinholeCenter.y - (1.1 - pinholeCenter.y) * scale;
+                projTrunk.position.set(wallX + 0.05, trunkProjY, 0);
+                projectionGroup.add(projTrunk);
+                projectedObjects.push(projTrunk);
+
+                // Projected (inverted) foliage spheres
+                const foliageDefs = [
+                    { oy: 2.8, oz: 0, r: 0.85, color: foliageColor1 },
+                    { oy: 2.4, oz: 0.3, r: 0.7, color: foliageColor2 },
+                    { oy: 2.5, oz: -0.2, r: 0.65, color: foliageColor3 },
+                ];
+                foliageDefs.forEach(fd => {
+                    const projY = pinholeCenter.y - (fd.oy - pinholeCenter.y) * scale;
+                    const projZ = pinholeCenter.z - (fd.oz - pinholeCenter.z) * scale;
+                    const geo = new THREE.SphereGeometry(fd.r * scale * 0.7, 16, 12);
+                    const mat = new THREE.MeshLambertMaterial({ color: fd.color, transparent: true, opacity: 0.55 });
+                    const m = new THREE.Mesh(geo, mat);
+                    m.position.set(wallX + 0.05, projY, projZ);
+                    projectionGroup.add(m);
+                    projectedObjects.push(m);
+                });
+            } else {
+                // No image: show a uniform brownish-green patch on wall
+                // This teaches: all the colors mix together → no picture
+                const patchGeo = new THREE.PlaneGeometry(3.5, 3.5);
+                const patchMat = new THREE.MeshBasicMaterial({
+                    color: 0x7a8a65,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.25
+                });
+                const patch = new THREE.Mesh(patchGeo, patchMat);
+                patch.rotation.y = Math.PI / 2;
+                patch.position.set(wallX - 0.01, 2.0, 0);
+                projectionGroup.add(patch);
+                projectedObjects.push(patch);
+            }
+        }
+
+        // ═══════════════════════════════════════════
+        // LABELS — CSS2D labels corresponding to figure annotations
+        // ═══════════════════════════════════════════
+        let labelObjects = [];
+
+        function makeLabel(text, position, fontSize, color) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            div.style.fontSize = fontSize || '14px';
+            div.style.color = color || '#fff';
+            div.style.fontWeight = '600';
+            div.style.textShadow = '0 0 6px rgba(0,0,0,0.8)';
+            div.style.pointerEvents = 'none';
+            div.style.whiteSpace = 'nowrap';
+            const label = new CSS2DObject(div);
+            label.position.copy(position);
+            return label;
+        }
+
+        function buildLabels() {
+            labelObjects.forEach(l => labelGroup.remove(l));
+            labelObjects = [];
+
+            if (!showLabels) return;
+
+            // "Wall" label — same as in the 2D figure
+            const wallLabel = makeLabel('Wall', new THREE.Vector3(wallX, wallHeight + 0.4, -1.8), '16px', '#ddd');
+            labelGroup.add(wallLabel);
+            labelObjects.push(wallLabel);
+
+            // "Tree" label
+            const treeLabel = makeLabel('Tree', new THREE.Vector3(4, 3.9, 0), '14px', '#8f8');
+            labelGroup.add(treeLabel);
+            labelObjects.push(treeLabel);
+
+            if (isPinholeMode) {
+                // "Pinhole" label — from figure (b)
+                const phLabel = makeLabel('Pinhole', new THREE.Vector3(barrierX, 3.2, 0), '15px', '#ffee58');
+                labelGroup.add(phLabel);
+                labelObjects.push(phLabel);
+
+                // "Barrier" label
+                const barLabel = makeLabel('Barrier', new THREE.Vector3(barrierX, 4.2, 1.5), '13px', '#aaa');
+                labelGroup.add(barLabel);
+                labelObjects.push(barLabel);
+
+                // "Inverted Image" label
+                const imgLabel = makeLabel('Inverted Image', new THREE.Vector3(wallX, 0.3, 0), '13px', '#ffab40');
+                labelGroup.add(imgLabel);
+                labelObjects.push(imgLabel);
+            } else {
+                // "No image (mixed light)" label
+                const noImgLabel = makeLabel('No image — light mixes', new THREE.Vector3(wallX, 0.3, 0), '13px', '#ff6b6b');
+                labelGroup.add(noImgLabel);
+                labelObjects.push(noImgLabel);
+            }
+        }
+
+        // ═══════════════════════════════════════════
+        // REBUILD EVERYTHING
+        // ═══════════════════════════════════════════
+        function rebuild() {
+            buildBarrier();
+            buildRays();
+            buildProjection();
+            buildLabels();
+        }
+        rebuild();
+
+        // ═══════════════════════════════════════════
+        // INTERACTIVE CONTROLS
+        // ═══════════════════════════════════════════
+
+        const infoBox = document.getElementById('info-box');
+        const btnMode = document.getElementById('btnMode');
+        const pinholeSlider = document.getElementById('pinhole-slider');
+
+        // Toggle between open wall (no image) and pinhole (image forms)
+        // This is the core interaction: teaches WHY a pinhole is needed
+        window.toggleMode = function () {
+            isPinholeMode = !isPinholeMode;
+            btnMode.textContent = isPinholeMode
+                ? 'Mode: Pinhole (image forms!)'
+                : 'Mode: Open Wall (no image)';
+            btnMode.classList.toggle('active', isPinholeMode);
+            pinholeSlider.style.display = isPinholeMode ? 'flex' : 'none';
+
+            if (isPinholeMode) {
+                infoBox.innerHTML = 'The <em>pinhole</em> restricts rays so each wall point receives light from only <em>one direction</em>. An <em>inverted image</em> forms on the wall.';
+            } else {
+                infoBox.innerHTML = 'Without a barrier, rays from <em>all parts</em> of the tree reach <em>every</em> wall point. The light mixes — <em>no image</em> forms.';
+            }
+            rebuild();
+        };
+
+        // Pinhole size slider — teaches how aperture size affects image sharpness
+        window.updatePinholeSize = function (val) {
+            pinholeRadius = parseFloat(val);
+            buildBarrier();
+            if (pinholeRadius > 0.6) {
+                infoBox.innerHTML = 'A <em>large aperture</em> lets rays from many directions through — the image becomes <em>brighter but blurrier</em>.';
+            } else if (pinholeRadius < 0.15) {
+                infoBox.innerHTML = 'A <em>tiny pinhole</em> produces a <em>sharp</em> but <em>dim</em> image. Only rays from one precise direction reach each wall point.';
+            } else {
+                infoBox.innerHTML = 'Adjust the pinhole size to see the trade-off between <em>sharpness</em> and <em>brightness</em>.';
+            }
+        };
+
+        // Toggle ray visibility
+        window.toggleRays = function () {
+            showRays = document.getElementById('chkRays').checked;
+            buildRays();
+        };
+
+        // Toggle label visibility
+        window.toggleLabels = function () {
+            showLabels = document.getElementById('chkLabels').checked;
+            buildLabels();
+        };
+
+        // Reset to textbook view
+        window.resetView = function () {
+            camera.position.copy(defaultCamPos);
+            controls.target.copy(defaultTarget);
+            camera.zoom = 1.0;
+            camera.updateProjectionMatrix();
+            controls.update();
+            demoStep = -1;
+            document.getElementById('btnStep').textContent = '▶ Guided Demo';
+            infoBox.innerHTML = 'Click <em>Guided Demo</em> to walk through the concept step by step.';
+        };
+
+        // ═══════════════════════════════════════════
+        // GUIDED DEMO — step by step teaching sequence
+        // ═══════════════════════════════════════════
+        const demoSteps = [
+            {
+                label: 'Step 1/5',
+                action: () => {
+                    isPinholeMode = false;
+                    btnMode.textContent = 'Mode: Open Wall (no image)';
+                    btnMode.classList.remove('active');
+                    pinholeSlider.style.display = 'none';
+                    showRays = true;
+                    document.getElementById('chkRays').checked = true;
+                    rebuild();
+                },
+                info: '<b>Step 1:</b> Light from the tree radiates in all directions. Without any barrier, rays from <em>every part</em> of the tree reach <em>every point</em> on the wall.',
+                cam: { pos: new THREE.Vector3(1, 4, 10), target: new THREE.Vector3(0, 1.5, 0) }
+            },
+            {
+                label: 'Step 2/5',
+                action: () => {
+                    isPinholeMode = false;
+                    rebuild();
+                },
+                info: '<b>Step 2:</b> Each wall point receives a <em>mixture</em> of green (foliage) and brown (trunk) rays. The colors average out — the wall shows <em>no picture</em>, just a uniform tint.',
+                cam: { pos: new THREE.Vector3(-6, 3, 5), target: new THREE.Vector3(-4, 2, 0) }
+            },
+            {
+                label: 'Step 3/5',
+                action: () => {
+                    isPinholeMode = true;
+                    btnMode.textContent = 'Mode: Pinhole (image forms!)';
+                    btnMode.classList.add('active');
+                    pinholeSlider.style.display = 'flex';
+                    document.getElementById('pinholeSize').value = 0.15;
+                    pinholeRadius = 0.15;
+                    rebuild();
+                },
+                info: '<b>Step 3:</b> Now we add a <em>barrier</em> with a small <em>pinhole</em>. Only rays passing through the tiny hole reach the wall. Each wall point now sees light from <em>one direction only</em>.',
+                cam: { pos: new THREE.Vector3(3, 4, 9), target: new THREE.Vector3(0, 1.8, 0) }
+            },
+            {
+                label: 'Step 4/5',
+                action: () => { },
+                info: '<b>Step 4:</b> The pinhole creates a <em>perspective projection</em>. Top of the tree maps to the <em>bottom</em> of the wall, and vice versa — the image is <em>inverted</em>!',
+                cam: { pos: new THREE.Vector3(-5, 3, 7), target: new THREE.Vector3(-2, 1.5, 0) }
+            },
+            {
+                label: 'Step 5/5',
+                action: () => {
+                    document.getElementById('pinholeSize').value = 0.8;
+                    pinholeRadius = 0.8;
+                    buildBarrier();
+                },
+                info: '<b>Step 5:</b> Making the pinhole <em>larger</em> lets more light through (brighter) but rays from multiple directions reach each point — the image gets <em>blurrier</em>. Try the slider!',
+                cam: { pos: new THREE.Vector3(5, 5, 8), target: new THREE.Vector3(0, 1.8, 0) }
+            }
+        ];
+
+        window.stepDemo = function () {
+            demoStep++;
+            if (demoStep >= demoSteps.length) {
+                demoStep = -1;
+                document.getElementById('btnStep').textContent = '▶ Guided Demo';
+                infoBox.innerHTML = 'Demo complete! Explore freely, or click <em>Guided Demo</em> to restart.';
+                return;
+            }
+            const step = demoSteps[demoStep];
+            document.getElementById('btnStep').textContent = `Next (${step.label})`;
+            step.action();
+            infoBox.innerHTML = step.info;
+
+            // Animate camera to step's viewpoint
+            if (step.cam) {
+                animateCamera(step.cam.pos, step.cam.target);
+            }
+        };
+
+        // Smooth camera animation
+        function animateCamera(targetPos, targetLookAt) {
+            const startPos = camera.position.clone();
+            const startTarget = controls.target.clone();
+            const duration = 800;
+            const startTime = performance.now();
+
+            function tick(now) {
+                const elapsed = now - startTime;
+                const t = Math.min(elapsed / duration, 1);
+                const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // ease in-out
+
+                camera.position.lerpVectors(startPos, targetPos, ease);
+                controls.target.lerpVectors(startTarget, targetLookAt, ease);
+                camera.zoom = 1.0;
+                camera.updateProjectionMatrix();
+                controls.update();
+
+                if (t < 1) requestAnimationFrame(tick);
+            }
+            requestAnimationFrame(tick);
+        }
+
+        // ─── Animation loop ───
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        animate();
+
+        // ─── Resize handler ───
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            const asp = w / h;
+            camera.left = -d * asp;
+            camera.right = d * asp;
+            camera.top = d;
+            camera.bottom = -d;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+            labelRenderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

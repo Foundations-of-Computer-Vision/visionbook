@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Homography: Planar Surface Projection</title>
+  <style>
+    html, body, #container {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: white;
+      font-family: Arial, sans-serif;
+    }
+    /* Control panel overlay */
+    #controls {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      z-index: 10;
+      max-width: 310px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    #controls h3 { margin: 0 0 8px; font-size: 15px; }
+    #controls button {
+      display: block;
+      width: 100%;
+      margin: 4px 0;
+      padding: 6px 10px;
+      border: 1px solid #999;
+      border-radius: 4px;
+      background: #f5f5f5;
+      cursor: pointer;
+      font-size: 12px;
+      text-align: left;
+    }
+    #controls button:hover { background: #e0e0e0; }
+    #controls button.active { background: #cde; border-color: #59a; }
+    #controls label { display: block; margin: 6px 0 2px; font-size: 12px; }
+    #controls input[type=range] { width: 100%; }
+    #step-text {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.78);
+      color: #fff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      max-width: 600px;
+      text-align: center;
+      z-index: 10;
+      display: none;
+      line-height: 1.5;
+    }
+    #step-nav {
+      margin-top: 8px;
+    }
+    #step-nav button {
+      display: inline-block;
+      width: auto;
+      margin: 0 4px;
+      padding: 4px 14px;
+      background: #555;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    #step-nav button:hover { background: #777; }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+
+  <!-- Control panel -->
+  <div id="controls">
+    <h3>Planar Homography</h3>
+    <button id="btn-reset">Reset to textbook view</button>
+    <button id="btn-grid" class="active">Toggle grid projection</button>
+    <button id="btn-demo">Step-through demo</button>
+    <label>Camera rotation (yaw): <span id="yaw-val">0°</span></label>
+    <input type="range" id="slider-yaw" min="-60" max="60" value="0" step="1" />
+    <label>Camera tilt (pitch): <span id="pitch-val">-30°</span></label>
+    <input type="range" id="slider-pitch" min="-60" max="-5" value="-30" step="1" />
+    <label>Drag the cyan point on the plane!</label>
+  </div>
+
+  <!-- Step-through text overlay -->
+  <div id="step-text">
+    <span id="step-content"></span>
+    <div id="step-nav">
+      <button id="btn-prev">◀ Prev</button>
+      <span id="step-counter"></span>
+      <button id="btn-next">Next ▶</button>
+      <button id="btn-close-demo">Close</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+    import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three/examples/jsm/renderers/CSS2DRenderer';
+
+    // ─── Scene setup (from base_scene.html) ────────────────────────────
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    const aspect = container.clientWidth / container.clientHeight;
+    const d = 5;
+    const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+    // Textbook-like viewpoint: slightly above and to the left
+    const defaultCamPos = new THREE.Vector3(6, 5, 7);
+    const defaultCamTarget = new THREE.Vector3(0, 1, -1);
+    camera.position.copy(defaultCamPos);
+    camera.lookAt(defaultCamTarget);
+    camera.zoom = 1.0;
+    camera.updateProjectionMatrix();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    // CSS2D label renderer for crisp text labels
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(container.clientWidth, container.clientHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0px';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    container.appendChild(labelRenderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.copy(defaultCamTarget);
+    controls.update();
+
+    // ─── Helper: make a CSS2D text label ───────────────────────────────
+    function makeLabel(text, color, fontSize) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      div.style.color = color || '#000';
+      div.style.fontSize = (fontSize || 13) + 'px';
+      div.style.fontWeight = 'bold';
+      div.style.fontFamily = 'Arial, sans-serif';
+      div.style.pointerEvents = 'none';
+      div.style.textShadow = '0 0 3px #fff, 0 0 3px #fff';
+      const obj = new CSS2DObject(div);
+      return obj;
+    }
+
+    // ─── Helper: create an arrow (shaft + cone) ────────────────────────
+    function makeArrow(origin, dir, length, color, headLen, headWidth) {
+      headLen = headLen || 0.18;
+      headWidth = headWidth || 0.10;
+      const arrow = new THREE.ArrowHelper(
+        dir.clone().normalize(), origin, length, color, headLen, headWidth
+      );
+      return arrow;
+    }
+
+    // ─── Helper: dashed line between two points ────────────────────────
+    function makeDashedLine(p1, p2, color) {
+      const geom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      const mat = new THREE.LineDashedMaterial({
+        color: color || 0x000000,
+        dashSize: 0.15,
+        gapSize: 0.08,
+        linewidth: 1
+      });
+      const line = new THREE.Line(geom, mat);
+      line.computeLineDistances();
+      return line;
+    }
+
+    // ─── Helper: solid line between two points ─────────────────────────
+    function makeLine(p1, p2, color, lw) {
+      const geom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      const mat = new THREE.LineBasicMaterial({ color: color || 0x000000, linewidth: lw || 1 });
+      return new THREE.Line(geom, mat);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SCENE PARAMETERS
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Camera (virtual, being illustrated) parameters
+    // The "virtual camera" is the camera depicted in the figure, not the Three.js camera.
+    let camYawDeg = 0;
+    let camPitchDeg = -30;
+    const camDist = 5;          // distance from origin to virtual camera center
+    const focalLen = 1.2;       // distance from camera center to image plane
+    const imgPlaneW = 2.0;      // half-width of image plane
+    const imgPlaneH = 1.5;      // half-height of image plane
+
+    // Draggable point on the world plane (X, Y, 0)
+    let planePointWorld = new THREE.Vector3(2.0, 1.5, 0);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // BUILD THE STATIC WORLD PLANE (Z=0 in world coords)
+    // ═══════════════════════════════════════════════════════════════════
+    // The planar surface is the XY-plane at Z=0 in the figure's world frame.
+    // In our Three.js scene the "world plane" maps to the XZ-plane (Y=0)
+    // so that it lays flat. We'll use the mapping:
+    //   figure X  ->  Three.js X
+    //   figure Y  ->  Three.js Z  (into screen)
+    //   figure Z  ->  Three.js Y  (up)
+    //
+    // This lets the plane sit naturally on the ground.
+
+    // World-plane ground quad
+    const planeSize = 5;
+    const planeGeo = new THREE.PlaneGeometry(planeSize * 2, planeSize * 2);
+    const planeMat = new THREE.MeshBasicMaterial({
+      color: 0xdddddd, side: THREE.DoubleSide, transparent: true, opacity: 0.35
+    });
+    const planeMesh = new THREE.Mesh(planeGeo, planeMat);
+    planeMesh.rotation.x = -Math.PI / 2; // lay flat on XZ
+    scene.add(planeMesh);
+
+    // Plane border
+    const borderPts = [
+      new THREE.Vector3(-planeSize, 0, -planeSize),
+      new THREE.Vector3( planeSize, 0, -planeSize),
+      new THREE.Vector3( planeSize, 0,  planeSize),
+      new THREE.Vector3(-planeSize, 0,  planeSize),
+      new THREE.Vector3(-planeSize, 0, -planeSize),
+    ];
+    scene.add(makeLine(borderPts[0], borderPts[1], 0x444444));
+    scene.add(makeLine(borderPts[1], borderPts[2], 0x444444));
+    scene.add(makeLine(borderPts[2], borderPts[3], 0x444444));
+    scene.add(makeLine(borderPts[3], borderPts[4], 0x444444));
+
+    // "planar surface" label
+    const planeSurfLabel = makeLabel('planar surface', '#444', 14);
+    planeSurfLabel.position.set(planeSize - 1.2, 0.05, planeSize - 0.3);
+    scene.add(planeSurfLabel);
+
+    // ─── World-coordinate axes (red, on the plane) ─────────────────────
+    // X axis (red), Y axis (red), Z axis (red, pointing up = perpendicular to plane)
+    const axLen = 1.4;
+    const xAxisW = makeArrow(new THREE.Vector3(0,0,0), new THREE.Vector3(1,0,0), axLen, 0xdd0000);
+    const yAxisW = makeArrow(new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,1), axLen, 0xdd0000);
+    const zAxisW = makeArrow(new THREE.Vector3(0,0,0), new THREE.Vector3(0,1,0), axLen, 0xdd0000);
+    scene.add(xAxisW); scene.add(yAxisW); scene.add(zAxisW);
+
+    const labelX = makeLabel('X', '#dd0000', 15);
+    labelX.position.set(axLen + 0.15, 0, 0);
+    scene.add(labelX);
+    const labelY = makeLabel('Y', '#dd0000', 15);
+    labelY.position.set(0, 0, axLen + 0.15);
+    scene.add(labelY);
+    const labelZ = makeLabel('Z', '#dd0000', 15);
+    labelZ.position.set(0, axLen + 0.2, 0);
+    scene.add(labelZ);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DYNAMIC GROUPS (rebuilt when camera angles or point change)
+    // ═══════════════════════════════════════════════════════════════════
+    const dynamicGroup = new THREE.Group();
+    scene.add(dynamicGroup);
+
+    // The draggable sphere on the world plane
+    const dragSphereGeo = new THREE.SphereGeometry(0.12, 24, 24);
+    const dragSphereMat = new THREE.MeshBasicMaterial({ color: 0x00cccc });
+    const dragSphere = new THREE.Mesh(dragSphereGeo, dragSphereMat);
+    scene.add(dragSphere);
+
+    const dragLabel = makeLabel('(X, Y, 0)', '#00aaaa', 13);
+    scene.add(dragLabel);
+
+    // Show grid projection toggle state
+    let showGrid = true;
+
+    // ─── Rebuild everything that depends on camera orientation / point ──
+    function rebuild() {
+      // Clear dynamic group
+      while (dynamicGroup.children.length > 0) {
+        const c = dynamicGroup.children[0];
+        dynamicGroup.remove(c);
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) c.material.dispose();
+      }
+
+      // Compute virtual camera position and orientation from yaw/pitch
+      const yaw = THREE.MathUtils.degToRad(camYawDeg);
+      const pitch = THREE.MathUtils.degToRad(camPitchDeg);
+
+      // Camera center position (spherical coords looking toward origin area)
+      const camCenter = new THREE.Vector3(
+        camDist * Math.cos(pitch) * Math.sin(yaw),
+        camDist * Math.sin(-pitch),          // up
+        camDist * Math.cos(pitch) * Math.cos(yaw) * -1  // pointing toward negative Z in scene
+      );
+      // The camera looks toward the origin area
+      const camLookAt = new THREE.Vector3(0, 0, 0);
+      const camForward = new THREE.Vector3().subVectors(camLookAt, camCenter).normalize();
+      const camRight = new THREE.Vector3().crossVectors(camForward, new THREE.Vector3(0,1,0)).normalize();
+      const camUp = new THREE.Vector3().crossVectors(camRight, camForward).normalize();
+
+      // ── Camera center sphere (black dot) ─────────────────────────────
+      const ccGeo = new THREE.SphereGeometry(0.12, 24, 24);
+      const ccMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      const ccMesh = new THREE.Mesh(ccGeo, ccMat);
+      ccMesh.position.copy(camCenter);
+      dynamicGroup.add(ccMesh);
+
+      const ccLabel = makeLabel('Camera center', '#000', 13);
+      ccLabel.position.copy(camCenter).add(camUp.clone().multiplyScalar(0.35));
+      dynamicGroup.add(ccLabel);
+
+      // ── Image plane (quad) ───────────────────────────────────────────
+      // The image plane sits at distance focalLen along camForward from camCenter
+      const imgCenter = camCenter.clone().add(camForward.clone().multiplyScalar(focalLen));
+      const halfW = imgPlaneW * 0.5;
+      const halfH = imgPlaneH * 0.5;
+
+      // Four corners of the image plane
+      const ipTL = imgCenter.clone().add(camRight.clone().multiplyScalar(-halfW)).add(camUp.clone().multiplyScalar( halfH));
+      const ipTR = imgCenter.clone().add(camRight.clone().multiplyScalar( halfW)).add(camUp.clone().multiplyScalar( halfH));
+      const ipBR = imgCenter.clone().add(camRight.clone().multiplyScalar( halfW)).add(camUp.clone().multiplyScalar(-halfH));
+      const ipBL = imgCenter.clone().add(camRight.clone().multiplyScalar(-halfW)).add(camUp.clone().multiplyScalar(-halfH));
+
+      // Image plane fill
+      const ipGeo = new THREE.BufferGeometry();
+      const ipVerts = new Float32Array([
+        ...ipTL.toArray(), ...ipBL.toArray(), ...ipBR.toArray(),
+        ...ipTL.toArray(), ...ipBR.toArray(), ...ipTR.toArray(),
+      ]);
+      ipGeo.setAttribute('position', new THREE.BufferAttribute(ipVerts, 3));
+      const ipMat = new THREE.MeshBasicMaterial({
+        color: 0xcccccc, side: THREE.DoubleSide, transparent: true, opacity: 0.3
+      });
+      dynamicGroup.add(new THREE.Mesh(ipGeo, ipMat));
+
+      // Image plane border (solid dark lines)
+      dynamicGroup.add(makeLine(ipTL, ipTR, 0x222222));
+      dynamicGroup.add(makeLine(ipTR, ipBR, 0x222222));
+      dynamicGroup.add(makeLine(ipBR, ipBL, 0x222222));
+      dynamicGroup.add(makeLine(ipBL, ipTL, 0x222222));
+
+      const ipLabel = makeLabel('Camera plane', '#222', 13);
+      ipLabel.position.copy(ipTR).add(camUp.clone().multiplyScalar(0.2));
+      dynamicGroup.add(ipLabel);
+
+      // ── Camera x, y axes (green) on image plane ─────────────────────
+      const axCamLen = 0.7;
+      const axCamOrigin = ipBL.clone().add(camRight.clone().multiplyScalar(0.15)).add(camUp.clone().multiplyScalar(0.15));
+      dynamicGroup.add(makeArrow(axCamOrigin, camRight, axCamLen, 0x00aa00, 0.12, 0.07));
+      dynamicGroup.add(makeArrow(axCamOrigin, camUp, axCamLen, 0x00aa00, 0.12, 0.07));
+      const lxCam = makeLabel('x', '#00aa00', 14);
+      lxCam.position.copy(axCamOrigin).add(camRight.clone().multiplyScalar(axCamLen + 0.12));
+      dynamicGroup.add(lxCam);
+      const lyCam = makeLabel('y', '#00aa00', 14);
+      lyCam.position.copy(axCamOrigin).add(camUp.clone().multiplyScalar(axCamLen + 0.12));
+      dynamicGroup.add(lyCam);
+
+      // ── Project the draggable plane point onto the image plane ───────
+      // Ray from camera center through world point; intersect with image plane
+      // planePointWorld is in figure coords (X -> scene X, Y -> scene Z, Z=0 -> scene Y=0)
+      const worldPt3 = new THREE.Vector3(planePointWorld.x, 0, planePointWorld.y);
+
+      // Update draggable sphere position
+      dragSphere.position.copy(worldPt3);
+      dragLabel.position.copy(worldPt3).add(new THREE.Vector3(0, -0.25, 0));
+
+      // Direction from camera center toward world point
+      const rayDir = new THREE.Vector3().subVectors(worldPt3, camCenter);
+
+      // Intersect with image plane: plane defined by point imgCenter and normal camForward
+      // t = dot(imgCenter - camCenter, camForward) / dot(rayDir, camForward)
+      const denom = rayDir.dot(camForward);
+      let imgPt = null;
+      if (Math.abs(denom) > 1e-6) {
+        const t = new THREE.Vector3().subVectors(imgCenter, camCenter).dot(camForward) / denom;
+        if (t > 0) {
+          imgPt = camCenter.clone().add(rayDir.clone().multiplyScalar(t));
+        }
+      }
+
+      if (imgPt) {
+        // Cyan dot on image plane
+        const ipDotGeo = new THREE.SphereGeometry(0.08, 16, 16);
+        const ipDotMat = new THREE.MeshBasicMaterial({ color: 0x00cccc });
+        const ipDot = new THREE.Mesh(ipDotGeo, ipDotMat);
+        ipDot.position.copy(imgPt);
+        dynamicGroup.add(ipDot);
+
+        const ipDotLabel = makeLabel('(x, y)', '#00aaaa', 13);
+        ipDotLabel.position.copy(imgPt).add(camUp.clone().multiplyScalar(0.2));
+        dynamicGroup.add(ipDotLabel);
+
+        // Dashed projection ray: camera center → image point → world point
+        dynamicGroup.add(makeDashedLine(camCenter, imgPt, 0x00bbbb));
+        dynamicGroup.add(makeDashedLine(imgPt, worldPt3, 0x00bbbb));
+      }
+
+      // ── Projection frustum edges (dashed black) from camera center to image plane corners ──
+      // Then extend to ground plane intersection to show the projected region
+      const corners = [ipTL, ipTR, ipBR, ipBL];
+      for (const corner of corners) {
+        // Line from camera center to image plane corner
+        dynamicGroup.add(makeDashedLine(camCenter, corner, 0x000000));
+
+        // Extend ray to ground plane (Y=0)
+        const rd = new THREE.Vector3().subVectors(corner, camCenter);
+        if (Math.abs(rd.y) > 1e-6) {
+          const tGround = -camCenter.y / rd.y;
+          if (tGround > 0) {
+            const groundPt = camCenter.clone().add(rd.clone().multiplyScalar(tGround));
+            // Clamp to reasonable range
+            if (groundPt.length() < 15) {
+              dynamicGroup.add(makeDashedLine(corner, groundPt, 0x000000));
+            }
+          }
+        }
+      }
+
+      // ── Grid projection: show a grid on the world plane and its projection on the image ──
+      if (showGrid) {
+        const gridColor = 0x4488cc;
+        const gridN = 5; // grid lines in each direction
+        const gridSpacing = 0.8;
+        const gridOriginX = 0;
+        const gridOriginZ = 0;
+
+        // Collect grid line endpoints on world plane and project them
+        for (let i = 0; i <= gridN; i++) {
+          // Lines parallel to X
+          const z = gridOriginZ + i * gridSpacing;
+          const pA = new THREE.Vector3(gridOriginX, 0, z);
+          const pB = new THREE.Vector3(gridOriginX + gridN * gridSpacing, 0, z);
+          dynamicGroup.add(makeLine(pA, pB, gridColor));
+
+          // Lines parallel to Z
+          const x = gridOriginX + i * gridSpacing;
+          const qA = new THREE.Vector3(x, 0, gridOriginZ);
+          const qB = new THREE.Vector3(x, 0, gridOriginZ + gridN * gridSpacing);
+          dynamicGroup.add(makeLine(qA, qB, gridColor));
+        }
+
+        // Project grid intersection points onto image plane
+        const projectedGridPts = [];
+        for (let i = 0; i <= gridN; i++) {
+          const row = [];
+          for (let j = 0; j <= gridN; j++) {
+            const wx = gridOriginX + j * gridSpacing;
+            const wz = gridOriginZ + i * gridSpacing;
+            const wp = new THREE.Vector3(wx, 0, wz);
+            const rd = new THREE.Vector3().subVectors(wp, camCenter);
+            const den = rd.dot(camForward);
+            let pp = null;
+            if (Math.abs(den) > 1e-6) {
+              const t = new THREE.Vector3().subVectors(imgCenter, camCenter).dot(camForward) / den;
+              if (t > 0) {
+                pp = camCenter.clone().add(rd.clone().multiplyScalar(t));
+              }
+            }
+            row.push(pp);
+          }
+          projectedGridPts.push(row);
+        }
+
+        // Draw projected grid on image plane
+        const projGridColor = 0x2266aa;
+        for (let i = 0; i <= gridN; i++) {
+          for (let j = 0; j < gridN; j++) {
+            const a = projectedGridPts[i][j];
+            const b = projectedGridPts[i][j+1];
+            if (a && b) dynamicGroup.add(makeLine(a, b, projGridColor));
+          }
+        }
+        for (let j = 0; j <= gridN; j++) {
+          for (let i = 0; i < gridN; i++) {
+            const a = projectedGridPts[i][j];
+            const b = projectedGridPts[i+1][j];
+            if (a && b) dynamicGroup.add(makeLine(a, b, projGridColor));
+          }
+        }
+      }
+
+      // ── H matrix label near the projection ray ──────────────────────
+      if (imgPt) {
+        const midRay = new THREE.Vector3().lerpVectors(imgPt, worldPt3, 0.5);
+        const hLabel = makeLabel('H', '#0055aa', 18);
+        hLabel.position.copy(midRay).add(new THREE.Vector3(0.3, 0.2, 0));
+        dynamicGroup.add(hLabel);
+      }
+    }
+
+    // Initial build
+    rebuild();
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DRAGGING: let user drag the cyan point on the world plane
+    // ═══════════════════════════════════════════════════════════════════
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let isDragging = false;
+
+    // Ground plane for raycasting
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      mouse.x = (e.clientX / container.clientWidth) * 2 - 1;
+      mouse.y = -(e.clientY / container.clientHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const hits = raycaster.intersectObject(dragSphere);
+      if (hits.length > 0) {
+        isDragging = true;
+        controls.enabled = false;
+      }
+    });
+
+    renderer.domElement.addEventListener('pointermove', (e) => {
+      if (!isDragging) return;
+      mouse.x = (e.clientX / container.clientWidth) * 2 - 1;
+      mouse.y = -(e.clientY / container.clientHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const intersect = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(groundPlane, intersect)) {
+        // Clamp to plane bounds
+        const cx = THREE.MathUtils.clamp(intersect.x, -planeSize + 0.2, planeSize - 0.2);
+        const cz = THREE.MathUtils.clamp(intersect.z, -planeSize + 0.2, planeSize - 0.2);
+        planePointWorld.x = cx;
+        planePointWorld.y = cz; // figure Y maps to scene Z
+        rebuild();
+      }
+    });
+
+    renderer.domElement.addEventListener('pointerup', () => {
+      if (isDragging) {
+        isDragging = false;
+        controls.enabled = true;
+      }
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CONTROLS
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Reset button → restore textbook view and default parameters
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      camYawDeg = 0; camPitchDeg = -30;
+      planePointWorld.set(2.0, 1.5, 0);
+      document.getElementById('slider-yaw').value = 0;
+      document.getElementById('slider-pitch').value = -30;
+      document.getElementById('yaw-val').textContent = '0°';
+      document.getElementById('pitch-val').textContent = '-30°';
+      camera.position.copy(defaultCamPos);
+      controls.target.copy(defaultCamTarget);
+      camera.zoom = 1.0;
+      camera.updateProjectionMatrix();
+      controls.update();
+      rebuild();
+    });
+
+    // Grid toggle
+    document.getElementById('btn-grid').addEventListener('click', function() {
+      showGrid = !showGrid;
+      this.classList.toggle('active', showGrid);
+      rebuild();
+    });
+
+    // Yaw slider: rotates the virtual camera around the scene
+    document.getElementById('slider-yaw').addEventListener('input', function() {
+      camYawDeg = parseFloat(this.value);
+      document.getElementById('yaw-val').textContent = camYawDeg + '°';
+      rebuild();
+    });
+
+    // Pitch slider: tilts the virtual camera
+    document.getElementById('slider-pitch').addEventListener('input', function() {
+      camPitchDeg = parseFloat(this.value);
+      document.getElementById('pitch-val').textContent = camPitchDeg + '°';
+      rebuild();
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STEP-THROUGH DEMO
+    // ═══════════════════════════════════════════════════════════════════
+    const steps = [
+      {
+        text: 'Step 1: The <b>planar surface</b> lies in the Z=0 plane of the world coordinate system. The red X, Y, Z axes mark the world frame placed on the surface.',
+        action: () => { camYawDeg = 0; camPitchDeg = -30; rebuild(); }
+      },
+      {
+        text: 'Step 2: The <b>camera</b> observes this plane. The green x, y axes are the image-plane coordinates. A point (X,Y,0) on the plane projects through the camera center onto the image plane at (x,y).',
+        action: () => {}
+      },
+      {
+        text: 'Step 3: Because Z=0, the projection equation simplifies: the 3rd column of the rotation matrix drops out, yielding a 3×3 matrix <b>H</b> (the homography) mapping plane coordinates to image coordinates.',
+        action: () => {}
+      },
+      {
+        text: 'Step 4: Try <b>dragging the cyan point</b> on the plane — the projected point on the image plane moves accordingly, always governed by the homography H.',
+        action: () => { planePointWorld.set(1.0, 2.5, 0); rebuild(); }
+      },
+      {
+        text: 'Step 5: Now <b>rotate the camera</b> using the yaw slider. The homography H changes, but the plane-to-image relationship remains a homography for any camera pose.',
+        action: () => {
+          document.getElementById('slider-yaw').value = 30;
+          camYawDeg = 30;
+          document.getElementById('yaw-val').textContent = '30°';
+          rebuild();
+        }
+      },
+      {
+        text: 'Step 6: Toggle the <b>grid projection</b> to see how a regular grid on the plane maps to a distorted (but still straight-line) grid on the image — the hallmark of a homography.',
+        action: () => {
+          showGrid = true;
+          document.getElementById('btn-grid').classList.add('active');
+          camYawDeg = 20; camPitchDeg = -25;
+          document.getElementById('slider-yaw').value = 20;
+          document.getElementById('slider-pitch').value = -25;
+          document.getElementById('yaw-val').textContent = '20°';
+          document.getElementById('pitch-val').textContent = '-25°';
+          rebuild();
+        }
+      },
+    ];
+
+    let currentStep = 0;
+    const stepText = document.getElementById('step-text');
+    const stepContent = document.getElementById('step-content');
+    const stepCounter = document.getElementById('step-counter');
+
+    function showStep(idx) {
+      currentStep = idx;
+      stepContent.innerHTML = steps[idx].text;
+      stepCounter.textContent = `${idx + 1} / ${steps.length}`;
+      steps[idx].action();
+      stepText.style.display = 'block';
+    }
+
+    document.getElementById('btn-demo').addEventListener('click', () => {
+      showStep(0);
+    });
+    document.getElementById('btn-prev').addEventListener('click', () => {
+      if (currentStep > 0) showStep(currentStep - 1);
+    });
+    document.getElementById('btn-next').addEventListener('click', () => {
+      if (currentStep < steps.length - 1) showStep(currentStep + 1);
+    });
+    document.getElementById('btn-close-demo').addEventListener('click', () => {
+      stepText.style.display = 'none';
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ANIMATION LOOP
+    // ═══════════════════════════════════════════════════════════════════
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    }
+    animate();
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth, h = container.clientHeight;
+      camera.left = -d * (w / h);
+      camera.right = d * (w / h);
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      labelRenderer.setSize(w, h);
+    });
+  </script>
+</body>
+</html>

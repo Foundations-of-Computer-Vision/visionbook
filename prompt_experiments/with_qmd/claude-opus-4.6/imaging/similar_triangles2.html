@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Perspective Projection – Similar Triangles</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            color: #eee;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #canvas3d {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* ---------- overlay panels ---------- */
+        #controls {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(20, 20, 40, 0.88);
+            border-radius: 10px;
+            padding: 14px 18px;
+            max-width: 310px;
+            font-size: 13px;
+            line-height: 1.55;
+            pointer-events: auto;
+            user-select: none;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .5);
+        }
+
+        #controls h2 {
+            font-size: 15px;
+            margin-bottom: 8px;
+            color: #8cf;
+        }
+
+        #controls label {
+            display: block;
+            margin: 6px 0 2px;
+        }
+
+        #controls input[type=range] {
+            width: 100%;
+        }
+
+        .val {
+            color: #ffa;
+            font-family: monospace;
+        }
+
+        .btn {
+            display: inline-block;
+            margin: 4px 3px;
+            padding: 5px 12px;
+            background: #334;
+            border: 1px solid #668;
+            border-radius: 5px;
+            color: #cdf;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .btn:hover {
+            background: #446;
+        }
+
+        .btn.active {
+            background: #558;
+            border-color: #9af;
+        }
+
+        #equations {
+            position: absolute;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 40, 0.88);
+            border-radius: 10px;
+            padding: 12px 22px;
+            font-size: 15px;
+            text-align: center;
+            pointer-events: none;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .5);
+        }
+
+        #equations .eq {
+            font-family: 'Times New Roman', serif;
+            font-size: 18px;
+        }
+
+        .green-text {
+            color: #4f4;
+        }
+
+        .cyan-text {
+            color: #4ff;
+        }
+
+        #guide {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(20, 20, 40, 0.88);
+            border-radius: 10px;
+            padding: 14px 18px;
+            max-width: 300px;
+            font-size: 13px;
+            line-height: 1.55;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, .5);
+        }
+
+        #guide h3 {
+            font-size: 14px;
+            margin-bottom: 6px;
+            color: #fc8;
+        }
+
+        #guideText {
+            min-height: 60px;
+        }
+
+        #stepCounter {
+            color: #888;
+            font-size: 11px;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas3d"></canvas>
+
+    <!-- Controls panel -->
+    <div id="controls">
+        <h2>Perspective Projection</h2>
+
+        <label>World point X: <span class="val" id="vX">4.0</span></label>
+        <input type="range" id="sX" min="-6" max="6" step="0.1" value="4.0" />
+
+        <label>World point Y: <span class="val" id="vY">-3.0</span></label>
+        <input type="range" id="sY" min="-6" max="6" step="0.1" value="-3.0" />
+
+        <label>World point Z: <span class="val" id="vZ">6.0</span></label>
+        <input type="range" id="sZ" min="1" max="12" step="0.1" value="6.0" />
+
+        <label>Focal length f: <span class="val" id="vF">2.5</span></label>
+        <input type="range" id="sF" min="0.5" max="5" step="0.1" value="2.5" />
+
+        <div style="margin-top:10px">
+            <span class="btn active" id="btnXZ" onclick="toggleTriangle('xz')">▲ x/f = X/Z (green)</span>
+            <span class="btn active" id="btnYZ" onclick="toggleTriangle('yz')">▲ y/f = Y/Z (cyan)</span>
+        </div>
+        <div>
+            <span class="btn" id="btnRays" onclick="toggleRays()">Show projection rays</span>
+            <span class="btn" onclick="resetView()">Reset to textbook view</span>
+        </div>
+        <div style="margin-top:6px">
+            <span class="btn" onclick="startGuide()">▶ Guided demo</span>
+        </div>
+    </div>
+
+    <!-- Equation bar -->
+    <div id="equations">
+        <span class="eq">
+            <span class="green-text">x / f = X / Z</span>
+            &nbsp;&nbsp;⟹&nbsp;&nbsp; <span class="green-text">x = f·X / Z</span>
+            &nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;
+            <span class="cyan-text">y / f = Y / Z</span>
+            &nbsp;&nbsp;⟹&nbsp;&nbsp; <span class="cyan-text">y = f·Y / Z</span>
+        </span>
+        <div style="margin-top:4px; font-size:13px; color:#aaa;" id="numericEq"></div>
+    </div>
+
+    <!-- Guided demo panel -->
+    <div id="guide">
+        <h3>Guided Demo</h3>
+        <div id="guideText">Press <b>▶ Guided demo</b> to begin a step-through explanation of perspective projection via
+            similar triangles.</div>
+        <div id="stepCounter"></div>
+        <div style="margin-top:8px">
+            <span class="btn" onclick="guideStep(-1)">◀ Prev</span>
+            <span class="btn" onclick="guideStep(1)">Next ▶</span>
+        </div>
+    </div>
+
+    <!-- Three.js via ES module CDN -->
+    <script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        /* ------------------------------------------------------------------ */
+        /*  Scene, camera, renderer setup                                      */
+        /* ------------------------------------------------------------------ */
+        const canvas = document.getElementById('canvas3d');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        // CSS2D label renderer (overlays HTML labels on 3D positions)
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+        // Default "textbook view" – slightly above and to the side
+        const defaultCamPos = new THREE.Vector3(10, 6, -10);
+        const defaultTarget = new THREE.Vector3(2, -0.5, 3);
+        camera.position.copy(defaultCamPos);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.copy(defaultTarget);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.12;
+        controls.update();
+
+        // Lights
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dLight.position.set(8, 10, -6);
+        scene.add(dLight);
+
+        /* ------------------------------------------------------------------ */
+        /*  State                                                              */
+        /* ------------------------------------------------------------------ */
+        let worldP = new THREE.Vector3(4, -3, 6);   // 3D world point P
+        let focalLen = 2.5;                          // focal length f
+        let showXZ = true, showYZ = true, showRays = false;
+
+        /* ------------------------------------------------------------------ */
+        /*  Helper: create an HTML label as CSS2DObject                        */
+        /* ------------------------------------------------------------------ */
+        function makeLabel(text, color = '#fff', fontSize = '14px') {
+            const div = document.createElement('div');
+            div.style.color = color;
+            div.style.fontSize = fontSize;
+            div.style.fontFamily = "'Segoe UI', Arial, sans-serif";
+            div.style.fontWeight = 'bold';
+            div.style.textShadow = '0 0 6px rgba(0,0,0,0.9)';
+            div.textContent = text;
+            return new CSS2DObject(div);
+        }
+
+        /* ------------------------------------------------------------------ */
+        /*  Static geometry: axes, ground grid                                 */
+        /* ------------------------------------------------------------------ */
+
+        // Grid (subtle)
+        const gridHelper = new THREE.GridHelper(20, 20, 0x333355, 0x222244);
+        gridHelper.position.y = -6;
+        scene.add(gridHelper);
+
+        /* World-coordinate axes (X, Y, Z arrows from pinhole = origin) */
+        // Pinhole is at origin. Z goes into the scene; image plane is at -f.
+        function buildAxis(dir, color, labelText) {
+            const len = 9;
+            const origin = new THREE.Vector3(0, 0, 0);
+            const arrow = new THREE.ArrowHelper(dir, origin, len, color, 0.35, 0.2);
+            scene.add(arrow);
+            const lbl = makeLabel(labelText, '#' + color.toString(16).padStart(6, '0'), '16px');
+            lbl.position.copy(dir).multiplyScalar(len + 0.4);
+            scene.add(lbl);
+        }
+        buildAxis(new THREE.Vector3(1, 0, 0), 0xff4444, 'X');   // X → right (in world)
+        buildAxis(new THREE.Vector3(0, 1, 0), 0x44ff44, 'Y');   // Y → up
+        buildAxis(new THREE.Vector3(0, 0, 1), 0x4488ff, 'Z');   // Z → into scene
+
+        /* ------------------------------------------------------------------ */
+        /*  Dynamic objects that update when sliders change                    */
+        /* ------------------------------------------------------------------ */
+
+        // -- Image plane (semi-transparent rectangle at z = -f) --
+        const planeMat = new THREE.MeshBasicMaterial({
+            color: 0xaaaacc, transparent: true, opacity: 0.22, side: THREE.DoubleSide
+        });
+        const planeGeo = new THREE.PlaneGeometry(8, 8);
+        const imagePlane = new THREE.Mesh(planeGeo, planeMat);
+        scene.add(imagePlane);
+
+        // Plane border
+        const planeBorderGeo = new THREE.EdgesGeometry(planeGeo);
+        const planeBorder = new THREE.LineSegments(planeBorderGeo, new THREE.LineBasicMaterial({ color: 0x8888aa }));
+        scene.add(planeBorder);
+
+        // Label for image plane
+        const planeLbl = makeLabel('Image plane', '#aac', '13px');
+        scene.add(planeLbl);
+
+        // Label for f (focal length)
+        const fLabel = makeLabel('f', '#ffa', '15px');
+        scene.add(fLabel);
+
+        // -- Pinhole dot at origin --
+        const pinholeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const pinholeMesh = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), pinholeMat);
+        scene.add(pinholeMesh);
+        const pinholeLbl = makeLabel('Pinhole', '#fff', '12px');
+        pinholeLbl.position.set(0, 0.35, 0);
+        scene.add(pinholeLbl);
+
+        // -- World point P (red sphere) --
+        const pointPMat = new THREE.MeshStandardMaterial({ color: 0xff2222, emissive: 0x880000 });
+        const pointPMesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 20), pointPMat);
+        scene.add(pointPMesh);
+        const pointPLbl = makeLabel('P = (X, Y, Z)', '#ff6666', '13px');
+        scene.add(pointPLbl);
+
+        // -- Projected point p on image plane (brown/dark-red sphere) --
+        const pointpMat = new THREE.MeshStandardMaterial({ color: 0xcc6622, emissive: 0x663300 });
+        const pointpMesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), pointpMat);
+        scene.add(pointpMesh);
+        const pointpLbl = makeLabel('p = (x, y)', '#cc8844', '13px');
+        scene.add(pointpLbl);
+
+        // -- Projection ray: straight line from P through pinhole to p --
+        // Using a fat line (BufferGeometry with LineBasicMaterial)
+        const rayLineGeo = new THREE.BufferGeometry();
+        const rayLineMat = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.25, gapSize: 0.15 });
+        const rayLine = new THREE.Line(rayLineGeo, rayLineMat);
+        scene.add(rayLine);
+
+        // -- Extra projection rays (toggled) showing full cone --
+        const extraRaysGroup = new THREE.Group();
+        scene.add(extraRaysGroup);
+
+        /* ---------- Similar triangle meshes ---------- */
+        // Green triangle: lies in X-Z plane, shows x/f = X/Z
+        const triXZGeo = new THREE.BufferGeometry();
+        const triXZMat = new THREE.MeshBasicMaterial({ color: 0x22ff44, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false });
+        const triXZMesh = new THREE.Mesh(triXZGeo, triXZMat);
+        scene.add(triXZMesh);
+        // Outline
+        const triXZEdgeMat = new THREE.LineBasicMaterial({ color: 0x22ff44 });
+        const triXZEdgeGeo = new THREE.BufferGeometry();
+        const triXZEdge = new THREE.LineLoop(triXZEdgeGeo, triXZEdgeMat);
+        scene.add(triXZEdge);
+
+        // Cyan triangle: lies in Y-Z plane, shows y/f = Y/Z
+        const triYZGeo = new THREE.BufferGeometry();
+        const triYZMat = new THREE.MeshBasicMaterial({ color: 0x22ffff, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false });
+        const triYZMesh = new THREE.Mesh(triYZGeo, triYZMat);
+        scene.add(triYZMesh);
+        const triYZEdgeMat = new THREE.LineBasicMaterial({ color: 0x22ffff });
+        const triYZEdgeGeo = new THREE.BufferGeometry();
+        const triYZEdge = new THREE.LineLoop(triYZEdgeGeo, triYZEdgeMat);
+        scene.add(triYZEdge);
+
+        /* ---------- Dimension labels for x, X, y, Y, f, Z ---------- */
+        const lblX = makeLabel('X', '#ff6666', '14px'); scene.add(lblX);
+        const lblx = makeLabel('x', '#44ff66', '14px'); scene.add(lblx);
+        const lblY = makeLabel('Y', '#ff6666', '14px'); scene.add(lblY);
+        const lbly = makeLabel('y', '#44ffff', '14px'); scene.add(lbly);
+
+        /* ---------- Dimension lines (dashed) for x, X ---------- */
+        const dimLineMat = new THREE.LineDashedMaterial({ color: 0x888888, dashSize: 0.15, gapSize: 0.1 });
+        function makeDimLine() {
+            const g = new THREE.BufferGeometry();
+            const l = new THREE.Line(g, dimLineMat.clone());
+            l.computeLineDistances();
+            scene.add(l);
+            return l;
+        }
+        const dimLineX = makeDimLine();
+        const dimLinex = makeDimLine();
+        const dimLineY = makeDimLine();
+        const dimLiney = makeDimLine();
+
+        /* ------------------------------------------------------------------ */
+        /*  Rebuild dynamic geometry on every parameter change                 */
+        /* ------------------------------------------------------------------ */
+        function rebuild() {
+            const f = focalLen;
+            const X = worldP.x, Y = worldP.y, Z = worldP.z;
+
+            // Projected coordinates on the virtual image plane placed at z = -f
+            // Using the virtual camera plane (in front) for clarity: proj at z = f
+            // Actually, the textbook figure places the image plane behind the pinhole.
+            // We'll use the convention: image plane at z = -f (behind pinhole),
+            // projection is inverted, but we also show the virtual plane concept.
+            // For the similar-triangles figure, the triangles span from origin
+            // to Z (world) and from origin to -f (image plane).
+
+            // Projected point on image plane (real, inverted):
+            const px = -f * X / Z;   // inverted
+            const py = -f * Y / Z;
+
+            // For the virtual image plane (same side as scene, not inverted):
+            // vx = f * X / Z,  vy = f * Y / Z
+            // The textbook figure shows both the real image plane behind and the
+            // virtual camera plane in front.  We focus on the real plane for the
+            // similar triangles, matching the figure.
+
+            /* --- Position image plane at z = -f --- */
+            imagePlane.position.set(0, 0, -f);
+            imagePlane.rotation.set(0, 0, 0); // already facing z by default for PlaneGeometry
+            planeBorder.position.copy(imagePlane.position);
+            planeLbl.position.set(0, 4.3, -f);
+
+            /* f label between origin and image plane */
+            fLabel.position.set(0.3, -0.3, -f / 2);
+
+            /* World point P */
+            pointPMesh.position.set(X, Y, Z);
+            pointPLbl.position.set(X, Y + 0.4, Z);
+
+            /* Projected point p on image plane */
+            pointpMesh.position.set(px, py, -f);
+            pointpLbl.position.set(px, py - 0.4, -f);
+
+            /* Projection ray: P → origin → p (dashed line) */
+            {
+                // Extend a bit beyond P for visual
+                const pts = [px * 1.0, py * 1.0, -f, 0, 0, 0, X, Y, Z];
+                rayLineGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+                rayLineGeo.computeBoundingSphere();
+                rayLine.computeLineDistances();
+            }
+
+            /* --- Green triangle (X-Z plane): vertices at origin, (X,0,Z), (px,0,-f) --- */
+            // This triangle shows the similar-triangle relationship in the X-Z plane.
+            // From similar triangles: |px|/f = X/Z  →  x/f = X/Z
+            {
+                const verts = new Float32Array([
+                    0, 0, 0,      // pinhole (apex)
+                    X, 0, Z,      // foot of P projected onto X-Z plane
+                    px, 0, -f     // foot of p projected onto X-Z plane (on image plane)
+                ]);
+                triXZGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+                triXZGeo.computeBoundingSphere();
+                triXZEdgeGeo.setAttribute('position', new THREE.BufferAttribute(verts.slice(), 3));
+                triXZEdgeGeo.computeBoundingSphere();
+                triXZMesh.visible = showXZ;
+                triXZEdge.visible = showXZ;
+            }
+
+            /* --- Cyan triangle (Y-Z plane): vertices at origin, (0,Y,Z), (0,py,-f) --- */
+            {
+                const verts = new Float32Array([
+                    0, 0, 0,
+                    0, Y, Z,
+                    0, py, -f
+                ]);
+                triYZGeo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+                triYZGeo.computeBoundingSphere();
+                triYZEdgeGeo.setAttribute('position', new THREE.BufferAttribute(verts.slice(), 3));
+                triYZEdgeGeo.computeBoundingSphere();
+                triYZMesh.visible = showYZ;
+                triYZEdge.visible = showYZ;
+            }
+
+            /* Dimension labels */
+            lblX.position.set(X / 2, -0.35, Z);
+            lblx.position.set(px / 2, -0.35, -f);
+            lblY.position.set(-0.35, Y / 2, Z);
+            lbly.position.set(-0.35, py / 2, -f);
+
+            /* Dimension lines (vertical drop lines & horizontal span lines) */
+            function setLinePos(line, x1, y1, z1, x2, y2, z2) {
+                line.geometry.setAttribute('position',
+                    new THREE.Float32BufferAttribute([x1, y1, z1, x2, y2, z2], 3));
+                line.geometry.computeBoundingSphere();
+                line.computeLineDistances();
+            }
+            // X span at world point height 0
+            setLinePos(dimLineX, 0, 0, Z, X, 0, Z);
+            // x span on image plane
+            setLinePos(dimLinex, 0, 0, -f, px, 0, -f);
+            // Y span
+            setLinePos(dimLineY, 0, 0, Z, 0, Y, Z);
+            setLinePos(dimLiney, 0, 0, -f, 0, py, -f);
+
+            /* Vertical drop lines from P to X-Z and Y-Z planes */
+            // (already visible via the triangles/dim lines)
+
+            /* Extra rays (corners of image plane → pinhole → world) */
+            extraRaysGroup.visible = showRays;
+            while (extraRaysGroup.children.length) extraRaysGroup.remove(extraRaysGroup.children[0]);
+            if (showRays) {
+                const corners = [
+                    new THREE.Vector3(-4, -4, -f),
+                    new THREE.Vector3(4, -4, -f),
+                    new THREE.Vector3(4, 4, -f),
+                    new THREE.Vector3(-4, 4, -f),
+                ];
+                corners.forEach(c => {
+                    // Ray from image plane corner through pinhole out into the world
+                    const dir = c.clone().negate().normalize();
+                    const farPt = dir.multiplyScalar(14);
+                    const g = new THREE.BufferGeometry().setFromPoints([c, new THREE.Vector3(0, 0, 0), farPt]);
+                    const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0x554444, transparent: true, opacity: 0.4 }));
+                    extraRaysGroup.add(l);
+                });
+            }
+
+            /* Numeric equation display */
+            const xProj = (f * X / Z).toFixed(2);
+            const yProj = (f * Y / Z).toFixed(2);
+            document.getElementById('numericEq').innerHTML =
+                `x = ${f.toFixed(1)} · ${X.toFixed(1)} / ${Z.toFixed(1)} = <span class="green-text">${xProj}</span>`
+                + `&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;`
+                + `y = ${f.toFixed(1)} · ${(Y).toFixed(1)} / ${Z.toFixed(1)} = <span class="cyan-text">${yProj}</span>`;
+        }
+
+        /* ------------------------------------------------------------------ */
+        /*  Slider wiring                                                      */
+        /* ------------------------------------------------------------------ */
+        function wire(id, prop) {
+            const el = document.getElementById(id);
+            el.addEventListener('input', () => {
+                const v = parseFloat(el.value);
+                document.getElementById('v' + prop).textContent = v.toFixed(1);
+                if (prop === 'F') focalLen = v;
+                else worldP[prop.toLowerCase()] = v;
+                rebuild();
+            });
+        }
+        wire('sX', 'X'); wire('sY', 'Y'); wire('sZ', 'Z'); wire('sF', 'F');
+
+        /* ------------------------------------------------------------------ */
+        /*  Button toggles                                                     */
+        /* ------------------------------------------------------------------ */
+        window.toggleTriangle = function (which) {
+            if (which === 'xz') { showXZ = !showXZ; document.getElementById('btnXZ').classList.toggle('active'); }
+            if (which === 'yz') { showYZ = !showYZ; document.getElementById('btnYZ').classList.toggle('active'); }
+            rebuild();
+        };
+        window.toggleRays = function () {
+            showRays = !showRays;
+            document.getElementById('btnRays').classList.toggle('active');
+            rebuild();
+        };
+        window.resetView = function () {
+            // Reset camera
+            camera.position.copy(defaultCamPos);
+            controls.target.copy(defaultTarget);
+            controls.update();
+            // Reset sliders
+            setSlider('sX', 4); setSlider('sY', -3); setSlider('sZ', 6); setSlider('sF', 2.5);
+            worldP.set(4, -3, 6); focalLen = 2.5;
+            showXZ = true; showYZ = true; showRays = false;
+            document.getElementById('btnXZ').classList.add('active');
+            document.getElementById('btnYZ').classList.add('active');
+            document.getElementById('btnRays').classList.remove('active');
+            rebuild();
+        };
+        function setSlider(id, val) {
+            const el = document.getElementById(id);
+            el.value = val;
+            const prop = id.charAt(1);
+            document.getElementById('v' + prop).textContent = parseFloat(val).toFixed(1);
+        }
+
+        /* ------------------------------------------------------------------ */
+        /*  Guided demo step-through                                           */
+        /* ------------------------------------------------------------------ */
+        const guideSteps = [
+            {
+                text: "<b>Step 1:</b> The <b>pinhole</b> sits at the origin. All light rays pass through this single point.",
+                action: () => { resetViewInternal(); }
+            },
+            {
+                text: "<b>Step 2:</b> The <b>image plane</b> is placed at distance <i>f</i> behind the pinhole (at Z = −f). This is where the camera sensor sits.",
+                action: () => {
+                    camera.position.set(6, 2, -8);
+                    controls.target.set(0, 0, -focalLen / 2);
+                    controls.update();
+                }
+            },
+            {
+                text: "<b>Step 3:</b> A 3D world point <b>P = (X, Y, Z)</b> (red dot) sends a light ray through the pinhole. Where the ray hits the image plane is the projected point <b>p = (x, y)</b> (orange dot).",
+                action: () => {
+                    camera.position.copy(defaultCamPos);
+                    controls.target.copy(defaultTarget);
+                    controls.update();
+                }
+            },
+            {
+                text: "<b>Step 4 – Green triangle:</b> In the X-Z plane, the small triangle (origin → x on image plane) and the large triangle (origin → X at depth Z) are <span class='green-text'><b>similar</b></span>. This gives us <span class='green-text'>x/f = X/Z</span>.",
+                action: () => {
+                    showXZ = true; showYZ = false;
+                    document.getElementById('btnXZ').classList.add('active');
+                    document.getElementById('btnYZ').classList.remove('active');
+                    camera.position.set(0, 10, 2);
+                    controls.target.set(2, 0, 2);
+                    controls.update();
+                    rebuild();
+                }
+            },
+            {
+                text: "<b>Step 5 – Cyan triangle:</b> Similarly in the Y-Z plane, the triangles give <span class='cyan-text'>y/f = Y/Z</span>.",
+                action: () => {
+                    showXZ = false; showYZ = true;
+                    document.getElementById('btnXZ').classList.remove('active');
+                    document.getElementById('btnYZ').classList.add('active');
+                    camera.position.set(10, 0, 2);
+                    controls.target.set(0, -1, 2);
+                    controls.update();
+                    rebuild();
+                }
+            },
+            {
+                text: "<b>Step 6:</b> Both triangles shown together. The key insight: objects farther away (larger Z) project to <b>smaller</b> image coordinates, because of the <b>1/Z</b> scaling. Try moving the Z slider to see!",
+                action: () => {
+                    showXZ = true; showYZ = true;
+                    document.getElementById('btnXZ').classList.add('active');
+                    document.getElementById('btnYZ').classList.add('active');
+                    camera.position.copy(defaultCamPos);
+                    controls.target.copy(defaultTarget);
+                    controls.update();
+                    rebuild();
+                }
+            }
+        ];
+        let guideIdx = -1;
+        function resetViewInternal() {
+            camera.position.copy(defaultCamPos);
+            controls.target.copy(defaultTarget);
+            controls.update();
+        }
+        window.startGuide = function () {
+            guideIdx = 0;
+            showGuideStep();
+        };
+        window.guideStep = function (delta) {
+            guideIdx = Math.max(0, Math.min(guideSteps.length - 1, guideIdx + delta));
+            showGuideStep();
+        };
+        function showGuideStep() {
+            if (guideIdx < 0 || guideIdx >= guideSteps.length) return;
+            const step = guideSteps[guideIdx];
+            document.getElementById('guideText').innerHTML = step.text;
+            document.getElementById('stepCounter').textContent = `Step ${guideIdx + 1} / ${guideSteps.length}`;
+            step.action();
+            rebuild();
+        }
+
+        /* ------------------------------------------------------------------ */
+        /*  Animation loop                                                     */
+        /* ------------------------------------------------------------------ */
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        /* ------------------------------------------------------------------ */
+        /*  Resize handling                                                    */
+        /* ------------------------------------------------------------------ */
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        /* ------------------------------------------------------------------ */
+        /*  Initial build & start                                              */
+        /* ------------------------------------------------------------------ */
+        rebuild();
+        animate();
+    </script>
+</body>
+
+</html>

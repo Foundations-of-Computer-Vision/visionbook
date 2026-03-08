@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BRDF Interactive Visualization</title>
+    <style>
+        /* ---------- Global ---------- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #1a1a2e;
+            color: #eee;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* ---------- HUD overlay ---------- */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 12px 16px;
+        }
+
+        /* Left panel: controls */
+        #controls {
+            pointer-events: auto;
+            background: rgba(10, 10, 30, .82);
+            border-radius: 10px;
+            padding: 14px 18px;
+            max-width: 310px;
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255, 255, 255, .08);
+        }
+
+        #controls h2 {
+            font-size: 15px;
+            margin-bottom: 10px;
+            color: #9df;
+            letter-spacing: .5px;
+        }
+
+        .ctrl-group {
+            margin-bottom: 10px;
+        }
+
+        .ctrl-group label {
+            display: block;
+            font-size: 12px;
+            color: #aab;
+            margin-bottom: 3px;
+        }
+
+        .ctrl-group input[type=range] {
+            width: 100%;
+            accent-color: #4fc;
+        }
+
+        .ctrl-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+        }
+
+        .btn {
+            pointer-events: auto;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: #fff;
+            background: #335;
+            transition: background .2s;
+        }
+
+        .btn:hover {
+            background: #448;
+        }
+
+        .btn.active {
+            background: #4a8;
+        }
+
+        .btn.reset {
+            background: #744;
+        }
+
+        .btn.reset:hover {
+            background: #966;
+        }
+
+        /* Right panel: info card */
+        #info {
+            pointer-events: auto;
+            background: rgba(10, 10, 30, .82);
+            border-radius: 10px;
+            padding: 14px 18px;
+            max-width: 340px;
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255, 255, 255, .08);
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        #info h3 {
+            color: #9df;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        #info .eq {
+            font-style: italic;
+            color: #fd8;
+            margin: 6px 0;
+        }
+
+        /* Step-through overlay */
+        #step-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 10, 30, .88);
+            border-radius: 10px;
+            padding: 12px 22px;
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255, 255, 255, .12);
+            text-align: center;
+            max-width: 540px;
+            display: none;
+            pointer-events: auto;
+        }
+
+        #step-overlay p {
+            font-size: 13px;
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+
+        #step-overlay .step-nav {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ===== HUD ===== -->
+    <div id="hud">
+        <!-- Left: Controls -->
+        <div id="controls">
+            <h2>BRDF Controls</h2>
+
+            <!-- 1. Albedo slider -->
+            <div class="ctrl-group">
+                <label>Albedo (a): <span id="val-albedo">0.70</span></label>
+                <input type="range" id="slider-albedo" min="0.05" max="1" step="0.01" value="0.70" />
+            </div>
+
+            <!-- 2. Specular exponent -->
+            <div class="ctrl-group">
+                <label>Phong exponent (α): <span id="val-alpha">30</span></label>
+                <input type="range" id="slider-alpha" min="1" max="200" step="1" value="30" />
+            </div>
+
+            <!-- 3. Specular strength -->
+            <div class="ctrl-group">
+                <label>Specular strength (k<sub>s</sub>): <span id="val-ks">0.50</span></label>
+                <input type="range" id="slider-ks" min="0" max="1" step="0.01" value="0.50" />
+            </div>
+
+            <!-- 4. Incoming light angle (θ from normal) -->
+            <div class="ctrl-group">
+                <label>Incoming angle θ: <span id="val-theta">45</span>°</label>
+                <input type="range" id="slider-theta" min="5" max="85" step="1" value="45" />
+            </div>
+
+            <div class="ctrl-row">
+                <!-- 5. Toggle: Lambertian / Phong / Both -->
+                <button class="btn active" id="btn-lambert">Lambertian</button>
+                <button class="btn active" id="btn-phong">Phong</button>
+                <button class="btn" id="btn-lobe-toggle">Show Lobe</button>
+            </div>
+            <div class="ctrl-row" style="margin-top:6px;">
+                <!-- 6. Guided demo -->
+                <button class="btn" id="btn-demo" style="background:#456;">▶ Guided Demo</button>
+                <button class="btn reset" id="btn-reset">Reset View</button>
+            </div>
+        </div>
+
+        <!-- Right: Info card -->
+        <div id="info">
+            <h3>Bidirectional Reflectance Distribution Function</h3>
+            <p>When light hits a surface, reflected intensity depends on the
+                incoming direction <b>p</b>, surface normal <b>n</b>,
+                and outgoing direction <b>q</b>.</p>
+            <p class="eq">ℓ<sub>out</sub> = F(ℓ<sub>in</sub>, n, λ, p, q)</p>
+            <p><b>Lambertian:</b> ℓ<sub>out</sub> = a · ℓ<sub>in</sub> · (n · p)</p>
+            <p><b>Phong specular:</b> ℓ<sub>spec</sub> = k<sub>s</sub> · (r · q)<sup>α</sup> · ℓ<sub>in</sub></p>
+            <p id="info-dynamic" style="margin-top:6px; color:#bda;"></p>
+        </div>
+    </div>
+
+    <!-- Step-through overlay -->
+    <div id="step-overlay">
+        <p id="step-text"></p>
+        <div class="step-nav">
+            <button class="btn" id="step-prev">◀ Prev</button>
+            <button class="btn" id="step-next" style="background:#4a8;">Next ▶</button>
+        </div>
+    </div>
+
+    <!-- ===== Three.js via ES module importmap ===== -->
+    <script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        /* ================================================================
+           SETUP: renderer, scene, camera, controls
+           ================================================================ */
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        // Textbook-like 3/4 view: elevated, slightly to the side
+        const RESET_POS = new THREE.Vector3(4, 4.5, 6);
+        const RESET_TARGET = new THREE.Vector3(0, 0.4, 0);
+        camera.position.copy(RESET_POS);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.copy(RESET_TARGET);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.update();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        /* ================================================================
+           LIGHTS (ambient + directional for shadow cues)
+           ================================================================ */
+        scene.add(new THREE.AmbientLight(0x667788, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        dirLight.position.set(5, 8, 4);
+        scene.add(dirLight);
+
+        /* ================================================================
+           2D ➜ 3D ELEMENT MAP
+           ---------------------------------------------------------------
+           Figure element            ➜  3D object
+           ---------------------------------------------------------------
+           Green flat surface        ➜  Plane mesh (green)
+           Surface normal n          ➜  Arrow (dark, pointing up)
+           Incoming ray ℓ_in(λ)     ➜  Arrow (yellow-orange gradient line)
+           Incoming direction p      ➜  Arrow (red) on the surface plane
+           Outgoing direction q      ➜  Arrow (dark green) on the surface plane
+           Outgoing ray ℓ_out        ➜  Arrow (bright green)
+           Reflected rays (lobe)     ➜  Set of arrows showing BRDF lobe
+           ================================================================ */
+
+        /* ---- Surface plane (the green quad) ---- */
+        const planeGeo = new THREE.PlaneGeometry(8, 8);
+        const planeMat = new THREE.MeshStandardMaterial({
+            color: 0x33cc33, side: THREE.DoubleSide, roughness: 0.7, metalness: 0.0
+        });
+        const planeMesh = new THREE.Mesh(planeGeo, planeMat);
+        planeMesh.rotation.x = -Math.PI / 2; // lay flat
+        planeMesh.receiveShadow = true;
+        scene.add(planeMesh);
+
+        // Subtle grid for depth reference
+        const gridHelper = new THREE.GridHelper(8, 16, 0x226622, 0x226622);
+        gridHelper.position.y = 0.005;
+        scene.add(gridHelper);
+
+        /* ---- Helper: create an arrow (shaft + cone) ---- */
+        function makeArrow(dir, origin, length, color, headLen, headW) {
+            headLen = headLen || 0.18;
+            headW = headW || 0.10;
+            const arr = new THREE.ArrowHelper(dir.clone().normalize(), origin, length, color, headLen, headW);
+            scene.add(arr);
+            return arr;
+        }
+
+        /* ---- Interaction point (where the ray hits) ---- */
+        const hitPoint = new THREE.Vector3(0, 0, 0);
+
+        // Small marker sphere at hit point
+        const markerGeo = new THREE.SphereGeometry(0.06, 16, 16);
+        const markerMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        const marker = new THREE.Mesh(markerGeo, markerMat);
+        marker.position.copy(hitPoint);
+        scene.add(marker);
+
+        /* ================================================================
+           STATE
+           ================================================================ */
+        let albedo = 0.70;
+        let phongAlpha = 30;
+        let ks = 0.50;
+        let thetaDeg = 45;
+        let showLambert = true;
+        let showPhong = true;
+        let showLobe = false;
+
+        /* ================================================================
+           ARROWS (rebuilt on parameter change)
+           ================================================================ */
+        const arrowGroup = new THREE.Group();
+        scene.add(arrowGroup);
+
+        // Label sprites
+        function makeLabel(text, fontSize, color) {
+            const canvas = document.createElement('canvas');
+            const sz = 256;
+            canvas.width = sz; canvas.height = sz;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, sz, sz);
+            ctx.font = `bold ${fontSize || 48}px 'Segoe UI', sans-serif`;
+            ctx.fillStyle = color || '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, sz / 2, sz / 2);
+            const tex = new THREE.CanvasTexture(canvas);
+            const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+            const sprite = new THREE.Sprite(mat);
+            sprite.scale.set(0.6, 0.6, 1);
+            return sprite;
+        }
+
+        /* Rebuild all dynamic arrows and lobe based on current state */
+        function rebuild() {
+            // Clear
+            while (arrowGroup.children.length) arrowGroup.remove(arrowGroup.children[0]);
+
+            const theta = THREE.MathUtils.degToRad(thetaDeg);
+
+            // Incoming direction p (unit vector towards the light source, in the surface frame)
+            // Light comes from the left, tilted by theta from the normal
+            const pDir = new THREE.Vector3(-Math.sin(theta), Math.cos(theta), 0).normalize();
+
+            // Surface normal n (pointing up)
+            const nDir = new THREE.Vector3(0, 1, 0);
+
+            // Mirror reflection direction r = 2(p·n)n - p
+            const pDotN = pDir.dot(nDir);
+            const rDir = nDir.clone().multiplyScalar(2 * pDotN).sub(pDir).normalize();
+
+            // ---- Incoming ray (long arrow from above, yellow-to-orange) ----
+            // The ray comes FROM direction p; we draw it arriving at hitPoint
+            const inLen = 3.2;
+            const inOrigin = hitPoint.clone().add(pDir.clone().multiplyScalar(inLen));
+            const inArrowDir = pDir.clone().negate(); // pointing toward hitPoint
+            const inArrow = new THREE.ArrowHelper(inArrowDir, inOrigin, inLen, 0xffaa00, 0.22, 0.12);
+            arrowGroup.add(inArrow);
+            // Gradient effect: add a second thinner line from yellow
+            const inLineGeo = new THREE.BufferGeometry().setFromPoints([
+                inOrigin.clone().add(pDir.clone().multiplyScalar(0.3)),
+                inOrigin
+            ]);
+            const inLineMat = new THREE.LineBasicMaterial({ color: 0xffdd00 });
+            arrowGroup.add(new THREE.Line(inLineGeo, inLineMat));
+
+            // Label ℓ_in(λ)
+            const inLabel = makeLabel('ℓ_in(λ)', 40, '#ffcc00');
+            inLabel.position.copy(inOrigin).add(new THREE.Vector3(-0.5, 0.3, 0));
+            arrowGroup.add(inLabel);
+
+            // ---- Surface normal n (black/dark arrow upward) ----
+            const nArrow = new THREE.ArrowHelper(nDir, hitPoint.clone(), 1.8, 0x111111, 0.2, 0.12);
+            arrowGroup.add(nArrow);
+            const nLabel = makeLabel('n', 52, '#000000');
+            nLabel.position.set(0, 2.1, 0);
+            arrowGroup.add(nLabel);
+
+            // ---- Direction p (red arrow on surface plane, pointing toward incoming light projected on plane) ----
+            const pProj = new THREE.Vector3(-Math.sin(theta), 0, 0).normalize();
+            // Actually, p points toward the light source. Its projection on the surface is the horizontal component.
+            const pSurfDir = new THREE.Vector3(pDir.x, 0, pDir.z).normalize();
+            if (pSurfDir.length() > 0.01) {
+                const pSurfArrow = new THREE.ArrowHelper(pSurfDir, hitPoint.clone().add(new THREE.Vector3(0, 0.02, 0)), 1.0, 0xdd2222, 0.16, 0.10);
+                arrowGroup.add(pSurfArrow);
+            }
+            // Draw p arrow in the direction of p (3D)
+            const pArrow = new THREE.ArrowHelper(pDir, hitPoint.clone(), 1.2, 0xdd2222, 0.16, 0.10);
+            arrowGroup.add(pArrow);
+            const pLabel = makeLabel('p', 52, '#ff3333');
+            pLabel.position.copy(hitPoint.clone().add(pDir.clone().multiplyScalar(1.4)));
+            arrowGroup.add(pLabel);
+
+            // ---- Outgoing direction q (dark green arrow) ----
+            // For visualization, q is user-conceptual; we show it in the mirror direction initially
+            const qDir = rDir.clone();
+            const qArrow = new THREE.ArrowHelper(qDir, hitPoint.clone(), 1.2, 0x006600, 0.16, 0.10);
+            arrowGroup.add(qArrow);
+            const qLabel = makeLabel('q', 52, '#006600');
+            qLabel.position.copy(hitPoint.clone().add(qDir.clone().multiplyScalar(1.4)));
+            arrowGroup.add(qLabel);
+
+            // ---- Mirror reflection direction r (cyan, dashed style) ----
+            const rArrow = new THREE.ArrowHelper(rDir, hitPoint.clone(), 1.6, 0x00cccc, 0.16, 0.10);
+            arrowGroup.add(rArrow);
+            const rLabel = makeLabel('r', 48, '#00cccc');
+            rLabel.position.copy(hitPoint.clone().add(rDir.clone().multiplyScalar(1.85)));
+            arrowGroup.add(rLabel);
+
+            // ---- Outgoing ray ℓ_out (bright green, the main reflected ray) ----
+            // Compute lambertian component
+            const lambComp = showLambert ? albedo * Math.max(pDotN, 0) : 0;
+            // Compute phong specular component (for the q = r direction, (r·q)=1)
+            const specComp = showPhong ? ks * 1.0 : 0; // max specular along r
+            const totalOut = Math.min(lambComp + specComp, 1.5);
+
+            const outArrow = new THREE.ArrowHelper(rDir, hitPoint.clone(), 1.0 + totalOut * 1.2, 0x00ff44, 0.22, 0.12);
+            arrowGroup.add(outArrow);
+            const outLabel = makeLabel('ℓ_out', 40, '#00ff88');
+            outLabel.position.copy(hitPoint.clone().add(rDir.clone().multiplyScalar(1.2 + totalOut * 1.2 + 0.3)));
+            arrowGroup.add(outLabel);
+
+            // ---- BRDF equation label ----
+            const eqLabel = makeLabel('ℓ_out = F(ℓ_in, n, λ, p, q)', 28, '#ffffff');
+            eqLabel.scale.set(1.4, 0.5, 1);
+            eqLabel.position.copy(hitPoint.clone().add(rDir.clone().multiplyScalar(1.2 + totalOut * 1.2 + 0.7)).add(new THREE.Vector3(0.8, 0.2, 0)));
+            arrowGroup.add(eqLabel);
+
+            // ---- Reflected rays lobe (multiple arrows showing BRDF distribution) ----
+            // Interaction: "Show Lobe" toggle draws a hemisphere of arrows with intensity = BRDF
+            if (showLobe) {
+                const lobeArrows = 36; // number of sample directions in a fan
+                for (let i = 0; i < lobeArrows; i++) {
+                    // Fan in the XY plane (the plane of incidence)
+                    const angle = (i / (lobeArrows - 1)) * Math.PI; // 0 to π in the upper hemisphere
+                    const outDir = new THREE.Vector3(Math.cos(angle - Math.PI / 2), Math.sin(angle), 0).normalize();
+                    // only upper hemisphere
+                    if (outDir.y < 0.01) continue;
+
+                    // Lambertian component: a * (n · p)  — independent of outgoing direction
+                    const lamb = showLambert ? albedo * Math.max(pDotN, 0) : 0;
+
+                    // Phong specular: ks * (r · outDir)^alpha
+                    const rDotQ = Math.max(rDir.dot(outDir), 0);
+                    const spec = showPhong ? ks * Math.pow(rDotQ, phongAlpha) : 0;
+
+                    const intensity = lamb + spec;
+                    const len = 0.3 + intensity * 2.0;
+
+                    // Color: blend green (lambertian) to white/yellow (specular)
+                    const specFrac = (lamb + spec > 0.001) ? spec / (lamb + spec) : 0;
+                    const color = new THREE.Color().setHSL(0.33 - specFrac * 0.2, 0.6 + specFrac * 0.4, 0.35 + specFrac * 0.4);
+
+                    const lobeArrow = new THREE.ArrowHelper(outDir, hitPoint.clone(), len, color, 0.10, 0.06);
+                    // Make lobe arrows semi-transparent
+                    lobeArrow.line.material.transparent = true;
+                    lobeArrow.line.material.opacity = 0.55;
+                    lobeArrow.cone.material.transparent = true;
+                    lobeArrow.cone.material.opacity = 0.55;
+                    arrowGroup.add(lobeArrow);
+                }
+
+                // Also draw lobe in the perpendicular plane (ZY) for 3D feel
+                for (let i = 0; i < 18; i++) {
+                    const angle = (i / 17) * Math.PI;
+                    const outDir = new THREE.Vector3(0, Math.sin(angle), Math.cos(angle - Math.PI / 2)).normalize();
+                    if (outDir.y < 0.01) continue;
+
+                    const lamb = showLambert ? albedo * Math.max(pDotN, 0) : 0;
+                    const rDotQ = Math.max(rDir.dot(outDir), 0);
+                    const spec = showPhong ? ks * Math.pow(rDotQ, phongAlpha) : 0;
+                    const intensity = lamb + spec;
+                    const len = 0.3 + intensity * 2.0;
+
+                    const specFrac = (lamb + spec > 0.001) ? spec / (lamb + spec) : 0;
+                    const color = new THREE.Color().setHSL(0.33 - specFrac * 0.2, 0.6 + specFrac * 0.4, 0.35 + specFrac * 0.4);
+
+                    const lobeArrow = new THREE.ArrowHelper(outDir, hitPoint.clone(), len, color, 0.10, 0.06);
+                    lobeArrow.line.material.transparent = true;
+                    lobeArrow.line.material.opacity = 0.35;
+                    lobeArrow.cone.material.transparent = true;
+                    lobeArrow.cone.material.opacity = 0.35;
+                    arrowGroup.add(lobeArrow);
+                }
+            }
+
+            // ---- Angle arc between n and p (to show θ) ----
+            const arcPts = [];
+            const arcN = 24;
+            for (let i = 0; i <= arcN; i++) {
+                const t = i / arcN;
+                const a = t * theta;
+                // Interpolate from n toward p
+                const dir = new THREE.Vector3(
+                    -Math.sin(a),
+                    Math.cos(a),
+                    0
+                ).normalize().multiplyScalar(0.55);
+                arcPts.push(hitPoint.clone().add(dir));
+            }
+            const arcGeo = new THREE.BufferGeometry().setFromPoints(arcPts);
+            const arcMat = new THREE.LineBasicMaterial({ color: 0xffaa44 });
+            arrowGroup.add(new THREE.Line(arcGeo, arcMat));
+
+            const thetaLabel = makeLabel('θ', 44, '#ffaa44');
+            const thetaMid = theta / 2;
+            thetaLabel.position.copy(hitPoint.clone().add(new THREE.Vector3(-Math.sin(thetaMid), Math.cos(thetaMid), 0).multiplyScalar(0.75)));
+            arrowGroup.add(thetaLabel);
+
+            // Update info text
+            const cosTheta = Math.cos(theta).toFixed(3);
+            const lambVal = (albedo * Math.cos(theta)).toFixed(3);
+            document.getElementById('info-dynamic').innerHTML =
+                `cos(θ)=${cosTheta} &nbsp;|&nbsp; Lambertian = ${lambVal} &nbsp;|&nbsp; ` +
+                `Peak total = ${totalOut.toFixed(3)}`;
+        }
+
+        rebuild();
+
+        /* ================================================================
+           UI WIRING
+           ================================================================ */
+        const slAlbedo = document.getElementById('slider-albedo');
+        const slAlpha = document.getElementById('slider-alpha');
+        const slKs = document.getElementById('slider-ks');
+        const slTheta = document.getElementById('slider-theta');
+
+        /* Interaction teaching:
+           - Albedo slider: teaches that surface reflectance scales ALL outgoing light uniformly.
+           - Phong exponent α: teaches how specular highlight sharpness changes.
+           - Specular strength ks: teaches the specular contribution magnitude.
+           - Incoming angle θ: teaches n·p dependency (cos θ fall-off).
+           - Lambertian/Phong toggles: teaches the difference between diffuse and specular components.
+           - Show Lobe: teaches the full directional distribution of reflected light.
+        */
+
+        slAlbedo.addEventListener('input', () => {
+            albedo = parseFloat(slAlbedo.value);
+            document.getElementById('val-albedo').textContent = albedo.toFixed(2);
+            rebuild();
+        });
+        slAlpha.addEventListener('input', () => {
+            phongAlpha = parseInt(slAlpha.value);
+            document.getElementById('val-alpha').textContent = phongAlpha;
+            rebuild();
+        });
+        slKs.addEventListener('input', () => {
+            ks = parseFloat(slKs.value);
+            document.getElementById('val-ks').textContent = ks.toFixed(2);
+            rebuild();
+        });
+        slTheta.addEventListener('input', () => {
+            thetaDeg = parseInt(slTheta.value);
+            document.getElementById('val-theta').textContent = thetaDeg;
+            rebuild();
+        });
+
+        // Toggle buttons
+        document.getElementById('btn-lambert').addEventListener('click', function () {
+            showLambert = !showLambert;
+            this.classList.toggle('active', showLambert);
+            rebuild();
+        });
+        document.getElementById('btn-phong').addEventListener('click', function () {
+            showPhong = !showPhong;
+            this.classList.toggle('active', showPhong);
+            rebuild();
+        });
+        document.getElementById('btn-lobe-toggle').addEventListener('click', function () {
+            showLobe = !showLobe;
+            this.classList.toggle('active', showLobe);
+            rebuild();
+        });
+
+        // Reset to textbook view
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            camera.position.copy(RESET_POS);
+            controls.target.copy(RESET_TARGET);
+            controls.update();
+            // Reset sliders
+            slAlbedo.value = 0.70; albedo = 0.70; document.getElementById('val-albedo').textContent = '0.70';
+            slAlpha.value = 30; phongAlpha = 30; document.getElementById('val-alpha').textContent = '30';
+            slKs.value = 0.50; ks = 0.50; document.getElementById('val-ks').textContent = '0.50';
+            slTheta.value = 45; thetaDeg = 45; document.getElementById('val-theta').textContent = '45';
+            showLambert = true; showPhong = true; showLobe = false;
+            document.getElementById('btn-lambert').classList.add('active');
+            document.getElementById('btn-phong').classList.add('active');
+            document.getElementById('btn-lobe-toggle').classList.remove('active');
+            rebuild();
+        });
+
+        /* ================================================================
+           GUIDED DEMO (step-through sequence)
+           ---------------------------------------------------------------
+           Teaches the concept progression:
+           1. Start with just the surface and normal
+           2. Add incoming light ray
+           3. Show Lambertian reflection
+           4. Show Phong specular
+           5. Vary the incoming angle to see cos θ fall-off
+           6. Show full BRDF lobe
+           ================================================================ */
+        const demoSteps = [
+            {
+                text: '<b>Step 1/6:</b> A flat surface with its <b>surface normal n</b> pointing upward. The normal defines the surface orientation.',
+                action() {
+                    showLambert = false; showPhong = false; showLobe = false;
+                    slTheta.value = 45; thetaDeg = 45;
+                    document.getElementById('btn-lambert').classList.remove('active');
+                    document.getElementById('btn-phong').classList.remove('active');
+                    document.getElementById('btn-lobe-toggle').classList.remove('active');
+                    rebuild();
+                }
+            },
+            {
+                text: '<b>Step 2/6:</b> An incoming light ray <b>ℓ<sub>in</sub>(λ)</b> strikes the surface from direction <b>p</b> at angle θ from the normal. The angle θ between <b>n</b> and <b>p</b> determines how much light the surface receives.',
+                action() {
+                    showLambert = false; showPhong = false; showLobe = false;
+                    rebuild();
+                }
+            },
+            {
+                text: '<b>Step 3/6:</b> <b>Lambertian (diffuse) reflection:</b> ℓ<sub>out</sub> = a · ℓ<sub>in</sub> · cos θ. Reflected intensity depends only on the angle between the incoming ray and the normal — not on the viewing direction. Try changing the albedo slider!',
+                action() {
+                    showLambert = true; showPhong = false; showLobe = true;
+                    document.getElementById('btn-lambert').classList.add('active');
+                    document.getElementById('btn-phong').classList.remove('active');
+                    document.getElementById('btn-lobe-toggle').classList.add('active');
+                    rebuild();
+                }
+            },
+            {
+                text: '<b>Step 4/6:</b> <b>Phong specular reflection:</b> ℓ<sub>spec</sub> = k<sub>s</sub> · (r · q)<sup>α</sup> · ℓ<sub>in</sub>. A specular highlight appears near the mirror reflection direction <b>r</b>. The exponent α controls sharpness. Try adjusting α!',
+                action() {
+                    showLambert = false; showPhong = true; showLobe = true;
+                    document.getElementById('btn-lambert').classList.remove('active');
+                    document.getElementById('btn-phong').classList.add('active');
+                    rebuild();
+                }
+            },
+            {
+                text: '<b>Step 5/6:</b> <b>Combined BRDF:</b> Both diffuse and specular components together form the complete reflection. Notice how the lobe has a broad diffuse base plus a tight specular peak near <b>r</b>.',
+                action() {
+                    showLambert = true; showPhong = true; showLobe = true;
+                    document.getElementById('btn-lambert').classList.add('active');
+                    document.getElementById('btn-phong').classList.add('active');
+                    document.getElementById('btn-lobe-toggle').classList.add('active');
+                    rebuild();
+                }
+            },
+            {
+                text: '<b>Step 6/6:</b> <b>Explore!</b> Drag the sliders to see how each parameter affects the reflection. Change the incoming angle θ to see the cosine fall-off. Orbit the 3D view to see the lobe from all sides. Press "Reset View" when done.',
+                action() { /* keep current state */ }
+            }
+        ];
+
+        let demoStep = -1;
+        const stepOverlay = document.getElementById('step-overlay');
+        const stepText = document.getElementById('step-text');
+
+        function showStep(i) {
+            demoStep = Math.max(0, Math.min(i, demoSteps.length - 1));
+            stepOverlay.style.display = 'block';
+            stepText.innerHTML = demoSteps[demoStep].text;
+            demoSteps[demoStep].action();
+        }
+
+        document.getElementById('btn-demo').addEventListener('click', () => {
+            showStep(0);
+        });
+        document.getElementById('step-next').addEventListener('click', () => {
+            if (demoStep < demoSteps.length - 1) showStep(demoStep + 1);
+            else stepOverlay.style.display = 'none';
+        });
+        document.getElementById('step-prev').addEventListener('click', () => {
+            if (demoStep > 0) showStep(demoStep - 1);
+        });
+
+        /* ================================================================
+           RENDER LOOP
+           ================================================================ */
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+
+</html>

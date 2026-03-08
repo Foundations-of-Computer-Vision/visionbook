@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Pinhole Camera – Coordinate Systems</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+        }
+
+        /* Control panel */
+        #controls {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid #bbb;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 13px;
+            line-height: 1.7;
+            max-width: 280px;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+        }
+
+        #controls h3 {
+            margin: 0 0 6px;
+            font-size: 15px;
+        }
+
+        #controls label {
+            display: block;
+            cursor: pointer;
+        }
+
+        #controls button {
+            margin: 4px 4px 4px 0;
+            padding: 4px 12px;
+            border: 1px solid #999;
+            border-radius: 4px;
+            background: #f5f5f5;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        #controls button:hover {
+            background: #e0e0e0;
+        }
+
+        #controls button.active {
+            background: #cde;
+            border-color: #48a;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .slider-row input[type=range] {
+            flex: 1;
+        }
+
+        #guide-text {
+            position: absolute;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.78);
+            color: #fff;
+            padding: 8px 18px;
+            border-radius: 6px;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 14px;
+            text-align: center;
+            z-index: 10;
+            pointer-events: none;
+            max-width: 600px;
+            transition: opacity 0.3s;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+
+    <!-- Interactive controls -->
+    <div id="controls">
+        <h3>Pinhole Camera</h3>
+
+        <!-- Focal length slider: teaches how f changes the box depth -->
+        <div class="slider-row">
+            <span>Focal length <i>f</i>:</span>
+            <input type="range" id="fSlider" min="0.6" max="2.5" step="0.05" value="1.4" />
+            <span id="fVal">1.4</span>
+        </div>
+
+        <!-- Toggles for educational overlays -->
+        <label><input type="checkbox" id="togAxes" checked /> World axes (X, Y, Z)</label>
+        <label><input type="checkbox" id="togProjection" /> Show 3D point projection</label>
+        <label><input type="checkbox" id="togVirtual" /> Show virtual camera plane</label>
+        <label><input type="checkbox" id="togRay" /> Show light-ray path</label>
+
+        <!-- Guided step-through demo -->
+        <div style="margin-top:6px;">
+            <button id="btnGuide">▶ Guided Demo</button>
+            <button id="btnReset">↺ Reset View</button>
+        </div>
+    </div>
+
+    <!-- Guided-demo overlay text -->
+    <div id="guide-text" style="opacity:0;"></div>
+
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+        import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three/examples/jsm/renderers/CSS2DRenderer';
+
+        // ── Scene setup (from base_scene.html) ──────────────────────────
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 3.8;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+        // Textbook-style 3/4 view looking at the camera from upper-right-front
+        camera.position.set(4.5, 3.5, 5);
+        camera.lookAt(0, 0, -0.5);
+        camera.zoom = 1.15;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        // CSS2D label renderer (overlaid on WebGL canvas)
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(container.clientWidth, container.clientHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // ── Helpers ─────────────────────────────────────────────────────
+        // Create a CSS2D text label
+        function makeLabel(text, color, fontSize) {
+            const div = document.createElement('div');
+            div.style.color = color || '#000';
+            div.style.fontFamily = "'Segoe UI', Arial, sans-serif";
+            div.style.fontSize = (fontSize || 16) + 'px';
+            div.style.fontWeight = 'bold';
+            div.style.pointerEvents = 'none';
+            div.style.textShadow = '0 0 3px #fff, 0 0 6px #fff';
+            div.textContent = text;
+            const obj = new CSS2DObject(div);
+            return obj;
+        }
+
+        // Create a thick arrow (cylinder + cone) along +X, to be rotated
+        function makeArrow(dir, origin, length, color, headLen, headRad, shaftRad) {
+            headLen = headLen || 0.18;
+            headRad = headRad || 0.06;
+            shaftRad = shaftRad || 0.025;
+            const group = new THREE.Group();
+            const shaftLen = length - headLen;
+            const shaftGeo = new THREE.CylinderGeometry(shaftRad, shaftRad, shaftLen, 12);
+            const mat = new THREE.MeshBasicMaterial({ color });
+            const shaft = new THREE.Mesh(shaftGeo, mat);
+            shaft.position.y = shaftLen / 2;
+            group.add(shaft);
+            const coneGeo = new THREE.ConeGeometry(headRad, headLen, 12);
+            const cone = new THREE.Mesh(coneGeo, mat);
+            cone.position.y = shaftLen + headLen / 2;
+            group.add(cone);
+            // Rotate so that the arrow points along 'dir'
+            const axis = new THREE.Vector3(0, 1, 0);
+            const q = new THREE.Quaternion().setFromUnitVectors(axis, dir.clone().normalize());
+            group.quaternion.copy(q);
+            group.position.copy(origin);
+            return group;
+        }
+
+        // Double-headed arrow for focal length indicator
+        function makeDoubleArrow(from, to, color) {
+            const dir = new THREE.Vector3().subVectors(to, from);
+            const len = dir.length();
+            const mid = new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5);
+            const group = new THREE.Group();
+            const headLen = 0.12;
+            const headRad = 0.05;
+            const shaftRad = 0.02;
+            // Shaft
+            const shaftLen = len - 2 * headLen;
+            const shaftGeo = new THREE.CylinderGeometry(shaftRad, shaftRad, shaftLen, 8);
+            const mat = new THREE.MeshBasicMaterial({ color });
+            const shaft = new THREE.Mesh(shaftGeo, mat);
+            group.add(shaft);
+            // Two cones
+            const coneGeo = new THREE.ConeGeometry(headRad, headLen, 8);
+            const c1 = new THREE.Mesh(coneGeo, mat);
+            c1.position.y = shaftLen / 2 + headLen / 2;
+            group.add(c1);
+            const c2 = new THREE.Mesh(coneGeo, mat);
+            c2.position.y = -(shaftLen / 2 + headLen / 2);
+            c2.rotation.z = Math.PI;
+            group.add(c2);
+            // Orient along dir
+            const axis = new THREE.Vector3(0, 1, 0);
+            const q = new THREE.Quaternion().setFromUnitVectors(axis, dir.clone().normalize());
+            group.quaternion.copy(q);
+            group.position.copy(mid);
+            return group;
+        }
+
+        // ── State ───────────────────────────────────────────────────────
+        let focalLength = 1.4;
+        const boxW = 1.8;  // camera box half-width (X)
+        const boxH = 1.5;  // camera box half-height (Y)
+
+        // Groups that get rebuilt when f changes
+        const cameraBoxGroup = new THREE.Group();     // the camera enclosure
+        const projPlaneGroup = new THREE.Group();      // projection plane highlight
+        const fArrowGroup = new THREE.Group();         // focal-length indicator
+        const axesGroup = new THREE.Group();           // world axes
+        const projPointGroup = new THREE.Group();      // 3D-point projection demo
+        const virtualPlaneGroup = new THREE.Group();   // virtual camera plane
+        const rayGroup = new THREE.Group();            // light ray through pinhole
+
+        scene.add(cameraBoxGroup, projPlaneGroup, fArrowGroup, axesGroup,
+            projPointGroup, virtualPlaneGroup, rayGroup);
+
+        // ── Build world axes (X red, Y green, Z blue) ──────────────────
+        // Maps the figure's X, Y, Z arrows at the pinhole (origin)
+        function buildAxes() {
+            axesGroup.clear();
+            const len = 2.8;
+            // X axis (red, right)
+            axesGroup.add(makeArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), len, 0xcc0000));
+            const lx = makeLabel('X', '#cc0000', 18);
+            lx.position.set(len + 0.15, 0.15, 0);
+            axesGroup.add(lx);
+            // Y axis (green, up)
+            axesGroup.add(makeArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), len, 0x008800));
+            const ly = makeLabel('Y', '#008800', 18);
+            ly.position.set(0, len + 0.2, 0);
+            axesGroup.add(ly);
+            // Z axis (blue, forward out of camera toward scene)
+            axesGroup.add(makeArrow(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), len, 0x0044cc));
+            const lz = makeLabel('Z', '#0044cc', 18);
+            lz.position.set(0, 0.15, len + 0.15);
+            axesGroup.add(lz);
+
+            // "World coordinates" label
+            const wl = makeLabel('World coordinates', '#333', 14);
+            wl.position.set(1.8, 2.3, 0);
+            axesGroup.add(wl);
+        }
+
+        // ── Build camera box ────────────────────────────────────────────
+        // The camera box extends from z = 0 (pinhole face) to z = -f (projection plane)
+        // 2D figure element: the dark green/olive 3D box
+        function buildCameraBox() {
+            cameraBoxGroup.clear();
+
+            // Semi-transparent box walls
+            const geo = new THREE.BoxGeometry(boxW * 2, boxH * 2, focalLength);
+            const mat = new THREE.MeshBasicMaterial({
+                color: 0x3a4a3a,
+                transparent: true,
+                opacity: 0.25,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const box = new THREE.Mesh(geo, mat);
+            box.position.set(0, 0, -focalLength / 2);
+            cameraBoxGroup.add(box);
+
+            // Wireframe edges
+            const edges = new THREE.EdgesGeometry(geo);
+            const lineMat = new THREE.LineBasicMaterial({ color: 0x222222, linewidth: 1 });
+            const wire = new THREE.LineSegments(edges, lineMat);
+            wire.position.copy(box.position);
+            cameraBoxGroup.add(wire);
+
+            // Pinhole dot (small sphere at origin)
+            // 2D figure element: the black dot labelled "Pinhole / camera center"
+            const dotGeo = new THREE.SphereGeometry(0.07, 16, 16);
+            const dotMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const dot = new THREE.Mesh(dotGeo, dotMat);
+            cameraBoxGroup.add(dot);
+
+            // Pinhole label
+            const pl = makeLabel('Pinhole / camera center', '#444', 12);
+            pl.position.set(0.4, -0.35, 0.3);
+            cameraBoxGroup.add(pl);
+
+            // "Pinhole camera" title
+            const tl = makeLabel('Pinhole camera', '#333', 15);
+            tl.position.set(-boxW - 0.3, boxH + 0.4, -focalLength / 2);
+            cameraBoxGroup.add(tl);
+        }
+
+        // ── Build projection plane highlight ────────────────────────────
+        // 2D figure element: the lighter rectangle on the back face labelled "Projection plane"
+        function buildProjPlane() {
+            projPlaneGroup.clear();
+            const pGeo = new THREE.PlaneGeometry(boxW * 2 - 0.05, boxH * 2 - 0.05);
+            const pMat = new THREE.MeshBasicMaterial({
+                color: 0x8899aa,
+                transparent: true,
+                opacity: 0.35,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const plane = new THREE.Mesh(pGeo, pMat);
+            plane.position.set(0, 0, -focalLength);
+            projPlaneGroup.add(plane);
+
+            // Dashed outline
+            const pts = [
+                new THREE.Vector3(-boxW, -boxH, -focalLength),
+                new THREE.Vector3(boxW, -boxH, -focalLength),
+                new THREE.Vector3(boxW, boxH, -focalLength),
+                new THREE.Vector3(-boxW, boxH, -focalLength),
+                new THREE.Vector3(-boxW, -boxH, -focalLength)
+            ];
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+            const dashMat = new THREE.LineDashedMaterial({ color: 0x222222, dashSize: 0.15, gapSize: 0.1 });
+            const dash = new THREE.Line(lineGeo, dashMat);
+            dash.computeLineDistances();
+            projPlaneGroup.add(dash);
+
+            // Label
+            const ll = makeLabel('Projection plane', '#556', 12);
+            ll.position.set(-boxW - 0.6, 0.1, -focalLength);
+            projPlaneGroup.add(ll);
+        }
+
+        // ── Build focal-length double-arrow ─────────────────────────────
+        // 2D figure element: the red double-headed arrow labelled "f"
+        function buildFArrow() {
+            fArrowGroup.clear();
+            const y0 = -boxH - 0.35;
+            const from = new THREE.Vector3(0, y0, 0);
+            const to = new THREE.Vector3(0, y0, -focalLength);
+            fArrowGroup.add(makeDoubleArrow(from, to, 0xcc0000));
+
+            const fl = makeLabel('f', '#cc0000', 16);
+            fl.position.set(0, y0 - 0.22, -focalLength / 2);
+            fArrowGroup.add(fl);
+        }
+
+        // ── Build optical axis annotation ───────────────────────────────
+        // 2D figure element: the arrow labelled "Optical / principal axis"
+        function buildOpticalAxis() {
+            // Drawn as part of Z-axis; add label
+            const ol = makeLabel('Optical / principal axis', '#555', 11);
+            ol.position.set(1.5, -0.25, 1.5);
+            axesGroup.add(ol);
+        }
+
+        // ── Build 3D-point projection demo ──────────────────────────────
+        // Interactive element: shows a 3D point P and its projected image p on the
+        // projection plane, demonstrating how a pinhole camera maps 3D → 2D
+        function buildProjectionDemo() {
+            projPointGroup.clear();
+            const P = new THREE.Vector3(1.2, 0.9, 2.5); // 3D point in world
+            // Projected location on projection plane using perspective: x = f*X/Z, y = f*Y/Z
+            // On projection plane at z = -f: the inverted image lands at (-f*X/Z, -f*Y/Z, -f)
+            const px = -focalLength * P.x / P.z;
+            const py = -focalLength * P.y / P.z;
+
+            // 3D point sphere
+            const sg = new THREE.SphereGeometry(0.08, 16, 16);
+            const sm = new THREE.MeshBasicMaterial({ color: 0xdd4400 });
+            const sph = new THREE.Mesh(sg, sm);
+            sph.position.copy(P);
+            projPointGroup.add(sph);
+            const pl = makeLabel('P = (X, Y, Z)', '#dd4400', 13);
+            pl.position.set(P.x + 0.15, P.y + 0.2, P.z);
+            projPointGroup.add(pl);
+
+            // Projected point on projection plane
+            const sg2 = new THREE.SphereGeometry(0.06, 16, 16);
+            const sm2 = new THREE.MeshBasicMaterial({ color: 0x0066cc });
+            const sph2 = new THREE.Mesh(sg2, sm2);
+            sph2.position.set(px, py, -focalLength);
+            projPointGroup.add(sph2);
+            const pl2 = makeLabel('p (projected)', '#0066cc', 12);
+            pl2.position.set(px - 0.1, py - 0.2, -focalLength);
+            projPointGroup.add(pl2);
+
+            // Ray from P through pinhole to projection plane (dashed)
+            const rayPts = [P, new THREE.Vector3(0, 0, 0), new THREE.Vector3(px, py, -focalLength)];
+            const rGeo = new THREE.BufferGeometry().setFromPoints(rayPts);
+            const rMat = new THREE.LineDashedMaterial({ color: 0xdd4400, dashSize: 0.12, gapSize: 0.08 });
+            const ray = new THREE.Line(rGeo, rMat);
+            ray.computeLineDistances();
+            projPointGroup.add(ray);
+
+            // Also show on virtual plane
+            const vpx = focalLength * P.x / P.z;
+            const vpy = focalLength * P.y / P.z;
+            if (document.getElementById('togVirtual').checked) {
+                const sg3 = new THREE.SphereGeometry(0.05, 16, 16);
+                const sm3 = new THREE.MeshBasicMaterial({ color: 0x22aa44 });
+                const sph3 = new THREE.Mesh(sg3, sm3);
+                sph3.position.set(vpx, vpy, focalLength);
+                projPointGroup.add(sph3);
+                const pl3 = makeLabel('p\' (virtual)', '#22aa44', 11);
+                pl3.position.set(vpx + 0.12, vpy + 0.15, focalLength);
+                projPointGroup.add(pl3);
+                // dashed ray extension
+                const rPts2 = [new THREE.Vector3(0, 0, 0), new THREE.Vector3(vpx, vpy, focalLength)];
+                const rGeo2 = new THREE.BufferGeometry().setFromPoints(rPts2);
+                const rMat2 = new THREE.LineDashedMaterial({ color: 0x22aa44, dashSize: 0.1, gapSize: 0.06 });
+                const r2 = new THREE.Line(rGeo2, rMat2);
+                r2.computeLineDistances();
+                projPointGroup.add(r2);
+            }
+        }
+
+        // ── Build virtual camera plane ──────────────────────────────────
+        // Interactive element: shows the virtual (non-inverted) camera plane at z = +f
+        // Teaches that we often use a virtual plane in front of the pinhole for convenience
+        function buildVirtualPlane() {
+            virtualPlaneGroup.clear();
+            const pGeo = new THREE.PlaneGeometry(boxW * 2 - 0.05, boxH * 2 - 0.05);
+            const pMat = new THREE.MeshBasicMaterial({
+                color: 0x22aa44,
+                transparent: true,
+                opacity: 0.2,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const plane = new THREE.Mesh(pGeo, pMat);
+            plane.position.set(0, 0, focalLength);
+            virtualPlaneGroup.add(plane);
+
+            // Outline
+            const pts = [
+                new THREE.Vector3(-boxW, -boxH, focalLength),
+                new THREE.Vector3(boxW, -boxH, focalLength),
+                new THREE.Vector3(boxW, boxH, focalLength),
+                new THREE.Vector3(-boxW, boxH, focalLength),
+                new THREE.Vector3(-boxW, -boxH, focalLength)
+            ];
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+            const lm = new THREE.LineDashedMaterial({ color: 0x22aa44, dashSize: 0.12, gapSize: 0.08 });
+            const ln = new THREE.Line(lineGeo, lm);
+            ln.computeLineDistances();
+            virtualPlaneGroup.add(ln);
+
+            const vl = makeLabel('Virtual camera plane', '#22aa44', 12);
+            vl.position.set(boxW + 0.2, boxH + 0.2, focalLength);
+            virtualPlaneGroup.add(vl);
+        }
+
+        // ── Build light-ray path ────────────────────────────────────────
+        // Interactive element: shows multiple sample light rays converging through
+        // the pinhole, teaching that only one ray per direction reaches a given
+        // point on the projection plane
+        function buildRayPaths() {
+            rayGroup.clear();
+            const sources = [
+                new THREE.Vector3(2.0, 1.5, 3.0),
+                new THREE.Vector3(-1.5, 1.0, 3.5),
+                new THREE.Vector3(0.5, -1.2, 4.0),
+                new THREE.Vector3(-0.8, -0.5, 2.8),
+            ];
+            const colors = [0xe06030, 0x3080e0, 0xb050c0, 0x40a060];
+            sources.forEach((src, i) => {
+                const px = -focalLength * src.x / src.z;
+                const py = -focalLength * src.y / src.z;
+                // Clamp to projection plane bounds
+                const cx = Math.max(-boxW + 0.05, Math.min(boxW - 0.05, px));
+                const cy = Math.max(-boxH + 0.05, Math.min(boxH - 0.05, py));
+                const dest = new THREE.Vector3(cx, cy, -focalLength);
+
+                // Source sphere
+                const sg = new THREE.SphereGeometry(0.06, 12, 12);
+                const sm = new THREE.MeshBasicMaterial({ color: colors[i] });
+                rayGroup.add(new THREE.Mesh(sg, sm).translateX(src.x).translateY(src.y).translateZ(src.z));
+
+                // Projected dot
+                const sg2 = new THREE.SphereGeometry(0.04, 12, 12);
+                const dot = new THREE.Mesh(sg2, sm);
+                dot.position.copy(dest);
+                rayGroup.add(dot);
+
+                // Ray line from source through pinhole to projection plane
+                const pts = [src, new THREE.Vector3(0, 0, 0), dest];
+                const rGeo = new THREE.BufferGeometry().setFromPoints(pts);
+                const rMat = new THREE.LineBasicMaterial({ color: colors[i], transparent: true, opacity: 0.7 });
+                const ray = new THREE.Line(rGeo, rMat);
+                rayGroup.add(ray);
+            });
+        }
+
+        // ── Full rebuild when focal length changes ──────────────────────
+        function rebuild() {
+            buildCameraBox();
+            buildProjPlane();
+            buildFArrow();
+            buildAxes();
+            buildOpticalAxis();
+            if (document.getElementById('togProjection').checked) buildProjectionDemo();
+            else projPointGroup.clear();
+            if (document.getElementById('togVirtual').checked) buildVirtualPlane();
+            else virtualPlaneGroup.clear();
+            if (document.getElementById('togRay').checked) buildRayPaths();
+            else rayGroup.clear();
+            // Axis visibility
+            axesGroup.visible = document.getElementById('togAxes').checked;
+        }
+        rebuild();
+
+        // ── Controls wiring ─────────────────────────────────────────────
+        const fSlider = document.getElementById('fSlider');
+        const fVal = document.getElementById('fVal');
+        fSlider.addEventListener('input', () => {
+            focalLength = parseFloat(fSlider.value);
+            fVal.textContent = focalLength.toFixed(2);
+            rebuild();
+        });
+
+        document.getElementById('togAxes').addEventListener('change', rebuild);
+        document.getElementById('togProjection').addEventListener('change', rebuild);
+        document.getElementById('togVirtual').addEventListener('change', rebuild);
+        document.getElementById('togRay').addEventListener('change', rebuild);
+
+        // ── Reset to textbook view ──────────────────────────────────────
+        function resetView() {
+            camera.position.set(4.5, 3.5, 5);
+            camera.lookAt(0, 0, -0.5);
+            camera.zoom = 1.15;
+            camera.updateProjectionMatrix();
+            controls.target.set(0, 0, -0.5);
+            controls.update();
+            fSlider.value = 1.4;
+            focalLength = 1.4;
+            fVal.textContent = '1.40';
+            document.getElementById('togAxes').checked = true;
+            document.getElementById('togProjection').checked = false;
+            document.getElementById('togVirtual').checked = false;
+            document.getElementById('togRay').checked = false;
+            rebuild();
+        }
+        document.getElementById('btnReset').addEventListener('click', resetView);
+
+        // ── Guided demo (step-through) ──────────────────────────────────
+        // Walks the user through the key concepts one step at a time
+        const guideEl = document.getElementById('guide-text');
+        let guideStep = -1;
+        const guideSteps = [
+            {
+                text: 'Step 1/6 — The pinhole camera is a light-tight box with a small hole (the pinhole) at the origin.',
+                action: () => {
+                    resetView();
+                }
+            },
+            {
+                text: 'Step 2/6 — World coordinate axes X (red), Y (green), Z (blue) originate at the pinhole. Z is the optical axis.',
+                action: () => {
+                    document.getElementById('togAxes').checked = true;
+                    rebuild();
+                }
+            },
+            {
+                text: 'Step 3/6 — The projection plane sits at distance f behind the pinhole. Try the slider to change f.',
+                action: () => {
+                    // Animate f briefly
+                    fSlider.value = 2.0;
+                    focalLength = 2.0;
+                    fVal.textContent = '2.00';
+                    rebuild();
+                    setTimeout(() => { fSlider.value = 1.0; focalLength = 1.0; fVal.textContent = '1.00'; rebuild(); }, 800);
+                    setTimeout(() => { fSlider.value = 1.4; focalLength = 1.4; fVal.textContent = '1.40'; rebuild(); }, 1600);
+                }
+            },
+            {
+                text: 'Step 4/6 — A 3D point P projects through the pinhole onto the projection plane, producing an inverted image.',
+                action: () => {
+                    document.getElementById('togProjection').checked = true;
+                    rebuild();
+                }
+            },
+            {
+                text: 'Step 5/6 — The virtual camera plane (green) sits at z = +f, giving a non-inverted projection for convenience.',
+                action: () => {
+                    document.getElementById('togVirtual').checked = true;
+                    rebuild();
+                }
+            },
+            {
+                text: 'Step 6/6 — Multiple scene points each send one ray through the pinhole, forming an image. Orbit to explore!',
+                action: () => {
+                    document.getElementById('togRay').checked = true;
+                    document.getElementById('togProjection').checked = false;
+                    rebuild();
+                }
+            }
+        ];
+
+        document.getElementById('btnGuide').addEventListener('click', () => {
+            guideStep++;
+            if (guideStep >= guideSteps.length) {
+                guideStep = -1;
+                guideEl.style.opacity = '0';
+                resetView();
+                return;
+            }
+            guideSteps[guideStep].action();
+            guideEl.textContent = guideSteps[guideStep].text;
+            guideEl.style.opacity = '1';
+        });
+
+        // ── Animate ─────────────────────────────────────────────────────
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        animate();
+
+        // ── Resize handling ─────────────────────────────────────────────
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.left = -d * (w / h);
+            camera.right = d * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+            labelRenderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>
