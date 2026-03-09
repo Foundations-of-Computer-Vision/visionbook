@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Perspective Projection: Similar Triangles</title>
+  <style>
+    html, body, #container {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: white;
+      font-family: sans-serif;
+    }
+    #ui-container {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      max-width: 300px;
+      z-index: 10;
+    }
+    h3 { margin-top: 0; margin-bottom: 10px; font-size: 16px; }
+    p { font-size: 13px; line-height: 1.4; color: #333; }
+    .slider-row { margin-bottom: 10px; }
+    .slider-row label { display: inline-block; width: 30px; font-weight: bold; }
+    .slider-row input { width: 150px; vertical-align: middle; }
+    .slider-row span { font-size: 12px; display: inline-block; width: 40px; text-align: right; }
+    button {
+      margin-top: 10px;
+      padding: 6px 12px;
+      background: #0078D7;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:hover { background: #005A9E; }
+    #equations {
+      font-family: serif;
+      font-size: 16px;
+      background: #f8f8f8;
+      border: 1px solid #ddd;
+      padding: 10px;
+      margin-top: 15px;
+      text-align: center;
+    }
+    .math { font-style: italic; }
+  </style>
+</head>
+<body>
+  <div id="ui-container">
+    <h3>Perspective Projection Geometry</h3>
+    <p>Adjust the 3D point (X, Y, Z) and focal length (f) to see how the projected point (x, y) changes based on similar triangles.</p>
+    
+    <div class="slider-row">
+      <label for="X">X:</label>
+      <input type="range" id="X" min="-3" max="3" step="0.1" value="2">
+      <span id="val-X">2.0</span>
+    </div>
+    <div class="slider-row">
+      <label for="Y">Y:</label>
+      <input type="range" id="Y" min="-3" max="3" step="0.1" value="2">
+      <span id="val-Y">2.0</span>
+    </div>
+    <div class="slider-row">
+      <label for="Z">Z:</label>
+      <input type="range" id="Z" min="2" max="6" step="0.1" value="4">
+      <span id="val-Z">4.0</span>
+    </div>
+    <div class="slider-row">
+      <label for="f">f:</label>
+      <input type="range" id="f" min="0.5" max="2" step="0.1" value="1">
+      <span id="val-f">1.0</span>
+    </div>
+    
+    <div id="equations">
+      <span style="color:red">x</span> = <span style="color:red">X</span> &middot; (f / Z) <br>
+      <span style="color:blue">y</span> = <span style="color:blue">Y</span> &middot; (f / Z)
+    </div>
+
+    <button id="reset-btn">Reset to Textbook View</button>
+  </div>
+  <div id="container"></div>
+
+  <!-- Use text rendering for labels -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+    import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three/examples/jsm/renderers/CSS2DRenderer';
+
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    // Camera setup
+    const aspect = container.clientWidth / container.clientHeight;
+    // We use a Perspective camera for viewing, to see 3D structure better
+    const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 100);
+    // Position camera to approximate the textbook figure's angle
+    camera.position.set(5, 4, 8);
+    camera.lookAt(0, 0, 2);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(container.clientWidth, container.clientHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0px';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    container.appendChild(labelRenderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.set(0, 0, 2);
+
+    // --- State ---
+    let state = {
+      X: 2.5,
+      Y: 2.5,
+      Z: 5.0,
+      f: 1.5
+    };
+
+    // --- Materials ---
+    const axisMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+    const rayMat = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 0.1, gapSize: 0.05 });
+    const xTriangleMat = new THREE.MeshBasicMaterial({ color: 0x99ff99, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+    const yTriangleMat = new THREE.MeshBasicMaterial({ color: 0x99ffff, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+    const xLineMat = new THREE.LineBasicMaterial({ color: 0x00aa00 });
+    const yLineMat = new THREE.LineBasicMaterial({ color: 0x00aaaa });
+    const redHighlightMat = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
+
+    const objPointMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const imgPointMat = new THREE.MeshBasicMaterial({ color: 0x8b4513 });
+    const planeMat = new THREE.MeshBasicMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+    const planeBorderMat = new THREE.LineBasicMaterial({ color: 0x444444 });
+
+    // --- Group for the whole diagram ---
+    const diagramGroup = new THREE.Group();
+    scene.add(diagramGroup);
+
+    // Axes
+    const xAxisGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(5,0,0)]);
+    const yAxisGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,4,0)]);
+    const zAxisGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,8)]);
+    
+    diagramGroup.add(new THREE.Line(xAxisGeo, axisMat));
+    diagramGroup.add(new THREE.Line(yAxisGeo, axisMat));
+    diagramGroup.add(new THREE.Line(zAxisGeo, axisMat));
+
+    // Plane (Image Plane at z = f)
+    // Actually in the book z goes right, x goes down, y goes across. 
+    // Let's use standard Three.js axes (y up, x right, z back) for the 3D scene, 
+    // but map it to visually match the textbook.
+    // In textbook: Z axis points to the right. Y axis points up. X axis points towards the viewer.
+    // To match this exactly:
+    diagramGroup.rotation.y = Math.PI / 2; // Z axis goes right
+    diagramGroup.rotation.x = 0;
+    
+    // We will build geometry assuming +Z is forward along the optical axis, +Y up, +X left (to match book's X coming out towards bottom left)
+    // Actually, let's just use manual coordinates.
+    // Book axes: 
+    // Horizontal right = Z
+    // Vertical up = Y
+    // Out of screen / down-left = X
+    // We'll mimic this with:
+    // right = +Z
+    // up = +Y
+    // front = +X
+    // Center point is PinHole (0,0,0).
+
+    // Let's reset rotation and construct it directly.
+    diagramGroup.rotation.set(0, 0, 0);
+    
+    // Function to create text labels
+    function createLabel(text, color = '#000', size = '20px') {
+      const div = document.createElement('div');
+      div.textContent = text;
+      div.style.color = color;
+      div.style.fontSize = size;
+      div.style.fontFamily = 'serif';
+      div.style.fontStyle = 'italic';
+      const label = new CSS2DObject(div);
+      return label;
+    }
+
+    // Dynamic objects
+    let rayLine, imgPoint, objPoint, imagePlane, planeBorder;
+    let xBigTri, xSmallTri, yBigTri, ySmallTri;
+    let xBigEdge, yBigEdge, xSmallEdge, ySmallEdge, xBaseSmall, yBaseSmall;
+
+    // Fixed Labels
+    const oLabel = createLabel('O');
+    oLabel.position.set(-0.2, -0.2, 0);
+    diagramGroup.add(oLabel);
+
+    // Helpers to create lines/triangles safely
+    function createTriangle(mat) {
+      const geo = new THREE.BufferGeometry();
+      const mesh = new THREE.Mesh(geo, mat);
+      diagramGroup.add(mesh);
+      return mesh;
+    }
+    
+    function createLine(mat) {
+      const geo = new THREE.BufferGeometry();
+      const line = new THREE.Line(geo, mat);
+      diagramGroup.add(line);
+      return line;
+    }
+
+    xBigTri = createTriangle(xTriangleMat);
+    xSmallTri = createTriangle(xTriangleMat);
+    yBigTri = createTriangle(yTriangleMat);
+    ySmallTri = createTriangle(yTriangleMat);
+
+    rayLine = createLine(rayMat);
+    xBigEdge = createLine(redHighlightMat);
+    yBigEdge = createLine(redHighlightMat);
+    xSmallEdge = createLine(redHighlightMat);
+    ySmallEdge = createLine(redHighlightMat);
+
+    const xBigBase = createLine(redHighlightMat);
+    const zBigBase = createLine(redHighlightMat);
+    const xSmallBase = createLine(redHighlightMat);
+    const zSmallBase = createLine(redHighlightMat);
+    const xBaseTick = createLine(xLineMat); // Green drop line
+    const yBaseTick = createLine(yLineMat); // Cyan drop line
+
+    // Points
+    const sphereGeo = new THREE.SphereGeometry(0.1, 16, 16);
+    objPoint = new THREE.Mesh(sphereGeo, objPointMat);
+    imgPoint = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 16), imgPointMat);
+    diagramGroup.add(objPoint);
+    diagramGroup.add(imgPoint);
+
+    // Labels that move
+    const l_X = createLabel('X', '#FF0000');
+    const l_Y = createLabel('Y', '#FF0000');
+    const l_Z = createLabel('Z', '#000000');
+    const l_x = createLabel('x', '#FF0000');
+    const l_y = createLabel('y', '#FF0000');
+    const l_f = createLabel('f', '#000000');
+    
+    diagramGroup.add(l_X);
+    diagramGroup.add(l_Y);
+    diagramGroup.add(l_Z);
+    diagramGroup.add(l_x);
+    diagramGroup.add(l_y);
+    diagramGroup.add(l_f);
+
+    // Image plane
+    const planeGeom = new THREE.PlaneGeometry(1, 1);
+    imagePlane = new THREE.Mesh(planeGeom, planeMat);
+    // Plane is bounded by X and Y axes, we will adjust geometry dynamically
+    diagramGroup.add(imagePlane);
+
+    const planeEdges = new THREE.EdgesGeometry(new THREE.PlaneGeometry(1, 1));
+    planeBorder = new THREE.LineSegments(planeEdges, planeBorderMat);
+    diagramGroup.add(planeBorder);
+
+    function updateGeometry() {
+      const { X, Y, Z, f } = state;
+      const x = X * (f / Z);
+      const y = Y * (f / Z);
+
+      // We map textbook (Z right, Y up, X out-left) to Three.js (x right, y up, z out)
+      // Wait, let's just make the axes in 3D:
+      // textbook Z -> Three.js x
+      // textbook Y -> Three.js y
+      // textbook X -> Three.js z (pointing towards +z)
+
+      // Object point P = (Z, Y, X) in Three.js coords
+      const P = new THREE.Vector3(Z, Y, X);
+      // Image point p = (f, y, x) in Three.js coords
+      const p = new THREE.Vector3(f, y, x);
+      const O = new THREE.Vector3(0, 0, 0);
+
+      objPoint.position.copy(P);
+      imgPoint.position.copy(p);
+
+      // Ray
+      rayLine.geometry.setFromPoints([O, P]);
+      rayLine.computeLineDistances();
+
+      // Similar Triangle for X (Horizontal/Depth plane) colored Green
+      // In book: Base goes along Z axis from 0 to Z. Height goes along X.
+      // So triangle O -> (Z, 0, 0) -> (Z, 0, X)
+      const xBTriPts = new Float32Array([
+        0, 0, 0,
+        Z, 0, 0,
+        Z, 0, X
+      ]);
+      xBigTri.geometry.setAttribute('position', new THREE.BufferAttribute(xBTriPts, 3));
+      
+      const xSTriPts = new Float32Array([
+        0, 0, 0,
+        f, 0, 0,
+        f, 0, x
+      ]);
+      xSmallTri.geometry.setAttribute('position', new THREE.BufferAttribute(xSTriPts, 3));
+
+      // Similar Triangle for Y (Vertical/Z plane) colored Cyan
+      // In book: Base goes along Z axis from O to Z. Height goes along Y axis from (Z,0,X) to (Z,Y,X)
+      // Actually book cyan triangle is O -> (Z, 0, X) -> (Z, Y, X)
+      // And small cyan is O -> (f, 0, x) -> (f, y, x)
+      const yBTriPts = new Float32Array([
+        0, 0, 0,
+        Z, 0, X,
+        Z, Y, X
+      ]);
+      yBigTri.geometry.setAttribute('position', new THREE.BufferAttribute(yBTriPts, 3));
+
+      const ySTriPts = new Float32Array([
+        0, 0, 0,
+        f, 0, x,
+        f, y, x
+      ]);
+      ySmallTri.geometry.setAttribute('position', new THREE.BufferAttribute(ySTriPts, 3));
+
+      // Red highlights
+      xBigEdge.geometry.setFromPoints([new THREE.Vector3(Z, 0, 0), new THREE.Vector3(Z, 0, X)]);
+      yBigEdge.geometry.setFromPoints([new THREE.Vector3(Z, 0, X), new THREE.Vector3(Z, Y, X)]);
+      xSmallEdge.geometry.setFromPoints([new THREE.Vector3(f, 0, 0), new THREE.Vector3(f, 0, x)]);
+      ySmallEdge.geometry.setFromPoints([new THREE.Vector3(f, 0, x), new THREE.Vector3(f, y, x)]);
+
+      xBigBase.geometry.setFromPoints([O, new THREE.Vector3(Z, 0, 0)]);
+      zBigBase.geometry.setFromPoints([O, new THREE.Vector3(Z, 0, 0)]); // already drawn 
+
+      // Image Plane
+      // It sits at Z=f (in Three.js, x=f). It needs to be large enough.
+      const planeW = 6;
+      const planeH = 6;
+      imagePlane.geometry.dispose();
+      imagePlane.geometry = new THREE.PlaneGeometry(planeW, planeH);
+      // Rotate to face X axis (textbook Z axis)
+      imagePlane.rotation.y = Math.PI / 2;
+      imagePlane.position.set(f, 0, 0);
+      
+      planeBorder.geometry.dispose();
+      planeBorder.geometry = new THREE.EdgesGeometry(imagePlane.geometry);
+      planeBorder.rotation.y = Math.PI / 2;
+      planeBorder.position.set(f, 0, 0);
+
+      // Labels positioning
+      l_X.position.set(Z, 0, X/2);
+      l_Y.position.set(Z, Y/2, X);
+      l_Z.position.set(Z/2, 0, 0);
+      l_x.position.set(f, 0, x/2);
+      l_y.position.set(f, y/2, x);
+      l_f.position.set(f/2, -0.3, 0);
+    }
+
+    // UI Bindings
+    function bindSlider(id, prop) {
+      const el = document.getElementById(id);
+      const valEl = document.getElementById(`val-${id}`);
+      el.addEventListener('input', (e) => {
+        state[prop] = parseFloat(e.target.value);
+        valEl.textContent = state[prop].toFixed(1);
+        updateGeometry();
+      });
+    }
+
+    bindSlider('X', 'X');
+    bindSlider('Y', 'Y');
+    bindSlider('Z', 'Z');
+    bindSlider('f', 'f');
+
+    document.getElementById('reset-btn').addEventListener('click', () => {
+      state = { X: 2.5, Y: 2.5, Z: 5.0, f: 1.5 };
+      document.getElementById('X').value = state.X;
+      document.getElementById('Y').value = state.Y;
+      document.getElementById('Z').value = state.Z;
+      document.getElementById('f').value = state.f;
+      document.getElementById('val-X').textContent = state.X.toFixed(1);
+      document.getElementById('val-Y').textContent = state.Y.toFixed(1);
+      document.getElementById('val-Z').textContent = state.Z.toFixed(1);
+      document.getElementById('val-f').textContent = state.f.toFixed(1);
+      
+      // Reset camera
+      camera.position.set(7, 4, 6);
+      controls.target.set(2, 1, 1);
+      updateGeometry();
+    });
+
+    // Initial setup
+    document.getElementById('reset-btn').click();
+
+    // Axis visual guides (arrows)
+    const arrowDirZ = new THREE.Vector3(1, 0, 0); // Textbook Z is Three.js x
+    const arrowDirY = new THREE.Vector3(0, 1, 0); // Textbook Y is Three.js y
+    const arrowDirX = new THREE.Vector3(0, 0, 1); // Textbook X is Three.js z
+    const arrowLen = 6;
+    const zArrow = new THREE.ArrowHelper(arrowDirZ, new THREE.Vector3(0,0,0), arrowLen, 0x000000, 0.3, 0.2);
+    const yArrow = new THREE.ArrowHelper(arrowDirY, new THREE.Vector3(0,0,0), 4, 0x000000, 0.3, 0.2);
+    const xArrow = new THREE.ArrowHelper(arrowDirX, new THREE.Vector3(0,0,0), 4, 0x000000, 0.3, 0.2);
+    diagramGroup.add(zArrow);
+    diagramGroup.add(yArrow);
+    diagramGroup.add(xArrow);
+    
+    // Axis Labels
+    const l_axisZ = createLabel('Z', '#000', '24px'); l_axisZ.position.set(arrowLen+0.2, 0, 0); diagramGroup.add(l_axisZ);
+    const l_axisY = createLabel('Y', '#000', '24px'); l_axisY.position.set(0, 4.2, 0); diagramGroup.add(l_axisY);
+    const l_axisX = createLabel('X', '#000', '24px'); l_axisX.position.set(0, 0, 4.2); diagramGroup.add(l_axisX);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth, h = container.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      labelRenderer.setSize(w, h);
+    });
+  </script>
+</body>
+</html>

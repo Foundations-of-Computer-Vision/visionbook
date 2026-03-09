@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Homography Plane Geometry Interactive</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #03060f;
+            color: #eef5ff;
+            font-family: "Space Grotesk", "Segoe UI", system-ui, -apple-system, sans-serif;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #titleBar {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            padding: 12px 16px;
+            background: rgba(4, 8, 20, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            max-width: 420px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+        }
+
+        #titleBar h1 {
+            margin: 0 0 6px 0;
+            font-size: 1.2rem;
+            letter-spacing: 0.03em;
+        }
+
+        #titleBar p {
+            margin: 0;
+            font-size: 0.9rem;
+            line-height: 1.3;
+            color: #c0d7ff;
+        }
+
+        .controls {
+            position: absolute;
+            top: 150px;
+            left: 16px;
+            width: 320px;
+            padding: 14px 16px 18px;
+            background: rgba(8, 12, 30, 0.92);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.55);
+        }
+
+        .controls label {
+            display: flex;
+            flex-direction: column;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #cddaef;
+            gap: 6px;
+        }
+
+        .controls input[type="range"] {
+            width: 100%;
+            accent-color: #66d9ff;
+        }
+
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        button {
+            flex: 1;
+            min-width: 120px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(101, 151, 255, 0.2);
+            color: #e7f2ff;
+            font-size: 0.85rem;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: background 0.2s ease, border 0.2s ease;
+        }
+
+        button:hover {
+            background: rgba(101, 151, 255, 0.35);
+            border-color: rgba(255, 255, 255, 0.35);
+        }
+
+        #labelLayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            font-size: 0.78rem;
+            color: #f2f6ff;
+        }
+
+        .label {
+            position: absolute;
+            padding: 3px 6px;
+            background: rgba(5, 8, 18, 0.78);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            text-shadow: 0 0 6px rgba(0, 0, 0, 0.7);
+        }
+
+        @media (max-width: 720px) {
+            #titleBar {
+                max-width: calc(100% - 32px);
+            }
+
+            .controls {
+                width: calc(100% - 32px);
+                left: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="titleBar">
+        <h1>Homography: Mapping a Planar Point into the Camera Plane</h1>
+        <p id="guideText">Rotate the camera, tilt the plane, and slide the planar point to see how a single 3D plane
+            produces image correspondences through a homography.</p>
+    </div>
+
+    <div class="controls">
+        <label>
+            Camera rotation (about center)
+            <input type="range" id="cameraRotation" min="-35" max="35" value="0" step="1" />
+        </label>
+        <label>
+            Planar tilt (around vertical)
+            <input type="range" id="planeTilt" min="-25" max="25" value="0" step="1" />
+        </label>
+        <label>
+            Planar point sweep
+            <input type="range" id="planePoint" min="-80" max="80" value="-30" step="1" />
+        </label>
+        <div class="button-row">
+            <button id="toggleRays">Toggle projection rays</button>
+            <button id="guideBtn">Guided demo</button>
+            <button id="resetBtn">Reset to textbook view</button>
+        </div>
+    </div>
+
+    <div id="labelLayer"></div>
+
+    <script type="module">
+        import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+        import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x040713);
+
+        const viewCamera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+        viewCamera.position.set(6, 4.5, 8);
+
+        const controls = new OrbitControls(viewCamera, renderer.domElement);
+        controls.target.set(0.5, 0.4, 0);
+        controls.enableDamping = true;
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight.position.set(6, 7, 5);
+        scene.add(dirLight);
+
+        const grid = new THREE.GridHelper(18, 18, 0x1f2e4f, 0x0e1629);
+        grid.position.y = -1.8;
+        scene.add(grid);
+
+        // Camera center from the 2D sketch becomes a 3D point at the pivot origin.
+        const cameraPivot = new THREE.Group();
+        cameraPivot.position.set(-3.2, 1.0, 0);
+        scene.add(cameraPivot);
+
+        const cameraCenterMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1, 32, 32),
+            new THREE.MeshStandardMaterial({ color: 0x00e0ff, emissive: 0x003344 })
+        );
+        cameraPivot.add(cameraCenterMesh);
+
+        const cameraAxis = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0).normalize(), new THREE.Vector3(0, 0, 0), 0.8, 0x66c1ff);
+        cameraPivot.add(cameraAxis);
+
+        // The drawing's camera plane becomes a translucent rectangle offset from the center.
+        const cameraPlaneGeo = new THREE.PlaneGeometry(2.5, 2.2);
+        const cameraPlaneMat = new THREE.MeshStandardMaterial({
+            color: 0xd6e7ff,
+            transparent: true,
+            opacity: 0.45,
+            side: THREE.DoubleSide
+        });
+        const cameraPlane = new THREE.Mesh(cameraPlaneGeo, cameraPlaneMat);
+        cameraPlane.position.set(1.7, 0, 0);
+        cameraPlane.rotation.y = -Math.PI / 2;
+        cameraPivot.add(cameraPlane);
+
+        const cameraPlaneOutline = new THREE.LineSegments(
+            new THREE.EdgesGeometry(cameraPlaneGeo),
+            new THREE.LineBasicMaterial({ color: 0x5a8eed })
+        );
+        cameraPlane.add(cameraPlaneOutline);
+
+        // The planar surface in the 2D figure becomes an actual tilted plane in 3D space.
+        const planarSurfaceGeo = new THREE.PlaneGeometry(7, 4, 4, 2);
+        const planarSurfaceMat = new THREE.MeshStandardMaterial({
+            color: 0xb3aca3,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide
+        });
+        const planarSurface = new THREE.Mesh(planarSurfaceGeo, planarSurfaceMat);
+        planarSurface.position.set(2.8, -0.2, 0);
+        planarSurface.rotation.set(-0.15, -0.75, 0.08);
+        scene.add(planarSurface);
+
+        const planeEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(planarSurfaceGeo),
+            new THREE.LineBasicMaterial({ color: 0x2a2826 })
+        );
+        planarSurface.add(planeEdges);
+
+        // (X, Y, 0) from the textbook is a movable point sliding along the plane.
+        const planePointMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.11, 24, 24),
+            new THREE.MeshStandardMaterial({ color: 0x00ffe1, emissive: 0x003a28 })
+        );
+        planePointMesh.position.set(-1.8, 0.4, 0);
+        planarSurface.add(planePointMesh);
+
+        // (x, y) on the camera plane is shown as a golden point on the imaging rectangle.
+        const imagePointMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.09, 24, 24),
+            new THREE.MeshStandardMaterial({ color: 0xffc857, emissive: 0x402200 })
+        );
+        scene.add(imagePointMesh);
+
+        // Rays connecting the camera center, planar point, and image point illustrate the projective mapping.
+        const rayMaterial = new THREE.LineDashedMaterial({ color: 0x00d4ff, dashSize: 0.4, gapSize: 0.16 });
+        let rayGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+        const rayLine = new THREE.Line(rayGeometry, rayMaterial);
+        rayLine.computeLineDistances();
+        scene.add(rayLine);
+
+        const projectionSegmentMaterial = new THREE.LineDashedMaterial({ color: 0xffa75b, dashSize: 0.2, gapSize: 0.1 });
+        let projectionSegmentGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+        const projectionSegment = new THREE.Line(projectionSegmentGeometry, projectionSegmentMaterial);
+        projectionSegment.computeLineDistances();
+        scene.add(projectionSegment);
+
+        const basisAxes = new THREE.AxesHelper(0.8);
+        cameraPivot.add(basisAxes);
+
+        const worldAxes = new THREE.AxesHelper(2);
+        worldAxes.position.copy(planarSurface.position);
+        scene.add(worldAxes);
+
+        const cameraRotationInput = document.getElementById("cameraRotation");
+        const planeTiltInput = document.getElementById("planeTilt");
+        const planePointInput = document.getElementById("planePoint");
+        const toggleRaysBtn = document.getElementById("toggleRays");
+        const guideBtn = document.getElementById("guideBtn");
+        const resetBtn = document.getElementById("resetBtn");
+        const guideText = document.getElementById("guideText");
+
+        const basePlaneRotation = { x: planarSurface.rotation.x, y: planarSurface.rotation.y, z: planarSurface.rotation.z };
+        const basePlanePoint = planePointMesh.position.clone();
+        const baseCameraRotation = 0;
+
+        const planePointWorld = new THREE.Vector3();
+        const cameraPlanePoint = new THREE.Vector3();
+        const cameraPlaneNormal = new THREE.Vector3();
+        const cameraPlaneQuaternion = new THREE.Quaternion();
+        const projectedPoint = new THREE.Vector3();
+        const tempVector = new THREE.Vector3();
+
+        const labelLayer = document.getElementById("labelLayer");
+        function createLabel(text) {
+            const el = document.createElement("div");
+            el.className = "label";
+            el.textContent = text;
+            labelLayer.appendChild(el);
+            return el;
+        }
+
+        const labels = [
+            { element: createLabel("Camera center C"), getPosition: () => cameraPivot.position.clone() },
+            { element: createLabel("Camera plane"), getPosition: () => cameraPlane.getWorldPosition(new THREE.Vector3()) },
+            { element: createLabel("Planar surface"), getPosition: () => planarSurface.getWorldPosition(new THREE.Vector3()) },
+            { element: createLabel("(X, Y, 0)"), getPosition: () => planePointMesh.getWorldPosition(new THREE.Vector3()) },
+            { element: createLabel("(x, y)"), getPosition: () => imagePointMesh.position.clone() }
+        ];
+
+        function updateLabels() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            labels.forEach((label) => {
+                const position = label.getPosition();
+                position.project(viewCamera);
+                const visible = position.z < 1;
+                if (!visible) {
+                    label.element.style.display = "none";
+                    return;
+                }
+                label.element.style.display = "block";
+                label.element.style.left = `${(position.x * 0.5 + 0.5) * width}px`;
+                label.element.style.top = `${(-position.y * 0.5 + 0.5) * height}px`;
+            });
+        }
+
+        function updatePlanePointFromSlider() {
+            const mapped = THREE.MathUtils.mapLinear(Number(planePointInput.value), -80, 80, -2.5, 2.5);
+            planePointMesh.position.x = mapped;
+            updateProjection();
+        }
+
+        function applyPlaneTiltFromSlider() {
+            const offset = THREE.MathUtils.degToRad(Number(planeTiltInput.value));
+            planarSurface.rotation.set(basePlaneRotation.x, basePlaneRotation.y + offset, basePlaneRotation.z);
+            updateProjection();
+        }
+
+        function applyCameraRotationFromSlider() {
+            cameraPivot.rotation.y = THREE.MathUtils.degToRad(Number(cameraRotationInput.value));
+            updateProjection();
+        }
+
+        function refreshLines(worldPoint, imagePoint) {
+            rayGeometry.dispose();
+            rayGeometry = new THREE.BufferGeometry().setFromPoints([cameraPivot.position.clone(), worldPoint.clone()]);
+            rayLine.geometry = rayGeometry;
+            rayLine.computeLineDistances();
+
+            projectionSegmentGeometry.dispose();
+            projectionSegmentGeometry = new THREE.BufferGeometry().setFromPoints([worldPoint.clone(), imagePoint.clone()]);
+            projectionSegment.geometry = projectionSegmentGeometry;
+            projectionSegment.computeLineDistances();
+        }
+
+        function updateProjection() {
+            planePointMesh.getWorldPosition(planePointWorld);
+            cameraPlane.getWorldPosition(cameraPlanePoint);
+            cameraPlane.getWorldQuaternion(cameraPlaneQuaternion);
+            cameraPlaneNormal.set(0, 0, 1).applyQuaternion(cameraPlaneQuaternion).normalize();
+
+            const direction = planePointWorld.clone().sub(cameraPivot.position);
+            const denominator = cameraPlaneNormal.dot(direction);
+            if (Math.abs(denominator) < 1e-4) {
+                imagePointMesh.visible = false;
+                return;
+            }
+            const t = cameraPlaneNormal.dot(cameraPlanePoint.clone().sub(cameraPivot.position)) / denominator;
+            projectedPoint.copy(direction.multiplyScalar(t)).add(cameraPivot.position);
+            imagePointMesh.position.copy(projectedPoint);
+            imagePointMesh.visible = true;
+            refreshLines(planePointWorld, projectedPoint);
+        }
+
+        let raysVisible = true;
+        // Interaction: toggling the rays lets learners focus on structure versus projection paths.
+        toggleRaysBtn.addEventListener("click", () => {
+            raysVisible = !raysVisible;
+            rayLine.visible = raysVisible;
+            projectionSegment.visible = raysVisible;
+        });
+
+        let guideIndex = 0;
+        const guideSteps = [
+            {
+                text: "Step 1: Choose a point (X, Y, 0) on the plane. Use the sweep slider to move it along the facade.",
+                action: () => {
+                    planePointMesh.material.emissive.setHex(0x006644);
+                    imagePointMesh.material.emissive.setHex(0x250d00);
+                    cameraPlane.material.opacity = 0.45;
+                }
+            },
+            {
+                text: "Step 2: Rays from the camera center carry that point through space. Toggle them to inspect the straight-line mapping.",
+                action: () => {
+                    planePointMesh.material.emissive.setHex(0x009966);
+                    rayLine.visible = projectionSegment.visible = true;
+                    rayMaterial.color.setHex(0x00d4ff);
+                }
+            },
+            {
+                text: "Step 3: The intersection with the camera plane lands at (x, y). Rotate the camera to see how orientation changes the hit point.",
+                action: () => {
+                    imagePointMesh.material.emissive.setHex(0x7a3600);
+                    cameraPlane.material.opacity = 0.6;
+                }
+            },
+            {
+                text: "Step 4: Because all points live on one plane, the mapping remains a homography; tilt the plane to sense the constraint.",
+                action: () => {
+                    cameraPlane.material.opacity = 0.45;
+                    planePointMesh.material.emissive.setHex(0x003a28);
+                    imagePointMesh.material.emissive.setHex(0x402200);
+                }
+            }
+        ];
+
+        // Interaction: guided demo walks sequentially through how a planar point becomes an image point.
+        guideBtn.addEventListener("click", () => {
+            const step = guideSteps[guideIndex % guideSteps.length];
+            guideText.textContent = step.text;
+            step.action();
+            guideIndex += 1;
+        });
+
+        // Interaction: reset instantly restores the textbook layout for reference.
+        resetBtn.addEventListener("click", () => {
+            cameraRotationInput.value = baseCameraRotation;
+            planeTiltInput.value = 0;
+            planePointInput.value = -30;
+            cameraPivot.rotation.y = 0;
+            planarSurface.rotation.set(basePlaneRotation.x, basePlaneRotation.y, basePlaneRotation.z);
+            planePointMesh.position.copy(basePlanePoint);
+            rayLine.visible = projectionSegment.visible = true;
+            raysVisible = true;
+            guideIndex = 0;
+            guideText.textContent = "Rotate the camera, tilt the plane, and slide the planar point to see how a single 3D plane produces image correspondences through a homography.";
+            viewCamera.position.set(6, 4.5, 8);
+            controls.target.set(0.5, 0.4, 0);
+            controls.update();
+            updateProjection();
+        });
+
+        // Interaction: rotating the virtual camera shows that pure rotation still yields a homography.
+        cameraRotationInput.addEventListener("input", () => {
+            applyCameraRotationFromSlider();
+        });
+
+        // Interaction: tilting the plane reminds viewers that the mapping assumes coplanar points.
+        planeTiltInput.addEventListener("input", () => {
+            applyPlaneTiltFromSlider();
+        });
+
+        // Interaction: sweeping the planar point illustrates how each location has a unique image partner.
+        planePointInput.addEventListener("input", () => {
+            updatePlanePointFromSlider();
+        });
+
+        window.addEventListener("resize", () => {
+            viewCamera.aspect = window.innerWidth / window.innerHeight;
+            viewCamera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        updateProjection();
+        updateLabels();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, viewCamera);
+            updateLabels();
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

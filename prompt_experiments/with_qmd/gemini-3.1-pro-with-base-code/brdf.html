@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>BRDF and Reflection Interactive 3D Visualization</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+            font-family: sans-serif;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            width: 320px;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+        }
+
+        .control-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        input[type=range] {
+            width: 100%;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 6px 12px;
+            margin-top: 5px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .btn:hover {
+            background: #005f9e;
+        }
+
+        /* 3D label styles */
+        .label {
+            position: absolute;
+            font-family: serif;
+            font-style: italic;
+            font-size: 1.2rem;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            color: black;
+            text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+        }
+
+        #formula-label {
+            font-size: 1.4rem;
+        }
+
+        #desc {
+            font-size: 0.85rem;
+            color: #444;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui-container">
+        <h2>Light interacting with surfaces</h2>
+        <div id="desc">
+            Explore the variables in the BRDF equation: <br>
+            <strong>&ell;<sub>out</sub> = F(&ell;<sub>in</sub>, n, &lambda;, p, q)</strong>
+        </div>
+
+        <div class="control-group">
+            <label for="p-angle">Incident Angle (p)</label>
+            <input type="range" id="p-angle" min="0" max="80" value="45" step="1">
+        </div>
+
+        <div class="control-group">
+            <label for="q-angle">Outgoing/Viewing Angle (q)</label>
+            <input type="range" id="q-angle" min="-80" max="80" value="-40" step="1">
+        </div>
+
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="toggle-lobe" checked> Show Diffuse Lobe (Lambertian)
+            </label>
+        </div>
+
+        <button class="btn" id="btn-reset">Reset to Textbook View</button>
+        <button class="btn" id="btn-demo">Run Concept Demo</button>
+    </div>
+
+    <!-- Labels -->
+    <div id="lbl-lin" class="label">&ell;<sub>in</sub>(&lambda;)</div>
+    <div id="lbl-n" class="label">n</div>
+    <div id="lbl-p" class="label">p</div>
+    <div id="lbl-q" class="label">q</div>
+    <div id="formula-label" class="label">&ell;<sub>out</sub> = F(&ell;<sub>in</sub>, n, &lambda;, p, q)</div>
+
+    <div id="container"></div>
+
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+        // -- SCENE SETUP --
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 4;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+        camera.position.set(5, 4, 6);
+        camera.lookAt(0, 0, 0);
+        camera.zoom = 1.1;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // -- GEOMETRY --
+        // Ground plane (green surface)
+        const planeGeo = new THREE.PlaneGeometry(8, 8);
+        const planeMat = new THREE.MeshBasicMaterial({ color: 0x7cfc00, side: THREE.DoubleSide });
+        const plane = new THREE.Mesh(planeGeo, planeMat);
+        plane.rotation.x = -Math.PI / 2;
+        scene.add(plane);
+
+        const origin = new THREE.Vector3(0, 0, 0);
+
+        // Helpers to draw arrows
+        function createArrow(dir, origin, length, color, headLength, headWidth) {
+            return new THREE.ArrowHelper(dir, origin, length, color, headLength, headWidth);
+        }
+
+        // Normal vector n (black)
+        const vecN = new THREE.Vector3(0, 1, 0);
+        const arrowN = createArrow(vecN, origin, 1.5, 0x000000, 0.3, 0.2);
+        scene.add(arrowN);
+
+        // Right-angle symbol
+        const rightAngleGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0.3, 0, 0),
+            new THREE.Vector3(0.3, 0.3, 0),
+            new THREE.Vector3(0, 0.3, 0)
+        ]);
+        const rightAngleMat = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const rightAngleLine = new THREE.Line(rightAngleGeo, rightAngleMat);
+        scene.add(rightAngleLine);
+
+        // Circle at origin
+        const circGeo = new THREE.RingGeometry(0.2, 0.25, 32);
+        const circMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+        const circle = new THREE.Mesh(circGeo, circMat);
+        circle.rotation.x = -Math.PI / 2;
+        scene.add(circle);
+
+        // p vector (black, incoming direction)
+        const arrowP = createArrow(new THREE.Vector3(-1, 1, 0).normalize(), origin, 1.5, 0x000000, 0.3, 0.2);
+        scene.add(arrowP);
+
+        // Incoming light ray Lin (yellow, thick line)
+        // Modeled as a thicker arrow pointing *to* the origin
+        const rayIncomingMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+        const rayIncomingCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 4), rayIncomingMat);
+        const rayIncomingOrigin = new THREE.Group();
+        rayIncomingOrigin.add(rayIncomingCyl);
+        rayIncomingCyl.position.y = 2; // offset so it ends at origin
+        scene.add(rayIncomingOrigin);
+
+        // q vector (black, outgoing direction of interest)
+        const arrowQ = createArrow(new THREE.Vector3(1, 1, 0).normalize(), origin, 1.5, 0x000000, 0.3, 0.2);
+        scene.add(arrowQ);
+
+        // Outgoing ray matching Figure (green, pointing along q)
+        const arrowLOut = createArrow(new THREE.Vector3(1, 1, 0).normalize(), origin, 2.5, 0x007f00, 0.4, 0.25);
+        scene.add(arrowLOut);
+
+        // Diffuse Lobes (many small green arrows)
+        const lobeGroup = new THREE.Group();
+        scene.add(lobeGroup);
+
+        const lobeArrows = [];
+        const numLobeArrows = 12;
+        for (let i = 0; i < numLobeArrows; i++) {
+            const phi = Math.acos(Math.random());
+            const theta = Math.random() * Math.PI * 2;
+            const dir = new THREE.Vector3(
+                Math.sin(phi) * Math.cos(theta),
+                Math.cos(phi),
+                Math.sin(phi) * Math.sin(theta)
+            ).normalize();
+
+            const arr = createArrow(dir, origin, 1, 0x32cd32, 0.2, 0.15);
+            lobeArrows.push({ arrow: arr, dir: dir });
+            lobeGroup.add(arr);
+        }
+
+        // -- STATE & UPDATES --
+        let pAngle = 45; // Degrees from vertical
+        let qAngle = -40; // Degrees from vertical
+
+        function updateGeometry() {
+            // incident p falls on xy plane for simplicity
+            const pRad = THREE.MathUtils.degToRad(pAngle);
+            const dirP = new THREE.Vector3(-Math.sin(pRad), Math.cos(pRad), 0).normalize();
+
+            arrowP.setDirection(dirP);
+
+            // The yellow incoming ray points towards origin, exactly opposite to p
+            const rotZ = Math.atan2(Math.sin(pRad), Math.cos(pRad));
+            rayIncomingOrigin.rotation.z = rotZ;
+
+            // q falls on xy plane
+            const qRad = THREE.MathUtils.degToRad(qAngle);
+            const dirQ = new THREE.Vector3(Math.sin(qRad), Math.cos(qRad), 0).normalize();
+            arrowQ.setDirection(dirQ);
+            arrowLOut.setDirection(dirQ);
+
+            // Diffuse lobe scale changes based on Lambert's law (n dot p)
+            const nDotP = Math.max(0, vecN.dot(dirP));
+            lobeArrows.forEach(item => {
+                // scale arrow length by cosine of incoming angle (Lambertian reflectance)
+                const len = 0.5 + 1.2 * nDotP * Math.max(0.1, vecN.dot(item.dir));
+                item.arrow.setLength(len, 0.2, 0.15);
+            });
+        }
+
+        // UI Listeners
+        const pAngleSlider = document.getElementById('p-angle');
+        const qAngleSlider = document.getElementById('q-angle');
+        const lobeToggle = document.getElementById('toggle-lobe');
+
+        pAngleSlider.addEventListener('input', (e) => {
+            pAngle = parseFloat(e.target.value);
+            updateGeometry();
+        });
+
+        qAngleSlider.addEventListener('input', (e) => {
+            qAngle = parseFloat(e.target.value);
+            updateGeometry();
+        });
+
+        lobeToggle.addEventListener('change', (e) => {
+            lobeGroup.visible = e.target.checked;
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            pAngle = 45; pAngleSlider.value = 45;
+            qAngle = -40; qAngleSlider.value = -40;
+            lobeToggle.checked = true; lobeGroup.visible = true;
+            camera.position.set(5, 4, 6);
+            camera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+            updateGeometry();
+        });
+
+        // Demo Sequence
+        let demoActive = false;
+        document.getElementById('btn-demo').addEventListener('click', async () => {
+            if (demoActive) return;
+            demoActive = true;
+
+            // Step 1: Move p to Grazing angle
+            for (let i = pAngle; i <= 80; i += 1) {
+                pAngle = i; pAngleSlider.value = i;
+                updateGeometry();
+                await new Promise(r => setTimeout(r, 20));
+            }
+
+            // Wait, noting diffuse reflection is dim
+            await new Promise(r => setTimeout(r, 1000));
+
+            // Step 2: Move p to Normal
+            for (let i = 80; i >= 0; i -= 2) {
+                pAngle = i; pAngleSlider.value = i;
+                updateGeometry();
+                await new Promise(r => setTimeout(r, 20));
+            }
+
+            demoActive = false;
+        });
+
+        // -- DOM LABEL SYNCING --
+        const to2DPosition = (vector, camera) => {
+            const pos = vector.clone();
+            pos.project(camera);
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            return {
+                x: (pos.x * .5 + .5) * w,
+                y: (pos.y * -.5 + .5) * h
+            };
+        };
+
+        function updateLabels() {
+            // L_in Label
+            const pRad = THREE.MathUtils.degToRad(pAngle);
+            const dirP = new THREE.Vector3(-Math.sin(pRad), Math.cos(pRad), 0);
+            const pPos3D = dirP.clone().multiplyScalar(3.5); // high up the yellow ray
+            const lblLinPos = to2DPosition(pPos3D, camera);
+            const lblLin = document.getElementById('lbl-lin');
+            lblLin.style.left = `${lblLinPos.x}px`;
+            lblLin.style.top = `${lblLinPos.y}px`;
+
+            // p Label
+            const pD3Pos = dirP.clone().multiplyScalar(1.6);
+            const lblPPos = to2DPosition(pD3Pos, camera);
+            const lblP = document.getElementById('lbl-p');
+            lblP.style.left = `${lblPPos.x}px`;
+            lblP.style.top = `${lblPPos.y}px`;
+
+            // n Label
+            const lblNPos = to2DPosition(new THREE.Vector3(0, 1.8, 0), camera);
+            const lblN = document.getElementById('lbl-n');
+            lblN.style.left = `${lblNPos.x}px`;
+            lblN.style.top = `${lblNPos.y}px`;
+
+            // q Label
+            const qRad = THREE.MathUtils.degToRad(qAngle);
+            const dirQ = new THREE.Vector3(Math.sin(qRad), Math.cos(qRad), 0);
+            const qD3Pos = dirQ.clone().multiplyScalar(1.6);
+            const lblQPos = to2DPosition(qD3Pos, camera);
+            const lblQ = document.getElementById('lbl-q');
+            lblQ.style.left = `${lblQPos.x}px`;
+            lblQ.style.top = `${lblQPos.y}px`;
+
+            // Formula Label (L_out)
+            const f3Pos = dirQ.clone().multiplyScalar(2.8);
+            const lblFPos = to2DPosition(f3Pos, camera);
+            const lblF = document.getElementById('formula-label');
+            lblF.style.left = `${lblFPos.x + 20}px`;
+            lblF.style.top = `${lblFPos.y - 20}px`;
+        }
+
+        // -- MAIN LOOP --
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            updateLabels();
+        }
+
+        updateGeometry();
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.left = -d * (w / h);
+            camera.right = d * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

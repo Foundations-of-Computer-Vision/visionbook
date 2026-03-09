@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Pinhole Geometry in 3D</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: "Segoe UI", system-ui, sans-serif;
+            background: #f7f8fb;
+            color: #111;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 1.2rem;
+            left: 1.2rem;
+            background: rgba(255, 255, 255, 0.88);
+            border-radius: 0.8rem;
+            padding: 1.1rem 1.2rem 1rem;
+            width: 320px;
+            box-shadow: 0 10px 25px rgba(15, 28, 63, 0.18);
+            backdrop-filter: blur(6px);
+        }
+
+        #ui h1 {
+            margin: 0 0 0.6rem;
+            font-size: 1.15rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .control {
+            margin-bottom: 0.85rem;
+        }
+
+        label {
+            font-size: 0.82rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.25rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            margin: 0.6rem 0 0.2rem;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 0.4rem;
+            margin-top: 0.8rem;
+        }
+
+        button {
+            flex: 1;
+            border: none;
+            padding: 0.55rem 0.6rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            background: #1c64f2;
+            color: #fff;
+        }
+
+        button.secondary {
+            background: #0f172a;
+        }
+
+        #guide {
+            position: absolute;
+            bottom: 1.2rem;
+            left: 1.2rem;
+            max-width: 420px;
+            background: rgba(15, 23, 42, 0.9);
+            color: #f8fafc;
+            padding: 0.85rem 1rem;
+            border-radius: 0.75rem;
+            font-size: 0.95rem;
+            line-height: 1.35;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.35);
+        }
+
+        #credit {
+            position: absolute;
+            bottom: 1rem;
+            right: 1.1rem;
+            font-size: 0.74rem;
+            background: rgba(255, 255, 255, 0.82);
+            padding: 0.4rem 0.6rem;
+            border-radius: 0.4rem;
+            color: #0f172a;
+        }
+
+        @media (max-width: 720px) {
+            #ui {
+                width: calc(100% - 2.4rem);
+                right: 1.2rem;
+            }
+
+            #guide {
+                max-width: calc(100% - 2.4rem);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="ui">
+        <h1>Perspective Projection</h1>
+        <div class="control">
+            <label for="xRange">Horizontal world position X <span id="xValue">0.70</span></label>
+            <input type="range" id="xRange" min="-1.2" max="1.2" step="0.01" value="0.7" />
+        </div>
+        <div class="control">
+            <label for="yRange">Vertical world position Y <span id="yValue">0.60</span></label>
+            <input type="range" id="yRange" min="-0.5" max="1.5" step="0.01" value="0.6" />
+        </div>
+        <div class="control">
+            <label for="zRange">Depth from pinhole Z <span id="zValue">2.40</span></label>
+            <input type="range" id="zRange" min="1.4" max="4.2" step="0.01" value="2.4" />
+        </div>
+        <label class="toggle">
+            <input type="checkbox" id="trianglesToggle" />
+            Highlight similar triangles
+        </label>
+        <div class="buttons">
+            <button id="stepBtn">Guided demo</button>
+            <button id="resetBtn" class="secondary">Reset to textbook view</button>
+        </div>
+    </div>
+    <div id="guide">Step 1 — Locate point P in the world space. Move the sliders to explore how its coordinates change.
+    </div>
+    <div id="credit">Drag to orbit • Scroll to zoom</div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three@0.161.0';
+        import { OrbitControls } from 'https://esm.sh/three@0.161.0/examples/jsm/controls/OrbitControls';
+
+        const container = document.getElementById('container');
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf4f6fb);
+
+        const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 100);
+        const defaultCameraPos = new THREE.Vector3(5.5, 4.2, 6.2);
+        camera.position.copy(defaultCameraPos);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.target.set(0, 0.6, 0);
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.75);
+        scene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.65);
+        dirLight.position.set(4, 6, 3);
+        scene.add(dirLight);
+
+        const worldAxes = new THREE.AxesHelper(2.8);
+        scene.add(worldAxes);
+
+        const opticalAxisGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, -2.2),
+            new THREE.Vector3(0, 0, 2.6)
+        ]);
+        const opticalAxis = new THREE.Line(opticalAxisGeom, new THREE.LineDashedMaterial({ color: 0x263238, dashSize: 0.1, gapSize: 0.07 }));
+        opticalAxis.computeLineDistances();
+        scene.add(opticalAxis);
+
+        const f = 1.5; // distance from pinhole to each plane
+
+        // Projection plane behind the pinhole (sensor plane from the textbook figure)
+        const sensorPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(3.4, 3),
+            new THREE.MeshBasicMaterial({ color: 0xd1d9e6, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+        );
+        sensorPlane.position.z = -f;
+        sensorPlane.rotation.y = Math.PI;
+        scene.add(sensorPlane);
+
+        const sensorEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(sensorPlane.geometry),
+            new THREE.LineBasicMaterial({ color: 0x90a4ae })
+        );
+        sensorEdges.position.z = -f;
+        sensorEdges.rotation.y = Math.PI;
+        scene.add(sensorEdges);
+
+        // Virtual camera plane placed symmetrically in front
+        const virtualPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(3.4, 3),
+            new THREE.MeshBasicMaterial({ color: 0xa7ffeb, transparent: true, opacity: 0.22, side: THREE.DoubleSide })
+        );
+        virtualPlane.position.z = f;
+        scene.add(virtualPlane);
+
+        const virtualEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(virtualPlane.geometry),
+            new THREE.LineBasicMaterial({ color: 0x26a69a })
+        );
+        virtualEdges.position.z = f;
+        scene.add(virtualEdges);
+
+        // Plane axes replicate the x/y axes drawn on the textbook diagram
+        function createPlaneAxes(zPos, mirrored = false) {
+            const group = new THREE.Group();
+            const xGeom = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(-1.4, 0, 0),
+                new THREE.Vector3(1.4, 0, 0)
+            ]);
+            const yGeom = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, -1.4, 0),
+                new THREE.Vector3(0, 1.4, 0)
+            ]);
+            const xLine = new THREE.Line(xGeom, new THREE.LineBasicMaterial({ color: 0x33691e }));
+            const yLine = new THREE.Line(yGeom, new THREE.LineBasicMaterial({ color: 0xc62828 }));
+            group.add(xLine);
+            group.add(yLine);
+            group.position.z = zPos;
+            if (mirrored) group.scale.x = -1;
+            scene.add(group);
+            return group;
+        }
+        createPlaneAxes(-f, true);
+        createPlaneAxes(f, false);
+
+        const pinhole = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 32, 32),
+            new THREE.MeshStandardMaterial({ color: 0x212121, metalness: 0.1, roughness: 0.4 })
+        );
+        scene.add(pinhole);
+
+        // 3D point P
+        const pointMaterial = new THREE.MeshStandardMaterial({ color: 0x1e88e5, roughness: 0.2, metalness: 0.1 });
+        const pointMesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 32, 32), pointMaterial);
+        scene.add(pointMesh);
+
+        // Projection points on the real and virtual planes
+        const sensorPoint = new THREE.Mesh(new THREE.SphereGeometry(0.07, 24, 24), new THREE.MeshStandardMaterial({ color: 0xd84315 }));
+        scene.add(sensorPoint);
+        const virtualPoint = new THREE.Mesh(new THREE.SphereGeometry(0.07, 24, 24), new THREE.MeshStandardMaterial({ color: 0x1b5e20 }));
+        scene.add(virtualPoint);
+
+        // Rays showing light path through the pinhole
+        const rayMaterialPrimary = new THREE.LineBasicMaterial({ color: 0x0d47a1, linewidth: 3 });
+        const rayMaterialSensor = new THREE.LineBasicMaterial({ color: 0x1565c0 });
+        const rayMaterialVirtual = new THREE.LineBasicMaterial({ color: 0x2e7d32 });
+        const rayToPinhole = new THREE.Line(new THREE.BufferGeometry(), rayMaterialPrimary);
+        scene.add(rayToPinhole);
+        const rayToSensor = new THREE.Line(new THREE.BufferGeometry(), rayMaterialSensor);
+        scene.add(rayToSensor);
+        const rayToVirtual = new THREE.Line(new THREE.BufferGeometry(), rayMaterialVirtual);
+        scene.add(rayToVirtual);
+
+        // Similar triangles in XZ and YZ planes to explain proportion preservation
+        const triMaterial = new THREE.MeshBasicMaterial({ color: 0xffc107, transparent: true, opacity: 0.28, side: THREE.DoubleSide, visible: false });
+        const triangleXZ = new THREE.Mesh(new THREE.BufferGeometry(), triMaterial.clone());
+        const triangleYZ = new THREE.Mesh(new THREE.BufferGeometry(), triMaterial.clone());
+        triangleXZ.visible = false;
+        triangleYZ.visible = false;
+        scene.add(triangleXZ);
+        scene.add(triangleYZ);
+
+        function initTriangleGeometry(mesh) {
+            const positions = new Float32Array(9);
+            mesh.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        }
+        initTriangleGeometry(triangleXZ);
+        initTriangleGeometry(triangleYZ);
+
+        // Utility to create canvas-based sprites for labels used in the textbook
+        function createLabel(text, color = '#111') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = color;
+            ctx.font = 'bold 120px "Trebuchet MS"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(0.9, 0.45, 1);
+            return sprite;
+        }
+
+        const labelP = createLabel('P');
+        const labelpReal = createLabel('p (sensor)', '#b71c1c');
+        const labelpVirtual = createLabel('p (virtual)', '#1b5e20');
+        const labelPinhole = createLabel('Pinhole', '#111');
+        const labelPlanes = createLabel('Projection plane', '#37474f');
+        const labelVirtualPlane = createLabel('Virtual plane', '#1f6f64');
+        scene.add(labelP, labelpReal, labelpVirtual, labelPinhole, labelPlanes, labelVirtualPlane);
+        labelPinhole.position.set(0.2, -0.35, 0);
+        labelPlanes.position.set(-1.55, 1.1, -f + 0.01);
+        labelVirtualPlane.position.set(-1.45, 1.1, f + 0.01);
+
+        const ui = {
+            xRange: document.getElementById('xRange'),
+            yRange: document.getElementById('yRange'),
+            zRange: document.getElementById('zRange'),
+            xValue: document.getElementById('xValue'),
+            yValue: document.getElementById('yValue'),
+            zValue: document.getElementById('zValue'),
+            trianglesToggle: document.getElementById('trianglesToggle'),
+            stepBtn: document.getElementById('stepBtn'),
+            resetBtn: document.getElementById('resetBtn'),
+            guide: document.getElementById('guide')
+        };
+
+        const params = {
+            x: parseFloat(ui.xRange.value),
+            y: parseFloat(ui.yRange.value),
+            z: parseFloat(ui.zRange.value)
+        };
+        const defaults = { ...params };
+
+        const guideSteps = [
+            { text: 'Step 1 — Locate point P in the world space. Move the sliders to explore how its coordinates change.', focus: 'point' },
+            { text: 'Step 2 — Trace the ray from P through the pinhole. Only rays passing through the aperture reach the sensor.', focus: 'ray' },
+            { text: 'Step 3 — See how the point hits the projection plane (gray) and its virtual counterpart (teal). Their distances are both f.', focus: 'planes' },
+            { text: 'Step 4 — Enable similar triangles to relate world distances to image distances via proportion X/Z = x/f and Y/Z = y/f.', focus: 'triangles' }
+        ];
+        let guideIndex = 0;
+
+        function resetHighlights() {
+            pointMaterial.color.set(0x1e88e5);
+            rayMaterialPrimary.color.set(0x0d47a1);
+            rayMaterialSensor.color.set(0x1565c0);
+            rayMaterialVirtual.color.set(0x2e7d32);
+            sensorPlane.material.color.set(0xd1d9e6);
+            virtualPlane.material.color.set(0xa7ffeb);
+        }
+
+        function applyGuideStep(index) {
+            resetHighlights();
+            const step = guideSteps[index];
+            ui.guide.textContent = step.text;
+            switch (step.focus) {
+                case 'point':
+                    pointMaterial.color.set(0xff6f00);
+                    break;
+                case 'ray':
+                    rayMaterialPrimary.color.set(0xff3d00);
+                    rayMaterialSensor.color.set(0xff6f00);
+                    break;
+                case 'planes':
+                    sensorPlane.material.color.set(0xffab91);
+                    virtualPlane.material.color.set(0x7cb342);
+                    break;
+                case 'triangles':
+                    triangleXZ.material.color.set(0xffca28);
+                    triangleYZ.material.color.set(0xffca28);
+                    triangleXZ.visible = true;
+                    triangleYZ.visible = true;
+                    ui.trianglesToggle.checked = true;
+                    break;
+            }
+        }
+
+        function updateReadouts() {
+            ui.xValue.textContent = params.x.toFixed(2);
+            ui.yValue.textContent = params.y.toFixed(2);
+            ui.zValue.textContent = params.z.toFixed(2);
+        }
+
+        const tempOrigin = new THREE.Vector3();
+        const realProjection = new THREE.Vector3();
+        const virtualProjection = new THREE.Vector3();
+
+        function updateProjection() {
+            pointMesh.position.set(params.x, params.y, params.z);
+
+            const scale = f / params.z;
+            const px = params.x * scale;
+            const py = params.y * scale;
+            realProjection.set(-px, -py, -f);
+            virtualProjection.set(px, py, f);
+
+            sensorPoint.position.copy(realProjection);
+            virtualPoint.position.copy(virtualProjection);
+
+            // Update labels so they float near the relevant objects
+            labelP.position.copy(pointMesh.position).add(new THREE.Vector3(0.15, 0.18, 0));
+            labelpReal.position.copy(realProjection).add(new THREE.Vector3(-0.18, 0.18, 0));
+            labelpVirtual.position.copy(virtualProjection).add(new THREE.Vector3(0.18, 0.18, 0));
+
+            rayToPinhole.geometry.setFromPoints([pointMesh.position.clone(), tempOrigin.clone()]);
+            rayToSensor.geometry.setFromPoints([tempOrigin.clone(), realProjection.clone()]);
+            rayToVirtual.geometry.setFromPoints([tempOrigin.clone(), virtualProjection.clone()]);
+
+            // Update similar triangle meshes to visualize ratios in the XZ and YZ planes
+            const xzArray = triangleXZ.geometry.attributes.position.array;
+            xzArray.set([
+                0, 0, 0,
+                params.x, 0, params.z,
+                params.x, 0, 0
+            ]);
+            triangleXZ.geometry.attributes.position.needsUpdate = true;
+
+            const yzArray = triangleYZ.geometry.attributes.position.array;
+            yzArray.set([
+                0, 0, 0,
+                0, params.y, params.z,
+                0, params.y, 0
+            ]);
+            triangleYZ.geometry.attributes.position.needsUpdate = true;
+        }
+
+        updateProjection();
+        updateReadouts();
+        applyGuideStep(guideIndex);
+
+        ui.xRange.addEventListener('input', () => {
+            params.x = parseFloat(ui.xRange.value);
+            updateProjection();
+            updateReadouts();
+        });
+        ui.yRange.addEventListener('input', () => {
+            params.y = parseFloat(ui.yRange.value);
+            updateProjection();
+            updateReadouts();
+        });
+        ui.zRange.addEventListener('input', () => {
+            params.z = parseFloat(ui.zRange.value);
+            updateProjection();
+            updateReadouts();
+        });
+
+        ui.trianglesToggle.addEventListener('change', () => {
+            triangleXZ.visible = ui.trianglesToggle.checked;
+            triangleYZ.visible = ui.trianglesToggle.checked;
+        });
+
+        ui.stepBtn.addEventListener('click', () => {
+            guideIndex = (guideIndex + 1) % guideSteps.length;
+            applyGuideStep(guideIndex);
+        });
+
+        ui.resetBtn.addEventListener('click', () => {
+            params.x = defaults.x;
+            params.y = defaults.y;
+            params.z = defaults.z;
+            ui.xRange.value = defaults.x;
+            ui.yRange.value = defaults.y;
+            ui.zRange.value = defaults.z;
+            ui.trianglesToggle.checked = false;
+            triangleXZ.visible = false;
+            triangleYZ.visible = false;
+            guideIndex = 0;
+            controls.target.set(0, 0.6, 0);
+            camera.position.copy(defaultCameraPos);
+            controls.update();
+            updateProjection();
+            updateReadouts();
+            applyGuideStep(guideIndex);
+        });
+
+        window.addEventListener('resize', () => {
+            const { clientWidth, clientHeight } = container;
+            camera.aspect = clientWidth / clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(clientWidth, clientHeight);
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+
+</html>

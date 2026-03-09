@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Rotation-Induced Homography Explorer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap');
+
+        :root {
+            color-scheme: dark;
+            --panel-bg: rgba(5, 8, 20, 0.8);
+            --accent: #52f1e0;
+            --accent-2: #ff6b6b;
+            --text: #e4f7ff;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Space Grotesk', sans-serif;
+            background: radial-gradient(circle at top, #101b45 0%, #050912 60%, #02040b 100%);
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        #ui {
+            position: absolute;
+            top: 1.5rem;
+            left: 1.5rem;
+            width: min(360px, 90vw);
+            padding: 1.2rem 1.4rem;
+            border-radius: 1rem;
+            background: var(--panel-bg);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            z-index: 10;
+        }
+
+        h1 {
+            margin: 0 0 0.5rem;
+            font-size: 1.35rem;
+            letter-spacing: 0.02em;
+        }
+
+        p {
+            margin: 0.3rem 0 0.8rem;
+            line-height: 1.35;
+            font-size: 0.9rem;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.85rem;
+            display: block;
+            margin-bottom: 0.3rem;
+        }
+
+        #rotationSlider {
+            width: 100%;
+            accent-color: var(--accent);
+            margin-bottom: 0.8rem;
+        }
+
+        .checkbox {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            font-weight: 500;
+            margin-bottom: 0.8rem;
+        }
+
+        button {
+            width: 100%;
+            padding: 0.65rem 0.8rem;
+            border: none;
+            border-radius: 0.7rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 0.7rem;
+            color: #02121f;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        #guidedBtn {
+            background: var(--accent);
+            box-shadow: 0 10px 30px rgba(82, 241, 224, 0.4);
+        }
+
+        #resetBtn {
+            background: var(--accent-2);
+            box-shadow: 0 10px 30px rgba(255, 107, 107, 0.4);
+            margin-bottom: 0.4rem;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 35px rgba(0, 0, 0, 0.35);
+        }
+
+        #stepText {
+            font-size: 0.85rem;
+            margin-top: 0.2rem;
+            color: #9ac5ff;
+            min-height: 2.4rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <h1>Rotation-Induced Homography</h1>
+        <p>Explore how rotating a camera about a single center keeps image correspondences linked by a homography.</p>
+
+        <label>Camera 2 rotation: <span id="rotationValue">30°</span></label>
+        <input type="range" id="rotationSlider" min="0" max="75" value="30" step="1" />
+
+        <label class="checkbox">
+            <input type="checkbox" id="planeToggle" />
+            Show planar facade
+        </label>
+
+        <button id="guidedBtn">Guided Demo Step</button>
+        <button id="resetBtn">Reset to textbook view</button>
+        <p id="stepText">Start from the textbook arrangement to compare with the 2D diagram.</p>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.161.0/build/three.module.js';
+        import { OrbitControls } from 'https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js';
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x01040a);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(9, 6, 10);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 1, -6);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        const axisLength = 4.5;
+        const axisOrigin = new THREE.Vector3(0, 0, 0);
+
+        // Axes recreate the labeled triad from the textbook figure.
+        addAxis(new THREE.Vector3(1, 0, 0), 0x6be672, 'X');
+        addAxis(new THREE.Vector3(0, 1, 0), 0xffd166, 'Y');
+        addAxis(new THREE.Vector3(0, 0, -1), 0x66b0ff, 'Z');
+
+        function addAxis(direction, color, label) {
+            const arrow = new THREE.ArrowHelper(direction.clone().normalize(), axisOrigin, axisLength, color, 0.4, 0.25);
+            scene.add(arrow);
+            const sprite = createLabel(label);
+            sprite.position.copy(direction.clone().normalize().multiplyScalar(axisLength + 0.5));
+            scene.add(sprite);
+        }
+
+        // Planar surface mesh toggled on to mirror the planar facade scenario.
+        const planeGeometry = new THREE.PlaneGeometry(6, 4, 12, 8);
+        const planeMaterial = new THREE.MeshBasicMaterial({
+            color: 0x1e90ff,
+            opacity: 0.18,
+            transparent: true,
+            side: THREE.DoubleSide,
+            wireframe: true
+        });
+        const planarSurface = new THREE.Mesh(planeGeometry, planeMaterial);
+        planarSurface.position.set(4, 1, -10);
+        planarSurface.rotation.y = Math.PI / 10;
+        planarSurface.visible = false;
+        scene.add(planarSurface);
+
+        const sensorWidth = 3;
+        const sensorHeight = 2;
+        const sensorDistance = 2.2;
+
+        const camera1Group = buildCameraRig(0x2ecc71, 'Camera 1');
+        scene.add(camera1Group);
+
+        const camera2Group = buildCameraRig(0xff5f5f, 'Camera 2');
+        scene.add(camera2Group);
+
+        function buildCameraRig(color, labelText) {
+            const group = new THREE.Group();
+
+            // Colored plane stands for the 2D image plane from the textbook schematic.
+            const planeGeom = new THREE.PlaneGeometry(sensorWidth, sensorHeight);
+            const planeMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
+            const plane = new THREE.Mesh(planeGeom, planeMat);
+            plane.position.z = -sensorDistance;
+            group.add(plane);
+
+            const corners = [
+                new THREE.Vector3(-sensorWidth / 2, sensorHeight / 2, -sensorDistance),
+                new THREE.Vector3(sensorWidth / 2, sensorHeight / 2, -sensorDistance),
+                new THREE.Vector3(sensorWidth / 2, -sensorHeight / 2, -sensorDistance),
+                new THREE.Vector3(-sensorWidth / 2, -sensorHeight / 2, -sensorDistance)
+            ];
+
+            const frustumPoints = [];
+            corners.forEach((corner) => {
+                frustumPoints.push(new THREE.Vector3(0, 0, 0), corner);
+            });
+            for (let i = 0; i < corners.length; i++) {
+                frustumPoints.push(corners[i], corners[(i + 1) % corners.length]);
+            }
+
+            const frustumGeometry = new THREE.BufferGeometry().setFromPoints(frustumPoints);
+            const frustumLines = new THREE.LineSegments(
+                frustumGeometry,
+                new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.7 })
+            );
+            group.add(frustumLines);
+
+            const sprite = createLabel(labelText);
+            sprite.position.set(0, sensorHeight / 2 + 0.4, -sensorDistance * 0.7);
+            group.add(sprite);
+
+            return group;
+        }
+
+        const worldPoint = new THREE.Vector3(4, 1.5, -8.5);
+        const worldPointMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.18, 24, 24),
+            new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x1a1a1a })
+        );
+        worldPointMesh.position.copy(worldPoint);
+        scene.add(worldPointMesh);
+
+        // Dashed line shows the locus of the 3D point relative to both cameras.
+        const dashedGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), worldPoint]);
+        const dashedMaterial = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.4, gapSize: 0.2 });
+        const dashedLine = new THREE.Line(dashedGeometry, dashedMaterial);
+        dashedLine.computeLineDistances();
+        scene.add(dashedLine);
+
+        const cam1Projection = buildProjectionMarker(0x88ffdd);
+        camera1Group.add(cam1Projection);
+        const cam2Projection = buildProjectionMarker(0xff9aa2);
+        camera2Group.add(cam2Projection);
+
+        function buildProjectionMarker(color) {
+            return new THREE.Mesh(
+                new THREE.SphereGeometry(0.09, 16, 16),
+                new THREE.MeshBasicMaterial({ color })
+            );
+        }
+
+        const ray1 = buildRay(0x52f1e0);
+        const ray2 = buildRay(0xffa4a4);
+
+        function buildRay(color) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+            const material = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+            return line;
+        }
+
+        const rotationSlider = document.getElementById('rotationSlider');
+        const rotationValue = document.getElementById('rotationValue');
+        const planeToggle = document.getElementById('planeToggle');
+        const guidedBtn = document.getElementById('guidedBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const stepText = document.getElementById('stepText');
+
+        const defaultRotation = 30;
+        let guidedIndex = 0;
+
+        const guidedSteps = [
+            {
+                text: 'Step 1 · Align both cameras to share the same image plane; projections coincide when rotation is zero.',
+                action: () => {
+                    setRotation(0);
+                    planeToggle.checked = false;
+                    updatePlaneToggle();
+                }
+            },
+            {
+                text: 'Step 2 · Rotate Camera 2 to see how the same 3D point lands at a new pixel—still related by a homography.',
+                action: () => {
+                    setRotation(40);
+                }
+            },
+            {
+                text: 'Step 3 · Show the planar facade to recall that every point on that plane transforms via the same homography.',
+                action: () => {
+                    setRotation(28);
+                    planeToggle.checked = true;
+                    updatePlaneToggle();
+                }
+            }
+        ];
+
+        guidedBtn.addEventListener('click', () => {
+            guidedSteps[guidedIndex].action();
+            stepText.textContent = guidedSteps[guidedIndex].text;
+            guidedIndex = (guidedIndex + 1) % guidedSteps.length;
+        });
+
+        resetBtn.addEventListener('click', () => {
+            guidedIndex = 0;
+            planeToggle.checked = false;
+            setRotation(defaultRotation);
+            updatePlaneToggle();
+            stepText.textContent = 'Reset to the textbook reference: Camera 2 rotated by 30° with the plane hidden.';
+        });
+
+        rotationSlider.addEventListener('input', (event) => {
+            const angle = Number(event.target.value);
+            setRotation(angle);
+        });
+
+        planeToggle.addEventListener('change', updatePlaneToggle);
+
+        function setRotation(angleDegrees) {
+            rotationSlider.value = angleDegrees;
+            rotationValue.textContent = `${angleDegrees.toFixed(0)}°`;
+            camera2Group.rotation.y = THREE.MathUtils.degToRad(-angleDegrees);
+            camera2Group.updateMatrixWorld(true);
+            updateProjections();
+        }
+
+        function updatePlaneToggle() {
+            planarSurface.visible = planeToggle.checked;
+        }
+
+        function updateProjections() {
+            updateProjectionFor(camera1Group, cam1Projection, ray1);
+            updateProjectionFor(camera2Group, cam2Projection, ray2);
+        }
+
+        function updateProjectionFor(camGroup, projectedPoint, rayLine) {
+            camGroup.updateMatrixWorld(true);
+            const basis = getCameraBasis(camGroup);
+            const relative = worldPoint.clone().sub(camGroup.getWorldPosition(new THREE.Vector3()));
+            const zCam = relative.dot(basis.forward);
+            const xCam = relative.dot(basis.right);
+            const yCam = relative.dot(basis.up);
+            const scale = sensorDistance / zCam;
+            const imageX = xCam * scale;
+            const imageY = yCam * scale;
+            const planePoint = camGroup.getWorldPosition(new THREE.Vector3())
+                .add(basis.forward.clone().multiplyScalar(sensorDistance))
+                .add(basis.right.clone().multiplyScalar(imageX))
+                .add(basis.up.clone().multiplyScalar(imageY));
+            projectedPoint.position.copy(camGroup.worldToLocal(planePoint));
+
+            const positions = rayLine.geometry.attributes.position;
+            const origin = camGroup.getWorldPosition(new THREE.Vector3());
+            positions.setXYZ(0, origin.x, origin.y, origin.z);
+            positions.setXYZ(1, worldPoint.x, worldPoint.y, worldPoint.z);
+            positions.needsUpdate = true;
+        }
+
+        function getCameraBasis(group) {
+            const matrix = new THREE.Matrix4();
+            matrix.extractRotation(group.matrixWorld);
+            const right = new THREE.Vector3(1, 0, 0).applyMatrix4(matrix).normalize();
+            const up = new THREE.Vector3(0, 1, 0).applyMatrix4(matrix).normalize();
+            const forward = new THREE.Vector3(0, 0, -1).applyMatrix4(matrix).normalize();
+            return { right, up, forward };
+        }
+
+        function createLabel(text) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 128;
+            const context = canvas.getContext('2d');
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.fillStyle = '#ffffff';
+            context.font = '48px Space Grotesk';
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(1.8, 0.9, 1);
+            return sprite;
+        }
+
+        setRotation(defaultRotation);
+        updatePlaneToggle();
+        updateProjections();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        renderer.setAnimationLoop(() => {
+            controls.update();
+            renderer.render(scene, camera);
+        });
+
+        // Guided step hint to familiarize the user immediately.
+        guidedSteps[0].action();
+        stepText.textContent = guidedSteps[0].text;
+        guidedIndex = 1;
+    </script>
+</body>
+
+</html>

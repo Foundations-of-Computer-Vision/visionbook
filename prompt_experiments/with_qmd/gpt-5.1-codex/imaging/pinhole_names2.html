@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Pinhole Camera Coordinates — Interactive</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap');
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Space Grotesk', sans-serif;
+            background: radial-gradient(circle at 20% 20%, #1f2a44, #0b1326 60%);
+            color: #eef2ff;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+        }
+
+        #ui {
+            position: absolute;
+            top: 1.25rem;
+            left: 1.25rem;
+            width: 320px;
+            background: rgba(9, 12, 24, 0.82);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 18px;
+            padding: 1.25rem 1.5rem;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(16px);
+        }
+
+        #ui h1 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.4rem;
+            letter-spacing: 0.02em;
+        }
+
+        #ui p.blurb {
+            margin: 0 0 1.25rem 0;
+            font-size: 0.95rem;
+            color: #c7d2fe;
+        }
+
+        .control {
+            margin-bottom: 1rem;
+        }
+
+        .control label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 0.35rem;
+            color: #a5b4fc;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: #7dd3fc;
+        }
+
+        button {
+            width: 100%;
+            margin-bottom: 0.5rem;
+            padding: 0.65rem 0.85rem;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            border-radius: 12px;
+            background: linear-gradient(120deg, #2563eb, #7c3aed);
+            color: #fff;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        button.secondary {
+            background: rgba(148, 163, 184, 0.2);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.35);
+        }
+
+        #stepText {
+            margin-top: 0.35rem;
+            font-size: 0.85rem;
+            color: #f0abfc;
+            min-height: 3.3rem;
+        }
+
+        #legend {
+            margin-top: 1rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #legend h2 {
+            margin: 0 0 0.4rem 0;
+            font-size: 0.85rem;
+            letter-spacing: 0.08em;
+            color: #9ae6b4;
+        }
+
+        #legend ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            font-size: 0.78rem;
+            color: #bfdbfe;
+            line-height: 1.4;
+        }
+
+        #legend li span {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            margin-right: 0.4rem;
+            border-radius: 50%;
+        }
+
+        .label {
+            font-size: 0.75rem;
+            padding: 0.2rem 0.35rem;
+            border-radius: 0.35rem;
+            background: rgba(10, 12, 20, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #f1f5f9;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+    <div id="ui">
+        <h1>Pinhole Camera Geometry</h1>
+        <p class="blurb">Move point <strong>P(X,Y,Z)</strong> and see how it projects through the pinhole onto the image
+            plane <em>and</em> the virtual plane.</p>
+        <div class="control">
+            <label>Horizontal X (world) <span id="xVal">1.0</span></label>
+            <input type="range" id="xRange" min="-2" max="2" step="0.1" value="1">
+        </div>
+        <div class="control">
+            <label>Vertical Y (world) <span id="yVal">0.8</span></label>
+            <input type="range" id="yRange" min="-1.5" max="1.5" step="0.1" value="0.8">
+        </div>
+        <div class="control">
+            <label>Depth Z (world) <span id="zVal">5.0</span></label>
+            <input type="range" id="zRange" min="3" max="8" step="0.1" value="5">
+        </div>
+        <button id="togglePlane" class="secondary">Toggle Virtual Plane</button>
+        <button id="nextStep">Guided Demo Step</button>
+        <button id="resetView">Reset to Textbook View</button>
+        <p id="stepText">All elements visible. Use the sliders, then walk through the guided demo.</p>
+        <div id="legend">
+            <h2>Legend</h2>
+            <ul>
+                <li><span style="background:#38bdf8;"></span>Projection plane (image)</li>
+                <li><span style="background:#f97316;"></span>Ray from P through pinhole</li>
+                <li><span style="background:#facc15;"></span>Virtual plane projection</li>
+                <li><span style="background:#22c55e;"></span>World axes</li>
+            </ul>
+        </div>
+    </div>
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+        import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/renderers/CSS2DRenderer.js';
+
+        const container = document.getElementById('canvas-container');
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(6, 4, 8);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0.5, 0);
+        controls.enableDamping = true;
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambient);
+        const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+        dir.position.set(5, 6, 4);
+        scene.add(dir);
+
+        const f = 2; // focal distance from pinhole to projection plane
+
+        const cameraBodyGroup = new THREE.Group();
+        const bodyGeo = new THREE.BoxGeometry(4, 2.5, 4);
+        const bodyMat = new THREE.MeshStandardMaterial({
+            color: 0x5d6b82,
+            metalness: 0.1,
+            roughness: 0.7,
+            opacity: 0.45,
+            transparent: true
+        });
+        const cameraBody = new THREE.Mesh(bodyGeo, bodyMat);
+        cameraBodyGroup.add(cameraBody);
+        scene.add(cameraBodyGroup);
+
+        const projectionPlaneGroup = new THREE.Group();
+        const planeGeo = new THREE.PlaneGeometry(3.4, 2.3);
+        const planeMat = new THREE.MeshStandardMaterial({
+            color: 0x38bdf8,
+            opacity: 0.25,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+        const projectionPlane = new THREE.Mesh(planeGeo, planeMat);
+        projectionPlane.position.z = -f;
+        projectionPlaneGroup.add(projectionPlane);
+        cameraBodyGroup.add(projectionPlaneGroup);
+
+        const virtualPlaneGroup = new THREE.Group();
+        const virtualMat = new THREE.MeshStandardMaterial({
+            color: 0xfacc15,
+            opacity: 0.15,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+        const virtualPlane = new THREE.Mesh(planeGeo.clone(), virtualMat);
+        virtualPlane.position.z = f;
+        virtualPlaneGroup.add(virtualPlane);
+        scene.add(virtualPlaneGroup);
+
+        const pinhole = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x93c5fd })
+        );
+        scene.add(pinhole);
+
+        const axesGroup = new THREE.Group();
+        const axes = new THREE.AxesHelper(4);
+        axesGroup.add(axes);
+        const opticalAxis = new THREE.ArrowHelper(
+            new THREE.Vector3(0, 0, 1),
+            new THREE.Vector3(0, 0, 0),
+            4,
+            0xffffff,
+            0.3,
+            0.15
+        );
+        axesGroup.add(opticalAxis);
+        scene.add(axesGroup);
+
+        const pointGroup = new THREE.Group();
+        const pointMaterial = new THREE.MeshStandardMaterial({ color: 0xffb347, emissive: 0x7c2d12 });
+        const worldPoint = new THREE.Mesh(new THREE.SphereGeometry(0.15, 24, 24), pointMaterial);
+        pointGroup.add(worldPoint);
+        scene.add(pointGroup);
+
+        const projectionPoint = new THREE.Mesh(
+            new THREE.SphereGeometry(0.11, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0x38bdf8 })
+        );
+        projectionPlaneGroup.add(projectionPoint);
+
+        const virtualPoint = new THREE.Mesh(
+            new THREE.SphereGeometry(0.11, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0xfacc15 })
+        );
+        virtualPlaneGroup.add(virtualPoint);
+
+        const raysGroup = new THREE.Group();
+        const rayMaterial = new THREE.LineBasicMaterial({ color: 0xf97316 });
+        const rayGeometry = new THREE.BufferGeometry();
+        rayGeometry.setFromPoints([
+            new THREE.Vector3(),
+            new THREE.Vector3(),
+            new THREE.Vector3()
+        ]);
+        const rayLine = new THREE.Line(rayGeometry, rayMaterial);
+        raysGroup.add(rayLine);
+
+        const virtualRayMat = new THREE.LineDashedMaterial({ color: 0xfacc15, dashSize: 0.2, gapSize: 0.1 });
+        const virtualRayGeo = new THREE.BufferGeometry();
+        virtualRayGeo.setFromPoints([
+            new THREE.Vector3(),
+            new THREE.Vector3()
+        ]);
+        const virtualRay = new THREE.Line(virtualRayGeo, virtualRayMat);
+        virtualRay.computeLineDistances();
+        raysGroup.add(virtualRay);
+        scene.add(raysGroup);
+
+        // Labels to map 2D annotations from the textbook figure to 3D objects
+        const labels = [];
+        function addLabel(text, object, offset = new THREE.Vector3()) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            const label = new CSS2DObject(div);
+            label.position.copy(offset);
+            object.add(label);
+            labels.push(label);
+            return label;
+        }
+
+        addLabel('Projection plane (image)', projectionPlane, new THREE.Vector3(0, 1.2, 0));
+        addLabel('Virtual camera plane', virtualPlane, new THREE.Vector3(0, 1.2, 0));
+        addLabel('Pinhole / Camera center', pinhole, new THREE.Vector3(0.2, 0.4, 0));
+        addLabel('Optical axis (Z)', opticalAxis, new THREE.Vector3(0, 0, 0));
+        addLabel('World point P(X,Y,Z)', worldPoint, new THREE.Vector3(0.15, 0.4, 0));
+        addLabel('Image point p(x,y)', projectionPoint, new THREE.Vector3(0.2, 0.25, 0));
+        addLabel('Virtual image point', virtualPoint, new THREE.Vector3(0.2, 0.3, 0));
+
+        // UI elements and interactivity wiring
+        const xRange = document.getElementById('xRange');
+        const yRange = document.getElementById('yRange');
+        const zRange = document.getElementById('zRange');
+        const xVal = document.getElementById('xVal');
+        const yVal = document.getElementById('yVal');
+        const zVal = document.getElementById('zVal');
+        const togglePlaneBtn = document.getElementById('togglePlane');
+        const nextStepBtn = document.getElementById('nextStep');
+        const resetBtn = document.getElementById('resetView');
+        const stepText = document.getElementById('stepText');
+
+        const defaultState = { x: 1, y: 0.8, z: 5 };
+
+        function updateProjection() {
+            const X = parseFloat(xRange.value);
+            const Y = parseFloat(yRange.value);
+            const Z = parseFloat(zRange.value);
+            xVal.textContent = X.toFixed(1);
+            yVal.textContent = Y.toFixed(1);
+            zVal.textContent = Z.toFixed(1);
+
+            worldPoint.position.set(X, Y, Z);
+
+            const projX = -f * X / Z;
+            const projY = -f * Y / Z;
+            projectionPoint.position.set(projX, projY, -f);
+
+            const virtX = f * X / Z;
+            const virtY = f * Y / Z;
+            virtualPoint.position.set(virtX, virtY, f);
+
+            // Ray representing the perspective projection (world point -> pinhole -> image plane)
+            rayGeometry.setFromPoints([
+                new THREE.Vector3(X, Y, Z),
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(projX, projY, -f)
+            ]);
+            rayLine.geometry = rayGeometry;
+
+            // Line to virtual plane (same ray but forward)
+            virtualRayGeo.setFromPoints([
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(virtX, virtY, f)
+            ]);
+            virtualRay.geometry = virtualRayGeo;
+            virtualRay.computeLineDistances();
+        }
+
+        xRange.addEventListener('input', updateProjection);
+        yRange.addEventListener('input', updateProjection);
+        zRange.addEventListener('input', updateProjection);
+
+        togglePlaneBtn.addEventListener('click', () => {
+            virtualPlaneGroup.visible = !virtualPlaneGroup.visible;
+            togglePlaneBtn.textContent = virtualPlaneGroup.visible ? 'Hide Virtual Plane' : 'Show Virtual Plane';
+        });
+
+        const steps = [
+            {
+                text: 'Step 1 — Camera box constrains the light. Observe the light-tight volume.',
+                visible: { camera: true, axes: false, planes: true, virtual: false, point: false, rays: false }
+            },
+            {
+                text: 'Step 2 — World axes (X,Y,Z) originate at the pinhole to define coordinates.',
+                visible: { camera: true, axes: true, planes: true, virtual: false, point: false, rays: false }
+            },
+            {
+                text: 'Step 3 — Place a world point P(X,Y,Z). Move it with the sliders.',
+                visible: { camera: true, axes: true, planes: true, virtual: false, point: true, rays: false }
+            },
+            {
+                text: 'Step 4 — Rays through the pinhole land at p(x,y) on the image plane and on the virtual plane.',
+                visible: { camera: true, axes: true, planes: true, virtual: true, point: true, rays: true }
+            }
+        ];
+
+        let stepIndex = -1;
+        function applyStep(index) {
+            const cfg = steps[index];
+            cameraBodyGroup.visible = cfg.visible.camera;
+            projectionPlaneGroup.visible = cfg.visible.planes;
+            axesGroup.visible = cfg.visible.axes;
+            pointGroup.visible = cfg.visible.point;
+            raysGroup.visible = cfg.visible.rays;
+            virtualPlaneGroup.visible = cfg.visible.virtual;
+            stepText.textContent = `${index + 1}/${steps.length} ${cfg.text}`;
+        }
+
+        nextStepBtn.addEventListener('click', () => {
+            stepIndex = (stepIndex + 1) % steps.length;
+            applyStep(stepIndex);
+        });
+
+        function resetView() {
+            xRange.value = defaultState.x;
+            yRange.value = defaultState.y;
+            zRange.value = defaultState.z;
+            updateProjection();
+            cameraBodyGroup.visible = true;
+            projectionPlaneGroup.visible = true;
+            axesGroup.visible = true;
+            pointGroup.visible = true;
+            raysGroup.visible = true;
+            virtualPlaneGroup.visible = true;
+            togglePlaneBtn.textContent = 'Toggle Virtual Plane';
+            stepIndex = -1;
+            stepText.textContent = 'All elements visible. Use the sliders, then walk through the guided demo.';
+            controls.reset();
+            controls.target.set(0, 0.5, 0);
+            camera.position.set(6, 4, 8);
+        }
+
+        resetBtn.addEventListener('click', resetView);
+
+        updateProjection();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Ensure guided mode starts with everything visible in textbook view
+        resetView();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Homography Grid Transformation</title>
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      background: #f6f2e8;
+      color: #1b1b1b;
+    }
+    #container {
+      width: 100%;
+      height: 100%;
+    }
+    .ui-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      width: 280px;
+      padding: 16px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 15px 35px rgba(20, 20, 20, 0.15);
+      backdrop-filter: blur(8px);
+    }
+    .ui-panel label {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      display: block;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      color: #58524c;
+    }
+    .ui-panel input[type="range"] {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    .ui-panel button {
+      width: 100%;
+      padding: 10px 12px;
+      margin-top: 8px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      background: #f0ede3;
+      color: #2a2826;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .ui-panel button.active {
+      background: #0d47a1;
+      color: #fff;
+    }
+    .ui-panel button:hover {
+      background: #0d47a1;
+      color: #fff;
+    }
+    .demo-panel {
+      position: absolute;
+      bottom: 24px;
+      left: 20px;
+      width: 320px;
+      padding: 16px;
+      border-radius: 14px;
+      background: rgba(14, 21, 30, 0.9);
+      color: #f5f4f2;
+      box-shadow: 0 12px 30px rgba(10, 10, 10, 0.4);
+    }
+    .demo-panel .demo-label {
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      opacity: 0.7;
+      margin-bottom: 6px;
+    }
+    .demo-panel .demo-text {
+      font-size: 15px;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+    .demo-panel button {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 10px;
+      background: #ffc857;
+      color: #3a2a1a;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    @media (max-width: 768px) {
+      .ui-panel {
+        width: calc(100% - 40px);
+        left: 50%;
+        transform: translateX(-50%);
+      }
+      .demo-panel {
+        width: calc(100% - 40px);
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  <div class="ui-panel">
+    <label for="warpRange">Warp amount (identity → homography)</label>
+    <input id="warpRange" type="range" min="0" max="1" step="0.01" value="1" />
+    <button id="animateBtn">Animate Warp</button>
+    <button id="colinearBtn">Show Colinear Points</button>
+    <button id="angleBtn">Show Angle Distortion</button>
+    <button id="resetBtn">Reset to Textbook View</button>
+  </div>
+  <div class="demo-panel">
+    <div class="demo-label">Guided Concept</div>
+    <div class="demo-text" id="demoText">Use the guided steps to see how a planar grid warps under a homography.</div>
+    <button id="demoBtn">Next Guided Step</button>
+  </div>
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three@0.160.1';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls.js';
+
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf8f4ea);
+
+    const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 100);
+    const defaultCameraPosition = new THREE.Vector3(5.2, 3.4, 6.3);
+    const defaultTarget = new THREE.Vector3(0.1, 0, 0);
+    camera.position.copy(defaultCameraPosition);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.copy(defaultTarget);
+    controls.enablePan = false;
+    controls.minPolarAngle = 0.2;
+    controls.maxPolarAngle = Math.PI / 2.1;
+    controls.update();
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xded7c5, 0.7));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    dirLight.position.set(5, 6, 5);
+    scene.add(dirLight);
+
+    const leftRectCenter = new THREE.Vector3(-1.9, 0, 0);
+    const rightRectCenter = new THREE.Vector3(1.7, 0, 0);
+    const rectWidth = 2.4;
+    const rectHeight = 2.4;
+    const gridDivisions = 4;
+    const depthScale = 1.6;
+
+    const warpables = [];
+    const warpPoints = [];
+    const colinearGroup = new THREE.Group();
+    const angleGroup = new THREE.Group();
+    colinearGroup.visible = false;
+    angleGroup.visible = false;
+    scene.add(colinearGroup);
+    scene.add(angleGroup);
+
+    // Left grid repeats the planar textbook drawing before any homography acts on it.
+    createRectGrid(leftRectCenter, rectWidth, rectHeight, gridDivisions, 0x26231f);
+
+    // Arrow hints at "grid → warped grid" narrative from the textbook figure.
+    const arrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0).normalize(), new THREE.Vector3(-0.4, 0, 0.05), 1.2, 0x444444, 0.18, 0.08);
+    scene.add(arrow);
+
+    // Labels anchor both planes to the original caption.
+    const leftLabel = createBillboardLabel('Original planar grid');
+    leftLabel.position.set(-1.9, 1.45, 0.05);
+    scene.add(leftLabel);
+
+    const rightLabel = createBillboardLabel('Grid warped by homography');
+    rightLabel.position.set(1.7, 1.55, 0.2);
+    scene.add(rightLabel);
+
+    const rightLineMaterial = new THREE.LineBasicMaterial({ color: 0x0d47a1, linewidth: 2 });
+
+    // Right grid lives on the same plane but every vertex is driven through a homography.
+    for (let i = 0; i <= gridDivisions; i++) {
+      const t = i / gridDivisions;
+      registerWarpLine(t, 0, t, 1, rightLineMaterial);
+      registerWarpLine(0, t, 1, t, rightLineMaterial);
+    }
+
+    // Highlighted colinear samples emphasize that straightness survives the warp.
+    const highlightColor = 0xff7043;
+    const sphereGeometry = new THREE.SphereGeometry(0.06, 24, 24);
+    const sphereMaterial = new THREE.MeshBasicMaterial({ color: highlightColor });
+    const colinearSamples = [0.2, 0.5, 0.8];
+    const leftLinePoints = [];
+    const rightLineParams = colinearSamples.map((u) => [u, 0.35]);
+
+    colinearSamples.forEach((u) => {
+      const leftPoint = canonicalLeftToWorld(u, 0.35);
+      const leftSphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      leftSphere.position.copy(leftPoint);
+      colinearGroup.add(leftSphere);
+      leftLinePoints.push(leftPoint);
+
+      const rightSphere = new THREE.Mesh(sphereGeometry, sphereMaterial.clone());
+      registerWarpPoint(rightSphere, canonicalRightToWorld(u, 0.35), warpWorld(u, 0.35), colinearGroup);
+    });
+
+    const leftLineGeometry = new THREE.BufferGeometry().setFromPoints(leftLinePoints);
+    const leftColinearLine = new THREE.Line(leftLineGeometry, new THREE.LineBasicMaterial({ color: highlightColor }));
+    colinearGroup.add(leftColinearLine);
+    registerWarpPolyline(rightLineParams, new THREE.LineBasicMaterial({ color: highlightColor }), colinearGroup);
+
+    // Angle patch shows that 90° in the left grid becomes skewed after the homography.
+    const quadMaterial = new THREE.MeshBasicMaterial({ color: 0xffc857, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
+    const quadUV = [
+      [0.55, 0.15],
+      [0.75, 0.15],
+      [0.75, 0.35],
+      [0.55, 0.35],
+    ];
+    const leftQuad = buildStaticQuad(quadUV, quadMaterial.clone(), true);
+    angleGroup.add(leftQuad);
+    registerWarpQuad(quadUV, quadMaterial, angleGroup);
+
+    const warpRange = document.getElementById('warpRange');
+    const animateBtn = document.getElementById('animateBtn');
+    const colinearBtn = document.getElementById('colinearBtn');
+    const angleBtn = document.getElementById('angleBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const demoBtn = document.getElementById('demoBtn');
+    const demoText = document.getElementById('demoText');
+
+    let currentWarpAmount = 1;
+    let isAnimating = false;
+    let animationPhase = 0;
+    let colinearVisible = false;
+    let angleVisible = false;
+    let demoStep = 0;
+
+    const demoSteps = [
+      {
+        text: 'Step 1 · Start with the front-on grid: every square is axis-aligned and angles are right angles.',
+        action: () => {
+          stopAnimation();
+          setWarp(0);
+          setColinear(false);
+          setAngle(false);
+        },
+      },
+      {
+        text: 'Step 2 · Apply the homography: the same planar points move to new coordinates while the plane tilts.',
+        action: () => {
+          stopAnimation();
+          setWarp(1);
+          setColinear(false);
+          setAngle(false);
+        },
+      },
+      {
+        text: 'Step 3 · Colinear orange points stay on a single straight line before and after warping.',
+        action: () => {
+          stopAnimation();
+          setWarp(1);
+          setColinear(true);
+          setAngle(false);
+        },
+      },
+      {
+        text: 'Step 4 · Highlight one square: its angles are no longer 90° after the homography, illustrating distortion.',
+        action: () => {
+          stopAnimation();
+          setWarp(1);
+          setColinear(false);
+          setAngle(true);
+        },
+      },
+    ];
+
+    warpRange.addEventListener('input', (event) => {
+      stopAnimation();
+      setWarp(parseFloat(event.target.value), true);
+    });
+
+    animateBtn.addEventListener('click', () => {
+      isAnimating = !isAnimating;
+      animateBtn.classList.toggle('active', isAnimating);
+      animateBtn.textContent = isAnimating ? 'Pause Warp Animation' : 'Animate Warp';
+    });
+
+    colinearBtn.addEventListener('click', () => {
+      setColinear(!colinearVisible);
+    });
+
+    angleBtn.addEventListener('click', () => {
+      setAngle(!angleVisible);
+    });
+
+    resetBtn.addEventListener('click', () => {
+      resetView();
+    });
+
+    demoBtn.addEventListener('click', () => {
+      demoSteps[demoStep].action();
+      demoText.textContent = demoSteps[demoStep].text;
+      demoStep = (demoStep + 1) % demoSteps.length;
+    });
+
+    function resetView() {
+      stopAnimation();
+      setWarp(1);
+      warpRange.value = '1';
+      setColinear(false);
+      setAngle(false);
+      demoStep = 0;
+      demoText.textContent = 'Use the guided steps to see how a planar grid warps under a homography.';
+      camera.position.copy(defaultCameraPosition);
+      controls.target.copy(defaultTarget);
+      controls.update();
+    }
+
+    function stopAnimation() {
+      if (!isAnimating) return;
+      isAnimating = false;
+      animateBtn.classList.remove('active');
+      animateBtn.textContent = 'Animate Warp';
+    }
+
+    function setWarp(value, skipSliderSync = false) {
+      currentWarpAmount = THREE.MathUtils.clamp(value, 0, 1);
+      updateWarp(currentWarpAmount);
+      if (!skipSliderSync) {
+        warpRange.value = currentWarpAmount.toString();
+      }
+    }
+
+    function setColinear(flag) {
+      colinearVisible = flag;
+      colinearGroup.visible = flag;
+      colinearBtn.classList.toggle('active', flag);
+      colinearBtn.textContent = flag ? 'Hide Colinear Points' : 'Show Colinear Points';
+    }
+
+    function setAngle(flag) {
+      angleVisible = flag;
+      angleGroup.visible = flag;
+      angleBtn.classList.toggle('active', flag);
+      angleBtn.textContent = flag ? 'Hide Angle Distortion' : 'Show Angle Distortion';
+    }
+
+    function updateWarp(amount) {
+      warpables.forEach((item) => {
+        for (let i = 0; i < item.positions.length; i++) {
+          item.positions[i] = item.base[i] + (item.warped[i] - item.base[i]) * amount;
+        }
+        item.geometry.attributes.position.needsUpdate = true;
+      });
+      warpPoints.forEach((entry) => {
+        entry.object.position.copy(entry.base).lerp(entry.warped, amount);
+      });
+    }
+
+    function createRectGrid(center, width, height, divisions, color) {
+      const material = new THREE.LineBasicMaterial({ color: color });
+      for (let i = 0; i <= divisions; i++) {
+        const t = i / divisions;
+        const x = center.x - width / 2 + t * width;
+        const yMin = center.y - height / 2;
+        const yMax = center.y + height / 2;
+        const verticalGeom = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(x, yMin, center.z),
+          new THREE.Vector3(x, yMax, center.z),
+        ]);
+        scene.add(new THREE.Line(verticalGeom, material));
+
+        const y = center.y - height / 2 + t * height;
+        const horizontalGeom = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(center.x - width / 2, y, center.z),
+          new THREE.Vector3(center.x + width / 2, y, center.z),
+        ]);
+        scene.add(new THREE.Line(horizontalGeom, material));
+      }
+    }
+
+    function canonicalLeftToWorld(u, v) {
+      return rectToWorld(leftRectCenter, u, v);
+    }
+
+    function canonicalRightToWorld(u, v) {
+      return rectToWorld(rightRectCenter, u, v);
+    }
+
+    function rectToWorld(center, u, v) {
+      const x = center.x + (u - 0.5) * rectWidth;
+      const y = center.y + (0.5 - v) * rectHeight;
+      return new THREE.Vector3(x, y, center.z);
+    }
+
+    function applyHomography(u, v) {
+      const h00 = 1, h01 = 0.25, h02 = 0;
+      const h10 = -0.08, h11 = 1.1, h12 = 0;
+      const h20 = 0.4, h21 = -0.18, h22 = 1;
+      const denom = h20 * u + h21 * v + h22;
+      const nx = (h00 * u + h01 * v + h02) / denom;
+      const ny = (h10 * u + h11 * v + h12) / denom;
+      const depth = depthScale * (1 / denom - 1);
+      return { x: nx, y: ny, depth };
+    }
+
+    function warpWorld(u, v) {
+      const transformed = applyHomography(u, v);
+      const world = canonicalRightToWorld(transformed.x, transformed.y);
+      world.z += transformed.depth;
+      return world;
+    }
+
+    function registerWarpLine(u0, v0, u1, v1, material, parent = scene) {
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(6);
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const line = new THREE.Line(geometry, material);
+      parent.add(line);
+      warpables.push({
+        geometry,
+        positions,
+        base: packVectors([canonicalRightToWorld(u0, v0), canonicalRightToWorld(u1, v1)]),
+        warped: packVectors([warpWorld(u0, v0), warpWorld(u1, v1)]),
+      });
+      return line;
+    }
+
+    function registerWarpPolyline(points, material, parent = scene) {
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(points.length * 3);
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const line = new THREE.Line(geometry, material);
+      parent.add(line);
+      const baseVectors = points.map(([u, v]) => canonicalRightToWorld(u, v));
+      const warpedVectors = points.map(([u, v]) => warpWorld(u, v));
+      warpables.push({ geometry, positions, base: packVectors(baseVectors), warped: packVectors(warpedVectors) });
+      return line;
+    }
+
+    function registerWarpQuad(corners, material, parent = scene) {
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(18);
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const mesh = new THREE.Mesh(geometry, material);
+      parent.add(mesh);
+      const baseCorners = corners.map(([u, v]) => canonicalRightToWorld(u, v));
+      const warpedCorners = corners.map(([u, v]) => warpWorld(u, v));
+      warpables.push({ geometry, positions, base: packQuad(baseCorners), warped: packQuad(warpedCorners) });
+      return mesh;
+    }
+
+    function registerWarpPoint(object3D, baseVec, warpedVec, parent = scene) {
+      warpPoints.push({ object: object3D, base: baseVec, warped: warpedVec });
+      parent.add(object3D);
+    }
+
+    function packVectors(vectors) {
+      const arr = new Float32Array(vectors.length * 3);
+      vectors.forEach((vec, idx) => {
+        arr[idx * 3] = vec.x;
+        arr[idx * 3 + 1] = vec.y;
+        arr[idx * 3 + 2] = vec.z;
+      });
+      return arr;
+    }
+
+    function packQuad(points) {
+      return new Float32Array([
+        points[0].x, points[0].y, points[0].z,
+        points[1].x, points[1].y, points[1].z,
+        points[2].x, points[2].y, points[2].z,
+        points[0].x, points[0].y, points[0].z,
+        points[2].x, points[2].y, points[2].z,
+        points[3].x, points[3].y, points[3].z,
+      ]);
+    }
+
+    function buildStaticQuad(corners, material, leftSide = false) {
+      const pts = corners.map(([u, v]) => (leftSide ? canonicalLeftToWorld(u, v) : canonicalRightToWorld(u, v)));
+      const geometry = new THREE.BufferGeometry();
+      const vertices = packQuad(pts);
+      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      return new THREE.Mesh(geometry, material);
+    }
+
+    function createBillboardLabel(text) {
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      const padding = 28;
+      context.font = '48px "Space Grotesk", "Segoe UI", sans-serif';
+      const textMetrics = context.measureText(text);
+      canvas.width = textMetrics.width + padding * 2;
+      canvas.height = 96;
+      context.font = '48px "Space Grotesk", "Segoe UI", sans-serif';
+      context.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = '#111';
+      context.textBaseline = 'middle';
+      context.fillText(text, padding, canvas.height / 2);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.encoding = THREE.sRGBEncoding;
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+      sprite.scale.set(canvas.width / 300, canvas.height / 300, 1);
+      return sprite;
+    }
+
+    updateWarp(currentWarpAmount);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (isAnimating) {
+        animationPhase += 0.01;
+        const autoValue = 0.5 + 0.5 * Math.sin(animationPhase);
+        setWarp(autoValue, true);
+        warpRange.value = autoValue.toString();
+      }
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+  </script>
+</body>
+</html>

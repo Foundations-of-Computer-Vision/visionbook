@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Perspective Projection: Similar Triangles</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 350px;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            margin-top: 0;
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 5px;
+            width: 100%;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .math-text {
+            font-family: monospace;
+            font-size: 1.1em;
+            background: #eee;
+            padding: 5px;
+            text-align: center;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui-container">
+        <h1>Perspective Projection</h1>
+        <p>Concept: From similar triangles, we derive the perspective projection equations.</p>
+        <div class="math-text" id="math-x">x / f = X / Z</div>
+        <div class="math-text" id="math-y">y / f = Y / Z</div>
+
+        <div class="control-group">
+            <label>Point X: <span id="valX">10</span></label>
+            <input type="range" id="sliderX" min="-20" max="20" value="10">
+        </div>
+        <div class="control-group">
+            <label>Point Y: <span id="valY">8</span></label>
+            <input type="range" id="sliderY" min="-20" max="20" value="8">
+        </div>
+        <div class="control-group">
+            <label>Point Z (Distance): <span id="valZ">20</span></label>
+            <input type="range" id="sliderZ" min="10" max="40" value="20">
+        </div>
+        <div class="control-group">
+            <label>Focal Length (f): <span id="valF">5</span></label>
+            <input type="range" id="sliderF" min="2" max="15" value="5">
+        </div>
+
+        <button id="toggleXBtn">Toggle X Similar Triangles (Green)</button>
+        <button id="toggleYBtn">Toggle Y Similar Triangles (Cyan)</button>
+        <button id="resetBtn">Reset to Textbook View</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(30, 20, 40);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 0, 10);
+
+        // Grid and Axes
+        const axesHelper = new THREE.AxesHelper(25);
+        scene.add(axesHelper);
+
+        // State variables
+        let params = { X: 12, Y: 8, Z: 25, f: 8 };
+
+        // 3D Objects
+        const objects = {
+            plane: null,
+            point3D: null,
+            pointProjected: null,
+            ray: null,
+            trianglesX: new THREE.Group(),
+            trianglesY: new THREE.Group()
+        };
+
+        scene.add(objects.trianglesX);
+        scene.add(objects.trianglesY);
+
+        function createSceneElements() {
+            // Projection Plane
+            const planeGeo = new THREE.PlaneGeometry(30, 30);
+            const planeMat = new THREE.MeshBasicMaterial({ color: 0xcccccc, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+            objects.plane = new THREE.Mesh(planeGeo, planeMat);
+            scene.add(objects.plane);
+
+            // 3D Point P (Red)
+            const sphereGeo = new THREE.SphereGeometry(0.5, 32, 32);
+            objects.point3D = new THREE.Mesh(sphereGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+            scene.add(objects.point3D);
+
+            // Projected Point p (Brown/Orange)
+            objects.pointProjected = new THREE.Mesh(sphereGeo, new THREE.MeshBasicMaterial({ color: 0x8b4513 }));
+            scene.add(objects.pointProjected);
+
+            // Ray from origin to P
+            const matLineDashed = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 1, gapSize: 0.5 });
+            const rayGeo = new THREE.BufferGeometry();
+            objects.ray = new THREE.Line(rayGeo, matLineDashed);
+            scene.add(objects.ray);
+        }
+
+        function buildTriangles(group, color1, color2, p1_3d, p2_3d, p3_3d, p1_proj, p2_proj, p3_proj) {
+            group.clear();
+
+            // Large triangle (3D)
+            const geo3D = new THREE.BufferGeometry().setFromPoints([p1_3d, p2_3d, p3_3d, p1_3d]);
+            const mesh3D = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(p1_3d.x || p1_3d.y, p1_3d.z), new THREE.Vector2(p2_3d.x || p2_3d.y, p2_3d.z), new THREE.Vector2(p3_3d.x || p3_3d.y, p3_3d.z)])), new THREE.MeshBasicMaterial({ color: color1, transparent: true, opacity: 0.4, side: THREE.DoubleSide }));
+
+            // Re-implement correctly with basic lines and planes for simplicity and robustness
+            function makeTri(points, color, opacity) {
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                // Create face
+                geometry.setIndex([0, 1, 2]);
+                geometry.computeVertexNormals();
+                const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: opacity, side: THREE.DoubleSide });
+                const mesh = new THREE.Mesh(geometry, mat);
+
+                // Create edges
+                const edgesGeo = new THREE.BufferGeometry().setFromPoints([...points, points[0]]);
+                const edgesMat = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
+                const edges = new THREE.Line(edgesGeo, edgesMat);
+
+                group.add(mesh);
+                group.add(edges);
+            }
+
+            makeTri([p1_3d, p2_3d, p3_3d], color1, 0.3);
+            makeTri([p1_proj, p2_proj, p3_proj], color2, 0.6);
+        }
+
+        function updateScene() {
+            const { X, Y, Z, f } = params;
+            const x = (f * X) / Z;
+            const y = (f * Y) / Z;
+
+            // Update DOM Math
+            document.getElementById('math-x').innerText = `${x.toFixed(1)} / ${f} = ${X} / ${Z}`;
+            document.getElementById('math-y').innerText = `${y.toFixed(1)} / ${f} = ${Y} / ${Z}`;
+
+            // Update Plane position
+            objects.plane.position.set(0, 0, f);
+            objects.plane.rotation.y = 0; // facing Z
+
+            // Update Points
+            objects.point3D.position.set(X, Y, Z);
+            objects.pointProjected.position.set(x, y, f);
+
+            // Update Ray
+            objects.ray.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(X, Y, Z)]);
+            objects.ray.computeLineDistances();
+
+            // Update X Similar Triangles (Green) - lying in the XZ plane for visualization
+            const origin = new THREE.Vector3(0, 0, 0);
+            buildTriangles(
+                objects.trianglesX, 0x00ff00, 0x00cc00,
+                origin, new THREE.Vector3(0, 0, Z), new THREE.Vector3(X, 0, Z),
+                origin, new THREE.Vector3(0, 0, f), new THREE.Vector3(x, 0, f)
+            );
+
+            // Update Y Similar Triangles (Cyan) - lying in the YZ plane
+            buildTriangles(
+                objects.trianglesY, 0x00ffff, 0x00cccc,
+                origin, new THREE.Vector3(0, 0, Z), new THREE.Vector3(0, Y, Z),
+                origin, new THREE.Vector3(0, 0, f), new THREE.Vector3(0, y, f)
+            );
+        }
+
+        function setupInteractions() {
+            const mapSlider = (id, paramKey) => {
+                const el = document.getElementById(id);
+                const valEl = document.getElementById(`val${paramKey}`);
+                el.addEventListener('input', (e) => {
+                    params[paramKey] = parseFloat(e.target.value);
+                    valEl.innerText = params[paramKey];
+                    updateScene();
+                });
+            };
+
+            mapSlider('sliderX', 'X');
+            mapSlider('sliderY', 'Y');
+            mapSlider('sliderZ', 'Z');
+            mapSlider('sliderF', 'f');
+
+            document.getElementById('toggleXBtn').addEventListener('click', () => {
+                objects.trianglesX.visible = !objects.trianglesX.visible;
+            });
+
+            document.getElementById('toggleYBtn').addEventListener('click', () => {
+                objects.trianglesY.visible = !objects.trianglesY.visible;
+            });
+
+            document.getElementById('resetBtn').addEventListener('click', () => {
+                params = { X: 12, Y: 8, Z: 25, f: 8 };
+                document.getElementById('sliderX').value = params.X; document.getElementById('valX').innerText = params.X;
+                document.getElementById('sliderY').value = params.Y; document.getElementById('valY').innerText = params.Y;
+                document.getElementById('sliderZ').value = params.Z; document.getElementById('valZ').innerText = params.Z;
+                document.getElementById('sliderF').value = params.f; document.getElementById('valF').innerText = params.f;
+                objects.trianglesX.visible = true;
+                objects.trianglesY.visible = true;
+
+                // Reset camera to a good textbook-like angle
+                camera.position.set(30, 20, 40);
+                controls.target.set(0, 0, 10);
+                controls.update();
+                updateScene();
+            });
+        }
+
+        // Initialize
+        createSceneElements();
+        updateScene();
+        setupInteractions();
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Homography Plane Geometry</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            font-family: "Helvetica Neue", Arial, sans-serif;
+            background: #ffffff;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            width: 320px;
+            background: rgba(255, 255, 255, 0.92);
+            border: 1px solid #d0d0d0;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+            border-radius: 12px;
+            padding: 1rem 1.25rem 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+        }
+
+        #ui-panel h2 {
+            margin: 0;
+            font-size: 1.05rem;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: #333;
+        }
+
+        .control {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            font-size: 0.9rem;
+            color: #222;
+        }
+
+        .control label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+        }
+
+        .control input[type="range"] {
+            width: 100%;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        button {
+            flex: 1;
+            border: none;
+            border-radius: 999px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            background: #2c3e50;
+            color: #fff;
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        button:hover {
+            background: #1b2530;
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        #demo-box {
+            border-radius: 10px;
+            padding: 0.75rem;
+            background: #f3f6fa;
+            border: 1px solid #dbe4f0;
+            font-size: 0.88rem;
+            min-height: 70px;
+            color: #1c2733;
+        }
+
+        #demo-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        #demo-controls button {
+            background: #008cba;
+        }
+
+        #demo-controls button:hover {
+            background: #00688a;
+        }
+
+        #credit {
+            font-size: 0.7rem;
+            color: #888;
+            text-align: center;
+        }
+
+        @media (max-width: 700px) {
+            #ui-panel {
+                left: 50%;
+                transform: translateX(-50%);
+                right: auto;
+                width: calc(100% - 2rem);
+            }
+
+            button {
+                flex: 1 1 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="ui-panel">
+        <h2>Planar Homography</h2>
+        <div class="control">
+            <label for="tiltSlider">Plane tilt <span id="tiltValue">35°</span></label>
+            <input id="tiltSlider" type="range" min="10" max="65" step="0.5" value="35" aria-label="Plane tilt" />
+        </div>
+        <div class="control">
+            <label for="uSlider">Plane point (U) <span id="uValue">0.75</span></label>
+            <input id="uSlider" type="range" min="0.15" max="0.9" step="0.01" value="0.75"
+                aria-label="Plane point horizontal" />
+        </div>
+        <div class="control">
+            <label for="vSlider">Plane point (V) <span id="vValue">0.65</span></label>
+            <input id="vSlider" type="range" min="0.2" max="0.85" step="0.01" value="0.65"
+                aria-label="Plane point vertical" />
+        </div>
+        <div class="buttons">
+            <button id="toggleRays">Hide projection rays</button>
+            <button id="resetView">Reset to textbook view</button>
+        </div>
+        <div id="demo-box">
+            <strong>Guided demo · Step <span id="stepIndex">1</span>/4</strong>
+            <div id="demoText">The camera center projects rays that define the viewing pyramid.</div>
+        </div>
+        <div id="demo-controls">
+            <button id="nextStep">Next step</button>
+        </div>
+        <div id="credit">Interactive recreation of Fig. homography_plane_geometry.</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three@0.159.0';
+        import { OrbitControls } from 'https://esm.sh/three@0.159.0/examples/jsm/controls/OrbitControls.js';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const aspect = container.clientWidth / container.clientHeight;
+        const viewSize = 6;
+        const camera = new THREE.OrthographicCamera(
+            -viewSize * aspect,
+            viewSize * aspect,
+            viewSize,
+            -viewSize,
+            0.1,
+            100
+        );
+        camera.position.set(7, 5.5, 7);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.rotateSpeed = 0.7;
+        controls.minZoom = 0.5;
+        controls.maxZoom = 6;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        dirLight.position.set(8, 12, 9);
+        scene.add(dirLight);
+
+        const defaults = { tilt: 35, u: 0.75, v: 0.65 };
+        const params = { tilt: defaults.tilt, u: defaults.u, v: defaults.v, showRays: true };
+
+        const cameraOrigin = new THREE.Vector3(-3.2, 0.7, 0);
+        const cameraSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.12, 32, 32),
+            new THREE.MeshPhongMaterial({ color: 0x111111 })
+        );
+        cameraSphere.position.copy(cameraOrigin);
+        scene.add(cameraSphere);
+
+        // Camera plane represents the textbook's image plane rectangle.
+        const camPlaneGeom = new THREE.PlaneGeometry(1.9, 1.5);
+        const camPlaneMat = new THREE.MeshPhongMaterial({ color: 0xf1f1f1, side: THREE.DoubleSide, transparent: true, opacity: 0.95 });
+        const cameraPlane = new THREE.Mesh(camPlaneGeom, camPlaneMat);
+        cameraPlane.position.set(-1.4, 0.6, 0);
+        cameraPlane.rotation.y = Math.PI / 2;
+        scene.add(cameraPlane);
+
+        // Planar surface corresponds to the gray slanted plane in the figure.
+        const planeWidth = 4.8;
+        const planeHeight = 2.8;
+        const planeGeom = new THREE.PlaneGeometry(planeWidth, planeHeight, 1, 1);
+        const planeMat = new THREE.MeshPhongMaterial({ color: 0xd6d6d6, side: THREE.DoubleSide, shininess: 10 });
+        const planarSurface = new THREE.Mesh(planeGeom, planeMat);
+        planarSurface.position.set(2.4, -0.1, 0.6);
+        planarSurface.rotation.set(-THREE.MathUtils.degToRad(10), -THREE.MathUtils.degToRad(38), THREE.MathUtils.degToRad(8));
+        scene.add(planarSurface);
+
+        const planeBaseRotationY = planarSurface.rotation.y;
+
+        // Image plane axes recreate the green x/y axes from the textbook figure.
+        const imageAxes = new THREE.Group();
+        function addAxisArrow(group, dir, color, label) {
+            const arrow = new THREE.ArrowHelper(dir.clone().normalize(), new THREE.Vector3(0, 0, 0), 0.8, color, 0.14, 0.08);
+            group.add(arrow);
+            const lbl = createLabel(label, color === 0x00aa55 ? '#1f8c4b' : '#c0392b');
+            lbl.position.copy(dir.clone().normalize().multiplyScalar(0.9));
+            arrow.add(lbl);
+        }
+        addAxisArrow(imageAxes, new THREE.Vector3(0, 0.65, 0), 0x00aa55, 'y');
+        addAxisArrow(imageAxes, new THREE.Vector3(0, 0, -0.65), 0x00aa55, 'x');
+        imageAxes.position.set(0, -0.6, 0.55);
+        cameraPlane.add(imageAxes);
+
+        // World axes on the planar surface correspond to the red XYZ arrows in the textbook plane.
+        const planeAxes = new THREE.Group();
+        addAxisArrow(planeAxes, new THREE.Vector3(0.8, 0, 0), 0xc0392b, 'X');
+        addAxisArrow(planeAxes, new THREE.Vector3(0, 0.8, 0), 0xc0392b, 'Y');
+        addAxisArrow(planeAxes, new THREE.Vector3(0, 0, 0.8), 0xc0392b, 'Z');
+        planeAxes.position.set(-1.4, -1.0, -0.9);
+        planarSurface.add(planeAxes);
+
+        const worldPointMat = new THREE.MeshPhongMaterial({ color: 0x00cfe5, shininess: 60 });
+        const worldPoint = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 32), worldPointMat);
+        scene.add(worldPoint);
+
+        const imagePointMat = new THREE.MeshPhongMaterial({ color: 0x00cfe5, shininess: 60, opacity: 0.8, transparent: true });
+        const imagePoint = new THREE.Mesh(new THREE.SphereGeometry(0.09, 32, 32), imagePointMat);
+        scene.add(imagePoint);
+
+        // Rays show how (X, Y, 0) maps to (x, y) through projection.
+        const rayMaterial = new THREE.LineDashedMaterial({ color: 0x222222, dashSize: 0.18, gapSize: 0.12, linewidth: 1 });
+        const worldRay = new THREE.Line(new THREE.BufferGeometry(), rayMaterial.clone());
+        const imageRay = new THREE.Line(new THREE.BufferGeometry(), rayMaterial.clone());
+        scene.add(worldRay, imageRay);
+
+        const turquoiseLineMat = new THREE.LineBasicMaterial({ color: 0x00cfe5 });
+        const linkLine = new THREE.Line(new THREE.BufferGeometry(), turquoiseLineMat);
+        scene.add(linkLine);
+
+        const planeCornerRays = [];
+        for (let i = 0; i < 4; i++) {
+            const line = new THREE.Line(new THREE.BufferGeometry(), rayMaterial.clone());
+            planeCornerRays.push(line);
+            scene.add(line);
+        }
+
+        // Labels clarify textbook annotations in 3D space.
+        const cameraLabel = createLabel('Camera center', '#000000');
+        cameraLabel.position.set(0, 0.35, 0);
+        cameraSphere.add(cameraLabel);
+
+        const planeLabel = createLabel('Planar surface', '#555555');
+        planarSurface.add(planeLabel);
+        planeLabel.position.set(0.2, 0.2, 0.0);
+
+        const camPlaneLabel = createLabel('Camera plane', '#555555');
+        cameraPlane.add(camPlaneLabel);
+        camPlaneLabel.position.set(-0.2, 0.4, 0);
+
+        const imgPointLabel = createLabel('(x, y)', '#00a6c7');
+        imagePoint.add(imgPointLabel);
+        imgPointLabel.position.set(0.15, 0.25, 0);
+
+        const worldPointLabel = createLabel('(X, Y, 0)', '#00a6c7');
+        worldPoint.add(worldPointLabel);
+        worldPointLabel.position.set(0.2, 0.28, 0);
+
+        const steps = [
+            {
+                text: 'The camera center projects rays that define the viewing pyramid.',
+                focus: 'overview'
+            },
+            {
+                text: 'Select a point on the planar surface, labeled (X, Y, 0).',
+                focus: 'worldPoint'
+            },
+            {
+                text: 'The same ray intersects the camera plane at (x, y).',
+                focus: 'imagePoint'
+            },
+            {
+                text: 'Even when the plane tilts, the mapping between the two sets of points is a homography.',
+                focus: 'tilt'
+            }
+        ];
+        let currentStep = 0;
+        let tiltDemoActive = false;
+
+        const tiltSlider = document.getElementById('tiltSlider');
+        const uSlider = document.getElementById('uSlider');
+        const vSlider = document.getElementById('vSlider');
+        const tiltValue = document.getElementById('tiltValue');
+        const uValue = document.getElementById('uValue');
+        const vValue = document.getElementById('vValue');
+        const toggleRaysBtn = document.getElementById('toggleRays');
+        const resetBtn = document.getElementById('resetView');
+        const nextStepBtn = document.getElementById('nextStep');
+        const demoText = document.getElementById('demoText');
+        const stepIndex = document.getElementById('stepIndex');
+
+        // Slider exposes how tilting the plane still preserves a homography mapping.
+        tiltSlider.addEventListener('input', () => {
+            tiltDemoActive = false;
+            params.tilt = parseFloat(tiltSlider.value);
+            tiltValue.textContent = `${params.tilt.toFixed(0)}°`;
+            updatePlaneTilt();
+        });
+
+        // Sliders move the planar point to illustrate corresponding (x, y) projections.
+        uSlider.addEventListener('input', () => {
+            params.u = parseFloat(uSlider.value);
+            uValue.textContent = params.u.toFixed(2);
+            updateCorrespondence();
+        });
+
+        vSlider.addEventListener('input', () => {
+            params.v = parseFloat(vSlider.value);
+            vValue.textContent = params.v.toFixed(2);
+            updateCorrespondence();
+        });
+
+        toggleRaysBtn.addEventListener('click', () => {
+            params.showRays = !params.showRays;
+            toggleRaysBtn.textContent = params.showRays ? 'Hide projection rays' : 'Show projection rays';
+            updateRayVisibility();
+        });
+
+        resetBtn.addEventListener('click', () => {
+            params.tilt = defaults.tilt;
+            params.u = defaults.u;
+            params.v = defaults.v;
+            params.showRays = true;
+            tiltSlider.value = defaults.tilt;
+            uSlider.value = defaults.u;
+            vSlider.value = defaults.v;
+            tiltValue.textContent = `${defaults.tilt.toFixed(0)}°`;
+            uValue.textContent = defaults.u.toFixed(2);
+            vValue.textContent = defaults.v.toFixed(2);
+            toggleRaysBtn.textContent = 'Hide projection rays';
+            currentStep = 0;
+            updatePlaneTilt();
+            updateCorrespondence();
+            applyStepEffects();
+        });
+
+        nextStepBtn.addEventListener('click', () => {
+            currentStep = (currentStep + 1) % steps.length;
+            applyStepEffects();
+        });
+
+        function updatePlaneTilt() {
+            const offset = THREE.MathUtils.degToRad(params.tilt - defaults.tilt);
+            planarSurface.rotation.y = planeBaseRotationY - offset;
+            updateCorrespondence();
+        }
+
+        function getPlanePoint(u, v) {
+            const local = new THREE.Vector3((u - 0.5) * planeWidth, (v - 0.5) * planeHeight, 0);
+            return planarSurface.localToWorld(local);
+        }
+
+        function updateCorrespondence() {
+            const planePt = getPlanePoint(params.u, params.v);
+            worldPoint.position.copy(planePt);
+            const imagePt = intersectWithCameraPlane(planePt);
+            imagePoint.position.copy(imagePt);
+            updateRays();
+        }
+
+        function intersectWithCameraPlane(targetPoint) {
+            const planePoint = cameraPlane.localToWorld(new THREE.Vector3(0, 0, 0));
+            const planeNormal = new THREE.Vector3(0, 0, 1).applyQuaternion(cameraPlane.quaternion);
+            const dir = targetPoint.clone().sub(cameraOrigin);
+            const denom = planeNormal.dot(dir);
+            if (Math.abs(denom) < 1e-5) return planePoint.clone();
+            const t = planeNormal.dot(planePoint.clone().sub(cameraOrigin)) / denom;
+            return cameraOrigin.clone().add(dir.multiplyScalar(t));
+        }
+
+        function updateRays() {
+            const pointsWorld = [cameraOrigin.clone(), worldPoint.position.clone()];
+            worldRay.geometry.setFromPoints(pointsWorld);
+            worldRay.computeLineDistances();
+
+            const pointsImage = [cameraOrigin.clone(), imagePoint.position.clone()];
+            imageRay.geometry.setFromPoints(pointsImage);
+            imageRay.computeLineDistances();
+
+            const cyanPoints = [imagePoint.position.clone(), worldPoint.position.clone()];
+            linkLine.geometry.setFromPoints(cyanPoints);
+
+            const planeCorners = getPlaneCorners();
+            planeCorners.forEach((corner, idx) => {
+                const pts = [cameraOrigin.clone(), corner];
+                planeCornerRays[idx].geometry.setFromPoints(pts);
+                planeCornerRays[idx].computeLineDistances();
+            });
+
+            updateRayVisibility();
+        }
+
+        function getPlaneCorners() {
+            const halfW = planeWidth / 2;
+            const halfH = planeHeight / 2;
+            const corners = [
+                new THREE.Vector3(-halfW, -halfH, 0),
+                new THREE.Vector3(-halfW, halfH, 0),
+                new THREE.Vector3(halfW, halfH, 0),
+                new THREE.Vector3(halfW, -halfH, 0)
+            ];
+            return corners.map(corner => planarSurface.localToWorld(corner));
+        }
+
+        function updateRayVisibility() {
+            [worldRay, imageRay, linkLine, ...planeCornerRays].forEach(line => {
+                line.visible = params.showRays;
+            });
+        }
+
+        function applyStepEffects() {
+            demoText.textContent = steps[currentStep].text;
+            stepIndex.textContent = currentStep + 1;
+            worldPoint.scale.setScalar(1);
+            imagePoint.scale.setScalar(1);
+            planeMat.emissive = new THREE.Color(0x000000);
+            camPlaneMat.emissive = new THREE.Color(0x000000);
+            tiltDemoActive = false;
+
+            switch (steps[currentStep].focus) {
+                case 'worldPoint':
+                    worldPoint.scale.setScalar(1.2);
+                    break;
+                case 'imagePoint':
+                    imagePoint.scale.setScalar(1.2);
+                    camPlaneMat.emissive = new THREE.Color(0x88ccff);
+                    break;
+                case 'tilt':
+                    planeMat.emissive = new THREE.Color(0x666666);
+                    tiltDemoActive = true;
+                    break;
+                default:
+                    camPlaneMat.emissive = new THREE.Color(0x777777);
+                    break;
+            }
+        }
+
+        function animateTiltDemo(time) {
+            if (!tiltDemoActive) return;
+            const oscillation = Math.sin(time * 0.0015) * 8;
+            const newTilt = defaults.tilt + oscillation;
+            params.tilt = newTilt;
+            tiltSlider.value = newTilt;
+            tiltValue.textContent = `${newTilt.toFixed(0)}°`;
+            updatePlaneTilt();
+        }
+
+        function createLabel(text, color = '#222222') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(255,255,255,0.0)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = color;
+            ctx.font = '36px Helvetica Neue';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(0.8, 0.4, 1);
+            return sprite;
+        }
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+            controls.update();
+            animateTiltDemo(time);
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            camera.left = -viewSize * (w / h);
+            camera.right = viewSize * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+
+        updatePlaneTilt();
+        updateCorrespondence();
+        applyStepEffects();
+        animate(0);
+    </script>
+</body>
+
+</html>

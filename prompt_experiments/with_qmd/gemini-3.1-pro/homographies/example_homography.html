@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homography 3D Educational Visualization</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            width: 320px;
+            pointer-events: auto;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            color: #2c3e50;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #34495e;
+        }
+
+        p.description {
+            font-size: 0.85rem;
+            color: #7f8c8d;
+            margin-top: 2px;
+            line-height: 1.3;
+        }
+
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 8px;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        button.secondary {
+            background-color: #95a5a6;
+        }
+
+        button.secondary:hover {
+            background-color: #7f8c8d;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        #tutorial-text {
+            background: #e8f4f8;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            color: #2980b9;
+            margin-bottom: 15px;
+            border-left: 4px solid #3498db;
+        }
+    </style>
+    <!-- Import Three.js as ES Modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+
+    <div id="ui-panel">
+        <h2>Homography Transformation</h2>
+        <div id="tutorial-text">
+            <strong>Step 1:</strong> A homography maps points from one plane to another. Here we see a perfect uniform
+            grid.
+        </div>
+
+        <div class="control-group">
+            <button id="btn-next-step">Next Step</button>
+            <button id="btn-reset-view" class="secondary">Reset to Textbook View</button>
+        </div>
+
+        <div class="control-group">
+            <label for="tilt-slider">Plane Tilt Angle</label>
+            <input type="range" id="tilt-slider" min="-60" max="60" value="0">
+            <p class="description">Rotates the target plane. Notice how parallel lines converge and squares become
+                skewed polygons (keystone effect).</p>
+        </div>
+
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="toggle-rays"> Show Projection Rays
+            </label>
+            <p class="description">Visualizes how the 3D pinhole camera projects the points from the image plane to the
+                world plane.</p>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Scene Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf0f0f0);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 15);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // --- Educational Geometry: 2D Grid to 3D Homography ---
+
+        // 1. Source Grid (Left side of textbook figure, mapped to an image plane)
+        // Represents a pure, un-transformed 2D coordinate system.
+        const gridLinesSource = new THREE.Group();
+        gridLinesSource.position.set(-4, 0, 0);
+
+        // 2. Target Grid (Right side of textbook figure, mapped to a projective plane)
+        // Represents the plane after homographic transformation.
+        const gridLinesTarget = new THREE.Group();
+        gridLinesTarget.position.set(4, 0, 0);
+
+        // 3. Projection Center & Rays
+        // Shows the 3D mechanism that causes the homography (e.g. rotating a camera or viewing a planar surface).
+        const projectionCenter = new THREE.Vector3(4, 0, 8); // Pinhole camera origin for target
+        const raysGroup = new THREE.Group();
+        raysGroup.visible = false;
+
+        scene.add(gridLinesSource);
+        scene.add(gridLinesTarget);
+        scene.add(raysGroup);
+
+        // Grid parameters
+        const gridSize = 4;
+        const cellSize = 1;
+        const halfGrid = gridSize / 2;
+
+        // Material setup
+        const lineMatBlack = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+        const rayMat = new THREE.LineDashedMaterial({ color: 0xe74c3c, dashSize: 0.1, gapSize: 0.1 });
+
+        // Generate uniform source grid
+        for (let i = 0; i <= gridSize; i++) {
+            // Vertical lines
+            let geoV = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(-halfGrid + i * cellSize, -halfGrid, 0),
+                new THREE.Vector3(-halfGrid + i * cellSize, halfGrid, 0)
+            ]);
+            gridLinesSource.add(new THREE.Line(geoV, lineMatBlack));
+
+            // Horizontal lines
+            let geoH = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(-halfGrid, -halfGrid + i * cellSize, 0),
+                new THREE.Vector3(halfGrid, -halfGrid + i * cellSize, 0)
+            ]);
+            gridLinesSource.add(new THREE.Line(geoH, lineMatBlack));
+        }
+
+        // Add a plane underneath the target grid to represent the physical planar surface
+        const planeGeo = new THREE.PlaneGeometry(gridSize + 4, gridSize + 4);
+        const planeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+        const targetPlaneMesh = new THREE.Mesh(planeGeo, planeMat);
+        gridLinesTarget.add(targetPlaneMesh);
+
+        // Function to update the homography target grid based on plane tilt
+        function updateHomography(tiltAngleDeg) {
+            // Clear current target lines and rays
+            while (gridLinesTarget.children.length > 1) { // keep plane mesh
+                gridLinesTarget.remove(gridLinesTarget.children[gridLinesTarget.children.length - 1]);
+            }
+            raysGroup.clear();
+
+            const angleRad = THREE.MathUtils.degToRad(tiltAngleDeg);
+
+            // Set rotation of the plane
+            targetPlaneMesh.rotation.y = angleRad;
+
+            // Normal of the tilted plane
+            const planeNormal = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), angleRad);
+            const planePoint = new THREE.Vector3(4, 0, 0); // Center of plane in world space
+            const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, planePoint);
+
+            // Project each grid line
+            const drawProjectedLine = (p1, p2) => {
+                // p1, p2 are in local coordinates of the source grid, conceptually "image plane" points.
+                // We map them relative to the projection center.
+                const imgP1 = new THREE.Vector3(4 + p1.x, p1.y, 4); // Imaginary image plane at z=4
+                const imgP2 = new THREE.Vector3(4 + p2.x, p2.y, 4);
+
+                // Ray directions
+                const dir1 = new THREE.Vector3().subVectors(imgP1, projectionCenter).normalize();
+                const dir2 = new THREE.Vector3().subVectors(imgP2, projectionCenter).normalize();
+
+                // Intersect with the tilted plane
+                const target1 = new THREE.Vector3();
+                const target2 = new THREE.Vector3();
+
+                new THREE.Ray(projectionCenter, dir1).intersectPlane(plane, target1);
+                new THREE.Ray(projectionCenter, dir2).intersectPlane(plane, target2);
+
+                if (target1 && target2) {
+                    // Convert world coordinates back to target grid local coordinates
+                    target1.sub(new THREE.Vector3(4, 0, 0));
+                    target2.sub(new THREE.Vector3(4, 0, 0));
+
+                    const geo = new THREE.BufferGeometry().setFromPoints([target1, target2]);
+                    gridLinesTarget.add(new THREE.Line(geo, lineMatBlack));
+
+                    // Add rays (world coords)
+                    if (document.getElementById('toggle-rays').checked) {
+                        const rayGeo1 = new THREE.BufferGeometry().setFromPoints([projectionCenter, target1.clone().add(new THREE.Vector3(4, 0, 0))]);
+                        const rayGeo2 = new THREE.BufferGeometry().setFromPoints([projectionCenter, target2.clone().add(new THREE.Vector3(4, 0, 0))]);
+                        const rayLine1 = new THREE.Line(rayGeo1, rayMat);
+                        const rayLine2 = new THREE.Line(rayGeo2, rayMat);
+                        rayLine1.computeLineDistances();
+                        rayLine2.computeLineDistances();
+                        raysGroup.add(rayLine1, rayLine2);
+                    }
+                }
+            };
+
+            // Reconstruct the lines via projection
+            for (let i = 0; i <= gridSize; i++) {
+                drawProjectedLine(
+                    new THREE.Vector3(-halfGrid + i * cellSize, -halfGrid, 0),
+                    new THREE.Vector3(-halfGrid + i * cellSize, halfGrid, 0)
+                );
+                drawProjectedLine(
+                    new THREE.Vector3(-halfGrid, -halfGrid + i * cellSize, 0),
+                    new THREE.Vector3(halfGrid, -halfGrid + i * cellSize, 0)
+                );
+            }
+        }
+
+        // Initialize transformation
+        updateHomography(0);
+
+        // --- Interaction Logic ---
+
+        const tiltSlider = document.getElementById('tilt-slider');
+        tiltSlider.addEventListener('input', (e) => {
+            updateHomography(parseFloat(e.target.value));
+        });
+
+        document.getElementById('toggle-rays').addEventListener('change', (e) => {
+            raysGroup.visible = e.target.checked;
+            updateHomography(parseFloat(tiltSlider.value)); // Redraw with/without rays
+        });
+
+        document.getElementById('btn-reset-view').addEventListener('click', () => {
+            // Textbook view: flat on, side by side
+            camera.position.set(0, 0, 15);
+            camera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            tiltSlider.value = 45; // Standard textbook homography tilt
+            updateHomography(45);
+        });
+
+        // Guided Demo Steps
+        const tutorialSteps = [
+            "<strong>Step 1: The Original Grid.</strong> A planar square grid represents the coordinates in an orthographic view.",
+            "<strong>Step 2: Projection.</strong> Changing the plane tilt simulates capturing the plane from a different camera angle (homography). Notice angles and lengths are no longer preserved.",
+            "<strong>Step 3: Colinearity.</strong> Even though the squares warp into complex quadrilaterals, straight lines remain perfectly straight. This is the defining property of a projective transformation.",
+            "<strong>Step 4: Explore.</strong> Show the projection rays and rotate the 3D scene. A homography mathematically describes the perspective projection from an image plane to another plane."
+        ];
+
+        let currentStep = 0;
+        document.getElementById('btn-next-step').addEventListener('click', () => {
+            currentStep = (currentStep + 1) % tutorialSteps.length;
+            document.getElementById('tutorial-text').innerHTML = tutorialSteps[currentStep];
+
+            if (currentStep === 0) {
+                tiltSlider.value = 0;
+                document.getElementById('toggle-rays').checked = false;
+                raysGroup.visible = false;
+                camera.position.set(0, 0, 15);
+            } else if (currentStep === 1) {
+                tiltSlider.value = 40;
+            } else if (currentStep === 2) {
+                tiltSlider.value = 55;
+            } else if (currentStep === 3) {
+                document.getElementById('toggle-rays').checked = true;
+                raysGroup.visible = true;
+                camera.position.set(10, 8, 15);
+            }
+
+            updateHomography(parseFloat(tiltSlider.value));
+            camera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+        });
+
+        // Start with a slight tilt similar to the textbook image
+        tiltSlider.value = 0;
+        updateHomography(0);
+
+        // --- Rendering Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Pinhole Camera Geometry</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            width: 100%;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #f4f6fb;
+            color: #111;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 0.6rem;
+            box-shadow: 0 8px 18px rgba(15, 34, 58, 0.25);
+            padding: 1rem 1.2rem;
+            max-width: 320px;
+            line-height: 1.4;
+            backdrop-filter: blur(6px);
+        }
+
+        #ui h2 {
+            margin: 0 0 0.4rem 0;
+            font-size: 1.1rem;
+        }
+
+        .control-group {
+            margin-bottom: 0.9rem;
+        }
+
+        label {
+            font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.3rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+
+        button {
+            border: none;
+            border-radius: 0.4rem;
+            padding: 0.35rem 0.75rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            background: #264d73;
+            color: #fff;
+            transition: background 0.2s;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button:hover:not(:disabled) {
+            background: #1c3752;
+        }
+
+        #info {
+            font-size: 0.85rem;
+            margin-top: 0.6rem;
+            color: #334;
+        }
+
+        #demoText {
+            position: absolute;
+            bottom: 1.2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(6, 17, 40, 0.85);
+            color: #fff;
+            padding: 0.5rem 0.9rem;
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            min-width: 240px;
+            text-align: center;
+            pointer-events: none;
+        }
+
+        .label-renderer {
+            pointer-events: none;
+        }
+
+        .label {
+            padding: 0.15rem 0.35rem;
+            border-radius: 0.35rem;
+            font-size: 0.75rem;
+            background: rgba(0, 0, 0, 0.65);
+            color: #fff;
+            white-space: nowrap;
+        }
+
+        .label.highlight {
+            background: #ffb347;
+            color: #222;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="ui">
+        <h2>Pinhole Camera Controls</h2>
+        <div class="control-group">
+            <label>Focal length f (units) <span id="fVal">1.40</span></label>
+            <input id="fSlider" type="range" min="0.8" max="2.3" step="0.05" value="1.4" />
+        </div>
+        <div class="control-group">
+            <label>World point depth Z <span id="zVal">5.00</span></label>
+            <input id="zSlider" type="range" min="3" max="8" step="0.1" value="5" />
+        </div>
+        <div class="control-group">
+            <label><span>Show virtual camera plane</span>
+                <input id="virtualToggle" type="checkbox" checked />
+            </label>
+        </div>
+        <div class="buttons">
+            <button id="resetBtn">Reset to textbook view</button>
+            <button id="demoBtn">Run guided demo</button>
+        </div>
+        <div id="info">
+            Drag to orbit. Use sliders to see how changing f or moving the world point alters the projected point on the
+            camera plane.
+        </div>
+    </div>
+    <div id="demoText">World point P, ray, and projection are highlighted during the demo.</div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three@0.160.1/build/three.module.js';
+        import { OrbitControls } from 'https://esm.sh/three@0.160.1/examples/jsm/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three@0.160.1/examples/jsm/renderers/CSS2DRenderer.js';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf3f6fb);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(6, 4, 6);
+        camera.lookAt(0, 1, 2);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(container.clientWidth, container.clientHeight);
+        labelRenderer.domElement.className = 'label-renderer';
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.left = '0';
+        document.body.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0.7, 1.5);
+        controls.enableDamping = true;
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        keyLight.position.set(4, 6, 5);
+        scene.add(ambient, keyLight);
+
+        // Camera body volume to match the block in the 2D textbook illustration.
+        const cameraBodyGeometry = new THREE.BoxGeometry(2.6, 1.6, 3.4);
+        const cameraBodyMaterial = new THREE.MeshStandardMaterial({
+            color: 0x7a8c9f,
+            transparent: true,
+            opacity: 0.35,
+            side: THREE.DoubleSide
+        });
+        const cameraBody = new THREE.Mesh(cameraBodyGeometry, cameraBodyMaterial);
+        cameraBody.position.set(0, 0.6, 1.7);
+        scene.add(cameraBody);
+
+        // Projection plane that lives inside the camera housing.
+        const projectionPlaneMaterial = new THREE.MeshStandardMaterial({
+            color: 0x88c1d0,
+            transparent: true,
+            opacity: 0.35,
+            side: THREE.DoubleSide
+        });
+        const projectionPlane = new THREE.Mesh(new THREE.PlaneGeometry(3, 2), projectionPlaneMaterial);
+        scene.add(projectionPlane);
+
+        // Virtual camera plane placed symmetrically to show the flipped image used in derivations.
+        const virtualPlaneMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffe1a7,
+            transparent: true,
+            opacity: 0.32,
+            side: THREE.DoubleSide
+        });
+        const virtualPlane = new THREE.Mesh(new THREE.PlaneGeometry(3, 2), virtualPlaneMaterial);
+        scene.add(virtualPlane);
+
+        // Optical/pinhole location.
+        const pinholeMaterial = new THREE.MeshStandardMaterial({ color: 0x11141b, metalness: 0.2, roughness: 0.5 });
+        const pinhole = new THREE.Mesh(new THREE.SphereGeometry(0.055, 24, 24), pinholeMaterial);
+        pinhole.position.set(0, 0.6, 0);
+        scene.add(pinhole);
+
+        // Optical axis line to match the Z-axis arrow in the textbook figure.
+        const axisMaterial = new THREE.LineBasicMaterial({ color: 0x1b4d8c });
+        const axisGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0.6, -1.2),
+            new THREE.Vector3(0, 0.6, 4)
+        ]);
+        const opticalAxis = new THREE.Line(axisGeometry, axisMaterial);
+        scene.add(opticalAxis);
+
+        // Arrow helpers for world coordinate axes (matching original labels X, Y, Z).
+        const axisLength = 1.6;
+        const arrowX = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0.6, 0), axisLength, 0xc92f2f, 0.15, 0.09);
+        const arrowY = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0.6, 0), axisLength, 0x2f9c4a, 0.15, 0.09);
+        const arrowZ = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.6, 0), axisLength, 0x2f58c9, 0.15, 0.09);
+        scene.add(arrowX, arrowY, arrowZ);
+
+        // World point representing P(X,Y,Z) from the drawing.
+        const baseWorld = new THREE.Vector3(1.2, 1.1, 5);
+        const worldPointMaterial = new THREE.MeshStandardMaterial({ color: 0xff5e1a, emissive: 0x1a1200 });
+        const worldPoint = new THREE.Mesh(new THREE.SphereGeometry(0.09, 24, 24), worldPointMaterial);
+        scene.add(worldPoint);
+
+        // Projection of P on the camera plane (the textbook point p(x, y)).
+        const projectedPointMaterial = new THREE.MeshStandardMaterial({ color: 0x0054ff, emissive: 0x00142f });
+        const projectedPoint = new THREE.Mesh(new THREE.SphereGeometry(0.07, 24, 24), projectedPointMaterial);
+        scene.add(projectedPoint);
+
+        // Projection on the virtual plane to illustrate the flipped construction.
+        const virtualPointMaterial = new THREE.MeshStandardMaterial({ color: 0x7a3ffc, emissive: 0x190e33 });
+        const virtualPoint = new THREE.Mesh(new THREE.SphereGeometry(0.07, 24, 24), virtualPointMaterial);
+        scene.add(virtualPoint);
+
+        // Lines that map light rays from P through the pinhole to both planes.
+        const worldRayMaterial = new THREE.LineBasicMaterial({ color: 0xff8b3d });
+        const pinholeRayMaterial = new THREE.LineBasicMaterial({ color: 0x3377ff });
+        const worldRay = new THREE.Line(new THREE.BufferGeometry(), worldRayMaterial);
+        const imageRay = new THREE.Line(new THREE.BufferGeometry(), pinholeRayMaterial);
+        const virtualRay = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xa164ff }));
+        scene.add(worldRay, imageRay, virtualRay);
+
+        // Labels to keep the language from the chapter.
+        function createLabel(text) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            return new CSS2DObject(div);
+        }
+
+        const labelP = createLabel('World point P(X,Y,Z)');
+        worldPoint.add(labelP);
+
+        const labelp = createLabel('Projection p(x,y)');
+        projectedPoint.add(labelp);
+
+        const labelVirtual = createLabel('Virtual camera plane');
+        virtualPlane.add(labelVirtual);
+
+        const labelProjectionPlane = createLabel('Projection plane (camera)');
+        projectionPlane.add(labelProjectionPlane);
+
+        const labelOrigin = createLabel('Pinhole / origin');
+        pinhole.add(labelOrigin);
+
+        const labelX = createLabel('X');
+        const labelY = createLabel('Y');
+        const labelZ = createLabel('Z');
+        arrowX.add(labelX);
+        arrowY.add(labelY);
+        arrowZ.add(labelZ);
+
+        const params = {
+            focalLength: 1.4,
+            objectDepth: 5,
+            showVirtualPlane: true
+        };
+
+        const stateDefaults = { ...params };
+
+        const fSlider = document.getElementById('fSlider');
+        const zSlider = document.getElementById('zSlider');
+        const virtualToggle = document.getElementById('virtualToggle');
+        const resetBtn = document.getElementById('resetBtn');
+        const demoBtn = document.getElementById('demoBtn');
+        const fVal = document.getElementById('fVal');
+        const zVal = document.getElementById('zVal');
+        const demoText = document.getElementById('demoText');
+
+        let demoActive = false;
+
+        function updateLine(line, points) {
+            const positions = points.map(p => p.clone());
+            line.geometry.setFromPoints(positions);
+        }
+
+        function updateProjection() {
+            const f = params.focalLength;
+            const z = params.objectDepth;
+
+            worldPoint.position.set(baseWorld.x, baseWorld.y, z);
+
+            // Perspective projection: x = f * X / Z and y = f * Y / Z.
+            const ratio = f / z;
+            projectedPoint.position.set(baseWorld.x * ratio, baseWorld.y * ratio, f);
+            virtualPoint.position.set(baseWorld.x * ratio, baseWorld.y * ratio, -f);
+
+            projectionPlane.position.set(0, 0.6, f);
+            virtualPlane.position.set(0, 0.6, -f);
+            virtualPlane.visible = params.showVirtualPlane;
+            virtualPoint.visible = params.showVirtualPlane;
+            virtualRay.visible = params.showVirtualPlane;
+
+            updateLine(worldRay, [worldPoint.position, pinhole.position]);
+            updateLine(imageRay, [pinhole.position, projectedPoint.position]);
+            updateLine(virtualRay, [pinhole.position, virtualPoint.position]);
+
+            fVal.textContent = f.toFixed(2);
+            zVal.textContent = z.toFixed(2);
+        }
+
+        fSlider.addEventListener('input', () => {
+            params.focalLength = parseFloat(fSlider.value);
+            updateProjection();
+        });
+
+        zSlider.addEventListener('input', () => {
+            params.objectDepth = parseFloat(zSlider.value);
+            updateProjection();
+        });
+
+        virtualToggle.addEventListener('change', () => {
+            params.showVirtualPlane = virtualToggle.checked;
+            updateProjection();
+        });
+
+        resetBtn.addEventListener('click', () => {
+            params.focalLength = stateDefaults.focalLength;
+            params.objectDepth = stateDefaults.objectDepth;
+            params.showVirtualPlane = true;
+            fSlider.value = params.focalLength;
+            zSlider.value = params.objectDepth;
+            virtualToggle.checked = true;
+            controls.reset();
+            controls.target.set(0, 0.7, 1.5);
+            updateProjection();
+        });
+
+        function highlight(item, state) {
+            if (!item) return;
+            const dom = item.element;
+            if (!dom) return;
+            dom.classList.toggle('highlight', state);
+        }
+
+        function setEmissive(material, color) {
+            if (!material) return;
+            material.emissive = new THREE.Color(color);
+        }
+
+        function resetHighlights() {
+            setEmissive(worldPointMaterial, 0x1a1200);
+            setEmissive(projectedPointMaterial, 0x00142f);
+            setEmissive(virtualPointMaterial, 0x190e33);
+            highlight(labelP, false);
+            highlight(labelp, false);
+            highlight(labelVirtual, false);
+            highlight(labelProjectionPlane, false);
+            demoText.textContent = 'World point P, ray, and projection are highlighted during the demo.';
+        }
+
+        function runGuidedDemo() {
+            if (demoActive) return;
+            demoActive = true;
+            demoBtn.disabled = true;
+            const steps = [
+                () => {
+                    setEmissive(worldPointMaterial, 0xff7700);
+                    highlight(labelP, true);
+                    demoText.textContent = 'Step 1: Point P(X,Y,Z) is somewhere in front of the camera.';
+                },
+                () => {
+                    setEmissive(worldPointMaterial, 0x1a1200);
+                    highlight(labelP, false);
+                    highlight(labelProjectionPlane, false);
+                    demoText.textContent = 'Step 2: A single ray travels from P through the pinhole.';
+                },
+                () => {
+                    highlight(labelp, true);
+                    setEmissive(projectedPointMaterial, 0x33a0ff);
+                    demoText.textContent = 'Step 3: The ray reaches the projection plane at p(x,y).';
+                },
+                () => {
+                    highlight(labelVirtual, params.showVirtualPlane);
+                    setEmissive(virtualPointMaterial, params.showVirtualPlane ? 0xb78cff : 0x190e33);
+                    if (params.showVirtualPlane) {
+                        demoText.textContent = 'The mirrored virtual plane keeps the same coordinates without inversion.';
+                    }
+                }
+            ];
+
+            let index = 0;
+            function advance() {
+                resetHighlights();
+                if (index < steps.length) {
+                    steps[index]();
+                    index += 1;
+                    setTimeout(advance, 1600);
+                } else {
+                    resetHighlights();
+                    demoBtn.disabled = false;
+                    demoActive = false;
+                }
+            }
+            advance();
+        }
+
+        demoBtn.addEventListener('click', runGuidedDemo);
+
+        updateProjection();
+
+        function onWindowResize() {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            labelRenderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        window.addEventListener('resize', onWindowResize);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

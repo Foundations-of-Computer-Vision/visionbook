@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Perspective Projection Similar Triangles</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Source Sans Pro", "Segoe UI", sans-serif;
+            background: #f8fbff;
+            color: #0f172a;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            width: 300px;
+            background: rgba(255, 255, 255, 0.92);
+            border-radius: 12px;
+            padding: 1rem 1.2rem;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.2);
+            backdrop-filter: blur(6px);
+        }
+
+        #ui h2 {
+            margin: 0 0 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        #ui label {
+            display: block;
+            font-size: 0.84rem;
+            margin-top: 0.8rem;
+        }
+
+        #ui input[type=range] {
+            width: 100%;
+        }
+
+        #ui button {
+            width: 100%;
+            border: none;
+            background: #2563eb;
+            color: white;
+            padding: 0.55rem 0.6rem;
+            border-radius: 8px;
+            margin-top: 0.6rem;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        #ui button.secondary {
+            background: #0f172a;
+        }
+
+        #ui button:active {
+            transform: translateY(1px);
+        }
+
+        #message {
+            position: absolute;
+            bottom: 1.3rem;
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 320px;
+            max-width: 600px;
+            text-align: center;
+            padding: 0.75rem 1rem;
+            background: rgba(15, 23, 42, 0.9);
+            color: #e2e8f0;
+            border-radius: 999px;
+            font-size: 0.95rem;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
+        }
+
+        .value {
+            font-weight: 600;
+            float: right;
+        }
+
+        #ui .toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-top: 0.8rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="ui">
+        <h2>Image Formation Controls</h2>
+        <label>World depth Z (distance from pinhole)
+            <span class="value" id="depthValue">4.0</span>
+            <input type="range" id="depth" min="2" max="8" step="0.1" value="4">
+        </label>
+        <label>World horizontal X
+            <span class="value" id="xValue">2.0</span>
+            <input type="range" id="xPos" min="-2.5" max="2.5" step="0.1" value="2">
+        </label>
+        <label>World height Y
+            <span class="value" id="yValue">0.8</span>
+            <input type="range" id="yPos" min="-2" max="2" step="0.1" value="0.8">
+        </label>
+        <label class="toggle">
+            <input type="checkbox" id="triangleToggle" checked />
+            Show similar-triangle slices
+        </label>
+        <button id="resetBtn">Reset to textbook view</button>
+        <button id="demoBtn" class="secondary">Next guided step</button>
+    </div>
+    <div id="message">Use the sliders to move the red world point P and see how its image (x, y) obeys x = fX/Z and y =
+        fY/Z.</div>
+
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three@0.169.0';
+        import { OrbitControls } from 'https://esm.sh/three@0.169.0/examples/jsm/controls/OrbitControls.js';
+
+        const container = document.getElementById('container');
+        const depthSlider = document.getElementById('depth');
+        const xSlider = document.getElementById('xPos');
+        const ySlider = document.getElementById('yPos');
+        const triangleToggle = document.getElementById('triangleToggle');
+        const resetBtn = document.getElementById('resetBtn');
+        const demoBtn = document.getElementById('demoBtn');
+        const messageEl = document.getElementById('message');
+        const depthValue = document.getElementById('depthValue');
+        const xValue = document.getElementById('xValue');
+        const yValue = document.getElementById('yValue');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f6ff);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(8, 6, 8);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.target.set(0, 1, 2.5);
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        dirLight.position.set(6, 10, 4);
+        scene.add(ambient, dirLight);
+
+        const axes = new THREE.AxesHelper(3.5);
+        scene.add(axes);
+
+        const state = { X: 2, Y: 0.8, Z: 4, showTriangles: true, demoStep: 0 };
+        const focal = 2.0;
+
+        const origin = new THREE.Vector3(0, 0, 0);
+
+        // Image plane behind the pinhole mirrors the gray wall of the textbook diagram.
+        const imagePlaneGeom = new THREE.PlaneGeometry(5.5, 5.5);
+        const imagePlaneMat = new THREE.MeshBasicMaterial({ color: 0xe0e7ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+        const imagePlane = new THREE.Mesh(imagePlaneGeom, imagePlaneMat);
+        imagePlane.position.z = -focal;
+        scene.add(imagePlane);
+
+        const imagePlaneFrame = new THREE.LineSegments(new THREE.EdgesGeometry(imagePlaneGeom), new THREE.LineBasicMaterial({ color: 0xff4d4d }));
+        imagePlaneFrame.position.copy(imagePlane.position);
+        scene.add(imagePlaneFrame);
+
+        // Virtual plane in front (cyan) corresponds to the flipped, non-inverted drawing used in the text.
+        const virtualPlaneGeom = new THREE.PlaneGeometry(5.5, 5.5);
+        const virtualPlaneMat = new THREE.MeshBasicMaterial({ color: 0xcdf9ff, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+        const virtualPlane = new THREE.Mesh(virtualPlaneGeom, virtualPlaneMat);
+        virtualPlane.position.z = focal;
+        scene.add(virtualPlane);
+
+        const virtualPlaneFrame = new THREE.LineSegments(new THREE.EdgesGeometry(virtualPlaneGeom), new THREE.LineBasicMaterial({ color: 0xff4d4d }));
+        virtualPlaneFrame.position.copy(virtualPlane.position);
+        scene.add(virtualPlaneFrame);
+
+        // Principal red axis links the two planes just like the red line in the 2D figure.
+        const axisMaterial = new THREE.LineBasicMaterial({ color: 0xff2c2c });
+        const principalAxisGeom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -focal), new THREE.Vector3(0, 0, 5.5)]);
+        const principalAxis = new THREE.Line(principalAxisGeom, axisMaterial);
+        scene.add(principalAxis);
+
+        const pinhole = new THREE.Mesh(new THREE.SphereGeometry(0.1, 24, 24), new THREE.MeshPhongMaterial({ color: 0x111111 }));
+        scene.add(pinhole);
+
+        // World point P mapped from the brown/red circle in the flat drawing.
+        const worldPoint = new THREE.Mesh(new THREE.SphereGeometry(0.16, 28, 28), new THREE.MeshPhongMaterial({ color: 0xd34f32 }));
+        scene.add(worldPoint);
+
+        const virtualImagePoint = new THREE.Mesh(new THREE.SphereGeometry(0.12, 24, 24), new THREE.MeshPhongMaterial({ color: 0x3c5afa }));
+        scene.add(virtualImagePoint);
+
+        const realImagePoint = new THREE.Mesh(new THREE.SphereGeometry(0.12, 24, 24), new THREE.MeshPhongMaterial({ color: 0x2ec4b6 }));
+        scene.add(realImagePoint);
+
+        // Rays and cross-sections that illustrate similar triangles.
+        const worldRayMaterial = new THREE.LineDashedMaterial({ color: 0x111111, dashSize: 0.25, gapSize: 0.12, linewidth: 1 });
+        const worldRay = new THREE.Line(new THREE.BufferGeometry(), worldRayMaterial);
+        worldRay.computeLineDistances();
+        scene.add(worldRay);
+
+        const imageRayMaterial = new THREE.LineBasicMaterial({ color: 0xff4d4d });
+        const imageRay = new THREE.Line(new THREE.BufferGeometry(), imageRayMaterial);
+        scene.add(imageRay);
+
+        // Horizontal (green) and vertical (cyan) similar triangles from the textbook figure.
+        const xzMaterial = new THREE.MeshBasicMaterial({ color: 0x8bd17c, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+        const yzMaterial = new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+        const triangleXZ = new THREE.Mesh(new THREE.BufferGeometry(), xzMaterial);
+        const triangleYZ = new THREE.Mesh(new THREE.BufferGeometry(), yzMaterial);
+        scene.add(triangleXZ, triangleYZ);
+
+        // Lightweight text sprites keep the original labels (X, Y, Z, f, x, y, P).
+        function makeLabel(text, color = '#0f172a', size = 250) {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0,0,0,0)';
+            ctx.fillRect(0, 0, size, size);
+            ctx.fillStyle = color;
+            ctx.font = `${size * 0.35}px "Segoe UI", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, size / 2, size / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(0.7, 0.7, 0.7);
+            return sprite;
+        }
+
+        const labelX = makeLabel('X', '#b91c1c');
+        labelX.position.set(3.2, 0.2, 0);
+        scene.add(labelX);
+
+        const labelY = makeLabel('Y', '#15803d');
+        labelY.position.set(0.2, 3.3, 0);
+        scene.add(labelY);
+
+        const labelZ = makeLabel('Z', '#0f52ba');
+        labelZ.position.set(0.2, 0.2, 4.8);
+        scene.add(labelZ);
+
+        const labelf = makeLabel('f', '#ff4d4d');
+        labelf.position.set(0.2, -0.4, focal / 2);
+        scene.add(labelf);
+
+        const labelImagePlane = makeLabel('image plane', '#1f2937');
+        labelImagePlane.scale.set(1.5, 1.5, 1.5);
+        labelImagePlane.position.set(-2, -1.3, -focal);
+        scene.add(labelImagePlane);
+
+        const labelVirtualPlane = makeLabel('virtual plane', '#1f2937');
+        labelVirtualPlane.scale.set(1.5, 1.5, 1.5);
+        labelVirtualPlane.position.set(-2, -1.3, focal);
+        scene.add(labelVirtualPlane);
+
+        const labelWorldPoint = makeLabel('P(X,Y,Z)', '#d34f32');
+        scene.add(labelWorldPoint);
+
+        const labelImagePoint = makeLabel('p(x,y)', '#3c5afa');
+        scene.add(labelImagePoint);
+
+        const labelRealPoint = makeLabel('inverted image', '#2ec4b6');
+        labelRealPoint.scale.set(1.1, 1.1, 1.1);
+        scene.add(labelRealPoint);
+
+        function updateTriangleMesh(mesh, points) {
+            const positions = new Float32Array(points.flatMap(v => [v.x, v.y, v.z]));
+            mesh.geometry.dispose();
+            mesh.geometry = new THREE.BufferGeometry();
+            mesh.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            mesh.geometry.computeVertexNormals();
+        }
+
+        function updateLines(line, pts, dashed = false) {
+            line.geometry.dispose();
+            line.geometry = new THREE.BufferGeometry().setFromPoints(pts);
+            if (dashed && line.computeLineDistances) {
+                line.computeLineDistances();
+            }
+        }
+
+        function projectToPlane(X, Y, Z, planeZ) {
+            const scale = planeZ / Z;
+            return new THREE.Vector3(X * scale, Y * scale, planeZ);
+        }
+
+        function updateScene() {
+            const { X, Y, Z } = state;
+            worldPoint.position.set(X, Y, Z);
+            labelWorldPoint.position.copy(worldPoint.position).add(new THREE.Vector3(0.1, 0.4, 0));
+
+            const virtualPos = projectToPlane(X, Y, Z, focal);
+            virtualImagePoint.position.copy(virtualPos);
+            labelImagePoint.position.copy(virtualPos).add(new THREE.Vector3(0.2, 0.2, 0));
+
+            const realPos = projectToPlane(-X, -Y, Z, focal);
+            realPos.z = -focal;
+            realImagePoint.position.copy(realPos);
+            labelRealPoint.position.copy(realPos).add(new THREE.Vector3(0.2, 0.2, 0));
+
+            updateLines(worldRay, [worldPoint.position.clone(), origin.clone()], true);
+            updateLines(imageRay, [origin.clone(), virtualImagePoint.position.clone()]);
+
+            const triXZPoints = [origin.clone(), new THREE.Vector3(X, 0, Z), new THREE.Vector3(virtualPos.x, 0, virtualPos.z)];
+            const triYZPoints = [origin.clone(), new THREE.Vector3(0, Y, Z), new THREE.Vector3(0, virtualPos.y, virtualPos.z)];
+            updateTriangleMesh(triangleXZ, triXZPoints);
+            updateTriangleMesh(triangleYZ, triYZPoints);
+            triangleXZ.visible = triangleToggle.checked;
+            triangleYZ.visible = triangleToggle.checked;
+        }
+
+        updateScene();
+
+        function setSliderDisplays() {
+            depthValue.textContent = state.Z.toFixed(1);
+            xValue.textContent = state.X.toFixed(1);
+            yValue.textContent = state.Y.toFixed(1);
+        }
+
+        setSliderDisplays();
+
+        // Depth slider: moving the object along Z shows how both triangles shrink uniformly.
+        depthSlider.addEventListener('input', () => {
+            state.Z = parseFloat(depthSlider.value);
+            setSliderDisplays();
+            updateScene();
+            messageEl.textContent = 'Changing Z shows how distant objects shrink so that x = fX/Z and y = fY/Z.';
+        });
+
+        // Horizontal slider: demonstrates how x tracks the ratio between world and image triangles.
+        xSlider.addEventListener('input', () => {
+            state.X = parseFloat(xSlider.value);
+            setSliderDisplays();
+            updateScene();
+            messageEl.textContent = 'Adjusting X slides P sideways and the projected x follows the red similar triangle.';
+        });
+
+        // Vertical slider: mirrors how y depends on height yet shares the same Z scaling.
+        ySlider.addEventListener('input', () => {
+            state.Y = parseFloat(ySlider.value);
+            setSliderDisplays();
+            updateScene();
+            messageEl.textContent = 'Raising Y tilts the cyan triangle, reinforcing y = fY/Z.';
+        });
+
+        // Toggle reenacts hiding/showing the colored cross-sections from the flat artwork.
+        triangleToggle.addEventListener('change', () => {
+            state.showTriangles = triangleToggle.checked;
+            updateScene();
+            messageEl.textContent = state.showTriangles ? 'Triangles visible: compare world and image slices directly.' : 'Triangles hidden: focus on rays and image points only.';
+        });
+
+        function resetView() {
+            state.X = 2;
+            state.Y = 0.8;
+            state.Z = 4;
+            depthSlider.value = state.Z;
+            xSlider.value = state.X;
+            ySlider.value = state.Y;
+            triangleToggle.checked = true;
+            controls.target.set(0, 1, 2.5);
+            camera.position.set(8, 6, 8);
+            controls.update();
+            setSliderDisplays();
+            updateScene();
+            messageEl.textContent = 'Reset: this is the textbook perspective view with both horizontal and vertical similar triangles visible.';
+        }
+
+        resetBtn.addEventListener('click', resetView);
+
+        const demoSteps = [
+            {
+                text: 'Step 1: The red point P(X,Y,Z) lies in front of the pinhole and defines the big triangle.',
+                action: () => {
+                    worldPoint.material.emissive = new THREE.Color(0x882200);
+                    imageRay.material.color.set(0xff4d4d);
+                    worldRayMaterial.color.set(0x111111);
+                    triangleXZ.material.color.set(0x8bd17c);
+                    triangleYZ.material.color.set(0x7dd3fc);
+                }
+            },
+            {
+                text: 'Step 2: Rays pass through the pinhole, forming the smaller triangle on the virtual plane.',
+                action: () => {
+                    worldPoint.material.emissive = new THREE.Color(0x000000);
+                    imageRay.material.color.set(0xff0000);
+                    worldRayMaterial.color.set(0x333333);
+                }
+            },
+            {
+                text: 'Step 3: Compare colored triangles to see that their sides stay proportional (similar triangles).',
+                action: () => {
+                    triangleXZ.material.color.set(0x00c853);
+                    triangleYZ.material.color.set(0x00bcd4);
+                }
+            },
+            {
+                text: 'Step 4: Move sliders yourself and watch x = fX/Z and y = fY/Z in action.',
+                action: () => {
+                    triangleXZ.material.color.set(0x8bd17c);
+                    triangleYZ.material.color.set(0x7dd3fc);
+                    imageRay.material.color.set(0xff4d4d);
+                    worldRayMaterial.color.set(0x111111);
+                }
+            }
+        ];
+
+        demoBtn.addEventListener('click', () => {
+            state.demoStep = (state.demoStep + 1) % demoSteps.length;
+            const step = demoSteps[state.demoStep];
+            step.action();
+            messageEl.textContent = step.text;
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            renderer.setSize(w, h);
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+
+</html>

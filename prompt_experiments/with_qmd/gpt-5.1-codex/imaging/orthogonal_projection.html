@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Orthographic Projection Explorer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap');
+
+        :root {
+            color-scheme: dark;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Space Grotesk', 'IBM Plex Sans', 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at 20% 20%, #14213d, #030711 60%);
+            color: #f5f5f5;
+            overflow: hidden;
+        }
+
+        #ui {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            width: 300px;
+            padding: 16px;
+            border-radius: 18px;
+            backdrop-filter: blur(10px);
+            background: rgba(3, 7, 17, 0.78);
+            box-shadow: 0 10px 35px rgba(0, 0, 0, 0.45);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 5;
+        }
+
+        #ui h1 {
+            margin: 0;
+            font-size: 1.15rem;
+            letter-spacing: 0.03em;
+        }
+
+        #ui p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: #c9d2ff;
+        }
+
+        button {
+            border: none;
+            border-radius: 999px;
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: linear-gradient(120deg, #3f7df3, #6af0ff);
+            color: #041020;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(58, 148, 255, 0.35);
+        }
+
+        button.secondary {
+            background: #1e293b;
+            color: #a0b4ff;
+            border: 1px solid #243552;
+        }
+
+        .sliderLabel {
+            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: #68f2ff;
+        }
+
+        #depthValue {
+            font-weight: 600;
+            color: #fefcbf;
+        }
+
+        #stepText {
+            font-size: 0.85rem;
+            min-height: 48px;
+            line-height: 1.3;
+            color: #f5f5f5;
+        }
+
+        #legend {
+            position: absolute;
+            left: 16px;
+            bottom: 16px;
+            padding: 12px 16px;
+            border-radius: 14px;
+            background: rgba(2, 6, 13, 0.75);
+            font-size: 0.8rem;
+            line-height: 1.4;
+            color: #e1e4ff;
+            z-index: 5;
+        }
+
+        .swatch {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            margin-right: 6px;
+            border-radius: 3px;
+            vertical-align: middle;
+        }
+
+        .swatch.plane {
+            background: #4e74ff;
+        }
+
+        .swatch.object {
+            background: linear-gradient(45deg, #ff6b6b, #4ce08a);
+        }
+
+        .swatch.ray {
+            background: #ffffff;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        @media (max-width: 720px) {
+            #ui {
+                width: calc(100% - 32px);
+                right: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <h1>Orthographic Projection Explorer</h1>
+        <p>Step through the construction to see how parallel rays map 3D geometry onto the projection plane.</p>
+        <button id="stepBtn">Next guided step</button>
+        <button id="animateBtn" class="secondary">Start depth animation</button>
+        <label class="sliderLabel">Object depth (Z-axis displacement)
+            <input type="range" id="depthSlider" min="4" max="14" step="0.1" value="8" />
+            <span id="depthValue">8.0 units</span>
+        </label>
+        <button id="modeBtn" class="secondary">Switch to Perspective Comparison</button>
+        <button id="resetBtn">Reset to textbook view</button>
+        <div id="stepText"></div>
+    </div>
+    <div id="legend">
+        <div><span class="swatch plane"></span> Projection plane (x-y)</div>
+        <div><span class="swatch object"></span> Scene block + projected footprint</div>
+        <div><span class="swatch ray"></span> Parallel rays (orthographic)</div>
+    </div>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+        import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'https://unpkg.com/three@0.160.0/examples/jsm/renderers/CSS2DRenderer.js';
+
+        const depthSlider = document.getElementById('depthSlider');
+        const depthValue = document.getElementById('depthValue');
+        const stepBtn = document.getElementById('stepBtn');
+        const animateBtn = document.getElementById('animateBtn');
+        const modeBtn = document.getElementById('modeBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const stepText = document.getElementById('stepText');
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x030711);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(14, 10, 16);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 2, 6);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 12, 8);
+        scene.add(dirLight);
+
+        const axesHelper = new THREE.AxesHelper(6);
+        scene.add(axesHelper);
+
+        // Projection plane represents the 2D sensing surface from the textbook drawing.
+        const planeZ = 0;
+        const planeGeometry = new THREE.PlaneGeometry(12, 8);
+        const planeMaterial = new THREE.MeshStandardMaterial({
+            color: 0x4e74ff,
+            transparent: true,
+            opacity: 0.35,
+            side: THREE.DoubleSide
+        });
+        const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
+        planeMesh.position.set(0, 0, planeZ);
+        scene.add(planeMesh);
+
+        const planeBorder = new THREE.LineSegments(
+            new THREE.EdgesGeometry(planeGeometry),
+            new THREE.LineBasicMaterial({ color: 0x8fb2ff })
+        );
+        planeMesh.add(planeBorder);
+
+        // Block models the colored 3D staircase shape from the 2D artwork.
+        const blockSize = { x: 4, y: 2.5, z: 3 };
+        const blockGeometry = new THREE.BoxGeometry(blockSize.x, blockSize.y, blockSize.z);
+        const blockMaterials = [
+            new THREE.MeshStandardMaterial({ color: 0x4de1fc }), // right face (cyan)
+            new THREE.MeshStandardMaterial({ color: 0x4de1fc }), // left face
+            new THREE.MeshStandardMaterial({ color: 0xff5d57 }), // top face (red)
+            new THREE.MeshStandardMaterial({ color: 0xff5d57 }), // bottom face
+            new THREE.MeshStandardMaterial({ color: 0x38ff70 }), // front face (green)
+            new THREE.MeshStandardMaterial({ color: 0x38ff70 })  // back face
+        ];
+        const blockMesh = new THREE.Mesh(blockGeometry, blockMaterials);
+        blockMesh.position.set(0.5, 1.25, 8);
+        scene.add(blockMesh);
+
+        // Projected footprint lives on the plane and matches the block's cross-section.
+        const projectionGeometry = new THREE.PlaneGeometry(blockSize.x, blockSize.y);
+        const projectionMaterial = new THREE.MeshBasicMaterial({
+            color: 0x56ff9c,
+            transparent: true,
+            opacity: 0.85,
+            side: THREE.DoubleSide
+        });
+        const projectionMesh = new THREE.Mesh(projectionGeometry, projectionMaterial);
+        projectionMesh.position.set(blockMesh.position.x, blockMesh.position.y, planeZ + 0.01);
+        scene.add(projectionMesh);
+        projectionMesh.visible = false;
+
+        const projectionOutline = new THREE.LineSegments(
+            new THREE.EdgesGeometry(projectionGeometry),
+            new THREE.LineBasicMaterial({ color: 0x15583c })
+        );
+        projectionMesh.add(projectionOutline);
+
+        // Parallel rays demonstrate the orthographic bundle from the block to the plane.
+        const samplePoints = [];
+        const hx = blockSize.x / 2;
+        const hy = blockSize.y / 2;
+        const hz = blockSize.z / 2;
+        [[-hx, -hy], [hx, -hy], [-hx, hy], [hx, hy], [0, 0]].forEach(([x, y]) => {
+            samplePoints.push(new THREE.Vector3(x, y, hz));
+        });
+        const rayGroup = new THREE.Group();
+        scene.add(rayGroup);
+        const rayMaterial = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.4, gapSize: 0.2 });
+        const rayLines = samplePoints.map(() => {
+            const geom = new THREE.BufferGeometry();
+            geom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+            const line = new THREE.Line(geom, rayMaterial);
+            line.computeLineDistances();
+            rayGroup.add(line);
+            return line;
+        });
+        rayGroup.visible = false;
+
+        // Pinhole marker appears only in comparison mode to contrast with orthographic rays.
+        const pinholePosition = new THREE.Vector3(0, 0, -4);
+        const pinholeMarker = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0xffd166 })
+        );
+        pinholeMarker.position.copy(pinholePosition);
+        pinholeMarker.visible = false;
+        scene.add(pinholeMarker);
+
+        const pinholeLabel = makeLabel('Perspective pinhole', 0xffd166);
+        pinholeMarker.add(pinholeLabel);
+
+        const planeLabel = makeLabel('Projection plane (x-y)', 0xcad8ff);
+        planeLabel.position.set(0, 0, 0.02);
+        planeMesh.add(planeLabel);
+
+        const blockLabel = makeLabel('Scene block (X,Y,Z)', 0xffffff);
+        blockLabel.position.set(0, hy + 0.4, 0);
+        blockMesh.add(blockLabel);
+
+        const projectionLabel = makeLabel('Projected footprint', 0xffffff);
+        projectionLabel.position.set(0, hy + 0.2, 0);
+        projectionMesh.add(projectionLabel);
+
+        const rayLabelAnchor = new THREE.Object3D();
+        rayLabelAnchor.position.set(0, 2.5, 4);
+        scene.add(rayLabelAnchor);
+        const rayLabel = makeLabel('Parallel rays (orthographic)', 0xffffff);
+        rayLabelAnchor.add(rayLabel);
+
+        function makeLabel(text, color) {
+            const div = document.createElement('div');
+            div.style.padding = '2px 8px';
+            div.style.borderRadius = '999px';
+            div.style.background = 'rgba(0,0,0,0.6)';
+            div.style.fontSize = '0.75rem';
+            div.style.color = color ? `#${color.toString(16).padStart(6, '0')}` : '#ffffff';
+            div.textContent = text;
+            return new CSS2DObject(div);
+        }
+
+        const steps = [
+            {
+                title: 'Establish axes',
+                description: 'Axes and the blue sensing plane define how we read off (x,y) from world coordinates.',
+                planeOpacity: 0.25,
+                rays: false,
+                projection: false
+            },
+            {
+                title: 'Lock the plane',
+                description: 'The projection plane is fixed orthogonal to Z, ready to receive incoming rays.',
+                planeOpacity: 0.55,
+                rays: false,
+                projection: false
+            },
+            {
+                title: 'Trace parallel rays',
+                description: 'Parallel rays keep x and y unchanged while dropping Z, matching orthographic equations x=X, y=Y.',
+                planeOpacity: 0.55,
+                rays: true,
+                projection: false
+            },
+            {
+                title: 'Read the footprint',
+                description: 'The projected polygon is congruent to the block face regardless of Z-distance.',
+                planeOpacity: 0.55,
+                rays: true,
+                projection: true
+            }
+        ];
+        let currentStep = 0;
+        let isPerspective = false;
+        let animateDepth = false;
+        let animationTime = 0;
+
+        setStep(0);
+        updateDepthValue(blockMesh.position.z);
+        updateProjection();
+
+        stepBtn.addEventListener('click', () => {
+            currentStep = (currentStep + 1) % steps.length;
+            setStep(currentStep);
+        });
+
+        animateBtn.addEventListener('click', () => {
+            animateDepth = !animateDepth;
+            animateBtn.textContent = animateDepth ? 'Stop depth animation' : 'Start depth animation';
+            animateBtn.classList.toggle('secondary', !animateDepth);
+        });
+
+        depthSlider.addEventListener('input', (event) => {
+            animateDepth = false;
+            animateBtn.textContent = 'Start depth animation';
+            animateBtn.classList.add('secondary');
+            blockMesh.position.z = parseFloat(event.target.value);
+            updateProjection();
+        });
+
+        modeBtn.addEventListener('click', () => {
+            isPerspective = !isPerspective;
+            modeBtn.textContent = isPerspective ? 'Return to Orthographic Mode' : 'Switch to Perspective Comparison';
+            pinholeMarker.visible = isPerspective;
+            rayLabel.element.textContent = isPerspective ? 'Converging rays (perspective)' : 'Parallel rays (orthographic)';
+            updateProjection();
+        });
+
+        resetBtn.addEventListener('click', resetView);
+
+        function setStep(index) {
+            const step = steps[index];
+            planeMaterial.opacity = step.planeOpacity;
+            rayGroup.visible = step.rays;
+            projectionMesh.visible = step.projection;
+            stepText.innerHTML = `<strong>Step ${index + 1}/${steps.length}: ${step.title}</strong><br>${step.description}`;
+        }
+
+        function updateDepthValue(value) {
+            depthValue.textContent = `${value.toFixed(1)} units`;
+            depthSlider.value = value.toFixed(1);
+        }
+
+        // Slider and animation both feed into this function so learners can see that orthographic size stays fixed.
+        function updateProjection() {
+            projectionMesh.position.set(blockMesh.position.x, blockMesh.position.y, planeZ + 0.01);
+            if (isPerspective) {
+                const pinholeToPlane = Math.abs(pinholePosition.z - planeZ);
+                const scale = pinholeToPlane / (blockMesh.position.z + pinholeToPlane);
+                projectionMesh.scale.set(scale, scale, 1);
+            } else {
+                projectionMesh.scale.set(1, 1, 1);
+            }
+            updateRays();
+            updateDepthValue(blockMesh.position.z);
+        }
+
+        function updateRays() {
+            rayLines.forEach((line, idx) => {
+                const localPoint = samplePoints[idx].clone();
+                const worldPoint = localPoint.applyMatrix4(blockMesh.matrixWorld);
+                const targetPoint = isPerspective ? intersectWithPlane(worldPoint, pinholePosition, planeZ) : new THREE.Vector3(worldPoint.x, worldPoint.y, planeZ);
+                const positions = line.geometry.attributes.position.array;
+                positions[0] = worldPoint.x;
+                positions[1] = worldPoint.y;
+                positions[2] = worldPoint.z;
+                positions[3] = targetPoint.x;
+                positions[4] = targetPoint.y;
+                positions[5] = targetPoint.z;
+                line.geometry.attributes.position.needsUpdate = true;
+                line.computeLineDistances();
+            });
+        }
+
+        function intersectWithPlane(point, pinhole, targetZ) {
+            const t = (targetZ - point.z) / (pinhole.z - point.z);
+            return point.clone().lerp(pinhole, t);
+        }
+
+        function resetView() {
+            currentStep = 0;
+            setStep(currentStep);
+            animateDepth = false;
+            animateBtn.textContent = 'Start depth animation';
+            animateBtn.classList.add('secondary');
+            isPerspective = false;
+            modeBtn.textContent = 'Switch to Perspective Comparison';
+            pinholeMarker.visible = false;
+            rayLabel.element.textContent = 'Parallel rays (orthographic)';
+            blockMesh.position.set(0.5, 1.25, 8);
+            controls.target.set(0, 2, 6);
+            camera.position.set(14, 10, 16);
+            controls.update();
+            updateProjection();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (animateDepth) {
+                animationTime += 0.01;
+                const zPosition = 8 + Math.sin(animationTime) * 3.5;
+                blockMesh.position.z = zPosition;
+                updateProjection();
+            }
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homography - Planar Surface Projection</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f0f0f0; font-family: sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; display: block; }
+        
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 350px;
+            pointer-events: auto;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; margin-bottom: 10px; }
+        p { font-size: 0.9rem; line-height: 1.4; color: #333; }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 5px;
+            font-size: 0.9rem;
+            width: 100%;
+        }
+        button:hover { background-color: #0056b3; }
+        
+        .control-group {
+            margin-top: 15px;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        .slider-container label { font-size: 0.85rem; }
+        input[type=range] { width: 60%; }
+
+        .label {
+            color: black;
+            font-size: 14px;
+            font-family: sans-serif;
+            padding: 2px 4px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 3px;
+            pointer-events: none;
+        }
+        .label.cyan { color: #00cccc; font-weight: bold; background: rgba(255, 255, 255, 0.9); }
+        .label.red { color: #cc0000; }
+        .label.green { color: #00aa00; }
+    </style>
+    <!-- Import mapping for ES Modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div id="ui-container">
+        <h2>Homography: Planar Surface</h2>
+        <p>A planar surface in 3D ($Z=0$) projects onto the camera's image plane. The mapping between the 3D plane coordinates $(X,Y)$ and 2D image coordinates $(x,y)$ is a homography.</p>
+        
+        <div class="control-group">
+            <div class="slider-container">
+                <label for="point-x">Move Point X</label>
+                <input type="range" id="point-x" min="-2" max="2" step="0.1" value="0.5">
+            </div>
+            <div class="slider-container">
+                <label for="point-y">Move Point Y</label>
+                <input type="range" id="point-y" min="-2" max="2" step="0.1" value="0.5">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <button id="toggle-frustum">Toggle Frustum Rays</button>
+            <button id="reset-view">Reset to Textbook View</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --- SCENE SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        // Position for "textbook view"
+        const defaultCameraPos = new THREE.Vector3(12, 6, 12);
+        camera.position.copy(defaultCameraPos);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(3, -1, 0);
+        controls.update();
+
+        // --- GEOMETRIC ELEMENTS ---
+
+        // 1. Camera Center
+        const cameraCenterPos = new THREE.Vector3(-4, 4, 0);
+        const centerGeo = new THREE.SphereGeometry(0.2, 32, 32);
+        const centerMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const cameraCenter = new THREE.Mesh(centerGeo, centerMat);
+        cameraCenter.position.copy(cameraCenterPos);
+        scene.add(cameraCenter);
+        addLabel(cameraCenter, "Camera\ncenter", "label", [0, 0.4, 0]);
+
+        // Define projection parameters
+        const focalLength = 3; 
+        const lookDir = new THREE.Vector3(1, -0.5, 0).normalize(); // Pointing towards the plane
+        
+        // 2. Camera Plane (Image Plane)
+        const imagePlaneCenter = cameraCenterPos.clone().add(lookDir.clone().multiplyScalar(focalLength));
+        // We need local axes for the image plane
+        const upDir = new THREE.Vector3(0, 1, 0);
+        const rightDir = new THREE.Vector3().crossVectors(lookDir, upDir).normalize();
+        const trueUpDir = new THREE.Vector3().crossVectors(rightDir, lookDir).normalize(); // Re-orthogonalize
+
+        const planeWidth = 3;
+        const planeHeight = 3;
+        const imgPlaneGeo = new THREE.PlaneGeometry(planeWidth, planeHeight);
+        const imgPlaneMat = new THREE.MeshBasicMaterial({ 
+            color: 0xdddddd, 
+            transparent: true, 
+            opacity: 0.5, 
+            side: THREE.DoubleSide 
+        });
+        const imgPlaneMesh = new THREE.Mesh(imgPlaneGeo, imgPlaneMat);
+        imgPlaneMesh.position.copy(imagePlaneCenter);
+        imgPlaneMesh.lookAt(cameraCenterPos);
+        scene.add(imgPlaneMesh);
+
+        // Edges for image plane
+        const edgesGeo = new THREE.EdgesGeometry(imgPlaneGeo);
+        const edgesMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+        const imgPlaneEdges = new THREE.LineSegments(edgesGeo, edgesMat);
+        imgPlaneMesh.add(imgPlaneEdges);
+        addLabel(imgPlaneMesh, "Camera plane", "label", [0, planeHeight/2 + 0.5, 0]);
+
+        // Image plane axes (green)
+        const xAxisLen = 1.5;
+        const yAxisLen = 1.5;
+        // Start from bottom left corner of the image plane
+        const imgOrigin = imagePlaneCenter.clone()
+            .add(rightDir.clone().multiplyScalar(-planeWidth/2))
+            .add(trueUpDir.clone().multiplyScalar(-planeHeight/2));
+        
+        const imgAxisXGeo = new THREE.BufferGeometry().setFromPoints([imgOrigin, imgOrigin.clone().add(rightDir.clone().multiplyScalar(xAxisLen))]);
+        const imgAxisYGeo = new THREE.BufferGeometry().setFromPoints([imgOrigin, imgOrigin.clone().add(trueUpDir.clone().multiplyScalar(yAxisLen))]);
+        const greenMat = new THREE.LineBasicMaterial({ color: 0x00cc00 });
+        scene.add(new THREE.Line(imgAxisXGeo, greenMat));
+        scene.add(new THREE.Line(imgAxisYGeo, greenMat));
+        
+        // Add arrows to green axes
+        scene.add(new THREE.ArrowHelper(rightDir, imgOrigin, xAxisLen, 0x00cc00, 0.2, 0.1));
+        scene.add(new THREE.ArrowHelper(trueUpDir, imgOrigin, yAxisLen, 0x00cc00, 0.2, 0.1));
+        
+        // Pseudo-labels for green axes using simple objects
+        addLabelAtPosition(imgOrigin.clone().add(rightDir.clone().multiplyScalar(xAxisLen + 0.2)), "x", "label green");
+        addLabelAtPosition(imgOrigin.clone().add(trueUpDir.clone().multiplyScalar(yAxisLen + 0.2)), "y", "label green");
+
+        // 3. Planar Surface (World coordinate system with Z=0)
+        // Positioned further along look direction and tilted
+        const worldOrigin = cameraCenterPos.clone().add(new THREE.Vector3(12, -6, 2));
+        const worldNormal = new THREE.Vector3(-0.2, 1, 0.2).normalize();
+        
+        const worldPlaneWidth = 8;
+        const worldPlaneHeight = 8;
+        const worldPlaneGeo = new THREE.PlaneGeometry(worldPlaneWidth, worldPlaneHeight);
+        const worldPlaneMat = new THREE.MeshBasicMaterial({ 
+            color: 0xbcbcbc, 
+            transparent: true, 
+            opacity: 0.6, 
+            side: THREE.DoubleSide 
+        });
+        const worldPlaneMesh = new THREE.Mesh(worldPlaneGeo, worldPlaneMat);
+        worldPlaneMesh.position.copy(worldOrigin);
+        worldPlaneMesh.lookAt(worldOrigin.clone().add(worldNormal));
+        scene.add(worldPlaneMesh);
+        
+        const worldEdges = new THREE.LineSegments(new THREE.EdgesGeometry(worldPlaneGeo), new THREE.LineBasicMaterial({ color: 0x000000 }));
+        worldPlaneMesh.add(worldEdges);
+
+        addLabel(worldPlaneMesh, "planar surface", "label", [worldPlaneWidth/2 + 1, -worldPlaneHeight/2, 0]);
+
+        // World plane axes (Red) - laying on the plane (Z=0)
+        const wXDir = new THREE.Vector3(1, 0, 0);
+        wXDir.projectOnPlane(worldNormal).normalize();
+        const wYDir = new THREE.Vector3(0, 0, 1);
+        wYDir.projectOnPlane(worldNormal).normalize();
+        const wZDir = worldNormal.clone(); // Perpendicular
+
+        const wXYZLen = 2.0;
+        scene.add(new THREE.ArrowHelper(wXDir, worldOrigin, wXYZLen, 0xcc0000, 0.3, 0.15));
+        scene.add(new THREE.ArrowHelper(wYDir, worldOrigin, wXYZLen, 0xcc0000, 0.3, 0.15));
+        scene.add(new THREE.ArrowHelper(wZDir, worldOrigin, wXYZLen, 0xcc0000, 0.3, 0.15));
+        
+        addLabelAtPosition(worldOrigin.clone().add(wXDir.clone().multiplyScalar(wXYZLen + 0.3)), "X", "label red");
+        addLabelAtPosition(worldOrigin.clone().add(wYDir.clone().multiplyScalar(wXYZLen + 0.3)), "Y", "label red");
+        addLabelAtPosition(worldOrigin.clone().add(wZDir.clone().multiplyScalar(wXYZLen + 0.3)), "Z", "label red");
+
+
+        // 4. Frustum Rays (Corners of image plane to world plane)
+        const frustumLines = new THREE.Group();
+        scene.add(frustumLines);
+        
+        const corners = [
+            new THREE.Vector3(planeWidth/2, planeHeight/2, 0),
+            new THREE.Vector3(-planeWidth/2, planeHeight/2, 0),
+            new THREE.Vector3(-planeWidth/2, -planeHeight/2, 0),
+            new THREE.Vector3(planeWidth/2, -planeHeight/2, 0),
+        ];
+
+        const raycaster = new THREE.Raycaster();
+        const worldPlaneForRaycast = new THREE.Plane().setFromNormalAndCoplanarPoint(worldNormal, worldOrigin);
+
+        corners.forEach(cornerLocal => {
+            const cornerWorld = cornerLocal.clone().applyMatrix4(imgPlaneMesh.matrixWorld);
+            const dir = new THREE.Vector3().subVectors(cornerWorld, cameraCenterPos).normalize();
+            
+            const ray = new THREE.Ray(cameraCenterPos, dir);
+            const intersectPt = new THREE.Vector3();
+            ray.intersectPlane(worldPlaneForRaycast, intersectPt);
+
+            if (intersectPt) {
+                const lineGeo = new THREE.BufferGeometry().setFromPoints([cameraCenterPos, intersectPt]);
+                const lineMat = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 0.2, gapSize: 0.2 });
+                const line = new THREE.Line(lineGeo, lineMat);
+                line.computeLineDistances();
+                frustumLines.add(line);
+            }
+        });
+
+
+        // 5. Dynamic Projected Point (Cyan)
+        const pointGroup = new THREE.Group();
+        scene.add(pointGroup);
+
+        const worldPointMesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff, edgeColor: 0x000000 }));
+        const imgPointMesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
+        
+        pointGroup.add(worldPointMesh);
+        pointGroup.add(imgPointMesh);
+
+        const projRayGeo = new THREE.BufferGeometry();
+        const projRayMat = new THREE.LineDashedMaterial({ color: 0x00ffff, dashSize: 0.2, gapSize: 0.2, linewidth: 2 });
+        const projRayLine = new THREE.Line(projRayGeo, projRayMat);
+        pointGroup.add(projRayLine);
+
+        const localXLabel = addLabel(worldPointMesh, "(X,Y,0)", "label cyan", [0, -0.4, 0]);
+        const imgPrjLabel = addLabel(imgPointMesh, "(x,y)", "label cyan", [0, 0.3, 0]);
+
+        // Helper function for labels
+        function addLabel(parent, text, className, offset = [0,0,0]) {
+            const div = document.createElement('div');
+            div.className = className;
+            div.textContent = text;
+            const label = new CSS2DObject(div);
+            label.position.set(...offset);
+            parent.add(label);
+            return label;
+        }
+
+        function addLabelAtPosition(position, text, className) {
+            const div = document.createElement('div');
+            div.className = className;
+            div.textContent = text;
+            const label = new CSS2DObject(div);
+            label.position.copy(position);
+            scene.add(label);
+            return label;
+        }
+
+        // --- INTERACTIVITY ---
+        
+        function updateProjectedPoint() {
+            const u = parseFloat(document.getElementById('point-x').value);
+            const v = parseFloat(document.getElementById('point-y').value);
+
+            // Compute point on world plane (Z=0 in local coordinates mappings)
+            const ptWorld = worldOrigin.clone()
+                .add(wXDir.clone().multiplyScalar(u * 2)) // scale up a bit for visual range
+                .add(wYDir.clone().multiplyScalar(v * 2));
+            
+            worldPointMesh.position.copy(ptWorld);
+
+            // Ray from camera center through world point
+            const dir = new THREE.Vector3().subVectors(ptWorld, cameraCenterPos).normalize();
+            const ray = new THREE.Ray(cameraCenterPos, dir);
+            
+            // Intersect with image plane
+            const imgPlaneMath = new THREE.Plane().setFromNormalAndCoplanarPoint(lookDir, imagePlaneCenter);
+            const ptImg = new THREE.Vector3();
+            ray.intersectPlane(imgPlaneMath, ptImg);
+
+            if (ptImg) {
+                imgPointMesh.position.copy(ptImg);
+                
+                projRayLine.geometry.setFromPoints([cameraCenterPos, ptWorld]);
+                projRayLine.computeLineDistances();
+            }
+        }
+
+        document.getElementById('point-x').addEventListener('input', updateProjectedPoint);
+        document.getElementById('point-y').addEventListener('input', updateProjectedPoint);
+
+        document.getElementById('toggle-frustum').addEventListener('click', () => {
+            frustumLines.visible = !frustumLines.visible;
+        });
+
+        document.getElementById('reset-view').addEventListener('click', () => {
+            camera.position.copy(defaultCameraPos);
+            controls.target.set(3, -1, 0);
+            controls.update();
+        });
+
+        // Initialize state
+        updateProjectedPoint();
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>

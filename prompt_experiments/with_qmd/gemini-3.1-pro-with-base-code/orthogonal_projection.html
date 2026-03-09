@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Orthographic Projection</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #f8f9fa;
+            font-family: sans-serif;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            width: 250px;
+            z-index: 10;
+        }
+
+        h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+        }
+
+        p {
+            font-size: 12px;
+            color: #555;
+            margin: 0 0 15px 0;
+        }
+
+        button,
+        input {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        button {
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        .label {
+            position: absolute;
+            color: black;
+            font-weight: bold;
+            pointer-events: none;
+            font-size: 14px;
+            font-family: serif;
+            font-style: italic;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <h3>Orthographic Projection</h3>
+        <p>Displays an object projected via parallel rays orthogonal to the plane ($x=X, y=Y$).</p>
+
+        <label for="zDist">Move Object in Z:</label>
+        <input type="range" id="zDist" min="1" max="5" value="3" step="0.1"
+            title="Notice the projected size remains constant">
+
+        <button id="btnToggleLines">Toggle Projection Lines</button>
+        <button id="btnDemo">Play Demo</button>
+        <button id="btnReset">Reset to Textbook View</button>
+    </div>
+    <div id="container"></div>
+
+    <!-- Labels -->
+    <div id="lblX" class="label">X</div>
+    <div id="lblY" class="label">Y</div>
+    <div id="lblZ" class="label">Z</div>
+    <div id="lblxImage" class="label">x</div>
+    <div id="lblyImage" class="label">y</div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://esm.sh/three@0.150.1",
+        "three/addons/": "https://esm.sh/three@0.150.1/examples/jsm/"
+      }
+    }
+  </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Basic Setup
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+
+        // Using a Perspective Camera to view the 3D setup (the *textbook figure's* perspective)
+        // The *concept* taught is Orthographic, but we view the *scene* in 3D perspective to see the plane and lines.
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(-6, 4, 8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 1, 0);
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(-5, 10, 5);
+        scene.add(dirLight);
+
+        // Coordinate System Axes
+        function createAxis(dir, color, length) {
+            const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0, 0), length, color, 0.3, 0.2);
+            scene.add(arrow);
+            return arrow;
+        }
+        createAxis(new THREE.Vector3(1, 0, 0), 0x000000, 5); // Z in textbook might be horizontal. Let's map X=right, Y=up, Z=forward
+        createAxis(new THREE.Vector3(0, 1, 0), 0x000000, 4);
+        createAxis(new THREE.Vector3(0, 0, 1), 0x000000, 5);
+
+        // The stepped block (3D Object)
+        // Made of two parts to form an L-step
+        const blockGroup = new THREE.Group();
+        const matRed = new THREE.MeshLambertMaterial({ color: 0xff4444 });
+        const matGreen = new THREE.MeshLambertMaterial({ color: 0x44ff44 });
+        const matBlue = new THREE.MeshLambertMaterial({ color: 0x44ccff });
+
+        // Bottom step
+        const geomBottom = new THREE.BoxGeometry(2, 1, 1);
+        const meshBottom = new THREE.Mesh(geomBottom, [matBlue, matBlue, matGreen, matGreen, matRed, matRed]);
+        meshBottom.position.set(1, 0.5, 0);
+        blockGroup.add(meshBottom);
+
+        // Top step
+        const geomTop = new THREE.BoxGeometry(1, 1, 1);
+        const meshTop = new THREE.Mesh(geomTop, [matBlue, matBlue, matGreen, matGreen, matRed, matRed]);
+        meshTop.position.set(0.5, 1.5, 0);
+        blockGroup.add(meshTop);
+
+        blockGroup.position.z = 3; // Initial Z distance
+        scene.add(blockGroup);
+
+        // Projection Plane
+        const planeGeom = new THREE.PlaneGeometry(6, 5);
+        const planeMat = new THREE.MeshBasicMaterial({ color: 0xdddddd, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
+        const projPlane = new THREE.Mesh(planeGeom, planeMat);
+        projPlane.position.set(2, 1.5, 0);
+        scene.add(projPlane);
+
+        // Image axes on projection plane
+        const imgAxisGeom = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 3, 0),
+            new THREE.Vector3(-1, 0, 0), new THREE.Vector3(4, 0, 0)
+        ]);
+        const imgAxisMat = new THREE.LineBasicMaterial({ color: 0x00aa00 });
+        const imgAxes = new THREE.LineSegments(imgAxisGeom, imgAxisMat);
+        scene.add(imgAxes);
+
+        // Projected 2D shape on the plane
+        const projGroup = new THREE.Group();
+        const flatRedMat = new THREE.MeshBasicMaterial({ color: 0xff4444, side: THREE.DoubleSide, depthTest: false });
+        const projGeomBottom = new THREE.PlaneGeometry(2, 1);
+        const projMeshBottom = new THREE.Mesh(projGeomBottom, flatRedMat);
+        projMeshBottom.position.set(1, 0.5, 0.01);
+        projGroup.add(projMeshBottom);
+
+        const projGeomTop = new THREE.PlaneGeometry(1, 1);
+        const projMeshTop = new THREE.Mesh(projGeomTop, flatRedMat);
+        projMeshTop.position.set(0.5, 1.5, 0.01);
+        projGroup.add(projMeshTop);
+        scene.add(projGroup);
+
+        // Projection Lines (Dashed)
+        const linesGroup = new THREE.Group();
+        scene.add(linesGroup);
+
+        const dashMat = new THREE.LineDashedMaterial({
+            color: 0x000000, dashSize: 0.1, gapSize: 0.1
+        });
+
+        const keyPoints = [
+            new THREE.Vector3(0, 0, 0), new THREE.Vector3(2, 0, 0),
+            new THREE.Vector3(2, 1, 0), new THREE.Vector3(1, 1, 0),
+            new THREE.Vector3(1, 2, 0), new THREE.Vector3(0, 2, 0)
+        ];
+
+        function updateProjectionLines() {
+            // Clear old lines
+            while (linesGroup.children.length > 0) {
+                linesGroup.remove(linesGroup.children[0]);
+            }
+
+            const zOffset = blockGroup.position.z;
+
+            keyPoints.forEach(pt => {
+                const pStart = new THREE.Vector3(pt.x, pt.y, zOffset - 0.5); // Back of object
+                const pEnd = new THREE.Vector3(pt.x, pt.y, 0); // Projection plane
+
+                const geom = new THREE.BufferGeometry().setFromPoints([pStart, pEnd]);
+                const line = new THREE.Line(geom, dashMat);
+                line.computeLineDistances();
+                linesGroup.add(line);
+            });
+        }
+        updateProjectionLines();
+
+        // Interactions
+        const zDistInput = document.getElementById('zDist');
+        zDistInput.addEventListener('input', (e) => {
+            blockGroup.position.z = parseFloat(e.target.value);
+            updateProjectionLines();
+        });
+
+        let linesVisible = true;
+        document.getElementById('btnToggleLines').addEventListener('click', () => {
+            linesVisible = !linesVisible;
+            linesGroup.visible = linesVisible;
+        });
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            zDistInput.value = 3;
+            blockGroup.position.z = 3;
+            updateProjectionLines();
+            camera.position.set(-6, 4, 8);
+            controls.target.set(0, 1, 0);
+            linesVisible = true;
+            linesGroup.visible = true;
+        });
+
+        function toScreenXY(pos3D) {
+            const vec = pos3D.clone().project(camera);
+            vec.x = (vec.x + 1) / 2 * container.clientWidth;
+            vec.y = -(vec.y - 1) / 2 * container.clientHeight;
+            return vec;
+        }
+
+        function updateLabels() {
+            const offset = 10;
+            const xPos = toScreenXY(new THREE.Vector3(5.2, 0, 0));
+            const lblXSq = document.getElementById('lblX');
+            lblXSq.style.left = `${xPos.x}px`; lblXSq.style.top = `${xPos.y}px`;
+
+            const yPos = toScreenXY(new THREE.Vector3(0, 4.2, 0));
+            const lblYSq = document.getElementById('lblY');
+            lblYSq.style.left = `${yPos.x}px`; lblYSq.style.top = `${yPos.y}px`;
+
+            const zPos = toScreenXY(new THREE.Vector3(0, 0, 5.2));
+            const lblZSq = document.getElementById('lblZ');
+            lblZSq.style.left = `${zPos.x}px`; lblZSq.style.top = `${zPos.y}px`;
+
+            const xiPos = toScreenXY(new THREE.Vector3(4.2, 0, 0));
+            const lblxiSq = document.getElementById('lblxImage');
+            lblxiSq.style.left = `${xiPos.x}px`; lblxiSq.style.top = `${xiPos.y}px`;
+
+            const yiPos = toScreenXY(new THREE.Vector3(0, 3.2, 0));
+            const lblyiSq = document.getElementById('lblyImage');
+            lblyiSq.style.left = `${yiPos.x}px`; lblyiSq.style.top = `${yiPos.y}px`;
+        }
+
+        // Animation / Demo
+        let isPlaying = false;
+        document.getElementById('btnDemo').addEventListener('click', () => {
+            if (isPlaying) return;
+            isPlaying = true;
+
+            const startZ = blockGroup.position.z;
+            const targetZ = startZ > 2.5 ? 1 : 4;
+            const duration = 2000;
+            const startTime = performance.now();
+
+            function animateDemo(time) {
+                const elapsed = time - startTime;
+                const t = Math.min(elapsed / duration, 1);
+
+                // easing (smoothstep)
+                const smoothT = t * t * (3 - 2 * t);
+
+                const newZ = startZ + (targetZ - startZ) * smoothT;
+                blockGroup.position.z = newZ;
+                zDistInput.value = newZ;
+                updateProjectionLines();
+
+                if (t < 1) {
+                    requestAnimationFrame(animateDemo);
+                } else {
+                    isPlaying = false;
+                }
+            }
+            requestAnimationFrame(animateDemo);
+        });
+
+        // Main animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            updateLabels();
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+    </script>
+</body>
+
+</html>

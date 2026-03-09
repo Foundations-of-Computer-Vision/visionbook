@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Perspective Projection Explorer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap');
+
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at top, #111b2f 0%, #05060a 55%, #020205 100%);
+            color: #f4f6ff;
+            overflow: hidden;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 1.5rem;
+            left: 1.5rem;
+            width: 320px;
+            padding: 1.25rem 1.5rem 1.5rem;
+            background: rgba(7, 10, 24, 0.8);
+            border: 1px solid rgba(134, 170, 255, 0.3);
+            border-radius: 1rem;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 60px rgba(1, 4, 22, 0.7);
+            z-index: 10;
+        }
+
+        #ui-panel h1 {
+            margin: 0 0 0.75rem;
+            font-size: 1.35rem;
+            letter-spacing: 0.03em;
+            color: #d2e3ff;
+        }
+
+        #ui-panel p {
+            margin: 0 0 0.75rem;
+            line-height: 1.4;
+            font-size: 0.95rem;
+            color: #9fb3d5;
+        }
+
+        .control {
+            margin-bottom: 0.9rem;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.88rem;
+            color: #b7c8ff;
+            margin-bottom: 0.3rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: #6ec8ff;
+        }
+
+        .toggle-line {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.9rem;
+        }
+
+        button {
+            border: none;
+            border-radius: 999px;
+            padding: 0.55rem 1.1rem;
+            font-size: 0.9rem;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            color: #05060a;
+            background: linear-gradient(120deg, #42a5ff, #6ef3d6);
+            transition: transform 0.15s ease, box-shadow 0.2s ease;
+            box-shadow: 0 10px 25px rgba(66, 165, 255, 0.35);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 8px 18px rgba(66, 165, 255, 0.4);
+        }
+
+        .button-row {
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+            margin-top: 0.2rem;
+        }
+
+        #guidedText {
+            margin-top: 0.3rem;
+            font-size: 0.85rem;
+            color: #c5d8ff;
+            min-height: 2.6rem;
+        }
+
+        #labelLayer {
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="ui-panel">
+        <h1>Perspective Projection Explorer</h1>
+        <p>Adjust the 3D point to see how the pinhole camera maps it onto both the real projection plane (behind) and
+            the virtual plane (front).</p>
+        <div class="control">
+            <label>Depth Z (distance): <span id="depthValue">6.0</span></label>
+            <input type="range" id="depthSlider" min="3" max="12" step="0.1" value="6">
+        </div>
+        <div class="control">
+            <label>Horizontal X: <span id="xValue">2.0</span></label>
+            <input type="range" id="xSlider" min="-4" max="4" step="0.1" value="2">
+        </div>
+        <div class="control">
+            <label>Vertical Y: <span id="yValue">2.0</span></label>
+            <input type="range" id="ySlider" min="-4" max="4" step="0.1" value="2">
+        </div>
+        <div class="control toggle-line">
+            <input type="checkbox" id="virtualToggle" checked />
+            <span>Highlight virtual camera plane</span>
+        </div>
+        <div class="button-row">
+            <button id="guidedBtn">Guided Step</button>
+            <button id="resetBtn">Reset to textbook view</button>
+        </div>
+        <p id="guidedText">Step 1/4: Start from the textbook view—P is far away so its projection stays small.</p>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+        import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'https://unpkg.com/three@0.160.0/examples/jsm/renderers/CSS2DRenderer.js';
+
+        const container = document.getElementById('container');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x020307);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(10, 8, 14);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.id = 'labelLayer';
+        container.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.65);
+        scene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        dirLight.position.set(7, 10, 4);
+        scene.add(dirLight);
+
+        const axes = new THREE.AxesHelper(6);
+        scene.add(axes);
+
+        const f = 3; // focal distance representing the textbook's f parameter
+
+        const planeGeo = new THREE.PlaneGeometry(12, 8);
+
+        // Projection plane (gray) maps to the left board in the 2D figure (behind the pinhole)
+        const projectionPlaneMat = new THREE.MeshBasicMaterial({ color: 0x6980a0, transparent: true, opacity: 0.25, side: THREE.DoubleSide });
+        const projectionPlane = new THREE.Mesh(planeGeo, projectionPlaneMat);
+        projectionPlane.position.z = -f;
+        scene.add(projectionPlane);
+
+        // Virtual camera plane (teal) matches the mirrored plane in front used in the textbook diagram
+        const virtualPlaneMat = new THREE.MeshBasicMaterial({ color: 0x1bb8a5, transparent: true, opacity: 0.32, side: THREE.DoubleSide });
+        const virtualPlane = new THREE.Mesh(planeGeo, virtualPlaneMat);
+        virtualPlane.position.z = f;
+        scene.add(virtualPlane);
+
+        // Helper function for labels that mirror the 2D annotations in 3D space
+        function addLabel(text, target, offset = new THREE.Vector3()) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            div.style.padding = '0.2rem 0.35rem';
+            div.style.background = 'rgba(5,9,22,0.7)';
+            div.style.border = '1px solid rgba(255,255,255,0.35)';
+            div.style.borderRadius = '0.35rem';
+            div.style.fontSize = '0.7rem';
+            div.style.color = '#f6fbff';
+            const label = new CSS2DObject(div);
+            label.position.copy(offset);
+            target.add(label);
+            return label;
+        }
+
+        addLabel('Projection plane', projectionPlane, new THREE.Vector3(-4.5, 3.2, 0));
+        addLabel('Virtual plane', virtualPlane, new THREE.Vector3(-4.5, 3.2, 0));
+
+        const pinhole = new THREE.Mesh(
+            new THREE.SphereGeometry(0.18, 32, 32),
+            new THREE.MeshStandardMaterial({ color: 0xff5757, emissive: 0x552222, roughness: 0.3 })
+        );
+        pinhole.position.set(0, 0, 0);
+        scene.add(pinhole);
+        addLabel('Pinhole (origin)', pinhole, new THREE.Vector3(0.4, 0.4, 0));
+
+        const worldPoint = new THREE.Mesh(
+            new THREE.SphereGeometry(0.25, 32, 32),
+            new THREE.MeshStandardMaterial({ color: 0x87f39b, emissive: 0x1d5c3a })
+        );
+        scene.add(worldPoint);
+        addLabel('World point P', worldPoint, new THREE.Vector3(0.3, 0.3, 0));
+
+        const realProjection = new THREE.Mesh(
+            new THREE.SphereGeometry(0.18, 28, 28),
+            new THREE.MeshStandardMaterial({ color: 0xe0d9ff, emissive: 0x26264f })
+        );
+        scene.add(realProjection);
+        addLabel('Image p (inverted)', realProjection, new THREE.Vector3(0.3, -0.35, 0));
+
+        const virtualProjection = new THREE.Mesh(
+            new THREE.SphereGeometry(0.18, 28, 28),
+            new THREE.MeshStandardMaterial({ color: 0xffd37c, emissive: 0x5c4317 })
+        );
+        scene.add(virtualProjection);
+        addLabel('Virtual point (same orientation)', virtualProjection, new THREE.Vector3(0.3, 0.3, 0));
+
+        // Incoming ray from P to pinhole (yellow) copies the dashed ray in the source figure
+        const incomingLineMaterial = new THREE.LineBasicMaterial({ color: 0xffcc66 });
+        const incomingLine = new THREE.Line(new THREE.BufferGeometry(), incomingLineMaterial);
+        scene.add(incomingLine);
+
+        // Outgoing ray to projection plane (purple) shows inverted image path
+        const projectionLineMaterial = new THREE.LineBasicMaterial({ color: 0xd17dff });
+        const projectionLine = new THREE.Line(new THREE.BufferGeometry(), projectionLineMaterial);
+        scene.add(projectionLine);
+
+        // Ray to virtual plane (cyan) mirrors the mirror-image helper plane from the chapter
+        const virtualLineMaterial = new THREE.LineBasicMaterial({ color: 0x6ff2ff });
+        const virtualLine = new THREE.Line(new THREE.BufferGeometry(), virtualLineMaterial);
+        scene.add(virtualLine);
+
+        const params = { x: 2, y: 2, z: 6 };
+
+        function updateProjection() {
+            const worldPos = new THREE.Vector3(params.x, params.y, params.z);
+            worldPoint.position.copy(worldPos);
+
+            const virtualScale = f / params.z;
+            const virtualPos = new THREE.Vector3(params.x * virtualScale, params.y * virtualScale, f);
+            virtualProjection.position.copy(virtualPos);
+
+            const realScale = -f / params.z;
+            const realPos = new THREE.Vector3(params.x * realScale, params.y * realScale, -f);
+            realProjection.position.copy(realPos);
+
+            incomingLine.geometry.setFromPoints([worldPos, new THREE.Vector3(0, 0, 0)]);
+            projectionLine.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), realPos]);
+            virtualLine.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), virtualPos]);
+        }
+
+        updateProjection();
+
+        const depthSlider = document.getElementById('depthSlider');
+        const xSlider = document.getElementById('xSlider');
+        const ySlider = document.getElementById('ySlider');
+        const depthValue = document.getElementById('depthValue');
+        const xValue = document.getElementById('xValue');
+        const yValue = document.getElementById('yValue');
+        const virtualToggle = document.getElementById('virtualToggle');
+        const guidedBtn = document.getElementById('guidedBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const guidedText = document.getElementById('guidedText');
+
+        // Slider: changes Z to demonstrate how perspective shrinkage obeys x = fX/Z
+        depthSlider.addEventListener('input', () => {
+            params.z = parseFloat(depthSlider.value);
+            depthValue.textContent = params.z.toFixed(1);
+            updateProjection();
+        });
+
+        // Slider: moves P sideways to show lateral displacement and inversion on the real plane
+        xSlider.addEventListener('input', () => {
+            params.x = parseFloat(xSlider.value);
+            xValue.textContent = params.x.toFixed(1);
+            updateProjection();
+        });
+
+        // Slider: moves P vertically to reveal how the real plane flips the image vertically
+        ySlider.addEventListener('input', () => {
+            params.y = parseFloat(ySlider.value);
+            yValue.textContent = params.y.toFixed(1);
+            updateProjection();
+        });
+
+        // Toggle: highlights the virtual helper plane that keeps orientation
+        virtualToggle.addEventListener('change', () => {
+            virtualPlaneMat.opacity = virtualToggle.checked ? 0.35 : 0.12;
+            virtualPlaneMat.color.set(virtualToggle.checked ? 0x1bb8a5 : 0x0f4a40);
+        });
+
+        function setSliders(x, y, z) {
+            params.x = x;
+            params.y = y;
+            params.z = z;
+            xSlider.value = x;
+            ySlider.value = y;
+            depthSlider.value = z;
+            xValue.textContent = x.toFixed(1);
+            yValue.textContent = y.toFixed(1);
+            depthValue.textContent = z.toFixed(1);
+            updateProjection();
+        }
+
+        const guideSteps = [
+            {
+                text: 'Step 1/4: Start from the textbook view—P is far away so its projection stays small.',
+                action: () => setSliders(2, 2, 6)
+            },
+            {
+                text: 'Step 2/4: Slide P closer to the pinhole. Notice how the projection grows because f/Z increases.',
+                action: () => setSliders(2, 2, 3.5)
+            },
+            {
+                text: 'Step 3/4: Push P to the left (negative X). The real plane flips it to the opposite side.',
+                action: () => setSliders(-2, 2, 5)
+            },
+            {
+                text: 'Step 4/4: Raise P upward. The virtual plane keeps orientation, but the real plane shows an upside-down point.',
+                action: () => setSliders(-2, 3.5, 5)
+            }
+        ];
+
+        let guideIndex = 0;
+        guidedBtn.addEventListener('click', () => {
+            guideIndex = (guideIndex + 1) % guideSteps.length;
+            const step = guideSteps[guideIndex];
+            step.action();
+            guidedText.textContent = step.text;
+        });
+
+        resetBtn.addEventListener('click', () => {
+            guideIndex = 0;
+            virtualToggle.checked = true;
+            virtualPlaneMat.opacity = 0.35;
+            virtualPlaneMat.color.set(0x1bb8a5);
+            guidedText.textContent = guideSteps[0].text;
+            setSliders(2, 2, 6);
+            controls.reset();
+            camera.position.set(10, 8, 14);
+            controls.update();
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

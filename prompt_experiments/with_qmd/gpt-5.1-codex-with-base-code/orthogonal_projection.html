@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Orthographic Projection Explorer</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #f4f4f4;
+            color: #111;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 1.2rem;
+            left: 1.2rem;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 0.75rem;
+            padding: 1rem 1.2rem;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+            max-width: 320px;
+            font-size: 0.95rem;
+            line-height: 1.3rem;
+        }
+
+        #ui h1 {
+            margin: 0 0 0.4rem;
+            font-size: 1.1rem;
+        }
+
+        #ui .description {
+            font-size: 0.85rem;
+            color: #333;
+            margin-bottom: 0.75rem;
+        }
+
+        #ui label {
+            display: block;
+            margin: 0.6rem 0 0.2rem;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        #ui input[type="range"] {
+            width: 100%;
+        }
+
+        #ui .toggles {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            margin: 0.6rem 0 0.8rem;
+        }
+
+        #ui .toggles span {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.85rem;
+        }
+
+        #ui button {
+            margin-top: 0.45rem;
+            width: 100%;
+            padding: 0.45rem 0.2rem;
+            border: none;
+            border-radius: 0.5rem;
+            background: #1a73e8;
+            color: white;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        #ui button.secondary {
+            background: #f1f3f4;
+            color: #222;
+        }
+
+        #stepMessage {
+            margin-top: 0.5rem;
+            font-size: 0.83rem;
+            min-height: 2.3rem;
+        }
+
+        #stepControls {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.4rem;
+        }
+
+        #stepControls button {
+            margin-top: 0;
+            background: #ff6b2c;
+        }
+
+        #demoButton {
+            background: #00aa8f;
+        }
+
+        #labelsOverlay {
+            position: absolute;
+            pointer-events: none;
+            left: 0;
+            top: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="labelsOverlay"></div>
+    <div id="ui">
+        <h1>Orthographic Projection</h1>
+        <div class="description">
+            Explore how parallel rays keep object scale constant when projecting onto the x-y plane.
+        </div>
+        <label for="depthSlider">Slide object along Z (world X)</label>
+        <input id="depthSlider" type="range" min="0.4" max="3.5" step="0.01" value="1.6" />
+        <div id="depthValue">Depth: 1.60 units</div>
+        <div class="toggles">
+            <span><input type="checkbox" id="perspectiveMode" /> Toggle perspective camera</span>
+            <span><input type="checkbox" id="showRays" checked /> Show projection rays</span>
+        </div>
+        <div id="stepControls">
+            <button id="prevStep">◀ Previous Step</button>
+            <button id="nextStep">Next Step ▶</button>
+        </div>
+        <button id="demoButton">Play Guided Demo</button>
+        <button id="resetButton" class="secondary">Reset to textbook view</button>
+        <div id="stepMessage"></div>
+    </div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three@0.159.0';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three/examples/jsm/renderers/CSS2DRenderer.js';
+
+        const container = document.getElementById('container');
+        const aspect = container.clientWidth / container.clientHeight;
+        const frustumSize = 7;
+
+        // Orthographic camera mirrors the textbook's orthographic view.
+        const orthoCamera = new THREE.OrthographicCamera(
+            (-frustumSize * aspect) / 2,
+            (frustumSize * aspect) / 2,
+            frustumSize / 2,
+            -frustumSize / 2,
+            0.1,
+            50
+        );
+        orthoCamera.position.set(5, 4.5, 5);
+        orthoCamera.lookAt(1, 1, 0);
+
+        // Perspective camera lets students contrast projections interactively.
+        const perspectiveCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 100);
+        perspectiveCamera.position.copy(orthoCamera.position);
+        perspectiveCamera.lookAt(1, 1, 0);
+
+        let activeCamera = orthoCamera;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf5f7fb);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(container.clientWidth, container.clientHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(activeCamera, renderer.domElement);
+        controls.enableDamping = true;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(3, 4, 2);
+        scene.add(directionalLight);
+
+        // Projection plane (x-y plane) rotated so its normal matches the textbook's Z axis.
+        const planeMaterial = new THREE.MeshStandardMaterial({
+            color: 0xdfe5f1,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide
+        });
+        const projectionPlane = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 3.4), planeMaterial);
+        projectionPlane.rotation.y = Math.PI / 2; // plane spans Y & Z in world space
+        projectionPlane.position.set(0, 1.2, 0);
+        scene.add(projectionPlane);
+
+        const projectionPlaneBorder = new THREE.LineSegments(
+            new THREE.EdgesGeometry(projectionPlane.geometry),
+            new THREE.LineBasicMaterial({ color: 0x8ea3c4 })
+        );
+        projectionPlaneBorder.rotation.copy(projectionPlane.rotation);
+        projectionPlaneBorder.position.copy(projectionPlane.position);
+        scene.add(projectionPlaneBorder);
+
+        // Axes match the textbook arrows, even if mapped onto different world directions.
+        const axisMaterials = [];
+        function addAxis(dir, color, labelText, labelPos) {
+            const axisLength = 3;
+            const points = [new THREE.Vector3(0, 0, 0), dir.clone().multiplyScalar(axisLength)];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+            axisMaterials.push({ material, default: new THREE.Color(color) });
+            const axisLine = new THREE.Line(geometry, material);
+            scene.add(axisLine);
+
+            const tip = dir.clone().multiplyScalar(axisLength);
+            const coneGeometry = new THREE.ConeGeometry(0.08, 0.3, 16);
+            const coneMaterial = new THREE.MeshStandardMaterial({ color });
+            const arrow = new THREE.Mesh(coneGeometry, coneMaterial);
+            arrow.position.copy(tip);
+            arrow.lookAt(tip.clone().add(dir));
+            scene.add(arrow);
+
+            const label = createLabel(labelText);
+            label.position.copy(labelPos || tip.clone().multiplyScalar(0.95));
+            scene.add(label);
+        }
+
+        function createLabel(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            div.style.padding = '2px 6px';
+            div.style.borderRadius = '4px';
+            div.style.background = 'rgba(0,0,0,0.65)';
+            div.style.color = '#fff';
+            div.style.fontSize = '12px';
+            div.style.fontWeight = '600';
+            return new CSS2DObject(div);
+        }
+
+        addAxis(new THREE.Vector3(1, 0, 0), 0x0066ff, 'Z axis');
+        addAxis(new THREE.Vector3(0, 1, 0), 0x3e7c17, 'Y axis');
+        addAxis(new THREE.Vector3(0, 0, 1), 0xff5c39, 'X axis');
+
+        const planeLabel = createLabel('Projection plane (x-y)');
+        planeLabel.position.set(-0.05, 2.1, 0.9);
+        scene.add(planeLabel);
+
+        // Stepped prism replicating the textbook solid (cyan front, red mid, green top).
+        const objectGroup = new THREE.Group();
+
+        const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x4fc3dc, metalness: 0.1, roughness: 0.7 });
+        const midMaterial = new THREE.MeshStandardMaterial({ color: 0xff4a2f, metalness: 0.1, roughness: 0.6 });
+        const topMaterial = new THREE.MeshStandardMaterial({ color: 0x4fe457, metalness: 0.1, roughness: 0.5 });
+        const objectMaterials = [baseMaterial, midMaterial, topMaterial];
+
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.45, 1.5), baseMaterial);
+        base.position.set(0, 0.225, 0.1);
+        objectGroup.add(base);
+
+        const mid = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.45, 1.0), midMaterial);
+        mid.position.set(0, 0.675, -0.05);
+        objectGroup.add(mid);
+
+        const top = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.35, 0.55), topMaterial);
+        top.position.set(0, 0.995, -0.35);
+        objectGroup.add(top);
+
+        objectGroup.position.set(1.6, 0, 0);
+        scene.add(objectGroup);
+
+        const objectLabel = createLabel('Stepped block');
+        objectLabel.position.set(1.9, 1.4, -0.3);
+        scene.add(objectLabel);
+
+        // Projection silhouette drawn on the plane (same footprint regardless of depth).
+        const projectionGroup = new THREE.Group();
+        scene.add(projectionGroup);
+
+        function makeProjectionRect(width, height, yOffset, zOffset, color) {
+            const geom = new THREE.PlaneGeometry(width, height);
+            const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.65 });
+            const mesh = new THREE.Mesh(geom, mat);
+            mesh.rotation.y = Math.PI / 2;
+            mesh.position.set(0.002, yOffset, zOffset);
+            projectionGroup.add(mesh);
+            return mat;
+        }
+
+        const projBaseMat = makeProjectionRect(1.5, 1.2, 0.675, 0.1, 0x4fc3dc);
+        const projMidMat = makeProjectionRect(1.0, 1.2, 0.825, -0.05, 0xff4a2f);
+        const projTopMat = makeProjectionRect(0.55, 0.9, 1.05, -0.35, 0x4fe457);
+        const projectionMaterials = [projBaseMat, projMidMat, projTopMat];
+
+        // Parallel projection rays reinforce orthographic behavior.
+        const projectionLinesGroup = new THREE.Group();
+        scene.add(projectionLinesGroup);
+
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x0f0f0f, transparent: true, opacity: 0.55 });
+        const projectionLineSegments = [];
+
+        function rebuildProjectionLines() {
+            objectGroup.updateMatrixWorld(true);
+            const box = new THREE.Box3().setFromObject(objectGroup);
+            const min = box.min;
+            const max = box.max;
+            const corners = [
+                new THREE.Vector3(max.x, max.y, max.z),
+                new THREE.Vector3(max.x, max.y, min.z),
+                new THREE.Vector3(max.x, min.y, max.z),
+                new THREE.Vector3(max.x, min.y, min.z),
+                new THREE.Vector3(min.x, max.y, max.z),
+                new THREE.Vector3(min.x, max.y, min.z),
+                new THREE.Vector3(min.x, min.y, max.z),
+                new THREE.Vector3(min.x, min.y, min.z)
+            ];
+            while (projectionLinesGroup.children.length < corners.length) {
+                const geom = new THREE.BufferGeometry();
+                const line = new THREE.Line(geom, lineMaterial);
+                projectionLinesGroup.add(line);
+            }
+            projectionLinesGroup.children.forEach((line, idx) => {
+                const start = corners[idx];
+                const end = new THREE.Vector3(0, start.y, start.z);
+                const points = [start, end];
+                line.geometry.setFromPoints(points);
+            });
+        }
+
+        rebuildProjectionLines();
+
+        const projectionLabel = createLabel('Orthographic shadow');
+        projectionLabel.position.set(0.05, 1.35, -0.25);
+        scene.add(projectionLabel);
+
+        // UI elements
+        const depthSlider = document.getElementById('depthSlider');
+        const depthValue = document.getElementById('depthValue');
+        const perspectiveToggle = document.getElementById('perspectiveMode');
+        const showRaysToggle = document.getElementById('showRays');
+        const resetButton = document.getElementById('resetButton');
+        const prevStepBtn = document.getElementById('prevStep');
+        const nextStepBtn = document.getElementById('nextStep');
+        const demoButton = document.getElementById('demoButton');
+        const stepMessageEl = document.getElementById('stepMessage');
+
+        function updateObjectDepth(value) {
+            objectGroup.position.x = parseFloat(value);
+            depthValue.textContent = `Depth: ${parseFloat(value).toFixed(2)} units`;
+            rebuildProjectionLines();
+        }
+
+        depthSlider.addEventListener('input', (event) => {
+            updateObjectDepth(event.target.value);
+        });
+
+        function switchCamera(usePerspective) {
+            activeCamera = usePerspective ? perspectiveCamera : orthoCamera;
+            controls.object = activeCamera;
+            controls.update();
+        }
+
+        perspectiveToggle.addEventListener('change', (event) => {
+            switchCamera(event.target.checked);
+        });
+
+        showRaysToggle.addEventListener('change', (event) => {
+            projectionLinesGroup.visible = event.target.checked;
+        });
+
+        const steps = [
+            {
+                text: 'Step 1: Axes define the reference frame. Projection rays stay parallel to the Z axis.',
+                highlight: 'axes'
+            },
+            {
+                text: 'Step 2: Move the prism along Z. Its scale in the plane stays fixed under orthographic projection.',
+                highlight: 'object'
+            },
+            {
+                text: 'Step 3: The projection plane captures an identical silhouette regardless of object depth.',
+                highlight: 'plane'
+            },
+            {
+                text: 'Step 4: Projection rays are parallel, enforcing equal magnification everywhere.',
+                highlight: 'rays'
+            }
+        ];
+
+        let stepIndex = 0;
+        let demoInterval = null;
+
+        function resetHighlights() {
+            axisMaterials.forEach((entry) => entry.material.color.copy(entry.default));
+            objectMaterials.forEach((mat) => mat.emissive && mat.emissive.setHex(0x000000));
+            planeMaterial.color.set(0xdfe5f1);
+            projectionMaterials.forEach((mat) => (mat.opacity = 0.65));
+            lineMaterial.opacity = 0.55;
+        }
+
+        function applyHighlight(target) {
+            resetHighlights();
+            switch (target) {
+                case 'axes':
+                    axisMaterials.forEach((entry) => entry.material.color.set(0xffcc00));
+                    break;
+                case 'object':
+                    objectMaterials.forEach((mat) => {
+                        mat.emissive = mat.emissive || new THREE.Color(0x000000);
+                        mat.emissive.set(0x333333);
+                    });
+                    break;
+                case 'plane':
+                    planeMaterial.color.set(0xffe082);
+                    projectionMaterials.forEach((mat) => (mat.opacity = 0.85));
+                    break;
+                case 'rays':
+                    lineMaterial.opacity = 1.0;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        function setStep(index) {
+            stepIndex = (index + steps.length) % steps.length;
+            const step = steps[stepIndex];
+            stepMessageEl.textContent = step.text;
+            applyHighlight(step.highlight);
+        }
+
+        prevStepBtn.addEventListener('click', () => {
+            setStep(stepIndex - 1);
+        });
+
+        nextStepBtn.addEventListener('click', () => {
+            setStep(stepIndex + 1);
+        });
+
+        function stopDemo() {
+            if (demoInterval) {
+                clearInterval(demoInterval);
+                demoInterval = null;
+                demoButton.textContent = 'Play Guided Demo';
+            }
+        }
+
+        demoButton.addEventListener('click', () => {
+            if (demoInterval) {
+                stopDemo();
+                return;
+            }
+            demoButton.textContent = 'Pause Guided Demo';
+            demoInterval = setInterval(() => {
+                setStep(stepIndex + 1);
+            }, 2500);
+        });
+
+        resetButton.addEventListener('click', () => {
+            stopDemo();
+            perspectiveToggle.checked = false;
+            showRaysToggle.checked = true;
+            switchCamera(false);
+            projectionLinesGroup.visible = true;
+            depthSlider.value = 1.6;
+            updateObjectDepth(1.6);
+            orthoCamera.position.set(5, 4.5, 5);
+            orthoCamera.lookAt(1, 1, 0);
+            perspectiveCamera.position.copy(orthoCamera.position);
+            perspectiveCamera.lookAt(1, 1, 0);
+            controls.target.set(1, 1, 0);
+            controls.update();
+            setStep(0);
+        });
+
+        function render() {
+            requestAnimationFrame(render);
+            controls.update();
+            renderer.render(scene, activeCamera);
+            labelRenderer.render(scene, activeCamera);
+        }
+
+        window.addEventListener('resize', () => {
+            const newAspect = container.clientWidth / container.clientHeight;
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            labelRenderer.setSize(container.clientWidth, container.clientHeight);
+            orthoCamera.left = (-frustumSize * newAspect) / 2;
+            orthoCamera.right = (frustumSize * newAspect) / 2;
+            orthoCamera.top = frustumSize / 2;
+            orthoCamera.bottom = -frustumSize / 2;
+            orthoCamera.updateProjectionMatrix();
+            perspectiveCamera.aspect = newAspect;
+            perspectiveCamera.updateProjectionMatrix();
+        });
+
+        updateObjectDepth(depthSlider.value);
+        setStep(0);
+        render();
+    </script>
+</body>
+
+</html>

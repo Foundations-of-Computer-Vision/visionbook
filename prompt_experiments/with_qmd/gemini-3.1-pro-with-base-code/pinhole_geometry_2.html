@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Pinhole Geometry: Similar Triangles</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+            font-family: sans-serif;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            max-width: 300px;
+        }
+
+        .slider-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: inline-block;
+            width: 40px;
+        }
+
+        input[type=range] {
+            width: 150px;
+            vertical-align: middle;
+        }
+
+        button {
+            margin-top: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+
+        .description {
+            font-size: 0.9em;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        #math-display {
+            margin-top: 15px;
+            font-family: monospace;
+            font-size: 1.1em;
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <div class="description">
+            <strong>Perspective Projection</strong><br>
+            Explore how similar triangles relate a 3D point $(X,Y,Z)$ to its projection $(x,y)$ on the virtual camera
+            plane.
+        </div>
+
+        <div class="slider-group">
+            <label for="pX">X</label>
+            <input type="range" id="pX" min="0" max="4" step="0.1" value="2.5">
+            <span id="vX">2.5</span>
+        </div>
+        <div class="slider-group">
+            <label for="pY">Y</label>
+            <input type="range" id="pY" min="0" max="4" step="0.1" value="3.0">
+            <span id="vY">3.0</span>
+        </div>
+        <div class="slider-group">
+            <label for="pZ">Z</label>
+            <input type="range" id="pZ" min="2" max="6" step="0.1" value="4.0">
+            <span id="vZ">4.0</span>
+        </div>
+        <div class="slider-group">
+            <label for="focal">f</label>
+            <input type="range" id="focal" min="0.5" max="2.5" step="0.1" value="1.5">
+            <span id="vF">1.5</span>
+        </div>
+
+        <div>
+            <input type="checkbox" id="showTriangles" checked>
+            <label style="width:auto" for="showTriangles">Highlight Similar Triangles</label>
+        </div>
+
+        <button id="resetBtn">Reset to Textbook View</button>
+
+        <div id="math-display">
+            x / f = X / Z<br>
+            <span id="math-x"></span>
+        </div>
+    </div>
+
+    <div id="container"></div>
+
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+        import { FontLoader } from 'https://esm.sh/three/examples/jsm/loaders/FontLoader';
+        import { TextGeometry } from 'https://esm.sh/three/examples/jsm/geometries/TextGeometry';
+
+        // --- Setup ---
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // Using perspective camera to better see 3D relationships, though base had orthographic
+        const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(6, 4, 8);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.target.set(0, 1, 1);
+
+        // --- Materials ---
+        const matPlane = new THREE.MeshBasicMaterial({ color: 0xe0e8f0, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false });
+        const matPlaneBorder = new THREE.LineBasicMaterial({ color: 0x88aacc });
+        const matRay = new THREE.LineDashedMaterial({ color: 0xaaaaaa, dashSize: 0.1, gapSize: 0.1 });
+        const matPoint3D = new THREE.MeshBasicMaterial({ color: 0x00bbff }); // Cyan for 3D point
+        const matPoint2D = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red for projected point
+        const matOrigin = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+        // Triangle materials matching figure colors roughly
+        const matTriXSmall = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false });
+        const matTriXLarge = new THREE.MeshBasicMaterial({ color: 0x00cc00, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false });
+
+        const matTriYSmall = new THREE.MeshBasicMaterial({ color: 0x0000ff, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false });
+        const matTriYLarge = new THREE.MeshBasicMaterial({ color: 0x0000cc, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false });
+
+        const matAxisX = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const matAxisY = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const matAxisZ = new THREE.LineBasicMaterial({ color: 0x000000 });
+
+        // --- State ---
+        let state = {
+            P: new THREE.Vector3(2.5, 3.0, 4.0),
+            f: 1.5,
+            showTriangles: true
+        };
+
+        // --- Geometry Objects ---
+        const group = new THREE.Group();
+        scene.add(group);
+
+        // Axes
+        const sceneAxes = new THREE.AxesHelper(1);
+        // group.add(sceneAxes); // Using custom axes
+
+        function createLine(p1, p2, mat) {
+            const geo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+            const line = new THREE.Line(geo, mat);
+            line.computeLineDistances();
+            return line;
+        }
+
+        const axisLength = 5;
+        const xAxis = createLine(new THREE.Vector3(0, 0, 0), new THREE.Vector3(axisLength, 0, 0), matAxisX);
+        const yAxis = createLine(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, axisLength, 0), matAxisY);
+        const zAxis = createLine(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, axisLength), matAxisZ);
+        group.add(xAxis, yAxis, zAxis);
+
+        // Pinhole (Origin)
+        const pinhole = new THREE.Mesh(new THREE.SphereGeometry(0.08), matOrigin);
+        group.add(pinhole);
+
+        // Virtual Camera Plane
+        const planeSize = 3;
+        const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+        const vPlane = new THREE.Mesh(planeGeo, matPlane);
+        const vPlaneEdges = new THREE.LineSegments(new THREE.EdgesGeometry(planeGeo), matPlaneBorder);
+        vPlane.add(vPlaneEdges);
+        group.add(vPlane);
+
+        // Points
+        const p3D = new THREE.Mesh(new THREE.SphereGeometry(0.1), matPoint3D);
+        group.add(p3D);
+
+        const p2D = new THREE.Mesh(new THREE.SphereGeometry(0.08), matPoint2D);
+        group.add(p2D);
+
+        // Connecting Lines
+        const rayLineObj = new THREE.Line(new THREE.BufferGeometry(), matRay);
+        group.add(rayLineObj);
+
+        // Projection Lines (X and Y components)
+        const projLinesMat = new THREE.LineBasicMaterial({ color: 0x888888 });
+        const projLinesObj = new THREE.LineSegments(new THREE.BufferGeometry(), projLinesMat);
+        group.add(projLinesObj);
+
+        // Triangles
+        const triXSmall = new THREE.Mesh(new THREE.BufferGeometry(), matTriXSmall);
+        const triXLarge = new THREE.Mesh(new THREE.BufferGeometry(), matTriXLarge);
+        const triYSmall = new THREE.Mesh(new THREE.BufferGeometry(), matTriYSmall);
+        const triYLarge = new THREE.Mesh(new THREE.BufferGeometry(), matTriYLarge);
+        group.add(triXSmall, triXLarge, triYSmall, triYLarge);
+
+        // Labels
+        let font = null;
+        const labels = [];
+        new FontLoader().load('https://esm.sh/three/examples/fonts/helvetiker_regular.typeface.json', (loadedFont) => {
+            font = loadedFont;
+            createLabels();
+            updateScene();
+        });
+
+        function createLabelText(text, color = 0x000000, size = 0.2) {
+            if (!font) return new THREE.Mesh();
+            const geo = new TextGeometry(text, { font: font, size: size, height: 0.01 });
+            geo.center();
+            const mat = new THREE.MeshBasicMaterial({ color: color });
+            const mesh = new THREE.Mesh(geo, mat);
+            labels.push(mesh);
+            group.add(mesh);
+            return mesh;
+        }
+
+        let lblP, lblp, lblX, lblY, lblZ, lblx, lbly, lblf;
+
+        function createLabels() {
+            lblP = createLabelText('P (X,Y,Z)', 0x000000);
+            lblp = createLabelText('p (x,y)', 0x000000);
+            lblX = createLabelText('X', 0x000000, 0.15);
+            lblY = createLabelText('Y', 0x000000, 0.15);
+            lblZ = createLabelText('Z', 0x000000, 0.15);
+            lblx = createLabelText('x', 0x000000, 0.15);
+            lbly = createLabelText('y', 0x000000, 0.15);
+            lblf = createLabelText('f', 0x000000, 0.15);
+        }
+
+        // --- Update Logic ---
+        function updateScene() {
+            const { P, f, showTriangles } = state;
+
+            // Calculate projection
+            const x = f * (P.x / P.z);
+            const y = f * (P.y / P.z);
+            const p = new THREE.Vector3(x, y, f);
+
+            // Positioning
+            vPlane.position.set(0, 0, f);
+            p3D.position.copy(P);
+            p2D.position.copy(p);
+
+            // Ray
+            rayLineObj.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), P]);
+            rayLineObj.computeLineDistances();
+
+            // Projection lines
+            const pts = [];
+            // 3D point to Z axis
+            pts.push(P, new THREE.Vector3(0, 0, P.z));
+            pts.push(P, new THREE.Vector3(P.x, 0, P.z));
+            pts.push(P, new THREE.Vector3(0, P.y, P.z));
+            pts.push(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, P.z)); // Z axis extension
+
+            // 2D point on virtual plane
+            pts.push(p, new THREE.Vector3(0, 0, f));
+            pts.push(p, new THREE.Vector3(x, 0, f));
+            pts.push(p, new THREE.Vector3(0, y, f));
+
+            projLinesObj.geometry.setFromPoints(pts);
+
+            // Triangles (X-Z plane)
+            if (showTriangles) {
+                // Small X triangle (x, f)
+                triXSmall.geometry.setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0, 0, f),
+                    new THREE.Vector3(x, 0, f)
+                ]);
+
+                // Large X triangle (X, Z)
+                triXLarge.geometry.setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0, 0, P.z),
+                    new THREE.Vector3(P.x, 0, P.z)
+                ]);
+
+                // Small Y triangle (y, f) - drawn on Y-Z plane
+                triYSmall.geometry.setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0, 0, f),
+                    new THREE.Vector3(0, y, f)
+                ]);
+
+                // Large Y triangle (Y, Z)
+                triYLarge.geometry.setFromPoints([
+                    new THREE.Vector3(0, 0, 0),
+                    new THREE.Vector3(0, 0, P.z),
+                    new THREE.Vector3(0, P.y, P.z)
+                ]);
+
+                triXLarge.visible = triXSmall.visible = triYLarge.visible = triYSmall.visible = true;
+            } else {
+                triXLarge.visible = triXSmall.visible = triYLarge.visible = triYSmall.visible = false;
+            }
+
+            // Update Labels
+            if (font) {
+                lblP.position.copy(P).add(new THREE.Vector3(0.2, 0.2, 0));
+                lblp.position.copy(p).add(new THREE.Vector3(0.2, 0.2, 0));
+
+                lblX.position.set(P.x / 2, 0, P.z).add(new THREE.Vector3(0, -0.2, 0));
+                lblY.position.set(0, P.y / 2, P.z).add(new THREE.Vector3(-0.2, 0, 0));
+                lblZ.position.set(0, -0.2, P.z / 2);
+
+                lblx.position.set(x / 2, 0, f).add(new THREE.Vector3(0, -0.15, 0));
+                lbly.position.set(0, y / 2, f).add(new THREE.Vector3(-0.15, 0, 0));
+                lblf.position.set(0, -0.15, f / 2);
+
+                // Billboard labels
+                labels.forEach(l => l.quaternion.copy(camera.quaternion));
+            }
+
+            // Update Math
+            document.getElementById('math-x').innerHTML = `${x.toFixed(2)} / ${f.toFixed(2)} = ${P.x.toFixed(2)} / ${P.z.toFixed(2)} &nbsp;&nbsp;&nbsp;&nbsp; (${(x / f).toFixed(2)})`;
+        }
+
+        // --- UI Listeners ---
+        document.getElementById('pX').addEventListener('input', (e) => { state.P.x = parseFloat(e.target.value); document.getElementById('vX').innerText = state.P.x.toFixed(1); updateScene(); });
+        document.getElementById('pY').addEventListener('input', (e) => { state.P.y = parseFloat(e.target.value); document.getElementById('vY').innerText = state.P.y.toFixed(1); updateScene(); });
+        document.getElementById('pZ').addEventListener('input', (e) => { state.P.z = parseFloat(e.target.value); document.getElementById('vZ').innerText = state.P.z.toFixed(1); updateScene(); });
+        document.getElementById('focal').addEventListener('input', (e) => { state.f = parseFloat(e.target.value); document.getElementById('vF').innerText = state.f.toFixed(1); updateScene(); });
+
+        document.getElementById('showTriangles').addEventListener('change', (e) => { state.showTriangles = e.target.checked; updateScene(); });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            document.getElementById('pX').value = 2.5; document.getElementById('vX').innerText = "2.5"; state.P.x = 2.5;
+            document.getElementById('pY').value = 3.0; document.getElementById('vY').innerText = "3.0"; state.P.y = 3.0;
+            document.getElementById('pZ').value = 4.0; document.getElementById('vZ').innerText = "4.0"; state.P.z = 4.0;
+            document.getElementById('focal').value = 1.5; document.getElementById('vF').innerText = "1.5"; state.f = 1.5;
+            document.getElementById('showTriangles').checked = true; state.showTriangles = true;
+
+            camera.position.set(6, 4, 8);
+            camera.lookAt(0, 0, 0);
+            controls.target.set(0, 1, 1);
+
+            updateScene();
+        });
+
+        updateScene();
+
+        // --- Render Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            // Update billboards
+            if (font) {
+                labels.forEach(l => l.quaternion.copy(camera.quaternion));
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- Resize ---
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

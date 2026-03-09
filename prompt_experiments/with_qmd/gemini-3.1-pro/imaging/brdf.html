@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRDF and Light Reflection</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 350px;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 18px;
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+            margin-top: 5px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .label {
+            position: absolute;
+            color: black;
+            font-size: 16px;
+            font-weight: bold;
+            font-style: italic;
+            pointer-events: none;
+            text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="ui-container">
+        <h2>BRDF Reflection Model</h2>
+        <p style="font-size: 12px; line-height: 1.4;">
+            This interactive figure demonstrates the variables in the Bidirectional Reflectance Distribution Function
+            (BRDF) as described in the <b>imaging.qmd</b> text.
+        </p>
+
+        <div class="control-group">
+            <label for="lightAngle">Incoming light angle (&theta;<sub>in</sub>)</label>
+            <input type="range" id="lightAngle" min="0" max="80" value="45">
+        </div>
+
+        <div class="control-group">
+            <label for="outAngle">Outgoing viewing angle (&theta;<sub>out</sub>)</label>
+            <input type="range" id="outAngle" min="-80" max="80" value="45">
+        </div>
+
+        <div class="control-group" style="display:flex; align-items:center;">
+            <input type="checkbox" id="showScattering" checked>
+            <label for="showScattering" style="margin:0 0 0 5px;">Show scattered rays (diffuse)</label>
+        </div>
+
+        <button id="resetBtn">Reset to Textbook View</button>
+        <button id="demoBtn">Step-by-step Demo</button>
+    </div>
+
+    <div id="labels-container"></div>
+    <div id="canvas-container"></div>
+
+    <!-- Import map for Three.js ES Modules -->
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+</script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // 1. Setup Scene, Camera, Renderer
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(5, 4, 7);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 0, 0);
+
+        // 2. Map 2D elements to 3D objects
+        // Surface (Green plane in the figure)
+        const planeGeometry = new THREE.PlaneGeometry(10, 10);
+        const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x88ff00, side: THREE.DoubleSide });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.rotation.x = -Math.PI / 2;
+        scene.add(plane);
+
+        // Coordinate origin
+        const origin = new THREE.Vector3(0, 0, 0);
+
+        // Normal vector n (black arrow pointing straight up)
+        const nDir = new THREE.Vector3(0, 1, 0);
+        const nArrow = new THREE.ArrowHelper(nDir, origin, 1.5, 0x000000, 0.3, 0.2);
+        scene.add(nArrow);
+
+        // Incoming vector p (points TOWARD the light source as per the text.
+        // The visual yellow beam points toward the plane)
+        const pArrow = new THREE.ArrowHelper(new THREE.Vector3(), origin, 2.0, 0x000000, 0.4, 0.2);
+        scene.add(pArrow);
+
+        const qArrow = new THREE.ArrowHelper(new THREE.Vector3(), origin, 2.5, 0x000000, 0.4, 0.2);
+        scene.add(qArrow);
+
+        // Incoming light beam (yellow thick line)
+        const lightBeamMaterial = new THREE.LineBasicMaterial({ color: 0xffcc00, linewidth: 5 });
+        const lightBeamGeo = new THREE.BufferGeometry();
+        const lightBeam = new THREE.Line(lightBeamGeo, lightBeamMaterial);
+        scene.add(lightBeam);
+
+        // Scattered outgoing rays (green arrows)
+        const scatteringRays = [];
+        const scatteredGroup = new THREE.Group();
+        scene.add(scatteredGroup);
+
+        // Create a hemisphere of faint green arrows for diffuse scattering
+        const numScattered = 12;
+        for (let i = 0; i < numScattered; i++) {
+            const phi = Math.random() * Math.PI * 2;
+            const theta = Math.random() * (Math.PI / 2 * 0.8) + 0.1; // avoid completely flat
+            const dir = new THREE.Vector3(
+                Math.sin(theta) * Math.cos(phi),
+                Math.cos(theta),
+                Math.sin(theta) * Math.sin(phi)
+            );
+            const arrow = new THREE.ArrowHelper(dir, origin, 1.2 + Math.random() * 0.5, 0x33aa33, 0.2, 0.1);
+            scatteredGroup.add(arrow);
+        }
+
+        // HTML Labels support
+        const labelsContainer = document.getElementById('labels-container');
+        const labels = [
+            { id: 'lbl-n', text: 'n', pos: new THREE.Vector3(0, 1.7, 0) },
+            { id: 'lbl-p', text: 'p', pos: new THREE.Vector3() }, // updated dynamically
+            { id: 'lbl-q', text: 'q', pos: new THREE.Vector3() }, // updated dynamically
+            { id: 'lbl-lin', text: 'ℓ_in(λ)', pos: new THREE.Vector3() },
+            { id: 'lbl-lout', text: 'ℓ_out=F(ℓ_in,n,λ,p,q)', pos: new THREE.Vector3() }
+        ];
+
+        labels.forEach(l => {
+            const el = document.createElement('div');
+            el.className = 'label';
+            el.id = l.id;
+            el.innerHTML = l.text.replace(/_(\w+)/g, '<sub>$1</sub>'); // simple subscript parse
+            labelsContainer.appendChild(el);
+            l.element = el;
+        });
+
+        // 3. UI and State variables
+        let inAngleDeg = 45;
+        let outAngleDeg = 45;
+
+        const uiInAngle = document.getElementById('lightAngle');
+        const uiOutAngle = document.getElementById('outAngle');
+        const uiScattering = document.getElementById('showScattering');
+        const resetBtn = document.getElementById('resetBtn');
+        const demoBtn = document.getElementById('demoBtn');
+
+        // Update geometry based on angles
+        function updateGeometry() {
+            const inRad = THREE.MathUtils.degToRad(inAngleDeg);
+            const outRad = THREE.MathUtils.degToRad(outAngleDeg);
+
+            // Vector p points to light
+            const pDir = new THREE.Vector3(-Math.sin(inRad), Math.cos(inRad), 0).normalize();
+            pArrow.setDirection(pDir);
+
+            // Beam comes from light
+            const lightDist = 5;
+            const lightPos = pDir.clone().multiplyScalar(lightDist);
+            lightBeamGeo.setFromPoints([lightPos, origin]);
+
+            // Vector q points to outgoing direction
+            const qDir = new THREE.Vector3(Math.sin(outRad), Math.cos(outRad), 0).normalize();
+            qArrow.setDirection(qDir);
+
+            // Update dynamic label positions
+            const pLblPos = pDir.clone().multiplyScalar(1.2);
+            pLblPos.z -= 0.3; // offsetting for readability
+            labels.find(l => l.id === 'lbl-p').pos.copy(pLblPos);
+
+            const qLblPos = qDir.clone().multiplyScalar(1.5);
+            qLblPos.z += 0.3;
+            labels.find(l => l.id === 'lbl-q').pos.copy(qLblPos);
+
+            const linPos = pDir.clone().multiplyScalar(3.0);
+            linPos.y += 0.5;
+            labels.find(l => l.id === 'lbl-lin').pos.copy(linPos);
+
+            const loutPos = qDir.clone().multiplyScalar(2.7);
+            loutPos.y += 0.3;
+            labels.find(l => l.id === 'lbl-lout').pos.copy(loutPos);
+        }
+
+        function updateLabels() {
+            labels.forEach(l => {
+                const v = l.pos.clone();
+                v.project(camera);
+                const x = (v.x * .5 + .5) * window.innerWidth;
+                const y = (v.y * -.5 + .5) * window.innerHeight;
+
+                // Only show if in front of camera
+                if (v.z < 1) {
+                    l.element.style.display = 'block';
+                    l.element.style.left = `${x}px`;
+                    l.element.style.top = `${y}px`;
+                } else {
+                    l.element.style.display = 'none';
+                }
+            });
+        }
+
+        // Event Listeners for Interaction
+        uiInAngle.addEventListener('input', (e) => {
+            inAngleDeg = parseFloat(e.target.value);
+            updateGeometry();
+        });
+
+        uiOutAngle.addEventListener('input', (e) => {
+            outAngleDeg = parseFloat(e.target.value);
+            updateGeometry();
+        });
+
+        uiScattering.addEventListener('change', (e) => {
+            scatteredGroup.visible = e.target.checked;
+        });
+
+        function setAngles(i, o) {
+            inAngleDeg = i;
+            outAngleDeg = o;
+            uiInAngle.value = i;
+            uiOutAngle.value = o;
+            updateGeometry();
+        }
+
+        resetBtn.addEventListener('click', () => {
+            setAngles(45, 45);
+            uiScattering.checked = true;
+            scatteredGroup.visible = true;
+            camera.position.set(5, 4, 7);
+            controls.target.set(0, 0, 0);
+        });
+
+        // Simple guided demo
+        let demoInterval = null;
+        demoBtn.addEventListener('click', () => {
+            if (demoInterval) clearInterval(demoInterval);
+
+            // Step 1: light comes from right
+            setAngles(15, 60);
+            let step = 0;
+
+            demoInterval = setInterval(() => {
+                step++;
+                if (step < 30) {
+                    // Light moves overhead
+                    setAngles(15 + step * 1.5, 60 - step * 0.5);
+                } else if (step < 60) {
+                    // Outgoing vector sweeps
+                    setAngles(60, 45 - (step - 30) * 2);
+                } else {
+                    clearInterval(demoInterval);
+                    setAngles(45, 45); // reset
+                }
+            }, 50);
+        });
+
+        // Window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Init
+        updateGeometry();
+
+        // Render loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            updateLabels();
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+
+</html>

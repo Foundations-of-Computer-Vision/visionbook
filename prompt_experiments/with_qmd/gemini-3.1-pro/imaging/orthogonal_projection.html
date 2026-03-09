@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orthographic Projection Interactive Visualization</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+        }
+
+        p {
+            font-size: 0.9rem;
+            color: #333;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 8px;
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .slider-container {
+            margin-bottom: 15px;
+        }
+
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .label {
+            color: black;
+            font-family: serif;
+            font-size: 24px;
+            font-weight: bold;
+            pointer-events: none;
+            user-select: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="ui-container">
+        <h2>Orthographic Projection</h2>
+        <p>In orthographic projection, projection is done by parallel rays orthogonal to the projection plane. Notice $x
+            = X$ and $y = Y$, independent of distance $Z$.</p>
+
+        <button id="btn-reset">Reset to Textbook View</button>
+        <button id="btn-toggle-rays">Toggle Projection Rays</button>
+
+        <div class="slider-container">
+            <label for="z-slider">Move Object in Z (Distance from Plane): <span id="z-val">5.0</span></label>
+            <input type="range" id="z-slider" min="2" max="10" step="0.1" value="5">
+        </div>
+
+        <p id="demo-text">Observe that moving the object further away or closer does not change its projected size on
+            the plane!</p>
+    </div>
+
+    <!-- Import Three.js and OrbitControls as ES Modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // 1. Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // We use a perspective camera to view the 3D scene (showing the projection process)
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.getElementById('canvas-container').appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Setup initial "Textbook View" camera position
+        const textbookCameraPos = new THREE.Vector3(12, 8, 15);
+        const textbookTarget = new THREE.Vector3(0, 0, 0);
+
+        function resetCamera() {
+            camera.position.set(20, 15, 20); // Looking from top right to match the figure
+            controls.target.set(3, 0, 3);
+            camera.position.copy(textbookCameraPos);
+            controls.target.copy(textbookTarget);
+            controls.update();
+        }
+        resetCamera();
+
+        // 2. Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        dirLight.position.set(10, 20, 10);
+        scene.add(dirLight);
+
+        // Helper to create text labels
+        function createLabel(text, position, color = 'black') {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            div.style.color = color;
+            const label = new CSS2DObject(div);
+            label.position.copy(position);
+            scene.add(label);
+            return label;
+        }
+
+        // 3. World Axes (X, Y, Z) - Thick black lines
+        const axesGroup = new THREE.Group();
+        const axMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+
+        // Z axis goes horizontally to the right in the figure
+        // X axis goes "into" the screen / diagonal
+        // Y axis goes up
+        // We will map: Three.js X -> Figure Z, Three.js -Z -> Figure X, Three.js Y -> Figure Y
+
+        const axesHelper = new THREE.AxesHelper(8); // Red=X, Green=Y, Blue=Z
+        // scene.add( axesHelper ); // We will use custom black arrows instead to match figure
+
+        function buildArrow(dir, origin, length, color = 'black', thickness = 0.05) {
+            const arrowHelper = new THREE.ArrowHelper(dir, origin, length, color, 0.4, 0.3);
+            if (color === 'black') arrowHelper.line.material.linewidth = 3;
+            else arrowHelper.line.material.linewidth = 2;
+            return arrowHelper;
+        }
+
+        // Figure X (into screen, mapped to Three.js -Z)
+        scene.add(buildArrow(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, 0), 6, 'black'));
+        createLabel('X', new THREE.Vector3(0, 0.5, -6));
+
+        // Figure Y (up, mapped to Three.js Y)
+        scene.add(buildArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 6, 'black'));
+        createLabel('Y', new THREE.Vector3(0.5, 6, 0));
+
+        // Figure Z (right, mapped to Three.js X)
+        scene.add(buildArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 12, 'black'));
+        createLabel('Z', new THREE.Vector3(12, 0.5, 0));
+
+        // 4. Projection Plane
+        // Placed at Figure Z = 3 (Three.js X = 3)
+        const planeX = 3;
+        const planeGeo = new THREE.PlaneGeometry(8, 8);
+        const planeMat = new THREE.MeshBasicMaterial({
+            color: 0xe0e6ed,
+            transparent: true,
+            opacity: 0.6,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const plane = new THREE.Mesh(planeGeo, planeMat);
+        // Rotate to face Figure Z (Three.js X)
+        plane.rotation.y = Math.PI / 2;
+        plane.position.x = planeX;
+        scene.add(plane);
+
+        // Plane Outline
+        const edges = new THREE.EdgesGeometry(planeGeo);
+        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000 }));
+        plane.add(line);
+
+        createLabel('Projection plane', new THREE.Vector3(planeX, -4.5, 0));
+
+        // 2D Coordinates on Projection Plane
+        // Figure 2D x into screen (Three.js -Z), Figure 2D y up (Three.js Y)
+        scene.add(buildArrow(new THREE.Vector3(0, 0, -1), new THREE.Vector3(planeX, 0, 0), 4, '#00ff00')); // x
+        scene.add(buildArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(planeX, 0, 0), 4, '#00ff00')); // y
+        createLabel('x', new THREE.Vector3(planeX, 0.2, -4), '#00ff00');
+        createLabel('y', new THREE.Vector3(planeX, 4, 0.2), '#00ff00');
+
+        // 5. 3D Object (L-shape block)
+        // Mapped to our coordinates:
+        // Positioned along Figure Z (Three.js X)
+
+        const objectGroup = new THREE.Group();
+        scene.add(objectGroup);
+
+        // Geometries for the L-shape (composed of two boxes)
+        // Box 1 (Bottom step)
+        // Width along Figure Z (Three.js X) = 2
+        // Height along Figure Y = 1.5
+        // Depth along Figure X (Three.js -Z) = 3
+        const geom1 = new THREE.BoxGeometry(2, 1.5, 3);
+        // Box 2 (Top step)
+        const geom2 = new THREE.BoxGeometry(2, 1.5, 1.5);
+
+        // Materials matching figure colors:
+        // Faces pointing towards Projection Plane (Figure -Z / Three.js -X) -> Red
+        // Faces pointing Up (Figure Y / Three.js Y) -> Green
+        // Faces pointing Right (Figure X / Three.js -Z) -> Blue
+
+        // Note on BoxGeometry face order:
+        // 0: px, 1: nx, 2: py, 3: ny, 4: pz, 5: nz
+        // Mapped to our coords:
+        // px (Three X / Figure Z) -> back face -> Blue/Cyan ? Actually let's just make it simple
+        // Instead of strict materials per face on a box, let's use a standard material and manually color faces if needed.
+        // Or even simpler: use flat shading and distinct colors. Let's map materials for each side.
+
+        const matRed = new THREE.MeshLambertMaterial({ color: 0xff3333 });    // Facing plane
+        const matGreen = new THREE.MeshLambertMaterial({ color: 0x33ff33 });  // Top
+        const matBlue = new THREE.MeshLambertMaterial({ color: 0x33ccff });   // Side
+        const matGray = new THREE.MeshLambertMaterial({ color: 0x999999 });   // Hidden
+
+        const materials = [
+            matGray,  // px (Figure Z - away from plane)
+            matRed,   // nx (Figure -Z - towards plane)
+            matGreen, // py (Figure Y - up)
+            matGray,  // ny (Figure -Y - down)
+            matGray,  // pz (Figure -X - back side)
+            matBlue   // nz (Figure X - front side)
+        ];
+
+        const step1 = new THREE.Mesh(geom1, materials);
+        step1.position.set(0, 1.5 / 2, -1.5 / 2); // Centers
+
+        const step2 = new THREE.Mesh(geom2, materials);
+        step2.position.set(0, 1.5 + 1.5 / 2, -1.5 / 2 - 1.5 / 2 + 0.75); // Top step
+
+        // Fix top step position properly
+        // Bottom step: Y: 0 to 1.5, Z: 0 to -3
+        step1.position.set(0, 0.75, -1.5);
+
+        // Top step: Y: 1.5 to 3.0, Z: -1.5 to -3
+        step2.position.set(0, 2.25, -2.25);
+
+        // Add outlines to block
+        function addEdges(mesh) {
+            const edgeGeo = new THREE.EdgesGeometry(mesh.geometry);
+            const edgeMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+            const edgesMesh = new THREE.LineSegments(edgeGeo, edgeMat);
+            mesh.add(edgesMesh);
+        }
+        addEdges(step1);
+        addEdges(step2);
+
+        objectGroup.add(step1);
+        objectGroup.add(step2);
+
+        // Initialize object position along Figure Z (Three.js X)
+        let objectFigureZ = 8;
+        objectGroup.position.x = objectFigureZ;
+
+        // 6. 2D Projected Shape on the Plane
+        const projGroup = new THREE.Group();
+        scene.add(projGroup);
+        // Plane is at Three.js X = planeX.
+        // The projected shape is at X = planeX + 0.01 to avoid z-fighting
+        const projMat = new THREE.MeshBasicMaterial({ color: 0xff3333, side: THREE.DoubleSide });
+
+        // Project bottom step front face (nx)
+        // Its dimensions: Width in Figure X (Three Z) = 3, Height = 1.5
+        const pGeom1 = new THREE.PlaneGeometry(3, 1.5);
+        const pMesh1 = new THREE.Mesh(pGeom1, projMat);
+        pMesh1.rotation.y = Math.PI / 2;
+        pMesh1.position.set(planeX + 0.01, 0.75, -1.5);
+
+        // Project top step front face
+        // Width in Figure X (Three Z) = 1.5, Height = 1.5
+        const pGeom2 = new THREE.PlaneGeometry(1.5, 1.5);
+        const pMesh2 = new THREE.Mesh(pGeom2, projMat);
+        pMesh2.rotation.y = Math.PI / 2;
+        pMesh2.position.set(planeX + 0.01, 2.25, -2.25);
+
+        addEdges(pMesh1);
+        addEdges(pMesh2);
+        projGroup.add(pMesh1);
+        projGroup.add(pMesh2);
+
+        // 7. Projection Rays (Dashed lines)
+        const raysGroup = new THREE.Group();
+        scene.add(raysGroup);
+
+        const rayMaterial = new THREE.LineDashedMaterial({
+            color: 0x000000,
+            dashSize: 0.2,
+            gapSize: 0.2,
+        });
+
+        const projectionVertices = [
+            new THREE.Vector3(-1, 0, 0),       // Bottom-left of step 1 (local coords relative to group)
+            new THREE.Vector3(-1, 1.5, 0),     // Top-left of step 1
+            new THREE.Vector3(-1, 0, -3),      // Bottom-right of step 1
+            new THREE.Vector3(-1, 1.5, -1.5),  // inner corner
+            new THREE.Vector3(-1, 3, -1.5),    // Top-left of step 2
+            new THREE.Vector3(-1, 3, -3),      // Top-right of step 2
+            new THREE.Vector3(-1, 1.5, -3)     // Mid-right of step 2
+        ];
+
+        function updateRays() {
+            raysGroup.clear();
+            const startX = objectGroup.position.x - 1; // Front face of the object
+
+            projectionVertices.forEach(v => {
+                const startPoint = new THREE.Vector3(startX, v.y, v.z);
+                const endPoint = new THREE.Vector3(planeX, v.y, v.z);
+
+                const points = [startPoint, endPoint];
+                const geo = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geo, rayMaterial);
+                line.computeLineDistances(); // Required for dashed lines
+                raysGroup.add(line);
+            });
+        }
+        updateRays();
+
+        // 8. Interactivity
+
+        let raysVisible = true;
+        document.getElementById('btn-toggle-rays').addEventListener('click', () => {
+            raysVisible = !raysVisible;
+            raysGroup.visible = raysVisible;
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            resetCamera();
+            document.getElementById('z-slider').value = 5;
+            objectFigureZ = 5 + planeX; // Slider is distance from plane
+            objectGroup.position.x = objectFigureZ;
+            updateRays();
+            document.getElementById('z-val').textContent = "5.0";
+        });
+
+        document.getElementById('z-slider').addEventListener('input', (e) => {
+            const distance = parseFloat(e.target.value);
+            document.getElementById('z-val').textContent = distance.toFixed(1);
+            objectFigureZ = planeX + distance;
+            objectGroup.position.x = objectFigureZ;
+            updateRays();
+        });
+
+
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 9. Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        animate();
+
+    </script>
+</body>
+
+</html>

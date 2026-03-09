@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinhole Camera Geometry 3D</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+            background-color: #f0f0f0;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 300px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9rem;
+            margin-bottom: 3px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #005a99;
+        }
+
+        .label {
+            color: black;
+            font-weight: bold;
+            font-family: serif;
+            font-size: 16px;
+            pointer-events: none;
+            text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui-panel">
+        <h2>Pinhole Projection Concepts</h2>
+        <div class="control-group">
+            <label>Point P Position (X): <span id="px-val">5</span></label>
+            <input type="range" id="px-slider" min="-10" max="10" step="0.1" value="5">
+        </div>
+        <div class="control-group">
+            <label>Point P Position (Y): <span id="py-val">4</span></label>
+            <input type="range" id="py-slider" min="-10" max="10" step="0.1" value="4">
+        </div>
+        <div class="control-group">
+            <label>Point P Distance (Z): <span id="pz-val">10</span></label>
+            <input type="range" id="pz-slider" min="2" max="20" step="0.1" value="10">
+        </div>
+        <div class="control-group">
+            <label>Focal Length (f): <span id="f-val">3</span></label>
+            <input type="range" id="f-slider" min="1" max="6" step="0.1" value="3">
+        </div>
+        <button id="btn-reset">Reset to Textbook View</button>
+        <button id="btn-demo1">Demo: Move Object Closer</button>
+        <button id="btn-demo2">Demo: Increase Focal Length</button>
+        <p style="font-size: 0.8rem; margin-top: 10px; color: #555;">
+            Shows the relationship between the 3D point <strong>P</strong>, its projection on the virtual camera plane,
+            and its inverted projection on the projection plane.
+        </p>
+    </div>
+    <div id="canvas-container"></div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --- Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#fafafa');
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(15, 12, 25);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0, 5);
+        controls.enableDamping = true;
+
+        // --- Helpers ---
+        function createLabel(text, position, offset = [0, 0]) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.innerHTML = text;
+            div.style.marginTop = offset[1] + 'px';
+            div.style.marginLeft = offset[0] + 'px';
+            const label = new CSS2DObject(div);
+            label.position.copy(position);
+            return label;
+        }
+
+        function createArrow(dir, origin, length, color) {
+            return new THREE.ArrowHelper(dir.normalize(), origin, length, color, 0.5, 0.3);
+        }
+
+        // --- Geometry Elements ---
+        // 1. Pinhole (Origin)
+        const pinholeGeo = new THREE.SphereGeometry(0.2, 16, 16);
+        const pinholeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const pinhole = new THREE.Mesh(pinholeGeo, pinholeMat);
+        scene.add(pinhole);
+        const pinholeLabel = createLabel('(0,0,0) Pinhole', new THREE.Vector3(0, -0.5, 0));
+        scene.add(pinholeLabel);
+
+        // 2. World Axes
+        scene.add(createArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 8, 0x000000)); // X
+        scene.add(createArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 8, 0x000000)); // Y
+        scene.add(createArrow(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 12, 0x000000)); // Z
+        scene.add(createLabel('X', new THREE.Vector3(8.5, 0, 0)));
+        scene.add(createLabel('Y', new THREE.Vector3(0, 8.5, 0)));
+        scene.add(createLabel('Z', new THREE.Vector3(0, 0, 12.5)));
+
+        // 3. Planes (Virtual and Projection)
+        const planeGeo = new THREE.PlaneGeometry(8, 6);
+        const virtualMat = new THREE.MeshBasicMaterial({ color: 0x88ccff, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false });
+        const projectionMat = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.4, side: THREE.DoubleSide, depthWrite: false });
+
+        const virtualPlane = new THREE.Mesh(planeGeo, virtualMat);
+        scene.add(virtualPlane);
+        const projectionPlane = new THREE.Mesh(planeGeo, projectionMat);
+        scene.add(projectionPlane);
+
+        // Plane Local Axes ( ग्रीन / Green )
+        const vAxes = new THREE.Group();
+        vAxes.add(createArrow(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 0), 3, 0x00ff00)); // x (note: x is flipped in virtual relative to X as per diagram)
+        vAxes.add(createArrow(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), 3, 0x00ff00)); // y
+        vAxes.add(createLabel('x', new THREE.Vector3(-3.2, 0, 0)));
+        vAxes.add(createLabel('y', new THREE.Vector3(0, 3.2, 0)));
+        virtualPlane.add(vAxes);
+
+        const pAxes = new THREE.Group();
+        pAxes.add(createArrow(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 3, 0x00ff00)); // x
+        pAxes.add(createArrow(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 0), 3, 0x00ff00)); // y (flipped)
+        pAxes.add(createLabel('x', new THREE.Vector3(3.2, 0, 0)));
+        pAxes.add(createLabel('y', new THREE.Vector3(0, -3.2, 0)));
+        projectionPlane.add(pAxes);
+
+        // Focal point labels
+        const fLineMat = new THREE.LineBasicMaterial({ color: 0xff0000 });
+        const lineGeoV = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 3)]);
+        const fLineV = new THREE.Line(lineGeoV, fLineMat);
+        scene.add(fLineV);
+
+        // 4. Point P and Ray
+        const pointGeo = new THREE.SphereGeometry(0.3, 16, 16);
+        const pMat = new THREE.MeshBasicMaterial({ color: 0x00ccff });
+
+        const pointP = new THREE.Mesh(pointGeo, pMat);
+        scene.add(pointP);
+        const pLabel = createLabel('P(X,Y,Z)', pointP.position, [10, -10]);
+        scene.add(pLabel);
+
+        const pointVirt = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), pMat);
+        scene.add(pointVirt);
+        const pVirtLabel = createLabel('p(x,y)', pointVirt.position, [10, -10]);
+        scene.add(pVirtLabel);
+
+        const pointProj = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), pMat);
+        scene.add(pointProj);
+        const pProjLabel = createLabel('p', pointProj.position, [10, -10]);
+        scene.add(pProjLabel);
+
+        const rayGeo = new THREE.BufferGeometry();
+        const rayMat = new THREE.LineDashedMaterial({ color: 0xaaaaaa, dashSize: 0.5, gapSize: 0.5 });
+        const rayLine = new THREE.Line(rayGeo, rayMat);
+        rayLine.computeLineDistances();
+        scene.add(rayLine);
+
+        // --- State and Update Logic ---
+        let params = { P: new THREE.Vector3(5, 4, 10), f: 3 };
+
+        function updateGeometry() {
+            // Update Planes
+            virtualPlane.position.set(0, 0, params.f);
+            projectionPlane.position.set(0, 0, -params.f);
+
+            fLineV.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, params.f)]);
+
+            // Update Point P
+            pointP.position.copy(params.P);
+            pLabel.position.copy(params.P);
+
+            // Calculate Projections: x = f * X / Z, y = f * Y / Z
+            const scale = params.f / params.P.z;
+            const px = params.P.x * scale;
+            const py = params.P.y * scale;
+
+            pointVirt.position.set(px, py, params.f);
+            pVirtLabel.position.copy(pointVirt.position);
+
+            pointProj.position.set(-px, -py, -params.f);
+            pProjLabel.position.copy(pointProj.position);
+
+            // Update Ray Line
+            rayGeo.setFromPoints([params.P, pointProj.position]);
+            rayLine.computeLineDistances();
+        }
+
+        // --- Interaction ---
+        const uiPx = document.getElementById('px-slider');
+        const uiPy = document.getElementById('py-slider');
+        const uiPz = document.getElementById('pz-slider');
+        const uiF = document.getElementById('f-slider');
+
+        function onUiChange() {
+            params.P.x = parseFloat(uiPx.value);
+            params.P.y = parseFloat(uiPy.value);
+            params.P.z = parseFloat(uiPz.value);
+            params.f = parseFloat(uiF.value);
+
+            document.getElementById('px-val').innerText = params.P.x;
+            document.getElementById('py-val').innerText = params.P.y;
+            document.getElementById('pz-val').innerText = params.P.z;
+            document.getElementById('f-val').innerText = params.f;
+
+            updateGeometry();
+        }
+
+        uiPx.addEventListener('input', onUiChange);
+        uiPy.addEventListener('input', onUiChange);
+        uiPz.addEventListener('input', onUiChange);
+        uiF.addEventListener('input', onUiChange);
+
+        function animateValues(targetZ, targetF) {
+            const startZ = params.P.z;
+            const startF = params.f;
+            const duration = 1000;
+            const startTime = performance.now();
+
+            function step(time) {
+                const elapsed = (time - startTime) / duration;
+                if (elapsed < 1) {
+                    const t = elapsed < 0.5 ? 2 * elapsed * elapsed : -1 + (4 - 2 * elapsed) * elapsed; // easeInOutQuad
+                    uiPz.value = startZ + (targetZ - startZ) * t;
+                    uiF.value = startF + (targetF - startF) * t;
+                    onUiChange();
+                    requestAnimationFrame(step);
+                } else {
+                    uiPz.value = targetZ;
+                    uiF.value = targetF;
+                    onUiChange();
+                }
+            }
+            requestAnimationFrame(step);
+        }
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            uiPx.value = 5; uiPy.value = 4; uiPz.value = 10; uiF.value = 3;
+            onUiChange();
+            camera.position.set(15, 12, 25);
+            controls.target.set(0, 0, 5);
+        });
+
+        document.getElementById('btn-demo1').addEventListener('click', () => { animateValues(5, params.f); });
+        document.getElementById('btn-demo2').addEventListener('click', () => { animateValues(params.P.z, 6); });
+
+        // Build Scene
+        updateGeometry();
+
+        // --- Render Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+
+</html>

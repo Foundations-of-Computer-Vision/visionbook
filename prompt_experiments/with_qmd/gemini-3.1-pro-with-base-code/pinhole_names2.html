@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Pinhole Camera Geometry</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+            font-family: sans-serif;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+
+        button,
+        input {
+            margin: 5px 0;
+            display: block;
+        }
+
+        label {
+            font-size: 14px;
+        }
+
+        .label3d {
+            position: absolute;
+            color: black;
+            font-size: 14px;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            text-shadow: 1px 1px 0 #fff, -1px 1px 0 #fff, 1px -1px 0 #fff, -1px -1px 0 #fff;
+        }
+
+        .title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+
+    <div id="ui">
+        <div class="title">Pinhole Camera Concept</div>
+        <label>
+            Focal Length ($f$): <span id="f-val">2.0</span>
+            <input type="range" id="f-slider" min="1" max="4" step="0.1" value="2.0">
+        </label>
+        <label>
+            <input type="checkbox" id="show-box" checked> Show Camera Box
+        </label>
+        <button id="reset-btn">Reset to Textbook View</button>
+    </div>
+
+    <div id="labels"></div>
+
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+        const container = document.getElementById('container');
+        const labelsContainer = document.getElementById('labels');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // Initial camera setup
+        const aspect = container.clientWidth / container.clientHeight;
+        const d = 5;
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+        // Position to match the "textbook view" (isometric-like)
+        camera.position.set(5, 4, 6);
+        camera.lookAt(0, 0, 0);
+        camera.zoom = 1.0;
+        camera.updateProjectionMatrix();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // --- 3D Objects mapping to 2D figure elements ---
+
+        // 1. World Coordinate Axes (X, Y, Z right-handed)
+        // Origin is the pinhole center
+        const axesHelper = new THREE.AxesHelper(3);
+        scene.add(axesHelper);
+
+        // 2. Camera Box (representing the pinhole camera enclosure)
+        const boxWidth = 2;
+        const boxHeight = 2;
+        let focalLength = 2.0;
+
+        const boxGeometry = new THREE.BoxGeometry(boxWidth, boxHeight, focalLength);
+        // Move geometry so front face is at origin, extending to -Z
+        boxGeometry.translate(0, 0, -focalLength / 2);
+
+        const boxMaterial = new THREE.MeshBasicMaterial({
+            color: 0x8f9c90,
+            transparent: true,
+            opacity: 0.6,
+            depthWrite: false
+        });
+        const cameraBox = new THREE.Mesh(boxGeometry, boxMaterial);
+
+        // Edges for the box (dashed for back edges like the textbook)
+        const edgesGeom = new THREE.EdgesGeometry(boxGeometry);
+        const edgesMat = new THREE.LineBasicMaterial({ color: 0x333333, linewidth: 2 });
+        const cameraEdges = new THREE.LineSegments(edgesGeom, edgesMat);
+        cameraBox.add(cameraEdges);
+        scene.add(cameraBox);
+
+        // 3. Projection Plane (back face of the box, at Z = -f)
+        const planeGeo = new THREE.PlaneGeometry(boxWidth, boxHeight);
+        const planeMat = new THREE.MeshBasicMaterial({ color: 0xbdc3c7, side: THREE.DoubleSide });
+        const projectionPlane = new THREE.Mesh(planeGeo, planeMat);
+        projectionPlane.position.z = -focalLength;
+        scene.add(projectionPlane);
+
+        // 4. Pinhole / Camera Center (dot at origin)
+        const pinholeGeo = new THREE.SphereGeometry(0.1, 16, 16);
+        const pinholeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const pinhole = new THREE.Mesh(pinholeGeo, pinholeMat);
+        scene.add(pinhole);
+
+        // 5. Optical / Principal Axis (Extends along +Z)
+        // X, Y axes are handled by AxesHelper. We emphasize the Z axis.
+
+        // --- Labels ---
+        const htmlLabels = [
+            { text: "Pinhole camera", pos: new THREE.Vector3(-1.5, 1.5, 0), id: "l-camera" },
+            { text: "Projection plane", pos: new THREE.Vector3(-1.2, -0.5, -focalLength), id: "l-plane" },
+            { text: "Pinhole / camera center", pos: new THREE.Vector3(0.5, -0.5, 0), id: "l-center" },
+            { text: "Optical / principal axis", pos: new THREE.Vector3(0, 0, 2), id: "l-axis" },
+            { text: "X", pos: new THREE.Vector3(3.2, 0, 0), id: "l-x" },
+            { text: "Y", pos: new THREE.Vector3(0, 3.2, 0), id: "l-y" },
+            { text: "Z", pos: new THREE.Vector3(0, 0, 3.2), id: "l-z" },
+            { text: "World coordinates", pos: new THREE.Vector3(2, 2.5, 0), id: "l-world" }
+        ];
+
+        htmlLabels.forEach(lbl => {
+            const el = document.createElement('div');
+            el.className = 'label3d';
+            el.id = lbl.id;
+            el.innerText = lbl.text;
+            labelsContainer.appendChild(el);
+            lbl.element = el;
+        });
+
+        // Arrow to denote 'f' (focal length)
+        const fLabelEl = document.createElement('div');
+        fLabelEl.className = 'label3d';
+        fLabelEl.style.color = 'red';
+        fLabelEl.innerHTML = '&#8592; <i>f</i> &#8594;';
+        labelsContainer.appendChild(fLabelEl);
+
+
+        // --- Updating and Animation ---
+
+        function updateLabels() {
+            // Dynamic positions for things that move
+            htmlLabels.find(l => l.id === 'l-plane').pos.set(-1.2, -0.5, -focalLength);
+
+            htmlLabels.forEach(lbl => {
+                const tempV = lbl.pos.clone().project(camera);
+                const x = (tempV.x * .5 + .5) * container.clientWidth;
+                const y = (tempV.y * -.5 + .5) * container.clientHeight;
+                lbl.element.style.left = `${x}px`;
+                lbl.element.style.top = `${y}px`;
+            });
+
+            // Update 'f' label position
+            const fPos = new THREE.Vector3(-boxWidth / 2, -boxHeight / 2 - 0.3, -focalLength / 2);
+            const fProj = fPos.project(camera);
+            fLabelEl.style.left = `${(fProj.x * .5 + .5) * container.clientWidth}px`;
+            fLabelEl.style.top = `${(fProj.y * -.5 + .5) * container.clientHeight}px`;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            updateLabels();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.left = -d * (w / h);
+            camera.right = d * (w / h);
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+            updateLabels();
+        });
+
+        // --- Interactive Controls ---
+
+        const sliderF = document.getElementById('f-slider');
+        const displayF = document.getElementById('f-val');
+        sliderF.addEventListener('input', (e) => {
+            focalLength = parseFloat(e.target.value);
+            displayF.innerText = focalLength.toFixed(1);
+
+            // Rebuild box
+            cameraBox.geometry.dispose();
+            const geom = new THREE.BoxGeometry(boxWidth, boxHeight, focalLength);
+            geom.translate(0, 0, -focalLength / 2);
+            cameraBox.geometry = geom;
+
+            // Rebuild edges
+            cameraEdges.geometry.dispose();
+            cameraEdges.geometry = new THREE.EdgesGeometry(geom);
+
+            // Move projection plane
+            projectionPlane.position.z = -focalLength;
+        });
+
+        document.getElementById('show-box').addEventListener('change', (e) => {
+            cameraBox.visible = e.target.checked;
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            controls.reset();
+            camera.position.set(5, 4, 6);
+            camera.lookAt(0, 0, 0);
+            camera.zoom = 1.0;
+            camera.updateProjectionMatrix();
+
+            sliderF.value = 2.0;
+            sliderF.dispatchEvent(new Event('input'));
+            document.getElementById('show-box').checked = true;
+            cameraBox.visible = true;
+        });
+
+    </script>
+</body>
+
+</html>

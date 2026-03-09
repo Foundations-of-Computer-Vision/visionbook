@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Camera Rotation Homography</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f5f6fb;
+            color: #111;
+        }
+
+        #container {
+            position: absolute;
+            inset: 0;
+        }
+
+        #ui {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            padding: 0.9rem 1rem;
+            background: rgba(255, 255, 255, 0.88);
+            border-radius: 12px;
+            box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+            max-width: 320px;
+            z-index: 10;
+        }
+
+        .control-block {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        label {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        button {
+            border: none;
+            background: #111b46;
+            color: #fff;
+            padding: 0.45rem 0.6rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        button:hover {
+            background: #263681;
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        #toggleRays {
+            background: #d61f4f;
+        }
+
+        #toggleRays:hover {
+            background: #b0173f;
+        }
+
+        #reset {
+            background: #0d7a52;
+        }
+
+        #reset:hover {
+            background: #0a6040;
+        }
+
+        .stepper {
+            align-items: center;
+            background: #eef1ff;
+            border-radius: 10px;
+            padding: 0.4rem 0.5rem;
+        }
+
+        .stepper-controls {
+            display: flex;
+            gap: 0.2rem;
+        }
+
+        .stepper button {
+            background: #4a57c8;
+            min-width: 42px;
+            padding: 0.35rem;
+        }
+
+        #stepText {
+            font-size: 0.85rem;
+            line-height: 1.2;
+            font-weight: 500;
+            color: #202042;
+            margin-top: 0.3rem;
+        }
+
+        #hint {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            max-width: 340px;
+            padding: 0.8rem 1rem;
+            background: rgba(18, 20, 44, 0.86);
+            color: #f3f5ff;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            line-height: 1.35;
+            z-index: 8;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .highlight {
+            outline: 2px solid #4a57c8;
+            border-radius: 10px;
+            box-shadow: 0 0 0 4px rgba(74, 87, 200, 0.15);
+        }
+
+        #rotationValue {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #4a57c8;
+            text-align: right;
+        }
+
+        @media (max-width: 640px) {
+            #ui {
+                width: calc(100% - 2rem);
+                max-width: none;
+            }
+
+            #hint {
+                right: 1rem;
+                width: calc(100% - 2rem);
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="ui">
+        <div class="control-block" id="rotationBlock">
+            <label for="rotation">Camera 2 rotation (about shared center)</label>
+            <input type="range" id="rotation" min="-60" max="60" value="25" />
+            <div id="rotationValue">25°</div>
+        </div>
+        <div class="control-block">
+            <button id="toggleRays">Show Corresponding Rays</button>
+            <button id="reset">Reset to Textbook View</button>
+        </div>
+        <div class="control-block stepper" id="stepperBlock">
+            <div class="stepper-controls">
+                <button id="prevStep">◀</button>
+                <button id="nextStep">▶</button>
+            </div>
+            <div id="stepText"></div>
+        </div>
+    </div>
+    <div id="hint">
+        Rotate Camera&nbsp;2, reveal the rays, then step through the mini demo to see why a pure rotation keeps image
+        measurements related by a homography.
+    </div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three@0.161.0';
+        import { OrbitControls } from 'https://esm.sh/three@0.161.0/examples/jsm/controls/OrbitControls';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf4f6ff);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const aspect = container.clientWidth / container.clientHeight;
+        const viewSize = 5;
+        const camera = new THREE.OrthographicCamera(-viewSize * aspect, viewSize * aspect, viewSize, -viewSize, 0.1, 50);
+        camera.position.set(6, 5, 6);
+        camera.lookAt(0, 0, 0);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Axes and ground cues to anchor the shared center of projection visually.
+        const grid = new THREE.GridHelper(10, 10, 0xcad0f9, 0xe3e6fb);
+        grid.position.y = -1.5;
+        scene.add(grid);
+        const axes = new THREE.AxesHelper(2.4);
+        scene.add(axes);
+
+        // Helper to create 2D labels as sprites so they always face the viewer.
+        function createLabel(text, color = '#111', size = 1) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(2, 2);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = color;
+            ctx.font = '24px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width * 0.25, canvas.height * 0.25);
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(size, size * 0.5, 1);
+            sprite.renderOrder = 10;
+            return sprite;
+        }
+
+        // Origin where both cameras share the same center of projection.
+        const originMarker = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 24, 24),
+            new THREE.MeshBasicMaterial({ color: '#111' })
+        );
+        scene.add(originMarker);
+
+        const planeDistance = 2.3;
+        const planeGeometry = new THREE.PlaneGeometry(3.2, 2.1);
+
+        // Camera 1 sensor plane from the 2D figure becomes a fixed green plane in 3D.
+        const plane1Material = new THREE.MeshBasicMaterial({ color: 0x4abd6b, transparent: true, opacity: 0.75, side: THREE.DoubleSide });
+        const plane1 = new THREE.Mesh(planeGeometry, plane1Material);
+        plane1.position.set(0, 0, planeDistance);
+        scene.add(plane1);
+
+        // Camera 2 sensor plane (red) rotates about the shared origin just like the textbook diagram.
+        const plane2Material = new THREE.MeshBasicMaterial({ color: 0xec5a5a, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+        const plane2 = new THREE.Mesh(planeGeometry, plane2Material);
+        plane2.position.set(0, 0, planeDistance);
+
+        const camera2Group = new THREE.Group();
+        camera2Group.add(plane2);
+        scene.add(camera2Group);
+
+        // Wireframe pyramids depict the camera pinholes and image planes.
+        function createFrustum(color) {
+            const width = 1.7;
+            const height = planeDistance;
+            const apex = new THREE.Vector3(0, 0, 0);
+            const corners = [
+                new THREE.Vector3(-width / 2, height / 2, height),
+                new THREE.Vector3(width / 2, height / 2, height),
+                new THREE.Vector3(width / 2, -height / 2, height),
+                new THREE.Vector3(-width / 2, -height / 2, height)
+            ];
+            const points = [];
+            for (let i = 0; i < 4; i++) {
+                points.push(apex, corners[i]);
+            }
+            for (let i = 0; i < 4; i++) {
+                points.push(corners[i], corners[(i + 1) % 4]);
+            }
+            const frustumGeometry = new THREE.BufferGeometry().setFromPoints(points);
+            const frustumMaterial = new THREE.LineBasicMaterial({ color });
+            return new THREE.LineSegments(frustumGeometry, frustumMaterial);
+        }
+
+        const camera1Frustum = createFrustum(0x16944b);
+        scene.add(camera1Frustum);
+
+        const camera2Frustum = createFrustum(0xcf1d1d);
+        camera2Group.add(camera2Frustum);
+
+        const camera1Label = createLabel('Camera 1', '#0b6a32', 1.4);
+        camera1Label.position.set(-1.4, 1.1, planeDistance - 0.3);
+        scene.add(camera1Label);
+
+        const camera2Label = createLabel('Camera 2', '#a51616', 1.4);
+        camera2Label.position.set(-1.4, 1.1, planeDistance - 0.3);
+        camera2Group.add(camera2Label);
+
+        const axisLabels = [
+            { text: 'X', pos: new THREE.Vector3(2.3, 0, 0) },
+            { text: 'Y', pos: new THREE.Vector3(0, 2.3, 0) },
+            { text: 'Z', pos: new THREE.Vector3(0, 0, 2.6) }
+        ];
+        axisLabels.forEach(l => {
+            const sprite = createLabel(l.text, '#111', 0.9);
+            sprite.position.copy(l.pos);
+            scene.add(sprite);
+        });
+
+        const worldPoint = new THREE.Vector3(0.9, 0.7, 4);
+        const worldPointMarker = new THREE.Mesh(
+            new THREE.SphereGeometry(0.09, 32, 32),
+            new THREE.MeshBasicMaterial({ color: 0x09b7ff })
+        );
+        worldPointMarker.position.copy(worldPoint);
+        scene.add(worldPointMarker);
+
+        const worldPointLabel = createLabel('(X, Y, Z)', '#06678c', 1.2);
+        worldPointLabel.position.copy(worldPoint).add(new THREE.Vector3(0.05, 0.15, 0));
+        scene.add(worldPointLabel);
+
+        const pixelMarkerMaterial1 = new THREE.MeshBasicMaterial({ color: 0x1ab463 });
+        const pixelMarkerMaterial2 = new THREE.MeshBasicMaterial({ color: 0xe13c3c });
+        const pixelGeometry = new THREE.SphereGeometry(0.06, 16, 16);
+        const pixel1Marker = new THREE.Mesh(pixelGeometry, pixelMarkerMaterial1);
+        const pixel2Marker = new THREE.Mesh(pixelGeometry, pixelMarkerMaterial2);
+        scene.add(pixel1Marker);
+        camera2Group.add(pixel2Marker);
+
+        const xyLabel = createLabel('(x, y)', '#0b6a32', 0.9);
+        scene.add(xyLabel);
+        const xyPrimeLabel = createLabel(`(x', y')`, '#a51616', 0.9);
+        scene.add(xyPrimeLabel);
+
+        const rayGroup = new THREE.Group();
+        scene.add(rayGroup);
+
+        // Rays explain how each image measurement back-projects into 3D along a line.
+        function createRay(color) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
+            const material = new THREE.LineBasicMaterial({ color });
+            return new THREE.Line(geometry, material);
+        }
+
+        const camera1Ray = createRay(0x16944b);
+        const camera2Ray = createRay(0xcf1d1d);
+        rayGroup.add(camera1Ray, camera2Ray);
+        rayGroup.visible = false;
+
+        const dashedGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), worldPoint]);
+        const dashedMaterial = new THREE.LineDashedMaterial({ color: 0x6c7791, dashSize: 0.25, gapSize: 0.15 });
+        const dashedLine = new THREE.Line(dashedGeometry, dashedMaterial);
+        dashedLine.computeLineDistances();
+        scene.add(dashedLine);
+
+        const rotationSlider = document.getElementById('rotation');
+        const rotationValue = document.getElementById('rotationValue');
+        const toggleRaysBtn = document.getElementById('toggleRays');
+        const resetBtn = document.getElementById('reset');
+        const prevStepBtn = document.getElementById('prevStep');
+        const nextStepBtn = document.getElementById('nextStep');
+        const stepText = document.getElementById('stepText');
+        const rotationBlock = document.getElementById('rotationBlock');
+        const stepperBlock = document.getElementById('stepperBlock');
+
+        const defaultRotationDeg = 25;
+        let currentRotation = THREE.MathUtils.degToRad(defaultRotationDeg);
+        let raysVisible = false;
+        let stepIndex = 0;
+
+        function highlightControl(element) {
+            [rotationBlock, toggleRaysBtn, stepperBlock].forEach(el => el.classList.remove('highlight'));
+            if (element) {
+                element.classList.add('highlight');
+            }
+        }
+
+        function setRayVisibility(state) {
+            raysVisible = state;
+            rayGroup.visible = state;
+            toggleRaysBtn.textContent = state ? 'Hide Corresponding Rays' : 'Show Corresponding Rays';
+        }
+
+        function updateRayLine(line, intersection) {
+            const positions = line.geometry.attributes.position.array;
+            positions[0] = 0; positions[1] = 0; positions[2] = 0;
+            positions[3] = intersection.x; positions[4] = intersection.y; positions[5] = intersection.z;
+            positions[6] = worldPoint.x; positions[7] = worldPoint.y; positions[8] = worldPoint.z;
+            line.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function getPlaneNormal(mesh) {
+            const normal = new THREE.Vector3(0, 0, 1);
+            mesh.updateMatrixWorld(true);
+            return normal.applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion())).normalize();
+        }
+
+        function intersectPlane(normal, planePoint) {
+            const dir = worldPoint.clone().normalize();
+            const denom = normal.dot(dir);
+            if (Math.abs(denom) < 1e-4) return null;
+            const t = normal.dot(planePoint) / denom;
+            if (t <= 0) return null;
+            const maxT = worldPoint.length();
+            if (t > maxT) return null;
+            return dir.multiplyScalar(t);
+        }
+
+        function updateIntersections() {
+            const plane1Point = plane1.getWorldPosition(new THREE.Vector3());
+            const plane2Point = plane2.getWorldPosition(new THREE.Vector3());
+            const plane1Normal = getPlaneNormal(plane1);
+            const plane2Normal = getPlaneNormal(plane2);
+
+            const intersection1 = intersectPlane(plane1Normal, plane1Point);
+            const intersection2 = intersectPlane(plane2Normal, plane2Point);
+
+            if (intersection1) {
+                pixel1Marker.position.copy(intersection1);
+                xyLabel.position.copy(intersection1).add(new THREE.Vector3(0.05, 0.12, 0));
+                updateRayLine(camera1Ray, intersection1);
+            }
+            if (intersection2) {
+                pixel2Marker.position.copy(intersection2);
+                const worldIntersection = intersection2.clone();
+                xyPrimeLabel.position.copy(worldIntersection).add(new THREE.Vector3(0.05, 0.12, 0));
+                updateRayLine(camera2Ray, intersection2);
+            }
+        }
+
+        function updateCamera2Transform() {
+            camera2Group.rotation.y = currentRotation;
+            camera2Group.updateMatrixWorld(true);
+            updateIntersections();
+        }
+
+        const steps = [
+            {
+                text: '1. Camera 1 measures (x, y) on its green image plane while sharing the origin with Camera 2.',
+                action: () => {
+                    setRayVisibility(false);
+                    plane1Material.opacity = 0.85;
+                    plane2Material.opacity = 0.2;
+                    highlightControl(null);
+                }
+            },
+            {
+                text: '2. Rotate Camera 2 around the same center (use the slider) so only its orientation changes.',
+                action: () => {
+                    highlightControl(rotationBlock);
+                    plane1Material.opacity = 0.45;
+                    plane2Material.opacity = 0.7;
+                }
+            },
+            {
+                text: '3. Both rays meet at (X, Y, Z), proving that (x, y) and (x\', y\') are linked by a homography.',
+                action: () => {
+                    highlightControl(toggleRaysBtn);
+                    setRayVisibility(true);
+                    plane1Material.opacity = 0.55;
+                    plane2Material.opacity = 0.55;
+                }
+            }
+        ];
+
+        function applyStep() {
+            const step = steps[stepIndex];
+            stepText.textContent = step.text;
+            step.action();
+        }
+
+        rotationSlider.addEventListener('input', (event) => {
+            const value = parseFloat(event.target.value);
+            rotationValue.textContent = `${value.toFixed(0)}°`;
+            currentRotation = THREE.MathUtils.degToRad(value);
+            updateCamera2Transform();
+        });
+
+        toggleRaysBtn.addEventListener('click', () => {
+            setRayVisibility(!raysVisible);
+        });
+
+        resetBtn.addEventListener('click', () => {
+            rotationSlider.value = defaultRotationDeg;
+            rotationValue.textContent = `${defaultRotationDeg}°`;
+            currentRotation = THREE.MathUtils.degToRad(defaultRotationDeg);
+            updateCamera2Transform();
+            setRayVisibility(false);
+            stepIndex = 0;
+            applyStep();
+            controls.reset();
+        });
+
+        prevStepBtn.addEventListener('click', () => {
+            stepIndex = (stepIndex - 1 + steps.length) % steps.length;
+            applyStep();
+        });
+
+        nextStepBtn.addEventListener('click', () => {
+            stepIndex = (stepIndex + 1) % steps.length;
+            applyStep();
+        });
+
+        window.addEventListener('resize', () => {
+            const newAspect = container.clientWidth / container.clientHeight;
+            camera.left = -viewSize * newAspect;
+            camera.right = viewSize * newAspect;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        updateCamera2Transform();
+        applyStep();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

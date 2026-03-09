@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>BRDF Interactive Figure</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: "Gill Sans", "Segoe UI", sans-serif;
+            background: #ffffff;
+            color: #111;
+        }
+
+        #container {
+            position: absolute;
+            inset: 0;
+        }
+
+        #ui {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0.9rem;
+            border-radius: 0.75rem;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            width: 270px;
+        }
+
+        #ui label {
+            font-size: 0.88rem;
+            font-weight: 600;
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        button {
+            border: none;
+            padding: 0.55rem 0.8rem;
+            border-radius: 999px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #e4f6ff;
+            color: #00436e;
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        button:hover {
+            background: #c4ebff;
+            transform: translateY(-1px);
+        }
+
+        #demoText {
+            font-size: 0.82rem;
+            line-height: 1.2;
+            border-left: 3px solid #00a3ff;
+            padding-left: 0.5rem;
+            color: #003044;
+        }
+
+        #label-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            font-weight: 600;
+            color: #111;
+        }
+
+        .label {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.85);
+            padding: 0.15rem 0.3rem;
+            border-radius: 0.35rem;
+            font-size: 0.78rem;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="label-layer"></div>
+    <div id="ui">
+        <label>
+            Incoming angle θ (deg): <span id="angleValue">0°</span>
+            <input type="range" id="angleSlider" min="-80" max="80" value="-35" />
+        </label>
+        <button id="modeToggle">Mode: Lambertian BRDF</button>
+        <button id="stepButton">Guided Step</button>
+        <button id="resetButton">Reset to textbook view</button>
+        <div id="demoText">Incoming rays carry spectral power ℓ_in(λ) toward the surface.</div>
+    </div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three@0.164.1';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls.js';
+
+        const container = document.getElementById('container');
+        const labelLayer = document.getElementById('label-layer');
+        const angleSlider = document.getElementById('angleSlider');
+        const angleValue = document.getElementById('angleValue');
+        const modeToggle = document.getElementById('modeToggle');
+        const stepButton = document.getElementById('stepButton');
+        const resetButton = document.getElementById('resetButton');
+        const demoText = document.getElementById('demoText');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 50);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambient);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 6, 3);
+        scene.add(dirLight);
+
+        const surfaceMaterial = new THREE.MeshStandardMaterial({ color: 0x7dff3b, roughness: 0.7, metalness: 0.05 });
+        const surfaceGeometry = new THREE.PlaneGeometry(8, 6);
+        const surface = new THREE.Mesh(surfaceGeometry, surfaceMaterial);
+        surface.rotation.x = -Math.PI / 2;
+        scene.add(surface);
+
+        // Small disk highlights the interaction point where the 2D diagram showed the BRDF origin.
+        const hitPoint = new THREE.Vector3(0, 0.01, 0);
+        const hitMarker = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.09, 0.09, 0.01, 32),
+            new THREE.MeshStandardMaterial({ color: 0x333333 })
+        );
+        hitMarker.rotation.x = Math.PI / 2;
+        hitMarker.position.copy(hitPoint);
+        scene.add(hitMarker);
+
+        // Surface normal arrow maps the 2D normal vector n into 3D.
+        const normalVector = new THREE.Vector3(0, 1, 0);
+        const normalArrow = new THREE.ArrowHelper(normalVector, hitPoint, 1.8, 0x111111, 0.35, 0.24);
+        scene.add(normalArrow);
+
+        // Incoming ray ℓ_in(λ) mapped from the 2D orange arrow.
+        const incomingArrow = new THREE.ArrowHelper(new THREE.Vector3(-0.4, -1, -0.2).normalize(), new THREE.Vector3(-2, 2.3, -1), 3.2, 0xffb200, 0.4, 0.22);
+        scene.add(incomingArrow);
+        let incomingDir = new THREE.Vector3();
+        const incomingLength = 3.2;
+        const incomingStart = new THREE.Vector3();
+
+        // Outgoing rays q distributed across a hemisphere for the Lambertian case.
+        const lambertDirs = [
+            new THREE.Vector3(0.2, 0.97, 0.1),
+            new THREE.Vector3(-0.2, 0.92, -0.05),
+            new THREE.Vector3(0.05, 0.95, -0.32),
+            new THREE.Vector3(-0.18, 0.88, 0.35),
+            new THREE.Vector3(0.35, 0.9, -0.15)
+        ].map(v => v.normalize());
+        const lambertArrows = lambertDirs.map(dir => {
+            const arrow = new THREE.ArrowHelper(dir, hitPoint, 1.7, 0x00ad6a, 0.32, 0.2);
+            scene.add(arrow);
+            return arrow;
+        });
+
+        // Specular highlight arrow showing the Phong reflection term.
+        const specularArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), hitPoint, 2.2, 0x1765ff, 0.5, 0.3);
+        scene.add(specularArrow);
+
+        let reflectionDir = new THREE.Vector3(0, 1, 0);
+        let mode = 'lambert';
+        let stepIndex = 0;
+        const guidedSteps = [
+            'Incoming rays carry spectral power ℓ_in(λ) toward the surface.',
+            'The incident direction p and surface normal n define the cosine factor in Lambertian shading.',
+            'Lambertian BRDF spreads equal ℓ_out into many q directions.',
+            'Phong specular component concentrates ℓ_out near the mirror reflection direction.'
+        ];
+
+        // Label helpers keep the textbook annotations tied to the 3D points.
+        const labels = [];
+        function createLabel(text) {
+            const el = document.createElement('div');
+            el.className = 'label';
+            el.textContent = text;
+            labelLayer.appendChild(el);
+            return el;
+        }
+
+        const labelData = [
+            {
+                element: createLabel('ℓ_in(λ)'),
+                getPosition: () => incomingStart.clone().add(incomingDir.clone().multiplyScalar(0.4))
+            },
+            {
+                element: createLabel('p'),
+                getPosition: () => hitPoint.clone().add(incomingDir.clone().multiplyScalar(-0.2)).add(new THREE.Vector3(0, 0.18, 0))
+            },
+            {
+                element: createLabel('n'),
+                getPosition: () => hitPoint.clone().add(normalVector.clone().multiplyScalar(1.2))
+            },
+            {
+                element: createLabel('q'),
+                getPosition: () => {
+                    if (mode === 'lambert') {
+                        return hitPoint.clone().add(lambertDirs[0].clone().multiplyScalar(1.4));
+                    }
+                    return hitPoint.clone().add(reflectionDir.clone().multiplyScalar(1.6));
+                }
+            },
+            {
+                element: createLabel('ℓ_out'),
+                getPosition: () => {
+                    if (mode === 'lambert') {
+                        return hitPoint.clone().add(lambertDirs[2].clone().multiplyScalar(1.6));
+                    }
+                    return hitPoint.clone().add(reflectionDir.clone().multiplyScalar(2.1));
+                }
+            }
+        ];
+        labels.push(...labelData);
+
+        function updateLabels() {
+            labels.forEach(label => {
+                const pos = label.getPosition();
+                const projected = pos.clone().project(camera);
+                const x = (projected.x * 0.5 + 0.5) * container.clientWidth;
+                const y = (-projected.y * 0.5 + 0.5) * container.clientHeight;
+                const visible = projected.z >= -1 && projected.z <= 1;
+                label.element.style.opacity = visible ? '1' : '0';
+                if (visible) {
+                    label.element.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+                }
+            });
+        }
+
+        function updateIncomingSystem() {
+            const angleDeg = parseFloat(angleSlider.value);
+            angleValue.textContent = `${angleDeg.toFixed(0)}°`;
+            const angleRad = THREE.MathUtils.degToRad(angleDeg);
+            incomingDir.set(Math.sin(angleRad), -1.1, Math.cos(angleRad)).normalize();
+            incomingStart.copy(hitPoint).add(incomingDir.clone().multiplyScalar(-incomingLength));
+            incomingArrow.position.copy(incomingStart);
+            incomingArrow.setDirection(incomingDir);
+            incomingArrow.setLength(incomingLength, 0.6, 0.25);
+
+            const sourceDir = incomingDir.clone().negate().normalize();
+            reflectionDir = sourceDir.clone().reflect(normalVector).normalize();
+            specularArrow.setDirection(reflectionDir);
+            const highlightIntensity = Math.max(0.25, normalVector.dot(sourceDir));
+            specularArrow.setLength(1.8 + highlightIntensity * 1.5, 0.55, 0.32);
+
+            // Update Lambertian arrow brightness to reflect the cosine with the surface normal.
+            const lambertGain = Math.max(0.1, normalVector.dot(sourceDir));
+            lambertArrows.forEach((arrow, idx) => {
+                const baseLength = 1.1 + lambertGain * 1.2;
+                arrow.setLength(baseLength, 0.3, 0.2);
+                const hueShift = 0x00885a + idx * 0x000111;
+                arrow.cone.material.color.setHex(hueShift);
+                arrow.line.material.color.setHex(hueShift);
+            });
+        }
+
+        function setMode(nextMode) {
+            mode = nextMode;
+            const lambert = mode === 'lambert';
+            lambertArrows.forEach(a => (a.visible = lambert));
+            specularArrow.visible = !lambert;
+            modeToggle.textContent = lambert ? 'Mode: Lambertian BRDF' : 'Mode: Phong Specular';
+        }
+
+        function advanceStep() {
+            stepIndex = (stepIndex + 1) % guidedSteps.length;
+            demoText.textContent = guidedSteps[stepIndex];
+            if (stepIndex === 0) {
+                angleSlider.value = -35;
+                setMode('lambert');
+            } else if (stepIndex === 1) {
+                angleSlider.value = -15;
+                setMode('lambert');
+            } else if (stepIndex === 2) {
+                setMode('lambert');
+            } else if (stepIndex === 3) {
+                angleSlider.value = 25;
+                setMode('phong');
+            }
+            updateIncomingSystem();
+        }
+
+        function resetView() {
+            camera.position.set(4, 3.4, 4);
+            controls.target.set(0, 0.3, 0);
+            controls.update();
+            angleSlider.value = -35;
+            stepIndex = 0;
+            demoText.textContent = guidedSteps[0];
+            setMode('lambert');
+            updateIncomingSystem();
+        }
+
+        angleSlider.addEventListener('input', () => {
+            updateIncomingSystem();
+        });
+
+        modeToggle.addEventListener('click', () => {
+            setMode(mode === 'lambert' ? 'phong' : 'lambert');
+            updateIncomingSystem();
+        });
+
+        stepButton.addEventListener('click', () => {
+            advanceStep();
+        });
+
+        resetButton.addEventListener('click', () => {
+            resetView();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        camera.position.set(4, 3.4, 4);
+        controls.target.set(0, 0.3, 0);
+        controls.update();
+        setMode('lambert');
+        updateIncomingSystem();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            updateLabels();
+        }
+        animate();
+    </script>
+</body>
+
+</html>

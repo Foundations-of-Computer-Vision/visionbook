@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Interactive Homography Transformation</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+            font-family: sans-serif;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 320px;
+        }
+
+        h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            margin-bottom: 8px;
+            padding: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .explanation {
+            font-size: 12px;
+            color: #444;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui-container">
+        <h3>Homography (Perspective Warp)</h3>
+        <p class="explanation">
+            A homography preserves straight lines but alters length ratios and angles.
+            In 3D vision, viewing a 2D planar plane from a <strong>perspective camera</strong>
+            at a different orientation perfectly models a homography.
+        </p>
+        <!-- Interactions to demonstrate the concept -->
+        <button id="btn-front">1. Straight-on View (Left Fig)</button>
+        <button id="btn-warped">2. Angled View (Right Fig)</button>
+        <button id="btn-anim">3. Animate Camera Transformation</button>
+        <button id="btn-reset">Reset to textbook view</button>
+        <p class="explanation" style="margin-top:10px; font-style: italic;">
+            * Drag mouse to orbit manually.
+        </p>
+    </div>
+
+    <div id="container"></div>
+
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        // We MUST use a PerspectiveCamera to demonstrate a homography
+        // (Orthographic would not cause parallel lines to converge)
+        const aspect = container.clientWidth / container.clientHeight;
+        const camera = new THREE.PerspectiveCamera(40, aspect, 0.1, 100);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // --- Build faithful 3D geometry of the Grid (4x4 squares) ---
+        // The 2D element maps to a 3D line-segments object sitting on the Z=0 plane.
+        const size = 4;
+        const divisions = 4;
+        const halfSize = size / 2;
+        const step = size / divisions;
+
+        const points = [];
+        for (let i = 0; i <= divisions; i++) {
+            const k = - halfSize + i * step;
+            // Vertical lines
+            points.push(new THREE.Vector3(k, -halfSize, 0), new THREE.Vector3(k, halfSize, 0));
+            // Horizontal lines
+            points.push(new THREE.Vector3(-halfSize, k, 0), new THREE.Vector3(halfSize, k, 0));
+        }
+
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+        const grid = new THREE.LineSegments(geometry, material);
+        scene.add(grid);
+
+        // Camera animation state
+        let targetPos = new THREE.Vector3(6, 0, 3);
+        let animating = false;
+        let autoPivot = false;
+
+        // Initialize camera
+        camera.position.set(6, 0, 3);
+        camera.lookAt(0, 0, 0);
+        controls.target.set(0, 0, 0);
+
+        // --- Interaction Logic ---
+        // Moving the camera is mathematically equivalent to the 2D homography transformation
+        document.getElementById('btn-front').addEventListener('click', () => {
+            targetPos.set(0, 0, 9);
+            animating = true;
+            autoPivot = false;
+        });
+
+        document.getElementById('btn-warped').addEventListener('click', () => {
+            // This offset creates the converging lines / keystone effect shown on the right
+            targetPos.set(6.5, 0, 2.5);
+            animating = true;
+            autoPivot = false;
+        });
+
+        document.getElementById('btn-anim').addEventListener('click', () => {
+            animating = false;
+            autoPivot = true;
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            targetPos.set(6, 0, 3);
+            animating = true;
+            autoPivot = false;
+        });
+
+        let time = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Interpolate camera to the target positions
+            if (animating) {
+                camera.position.lerp(targetPos, 0.05);
+                camera.lookAt(0, 0, 0);
+                controls.update();
+                if (camera.position.distanceTo(targetPos) < 0.01) animating = false;
+            } else if (autoPivot) {
+                // Circular move to show the varying homographies dynamically
+                time += 0.01;
+                camera.position.x = Math.sin(time) * 6;
+                camera.position.z = Math.cos(time) * 6 + 3;
+                camera.position.y = Math.sin(time * 0.5) * 2;
+                camera.lookAt(0, 0, 0);
+                controls.update();
+            } else {
+                controls.update(); // Manual orbiting
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>

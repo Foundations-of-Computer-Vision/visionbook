@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Rotation and Homography 3D</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            width: 300px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            cursor: pointer;
+            background: #0078D7;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            background: #005A9E;
+        }
+
+        .label {
+            color: black;
+            font-size: 14px;
+            padding: 2px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 3px;
+            border: 1px solid #ccc;
+            font-family: serif;
+        }
+
+        .instruction {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 10px;
+        }
+    </style>
+    <!-- Import maps polyfill -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+    <div id="ui-container">
+        <h3>Camera Rotation (Homography)</h3>
+        <p class="instruction">When camera rotates from position 1 to position 2 around its center, corresponding image
+            points are related by a homography, independent of scene depth.</p>
+
+        <div class="control-group">
+            <label for="rotation-slider">Camera 2 Rotation: <span id="rot-val">30</span>&deg;</label>
+            <input type="range" id="rotation-slider" min="-60" max="60" value="30" step="1">
+        </div>
+
+        <div class="control-group">
+            <label for="point-x-slider">Point X Position: <span id="px-val">2.5</span></label>
+            <input type="range" id="point-x-slider" min="-5" max="5" value="2.5" step="0.1">
+        </div>
+
+        <div class="control-group">
+            <label for="point-z-slider">Point Z Position (Depth): <span id="pz-val">5</span></label>
+            <input type="range" id="point-z-slider" min="2" max="10" value="5" step="0.1">
+        </div>
+
+        <button id="step-btn">Play Step-through Demo</button>
+        <button id="reset-btn">Reset to Textbook View</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --- Setup Scene ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf0f0f0);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(-6, 4, -4);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        container.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, labelRenderer.domElement);
+        controls.target.set(0, 0, 2);
+        controls.update();
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        scene.add(dirLight);
+
+        // --- Helper function for labels ---
+        function createLabel(text, position) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.innerHTML = text;
+            const label = new CSS2DObject(div);
+            label.position.copy(position);
+            return label;
+        }
+
+        // --- Geometric Elements ---
+
+        // 1. Camera Center (Origin)
+        const centerMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const centerGeo = new THREE.SphereGeometry(0.1, 32, 32);
+        const center = new THREE.Mesh(centerGeo, centerMaterial);
+        scene.add(center);
+
+        // Grid/Axes Helper
+        const axesHelper = new THREE.AxesHelper(1.5);
+        axesHelper.setColors(0x00ff00, 0x00ff00, 0x00ff00); // Highlight XYZ as green per figure
+        scene.add(axesHelper);
+
+        const labelX = createLabel('<i>X</i>', new THREE.Vector3(1.6, 0, 0));
+        const labelY = createLabel('<i>Y</i>', new THREE.Vector3(0, 1.6, 0));
+        const labelZ = createLabel('<i>Z</i>', new THREE.Vector3(0, 0, 1.6));
+        scene.add(labelX); scene.add(labelY); scene.add(labelZ);
+
+        // 2. Camera 1 (Green Plane), Fixed focal length = 1
+        const focalLength = 1.5;
+        const planeGeo = new THREE.PlaneGeometry(3, 4);
+
+        const mat1 = new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+        const plane1 = new THREE.Mesh(planeGeo, mat1);
+        plane1.position.set(0, 0.5, focalLength); // Offset Y slightly like figure
+        scene.add(plane1);
+
+        const labelCam1 = createLabel('Camera 1', new THREE.Vector3(-1.8, 2, focalLength));
+        scene.add(labelCam1);
+
+        // 3. Camera 2 (Red Plane), Rotatable around origin
+        const camera2Group = new THREE.Group();
+        scene.add(camera2Group);
+
+        const mat2 = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+        const plane2 = new THREE.Mesh(planeGeo, mat2);
+        plane2.position.set(0, 0.5, focalLength);
+        camera2Group.add(plane2);
+
+        const labelCam2 = createLabel('Camera 2', new THREE.Vector3(2, -1.0, focalLength));
+        camera2Group.add(labelCam2);
+
+        // 4. Transform indicator (Arrow R)
+        // Creating an arc to represent rotation
+        const curve = new THREE.EllipseCurve(0, 0, 2.5, 2.5, 0, Math.PI / 4, false, 0);
+        const points = curve.getPoints(50);
+        const curveGeometry = new THREE.BufferGeometry().setFromPoints(points);
+        const curveMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+        const rotationCurve = new THREE.Line(curveGeometry, curveMaterial);
+        rotationCurve.rotation.x = Math.PI / 2;
+        rotationCurve.position.y = 2.5;
+        scene.add(rotationCurve);
+        const labelR = createLabel('<b>R</b>', new THREE.Vector3(1.8, 2.6, 1.8));
+        scene.add(labelR);
+
+        // 5. The 3D Point (X,Y,Z)
+        const targetPointGeo = new THREE.SphereGeometry(0.12, 32, 32);
+        const matCyan = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+        const matCyanWire = new THREE.MeshBasicMaterial({ color: 0x000000, wireframe: true });
+        const targetPoint = new THREE.Mesh(targetPointGeo, matCyan);
+        // Adding outline for the sphere
+        targetPoint.add(new THREE.Mesh(new THREE.SphereGeometry(0.125, 8, 8), matCyanWire));
+        targetPoint.position.set(2.5, 0.8, 5);
+        scene.add(targetPoint);
+
+        const targetLabel = createLabel('(<i>X,Y,Z</i>)', new THREE.Vector3(0, 0.3, 0));
+        targetPoint.add(targetLabel);
+
+        // 6. Projection Ray (Origin to 3D Point)
+        const rayGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), targetPoint.position]);
+        const rayMat = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 0.2, gapSize: 0.1 });
+        const projectionRay = new THREE.Line(rayGeo, rayMat);
+        projectionRay.computeLineDistances();
+        scene.add(projectionRay);
+
+        // 7. Intersections on the Image Planes
+        const intersectGeo = new THREE.SphereGeometry(0.08, 16, 16);
+
+        // P_xy on Cam 1
+        const p_xy = new THREE.Mesh(intersectGeo, matCyan);
+        p_xy.add(new THREE.Mesh(new THREE.SphereGeometry(0.085, 8, 8), matCyanWire));
+        scene.add(p_xy);
+        const p_xy_label = createLabel('(<i>x,y</i>)', new THREE.Vector3(0, 0.3, 0));
+        p_xy.add(p_xy_label);
+
+        // P_xy_prime on Cam 2
+        const p_xy_prime = new THREE.Mesh(intersectGeo, matCyan);
+        p_xy_prime.add(new THREE.Mesh(new THREE.SphereGeometry(0.085, 8, 8), matCyanWire));
+        scene.add(p_xy_prime);
+        const p_xy_prime_label = createLabel('(<i>x\',y\'</i>)', new THREE.Vector3(0, -0.3, 0));
+        p_xy_prime.add(p_xy_prime_label);
+
+        // Projection line segment from Center to planes
+        const rayGeoSolid = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)]);
+        const rayMatSolid = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+        const projectionRaySolid = new THREE.Line(rayGeoSolid, rayMatSolid);
+        scene.add(projectionRaySolid);
+
+        // --- Math & Updates ---
+
+        function updateGeometry() {
+            // Update 3D Point position from sliders
+            const px = parseFloat(document.getElementById('point-x-slider').value);
+            const py = 0.8;
+            const pz = parseFloat(document.getElementById('point-z-slider').value);
+            targetPoint.position.set(px, py, pz);
+
+            // Update Ray
+            projectionRay.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), targetPoint.position]);
+            projectionRay.computeLineDistances();
+
+            // Update Camera 2 Rotation
+            const rotDeg = parseFloat(document.getElementById('rotation-slider').value);
+            const rotRad = rotDeg * Math.PI / 180;
+            camera2Group.rotation.y = -rotRad; // Rotate around Y axis
+
+            // Adjust the R curve arc visually
+            const pArr = curve.getPoints(50);
+            for (let i = 0; i < pArr.length; i++) {
+                // simple scaling of the arc drawn
+                const frac = i / (pArr.length - 1);
+                const angle = frac * Math.abs(rotRad);
+                pArr[i] = new THREE.Vector2(2.5 * Math.sin(angle), 2.5 * Math.cos(angle));
+            }
+            if (rotRad < 0) {
+                for (let i = 0; i < pArr.length; i++) pArr[i].x *= -1;
+            }
+            rotationCurve.geometry.setFromPoints(pArr);
+
+            // Compute Intersections (Homogeneous projection math)
+            // 3D Point P = [X, Y, Z]^T
+            const P = new THREE.Vector3().copy(targetPoint.position);
+
+            // Camera 1: K[I | 0] P. 
+            // In 3D: ray intersection with plane z = focalLength.
+            // t = focalLength / P.z
+            if (P.z > 0.01) {
+                const t1 = focalLength / P.z;
+                p_xy.position.copy(P).multiplyScalar(t1);
+                p_xy.visible = true;
+                p_xy_label.visible = true;
+            } else {
+                p_xy.visible = false;
+                p_xy_label.visible = false;
+            }
+
+            // Camera 2: rotated plane.
+            // Plane normal n in world coords = (sin(rotRad), 0, cos(rotRad))
+            // Plane equation: n . x = focalLength
+            // Ray: x = t * P
+            // n . (t*P) = focalLength => t (n . P) = focalLength
+            const n2 = new THREE.Vector3(Math.sin(rotRad), 0, Math.cos(rotRad));
+            const denom = n2.dot(P);
+
+            if (denom > 0.01) {
+                const t2 = focalLength / denom;
+                p_xy_prime.position.copy(P).multiplyScalar(t2);
+                p_xy_prime.visible = true;
+                p_xy_prime_label.visible = true;
+
+                // Draw solid ray up to the furthest plane
+                const maxT = Math.max(focalLength / P.z, t2);
+                projectionRaySolid.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), P.clone().multiplyScalar(maxT)]);
+            } else {
+                p_xy_prime.visible = false;
+                p_xy_prime_label.visible = false;
+
+                if (P.z > 0.01) {
+                    projectionRaySolid.geometry.setFromPoints([new THREE.Vector3(0, 0, 0), P.clone().multiplyScalar(focalLength / P.z)]);
+                }
+            }
+        }
+
+        // --- Event Listeners ---
+        document.getElementById('rotation-slider').addEventListener('input', (e) => {
+            document.getElementById('rot-val').innerText = e.target.value;
+            updateGeometry();
+        });
+        document.getElementById('point-x-slider').addEventListener('input', (e) => {
+            document.getElementById('px-val').innerText = e.target.value;
+            updateGeometry();
+        });
+        document.getElementById('point-z-slider').addEventListener('input', (e) => {
+            document.getElementById('pz-val').innerText = e.target.value;
+            updateGeometry();
+        });
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            document.getElementById('rotation-slider').value = 30;
+            document.getElementById('point-x-slider').value = 2.5;
+            document.getElementById('point-z-slider').value = 5;
+            document.getElementById('rot-val').innerText = '30';
+            document.getElementById('px-val').innerText = '2.5';
+            document.getElementById('pz-val').innerText = '5';
+
+            camera.position.set(-6, 4, -4);
+            controls.target.set(0, 0, 2);
+            controls.update();
+
+            updateGeometry();
+        });
+
+        // Animation Step Through
+        let isAnimating = false;
+        document.getElementById('step-btn').addEventListener('click', async () => {
+            if (isAnimating) return;
+            isAnimating = true;
+            const btn = document.getElementById('step-btn');
+            btn.innerText = "Running Demo...";
+            btn.disabled = true;
+
+            // Reset
+            document.getElementById('reset-btn').click();
+            await new Promise(r => setTimeout(r, 800));
+
+            // Animate Rotation
+            const rotSl = document.getElementById('rotation-slider');
+            for (let i = 30; i >= -45; i -= 2) {
+                rotSl.value = i;
+                document.getElementById('rot-val').innerText = i;
+                updateGeometry();
+                await new Promise(r => setTimeout(r, 40));
+            }
+
+            await new Promise(r => setTimeout(r, 800));
+
+            // Move Point
+            const pxSl = document.getElementById('point-x-slider');
+            for (let i = 2.5; i >= -2; i -= 0.1) {
+                pxSl.value = i.toFixed(1);
+                document.getElementById('px-val').innerText = i.toFixed(1);
+                updateGeometry();
+                await new Promise(r => setTimeout(r, 40));
+            }
+
+            btn.innerText = "Play Step-through Demo";
+            btn.disabled = false;
+            isAnimating = false;
+        });
+
+        // --- Render Loop ---
+        updateGeometry();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+
+</html>

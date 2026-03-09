@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Homography: Planar Surface Projection</title>
+  <style>
+    html, body, #container {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: white;
+      font-family: sans-serif;
+    }
+    #ui-container {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      max-width: 300px;
+    }
+    h2 { margin-top: 0; font-size: 1.2rem; }
+    p { font-size: 0.9rem; line-height: 1.4; color: #333; }
+    button {
+      margin-top: 5px;
+      padding: 8px 12px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      width: 100%;
+      font-size: 0.9rem;
+    }
+    button:hover { background: #0056b3; }
+    .label {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 2px 5px;
+      border-radius: 3px;
+      font-size: 12px;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      display: none;
+      color: #000;
+      border: 1px solid #ddd;
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  
+  <div id="ui-container">
+    <h2>Planar Homography</h2>
+    <p>This interactive scene demonstrates how points on a 3D planar surface project onto a 2D camera plane. Because all world points lie on a single plane ($Z=0$), the mapping between the world plane and the image plane is a <strong>homography</strong>.</p>
+    <button id="btn-toggle-rays">Toggle Projection Rays</button>
+    <button id="btn-animate">Animate Point</button>
+    <button id="btn-reset">Reset to Textbook View</button>
+  </div>
+
+  <div id="label-camera" class="label">Camera center</div>
+  <div id="label-plane" class="label">Camera plane</div>
+  <div id="label-world" class="label">Planar surface (Z=0)</div>
+
+  <!-- Import Three.js -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+
+    // Using PerspectiveCamera for better 3D exploration
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+    
+    // Initial Textbook View position
+    const defaultCameraPos = new THREE.Vector3(8, 5, 8);
+    const defaultTarget = new THREE.Vector3(0, -2, -3);
+    camera.position.copy(defaultCameraPos);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.copy(defaultTarget);
+
+    // ==========================================
+    // 1. Faithful 3D Geometry
+    // ==========================================
+    
+    // Group for the entire projection geometry
+    const setupGroup = new THREE.Group();
+    scene.add(setupGroup);
+
+    // A. Camera Center (The pinhole)
+    const centerGeo = new THREE.SphereGeometry(0.15, 32, 32);
+    const centerMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const cameraCenter = new THREE.Mesh(centerGeo, centerMat);
+    cameraCenter.position.set(0, 0, 0);
+    setupGroup.add(cameraCenter);
+
+    // B. Camera Plane (Image Plane)
+    // Placed at z = -2.
+    const f = 2; // focal length analog
+    const planeGeo = new THREE.PlaneGeometry(3, 2.5);
+    const planeMat = new THREE.MeshBasicMaterial({ 
+      color: 0xcccccc, 
+      transparent: true, 
+      opacity: 0.5,
+      side: THREE.DoubleSide
+    });
+    const cameraPlane = new THREE.Mesh(planeGeo, planeMat);
+    cameraPlane.position.set(0, 0, -f);
+    setupGroup.add(cameraPlane);
+
+    // Camera Plane edges
+    const edgesGeo = new THREE.EdgesGeometry(planeGeo);
+    const edgesMat = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+    const cameraPlaneEdges = new THREE.LineSegments(edgesGeo, edgesMat);
+    cameraPlane.add(cameraPlaneEdges);
+
+    // Camera Coordinate Axes (x, y) - Green
+    const camAxisOrigin = new THREE.Vector3(-1.2, -1, 0);
+    const dirX_cam = new THREE.Vector3(1, 0, 0);
+    const dirY_cam = new THREE.Vector3(0, 1, 0);
+    const arrowX_cam = new THREE.ArrowHelper(dirX_cam, camAxisOrigin, 0.8, 0x00ff00);
+    const arrowY_cam = new THREE.ArrowHelper(dirY_cam, camAxisOrigin, 0.8, 0x00ff00);
+    cameraPlane.add(arrowX_cam);
+    cameraPlane.add(arrowY_cam);
+
+    // C. Planar Surface (World Plane Z=0)
+    // We will construct this as a rotated plane in 3D so it looks like the textbook.
+    const worldGroup = new THREE.Group();
+    worldGroup.position.set(0, -4, -6);
+    worldGroup.rotation.x = -Math.PI / 2.5; // Tilt it backwards
+    worldGroup.rotation.z = Math.PI / 6;    // Twist
+    setupGroup.add(worldGroup);
+
+    const surfaceGeo = new THREE.PlaneGeometry(8, 8);
+    const surfaceMat = new THREE.MeshBasicMaterial({ 
+      color: 0xaaaaaa, 
+      transparent: true, 
+      opacity: 0.6,
+      side: THREE.DoubleSide 
+    });
+    const planarSurface = new THREE.Mesh(surfaceGeo, surfaceMat);
+    worldGroup.add(planarSurface);
+
+    // World surface edges
+    const surfaceEdges = new THREE.LineSegments(new THREE.EdgesGeometry(surfaceGeo), new THREE.LineBasicMaterial({ color: 0x000000 }));
+    planarSurface.add(surfaceEdges);
+
+    // D. World Coordinate Axes (X, Y, Z) - Red
+    const worldAxisOrigin = new THREE.Vector3(-2, -2, 0);
+    const dirX_w = new THREE.Vector3(1, 0, 0);
+    const dirY_w = new THREE.Vector3(0, 1, 0);
+    const dirZ_w = new THREE.Vector3(0, 0, 1);
+    worldGroup.add(new THREE.ArrowHelper(dirX_w, worldAxisOrigin, 1.5, 0xff0000));
+    worldGroup.add(new THREE.ArrowHelper(dirY_w, worldAxisOrigin, 1.5, 0xff0000));
+    worldGroup.add(new THREE.ArrowHelper(dirZ_w, worldAxisOrigin, 1.5, 0xff0000));
+
+    // ==========================================
+    // 2. Projection Points & Rays
+    // ==========================================
+    const pointGeo = new THREE.SphereGeometry(0.1, 16, 16);
+    const pointMat = new THREE.MeshBasicMaterial({ color: 0x00ffff }); // Cyan with black border
+    const pointMatBorder = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+    
+    function createPoint() {
+      const mesh = new THREE.Mesh(pointGeo, pointMat);
+      const border = new THREE.Mesh(new THREE.SphereGeometry(0.12, 16, 16), pointMatBorder);
+      mesh.add(border);
+      return mesh;
+    }
+
+    const worldPoints = [
+      new THREE.Vector3(1, 1, 0),
+      new THREE.Vector3(-1, 2, 0),
+      new THREE.Vector3(0, -1, 0)
+    ];
+
+    const wPointMeshes = [];
+    const cPointMeshes = [];
+    const projectionLines = new THREE.Group();
+    setupGroup.add(projectionLines);
+
+    const lineMat = new THREE.LineDashedMaterial({
+      color: 0x000000,
+      dashSize: 0.2,
+      gapSize: 0.1,
+    });
+
+    worldPoints.forEach(wpLocal => {
+      // 1. Add point on world plane
+      const wpMesh = createPoint();
+      wpMesh.position.copy(wpLocal);
+      worldGroup.add(wpMesh);
+      wPointMeshes.push(wpMesh);
+
+      // 2. Compute true 3D position
+      const wpGlobal = new THREE.Vector3();
+      wpMesh.getWorldPosition(wpGlobal);
+
+      // 3. Project to camera plane (z = -f)
+      // Line from wpGlobal to origin: P(t) = wpGlobal * (1 - t)
+      // Intersection with z = -f: wpGlobal.z * (1 - t) = -f  => 1 - t = -f / wpGlobal.z
+      const scale = -f / wpGlobal.z;
+      const projGlobal = wpGlobal.clone().multiplyScalar(scale);
+
+      const cpMesh = createPoint();
+      cpMesh.scale.set(0.6, 0.6, 0.6); // smaller on image plane
+      setupGroup.add(cpMesh);
+      cpMesh.position.copy(projGlobal);
+      cPointMeshes.push(cpMesh);
+
+      // 4. Draw projection line
+      const pts = [wpGlobal, new THREE.Vector3(0,0,0)];
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const line = new THREE.Line(lineGeo, lineMat);
+      line.computeLineDistances();
+      projectionLines.add(line);
+    });
+
+    // ==========================================
+    // 3. Educational Interactivity
+    // ==========================================
+    
+    // Toggle rays
+    let raysVisible = true;
+    document.getElementById('btn-toggle-rays').addEventListener('click', () => {
+      raysVisible = !raysVisible;
+      projectionLines.visible = raysVisible;
+    });
+
+    // Animate Point
+    let isAnimating = false;
+    let animTime = 0;
+    document.getElementById('btn-animate').addEventListener('click', () => {
+      isAnimating = !isAnimating;
+      document.getElementById('btn-animate').innerText = isAnimating ? "Stop Animation" : "Animate Point";
+    });
+
+    // Reset View
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      camera.position.copy(defaultCameraPos);
+      controls.target.copy(defaultTarget);
+      isAnimating = false;
+      animTime = 0;
+      updateMovingPoint();
+      document.getElementById('btn-animate').innerText = "Animate Point";
+    });
+
+    function updateMovingPoint() {
+      // Move the first point in a circle on the world plane
+      const radius = 2;
+      worldPoints[0].x = Math.cos(animTime) * radius;
+      worldPoints[0].y = Math.sin(animTime) * radius;
+      
+      const wpMesh = wPointMeshes[0];
+      wpMesh.position.copy(worldPoints[0]);
+      
+      const wpGlobal = new THREE.Vector3();
+      wpMesh.getWorldPosition(wpGlobal);
+
+      const scale = -f / wpGlobal.z;
+      const projGlobal = wpGlobal.clone().multiplyScalar(scale);
+      
+      cPointMeshes[0].position.copy(projGlobal);
+
+      // Update line
+      const positions = projectionLines.children[0].geometry.attributes.position.array;
+      positions[0] = wpGlobal.x;
+      positions[1] = wpGlobal.y;
+      positions[2] = wpGlobal.z;
+      projectionLines.children[0].geometry.attributes.position.needsUpdate = true;
+      projectionLines.children[0].computeLineDistances();
+    }
+
+    // ==========================================
+    // Label Placement Function
+    // ==========================================
+    const labelCam = document.getElementById('label-camera');
+    const labelPlane = document.getElementById('label-plane');
+    const labelWorld = document.getElementById('label-world');
+    labelCam.style.display = 'block';
+    labelPlane.style.display = 'block';
+    labelWorld.style.display = 'block';
+
+    function updateLabels() {
+      const tempV = new THREE.Vector3();
+      
+      // Camera center: (0,0,0) global
+      tempV.set(0,0,0).project(camera);
+      labelCam.style.left = (tempV.x * 0.5 + 0.5) * container.clientWidth + 'px';
+      labelCam.style.top = (-(tempV.y * 0.5) + 0.5) * container.clientHeight - 30 + 'px'; // offset up
+
+      // Camera plane label
+      cameraPlane.getWorldPosition(tempV);
+      tempV.project(camera);
+      labelPlane.style.left = (tempV.x * 0.5 + 0.5) * container.clientWidth - 50 + 'px';
+      labelPlane.style.top = (-(tempV.y * 0.5) + 0.5) * container.clientHeight - 50 + 'px';
+
+      // World plane label
+      worldGroup.getWorldPosition(tempV);
+      tempV.x += 3; // offset
+      tempV.project(camera);
+      labelWorld.style.left = (tempV.x * 0.5 + 0.5) * container.clientWidth + 'px';
+      labelWorld.style.top = (-(tempV.y * 0.5) + 0.5) * container.clientHeight + 'px';
+    }
+
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      
+      if (isAnimating) {
+        animTime += 0.02;
+        updateMovingPoint();
+      }
+
+      updateLabels();
+      renderer.render(scene, camera);
+    }
+    
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Why Walls Need Pinhole Cameras</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #fefefe;
+            color: #111;
+            overflow: hidden;
+        }
+
+        #scene-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px 14px;
+            border-radius: 10px;
+            width: 320px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(4px);
+        }
+
+        #ui h1 {
+            font-size: 16px;
+            margin: 0 0 8px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            font-size: 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .button-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+
+        button {
+            border: none;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-weight: 600;
+            cursor: pointer;
+            background: #1f7aec;
+            color: white;
+            transition: transform 0.15s ease, background 0.15s ease;
+            flex: 1;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button.active {
+            background: #0f54a5;
+        }
+
+        #step-readout {
+            margin-top: 8px;
+            font-size: 13px;
+            background: #eff5ff;
+            padding: 8px;
+            border-radius: 6px;
+            min-height: 48px;
+        }
+
+        #credit {
+            position: absolute;
+            right: 18px;
+            bottom: 12px;
+            background: rgba(0, 0, 0, 0.65);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            letter-spacing: 0.03em;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="scene-container"></div>
+    <div id="ui">
+        <h1>Wall vs. Pinhole</h1>
+        <div class="control-group">
+            <div style="font-size:13px; margin-bottom:4px;">Scenario focus</div>
+            <div class="button-row">
+                <button class="scenario-button active" data-mode="both">Both Views</button>
+                <button class="scenario-button" data-mode="wall">Wall Only</button>
+                <button class="scenario-button" data-mode="pinhole">Pinhole Only</button>
+            </div>
+        </div>
+        <label>
+            Projection wall distance <span id="projectionValue">4.0 units</span>
+            <input type="range" id="projectionRange" min="2" max="6" step="0.1" value="4" />
+        </label>
+        <label>
+            Pinhole radius <span id="apertureValue">1.8 mm</span>
+            <input type="range" id="apertureRange" min="0.08" max="0.4" step="0.01" value="0.18" />
+        </label>
+        <div class="button-row">
+            <button id="stepButton">Next Guided Step</button>
+            <button id="demoButton">Play Demo</button>
+        </div>
+        <div class="button-row">
+            <button id="resetButton">Reset to Textbook View</button>
+        </div>
+        <div id="step-readout"></div>
+    </div>
+    <div id="credit">Orbit + drag to explore</div>
+    <script type="module">
+        import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.161/build/three.module.js";
+        import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.161/examples/jsm/controls/OrbitControls.js";
+
+        const container = document.getElementById("scene-container");
+        const projectionSlider = document.getElementById("projectionRange");
+        const projectionValue = document.getElementById("projectionValue");
+        const apertureSlider = document.getElementById("apertureRange");
+        const apertureValue = document.getElementById("apertureValue");
+        const scenarioButtons = document.querySelectorAll(".scenario-button");
+        const stepReadout = document.getElementById("step-readout");
+        const stepButton = document.getElementById("stepButton");
+        const demoButton = document.getElementById("demoButton");
+        const resetButton = document.getElementById("resetButton");
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf8fbff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(0, 8, 24);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 3, 0);
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x546e7a, 1);
+        scene.add(hemiLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 15, 5);
+        scene.add(dirLight);
+
+        const grid = new THREE.GridHelper(50, 50, 0xcfd8dc, 0xe1f5fe);
+        grid.position.y = 0;
+        scene.add(grid);
+
+        typeSetup();
+
+        const wallGroup = new THREE.Group();
+        const pinholeGroup = new THREE.Group();
+        scene.add(wallGroup, pinholeGroup);
+
+        const highlightSets = { wall: [], pinhole: [], screen: [] };
+        const wallRayLines = [];
+        const focusSegments = [];
+        const screenHits = [];
+        let projectionWall;
+        let projectionLabel;
+        let pinholePanel;
+        let apertureIndicator;
+        let demoTimeout = null;
+        let currentStep = 0;
+        const defaults = { projection: 4, aperture: 0.18 };
+
+        createWallScenario();
+        createPinholeScenario();
+        updateProjectionDistance(defaults.projection);
+        updateAperture(defaults.aperture);
+        showStep(0);
+
+        scenarioButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                scenarioButtons.forEach((b) => b.classList.remove("active"));
+                button.classList.add("active");
+                setScenario(button.dataset.mode);
+            });
+        });
+
+        projectionSlider.addEventListener("input", () => {
+            const value = parseFloat(projectionSlider.value);
+            updateProjectionDistance(value);
+        });
+
+        apertureSlider.addEventListener("input", () => {
+            const value = parseFloat(apertureSlider.value);
+            updateAperture(value);
+        });
+
+        stepButton.addEventListener("click", () => {
+            stopDemo();
+            showStep((currentStep + 1) % steps.length);
+        });
+
+        demoButton.addEventListener("click", () => {
+            if (demoTimeout) {
+                stopDemo();
+            } else {
+                startDemo();
+            }
+        });
+
+        resetButton.addEventListener("click", () => {
+            stopDemo();
+            controls.target.set(0, 3, 0);
+            camera.position.set(0, 8, 24);
+            controls.update();
+            projectionSlider.value = defaults.projection;
+            apertureSlider.value = defaults.aperture;
+            updateProjectionDistance(defaults.projection);
+            updateAperture(defaults.aperture);
+            scenarioButtons.forEach((b) => {
+                b.classList.toggle("active", b.dataset.mode === "both");
+            });
+            setScenario("both");
+            showStep(0);
+        });
+
+        window.addEventListener("resize", onWindowResize);
+
+        draw();
+
+        function typeSetup() {
+            renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+        }
+
+        function createWallScenario() {
+            const tree = buildTree(new THREE.Vector3(-3.5, 0, 0));
+            wallGroup.add(tree);
+            highlightSets.wall.push(tree);
+
+            const wall = new THREE.Mesh(
+                new THREE.PlaneGeometry(6, 6),
+                new THREE.MeshStandardMaterial({ color: 0xfefefe, side: THREE.DoubleSide, roughness: 0.9 })
+            );
+            wall.position.set(-9, 3, 0);
+            wall.rotation.y = Math.PI / 2;
+            wallGroup.add(wall);
+            highlightSets.wall.push(wall);
+
+            const wallLabel = createLabel("Diffuse wall");
+            wallLabel.position.set(-9.5, 6.2, 0);
+            wallGroup.add(wallLabel);
+
+            const origins = [
+                new THREE.Vector3(-2.4, 5, -0.8),
+                new THREE.Vector3(-2.4, 4.2, 0.4),
+                new THREE.Vector3(-2.6, 3, -1.4),
+                new THREE.Vector3(-2.2, 2.4, 0.8),
+                new THREE.Vector3(-2.8, 1.6, -0.2)
+            ];
+
+            const destinations = [
+                new THREE.Vector3(-9, 4.6, -2),
+                new THREE.Vector3(-9, 3.4, 1.5),
+                new THREE.Vector3(-9, 2.5, -1),
+                new THREE.Vector3(-9, 1.8, 2.2),
+                new THREE.Vector3(-9, 1.2, 0)
+            ];
+
+            origins.forEach((origin, index) => {
+                const line = createRay(origin, destinations[index], 0x6bc86b, 0.04);
+                wallGroup.add(line);
+                wallRayLines.push(line);
+                highlightSets.wall.push(line);
+            });
+        }
+
+        function createPinholeScenario() {
+            const tree = buildTree(new THREE.Vector3(2, 0, 0));
+            pinholeGroup.add(tree);
+            highlightSets.pinhole.push(tree);
+
+            pinholePanel = new THREE.Mesh(
+                new THREE.BoxGeometry(0.4, 5.5, 5.5),
+                new THREE.MeshStandardMaterial({ color: 0x0b0b0b, metalness: 0.2, roughness: 0.5 })
+            );
+            pinholePanel.position.set(6, 2.75, 0);
+            pinholeGroup.add(pinholePanel);
+            highlightSets.pinhole.push(pinholePanel);
+
+            projectionWall = new THREE.Mesh(
+                new THREE.PlaneGeometry(5.5, 6.5),
+                new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide, roughness: 0.7 })
+            );
+            projectionWall.rotation.y = Math.PI / 2;
+            projectionWall.position.set(10, 3, 0);
+            pinholeGroup.add(projectionWall);
+            highlightSets.screen.push(projectionWall);
+
+            projectionLabel = createLabel("Projection screen");
+            projectionLabel.position.set(projectionWall.position.x + 0.2, 6.3, 0);
+            pinholeGroup.add(projectionLabel);
+
+            const panelLabel = createLabel("Barrier with pinhole");
+            panelLabel.position.set(pinholePanel.position.x + 0.4, 5.4, 0);
+            pinholeGroup.add(panelLabel);
+            highlightSets.pinhole.push(panelLabel);
+
+            apertureIndicator = new THREE.Mesh(
+                new THREE.RingGeometry(0.1, 0.18, 48),
+                new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+            );
+            apertureIndicator.rotation.y = Math.PI / 2;
+            apertureIndicator.position.set(pinholePanel.position.x + 0.21, 2.75, 0);
+            pinholeGroup.add(apertureIndicator);
+            highlightSets.pinhole.push(apertureIndicator);
+
+            const pinholeCenter = new THREE.Vector3(pinholePanel.position.x + 0.21, 2.75, 0);
+            const sourceOffsets = [
+                new THREE.Vector3(0.2, 4.6, -1),
+                new THREE.Vector3(0.3, 4, 0.8),
+                new THREE.Vector3(0.3, 2.4, -0.8),
+                new THREE.Vector3(0.2, 1.4, 0.5)
+            ];
+
+            sourceOffsets.forEach((offset) => {
+                const start = tree.position.clone().add(offset);
+                const firstSegment = createRay(start, pinholeCenter, 0xb88a52, 0.05);
+                pinholeGroup.add(firstSegment);
+                highlightSets.pinhole.push(firstSegment);
+
+                const dest = new THREE.Vector3(
+                    projectionWall.position.x - 0.02,
+                    2.75 - (start.y - pinholeCenter.y) * 1.2,
+                    -(start.z) * 1.3
+                );
+
+                const secondSegment = createRay(pinholeCenter, dest.clone(), 0x00c853, 0.05);
+                secondSegment.userData.baseColor = 0x00c853;
+                pinholeGroup.add(secondSegment);
+                focusSegments.push({ line: secondSegment, y: dest.y, z: dest.z });
+                highlightSets.screen.push(secondSegment);
+
+                const hit = new THREE.Mesh(
+                    new THREE.CircleGeometry(0.2, 32),
+                    new THREE.MeshBasicMaterial({ color: 0xfff59d })
+                );
+                hit.rotation.y = Math.PI / 2;
+                hit.position.copy(dest);
+                hit.userData.baseColor = 0xfff59d;
+                pinholeGroup.add(hit);
+                screenHits.push({ mesh: hit, y: dest.y, z: dest.z });
+                highlightSets.screen.push(hit);
+            });
+        }
+
+        function buildTree(position) {
+            const tree = new THREE.Group();
+            // Cylinder + spheres recreate the stylized textbook tree in 3D.
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.35, 0.45, 3.2, 16),
+                new THREE.MeshStandardMaterial({ color: 0x8d5524, roughness: 0.8 })
+            );
+            trunk.position.y = 1.6;
+            tree.add(trunk);
+
+            const foliageMaterial = new THREE.MeshStandardMaterial({ color: 0x45c96a, roughness: 0.5 });
+            const spheres = [
+                { pos: [0, 3.6, 0], scale: 1.4 },
+                { pos: [-0.8, 3.1, 0.4], scale: 1.1 },
+                { pos: [0.8, 3.2, -0.3], scale: 1.2 },
+                { pos: [0.2, 2.8, -0.8], scale: 0.9 }
+            ];
+            spheres.forEach((info) => {
+                const sphere = new THREE.Mesh(new THREE.SphereGeometry(info.scale, 24, 24), foliageMaterial);
+                sphere.position.set(info.pos[0], info.pos[1], info.pos[2]);
+                tree.add(sphere);
+            });
+
+            const treeLabel = createLabel("Tree (light source)");
+            treeLabel.position.set(position.x + 0.2, 6, position.z);
+            tree.add(treeLabel);
+
+            tree.position.copy(position);
+            return tree;
+        }
+
+        function createRay(start, end, color, linewidth = 0.04) {
+            const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+            const material = new THREE.LineBasicMaterial({ color, linewidth, transparent: true, opacity: 1 });
+            const line = new THREE.Line(geometry, material);
+            line.userData.baseColor = color;
+            return line;
+        }
+
+        function createLabel(text) {
+            const canvas = document.createElement("canvas");
+            canvas.width = 512;
+            canvas.height = 256;
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "rgba(10, 29, 61, 0.82)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 48px 'Segoe UI', Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(3, 1.5, 1);
+            return sprite;
+        }
+
+        const steps = [
+            {
+                message: "Step 1 · Without a pinhole, every wall point mixes rays from the whole tree, so no image appears.",
+                focus: "wall"
+            },
+            {
+                message: "Step 2 · Adding a pinhole barrier lets only one direction through each location.",
+                focus: "pinhole"
+            },
+            {
+                message: "Step 3 · The screen now records an inverted but sharp image of the tree.",
+                focus: "screen"
+            }
+        ];
+
+        function showStep(index) {
+            currentStep = index;
+            stepReadout.textContent = steps[index].message;
+            applyHighlight(steps[index].focus);
+        }
+
+        function applyHighlight(key) {
+            Object.keys(highlightSets).forEach((setKey) => {
+                const active = setKey === key;
+                highlightSets[setKey].forEach((object) => {
+                    if (!object) return;
+                    if (object.material && object.material.emissive) {
+                        object.material.emissive.setHex(active ? 0x333333 : 0x000000);
+                    }
+                    if (object.material && object.material.color && object.userData.baseColor !== undefined && !object.material.emissive) {
+                        object.material.color.setHex(active ? 0xff7043 : object.userData.baseColor);
+                    }
+                    if (object.userData && object.userData.baseColor && object instanceof THREE.Line) {
+                        object.material.color.setHex(active ? 0xff7043 : object.userData.baseColor);
+                    }
+                });
+            });
+        }
+
+        function startDemo() {
+            let idx = 0;
+            showStep(idx);
+            demoButton.textContent = "Stop Demo";
+            const tick = () => {
+                idx += 1;
+                if (idx < steps.length) {
+                    showStep(idx);
+                    demoTimeout = setTimeout(tick, 2200);
+                } else {
+                    stopDemo();
+                }
+            };
+            demoTimeout = setTimeout(tick, 2200);
+        }
+
+        function stopDemo() {
+            if (demoTimeout) {
+                clearTimeout(demoTimeout);
+                demoTimeout = null;
+            }
+            demoButton.textContent = "Play Demo";
+        }
+
+        function setScenario(mode) {
+            if (mode === "wall") {
+                wallGroup.visible = true;
+                pinholeGroup.visible = false;
+            } else if (mode === "pinhole") {
+                wallGroup.visible = false;
+                pinholeGroup.visible = true;
+            } else {
+                wallGroup.visible = true;
+                pinholeGroup.visible = true;
+            }
+        }
+
+        function updateProjectionDistance(distance) {
+            const value = Math.max(2, Math.min(6, distance));
+            projectionSlider.value = value;
+            projectionValue.textContent = value.toFixed(1) + " units";
+            const newX = pinholePanel.position.x + value;
+            projectionWall.position.x = newX;
+            projectionLabel.position.x = newX + 0.2;
+            focusSegments.forEach((segment, idx) => {
+                const positions = segment.line.geometry.attributes.position;
+                positions.setXYZ(1, newX - 0.02, segment.y, segment.z);
+                positions.needsUpdate = true;
+                positions.computeBoundingSphere?.();
+            });
+            screenHits.forEach((hit) => {
+                hit.mesh.position.set(newX - 0.015, hit.y, hit.z);
+            });
+        }
+
+        function updateAperture(value) {
+            const radius = Math.max(0.08, Math.min(0.4, value));
+            apertureSlider.value = radius;
+            apertureValue.textContent = (radius * 10).toFixed(1) + " mm";
+            apertureIndicator.geometry.dispose();
+            apertureIndicator.geometry = new THREE.RingGeometry(radius * 0.6, radius, 48);
+            apertureIndicator.geometry.rotateZ(0);
+            apertureIndicator.rotation.y = Math.PI / 2;
+            screenHits.forEach((hit) => {
+                const scale = 1 + radius * 1.5;
+                hit.mesh.scale.set(scale, scale, scale);
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function draw() {
+            requestAnimationFrame(draw);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Accidental Wall Camera vs Pinhole</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            height: 100%;
+            font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+            background: #f7f9fb;
+            color: #0f1b2c;
+        }
+
+        #container {
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            max-width: 360px;
+            background: rgba(255, 255, 255, 0.92);
+            padding: 1rem;
+            border-radius: 0.65rem;
+            box-shadow: 0 10px 25px rgba(15, 27, 44, 0.15);
+            backdrop-filter: blur(6px);
+        }
+
+        #ui h1 {
+            font-size: 1.1rem;
+            margin: 0 0 0.5rem 0;
+        }
+
+        #controls {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        button,
+        input[type="range"] {
+            font-size: 0.9rem;
+            border-radius: 0.45rem;
+            border: 1px solid #a3b4c9;
+            padding: 0.35rem 0.6rem;
+            background: #eef3fb;
+            color: #0f1b2c;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #dee8f7;
+        }
+
+        label {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            font-size: 0.85rem;
+        }
+
+        #apertureValue {
+            font-weight: 600;
+        }
+
+        #caption {
+            margin-top: 0.6rem;
+            font-size: 0.9rem;
+            line-height: 1.35rem;
+        }
+
+        #credits {
+            margin-top: 0.4rem;
+            font-size: 0.75rem;
+            color: #4a5568;
+        }
+
+        @media (max-width: 720px) {
+            #ui {
+                max-width: calc(100% - 2rem);
+                right: 1rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container"></div>
+    <div id="ui">
+        <h1>Why the Pinhole Matters</h1>
+        <div id="controls">
+            <button id="resetView">Reset to textbook view</button>
+            <button id="togglePinhole">Hide pinhole wall</button>
+            <button id="animateRays">Play ray animation</button>
+            <label>
+                Aperture size (relative units)
+                <input id="apertureControl" type="range" min="0.2" max="1.4" step="0.1" value="0.5" />
+                <span id="apertureValue">0.50</span>
+            </label>
+            <button id="guidedStep">Next demo step</button>
+        </div>
+        <div id="caption"></div>
+        <div id="credits">Controls: drag to orbit, scroll to zoom.</div>
+    </div>
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+        const container = document.getElementById('container');
+        const caption = document.getElementById('caption');
+        const apertureSlider = document.getElementById('apertureControl');
+        const apertureValue = document.getElementById('apertureValue');
+        const togglePinholeBtn = document.getElementById('togglePinhole');
+        const animateBtn = document.getElementById('animateRays');
+        const guidedBtn = document.getElementById('guidedStep');
+        const resetBtn = document.getElementById('resetView');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xfefefe);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const viewHeight = 5.5;
+        let aspect = container.clientWidth / container.clientHeight;
+        const camera = new THREE.OrthographicCamera(
+            -viewHeight * aspect,
+            viewHeight * aspect,
+            viewHeight,
+            -viewHeight,
+            0.1,
+            50
+        );
+        const defaultCameraPosition = new THREE.Vector3(10, 8, 10);
+        const defaultTarget = new THREE.Vector3(1, 0.2, 0);
+        camera.position.copy(defaultCameraPosition);
+        camera.lookAt(defaultTarget);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+        controls.target.copy(defaultTarget);
+
+        const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x8f8f8f, 0.85);
+        scene.add(hemisphereLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        directionalLight.position.set(8, 10, 6);
+        scene.add(directionalLight);
+
+        const grid = new THREE.GridHelper(24, 40, 0xdfe4ea, 0xe8ecf2);
+        grid.position.y = -1.5;
+        scene.add(grid);
+
+        // Utility: convert simple canvas text into sprite labels that follow the camera.
+        function createLabel(text) {
+            const size = 256;
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.fillRect(0, 0, size, size);
+            ctx.fillStyle = '#102027';
+            ctx.font = 'bold 88px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, size / 2, size / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(2.6, 0.9, 1);
+            return sprite;
+        }
+
+        // Utility: store base opacity so guided steps can dim/highlight groups without losing defaults.
+        function cacheBaseOpacity(object) {
+            object.traverse(child => {
+                if (child.material) {
+                    const materials = Array.isArray(child.material) ? child.material : [child.material];
+                    materials.forEach(mat => {
+                        mat.transparent = true;
+                        if (mat.userData.baseOpacity === undefined) {
+                            mat.userData.baseOpacity = mat.opacity !== undefined ? mat.opacity : 1;
+                        }
+                    });
+                }
+            });
+        }
+
+        function setGroupEmphasis(object, weight) {
+            object.traverse(child => {
+                if (child.material) {
+                    const materials = Array.isArray(child.material) ? child.material : [child.material];
+                    materials.forEach(mat => {
+                        const base = mat.userData?.baseOpacity ?? 1;
+                        mat.opacity = THREE.MathUtils.lerp(0.1, base, weight);
+                    });
+                }
+            });
+        }
+
+        // Build a simplified tree (cylindrical trunk + layered spheres) mirroring the textbook tree sketch.
+        function createTree() {
+            const group = new THREE.Group();
+            const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.9 });
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 2.6, 12), trunkMaterial);
+            trunk.position.y = -1.5 + 1.3;
+            group.add(trunk);
+
+            const canopyMaterial = new THREE.MeshStandardMaterial({ color: 0x4caf50, roughness: 0.5 });
+            const mainCanopy = new THREE.Mesh(new THREE.SphereGeometry(1.3, 32, 32), canopyMaterial);
+            mainCanopy.position.y = trunk.position.y + 0.95;
+            group.add(mainCanopy);
+
+            const sideCanopy = new THREE.Mesh(new THREE.SphereGeometry(0.9, 28, 28), canopyMaterial);
+            sideCanopy.position.set(0.8, mainCanopy.position.y - 0.15, 0.4);
+            group.add(sideCanopy);
+
+            const backCanopy = new THREE.Mesh(new THREE.SphereGeometry(0.85, 28, 28), canopyMaterial);
+            backCanopy.position.set(-0.7, mainCanopy.position.y - 0.25, -0.2);
+            group.add(backCanopy);
+            return group;
+        }
+
+        // Create a polyline that stands in for a light ray.
+        function createRayPath(points, color) {
+            const cloned = points.map(p => p.clone());
+            const geometry = new THREE.BufferGeometry().setFromPoints(cloned);
+            const material = new THREE.LineBasicMaterial({ color, linewidth: 2, transparent: true, opacity: 0.9 });
+            const line = new THREE.Line(geometry, material);
+            const curve = new THREE.CatmullRomCurve3(cloned);
+            return { line, material, curve, points: cloned };
+        }
+
+        function updateRayPath(ray, points) {
+            ray.points = points.map(p => p.clone());
+            ray.line.geometry.dispose();
+            ray.line.geometry = new THREE.BufferGeometry().setFromPoints(ray.points);
+            ray.curve = new THREE.CatmullRomCurve3(ray.points);
+        }
+
+        const leftScenario = new THREE.Group();
+        scene.add(leftScenario);
+
+        const leftTree = createTree();
+        leftTree.position.set(-2.4, 0, 0);
+        leftScenario.add(leftTree);
+        const leftTreeLabel = createLabel('Tree');
+        leftTreeLabel.position.set(-2.4, 2.1, 1.6);
+        leftScenario.add(leftTreeLabel);
+
+        const leftWallMaterial = new THREE.MeshStandardMaterial({ color: 0xf9e7c5, roughness: 0.9, opacity: 0.95, transparent: true });
+        const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2), leftWallMaterial);
+        leftWall.rotation.y = Math.PI / 2;
+        leftWall.position.set(-6.4, 0, 0);
+        leftScenario.add(leftWall);
+
+        const leftWallLabel = createLabel('Diffuse wall');
+        leftWallLabel.position.set(-6, 2, 1.4);
+        leftScenario.add(leftWallLabel);
+
+        const leftBlur = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.4, 1.4),
+            new THREE.MeshBasicMaterial({ color: 0x86c990, opacity: 0.55, transparent: true })
+        );
+        leftBlur.rotation.y = Math.PI / 2;
+        leftBlur.position.set(-6.2, 0.2, 0);
+        leftScenario.add(leftBlur);
+
+        // Green rays showing how many directions average together on the bare wall.
+        const leftRayDefs = [
+            { start: new THREE.Vector3(-2.3, 1.3, -0.8), end: new THREE.Vector3(-6.15, 0.3, 0.1) },
+            { start: new THREE.Vector3(-1.9, 0.1, 0.9), end: new THREE.Vector3(-6.18, 0.25, 0.05) },
+            { start: new THREE.Vector3(-2.2, -0.9, -0.2), end: new THREE.Vector3(-6.12, 0.35, 0.15) }
+        ];
+        const leftRays = leftRayDefs.map(def => {
+            const ray = createRayPath([def.start, def.end], 0x39a04d);
+            leftScenario.add(ray.line);
+            return ray;
+        });
+
+        const rightTreeGroup = new THREE.Group();
+        scene.add(rightTreeGroup);
+        const rightTree = createTree();
+        rightTree.position.set(2.8, 0, 0);
+        rightTreeGroup.add(rightTree);
+        const rightTreeLabel = createLabel('Tree');
+        rightTreeLabel.position.set(2.8, 2.1, 1.5);
+        rightTreeGroup.add(rightTreeLabel);
+
+        const pinholeGroup = new THREE.Group();
+        scene.add(pinholeGroup);
+        const pinholeMaterial = new THREE.MeshStandardMaterial({ color: 0x11151a, roughness: 0.4, opacity: 0.94, transparent: true });
+        const pinholeWall = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2), pinholeMaterial);
+        pinholeWall.rotation.y = Math.PI / 2;
+        pinholeWall.position.set(5.5, 0, 0);
+        pinholeGroup.add(pinholeWall);
+
+        const holeMarker = new THREE.Mesh(
+            new THREE.CircleGeometry(0.35, 48),
+            new THREE.MeshBasicMaterial({ color: 0xfff7bf, opacity: 0.9, transparent: true })
+        );
+        holeMarker.rotation.y = Math.PI / 2;
+        holeMarker.position.set(5.51, 0, 0);
+        pinholeGroup.add(holeMarker);
+
+        const pinholeLabel = createLabel('Pinhole');
+        pinholeLabel.position.set(5.9, 2, 1.6);
+        pinholeGroup.add(pinholeLabel);
+
+        const projectionGroup = new THREE.Group();
+        scene.add(projectionGroup);
+        const projectionMaterial = new THREE.MeshStandardMaterial({ color: 0xfafafa, roughness: 0.7, opacity: 0.98, transparent: true });
+        const projectionWall = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.2), projectionMaterial);
+        projectionWall.rotation.y = Math.PI / 2;
+        projectionWall.position.set(8.7, 0, 0);
+        projectionGroup.add(projectionWall);
+
+        const projectionLabel = createLabel('Projection wall');
+        projectionLabel.position.set(8.6, 2, 1.4);
+        projectionGroup.add(projectionLabel);
+
+        const rightRaysGroup = new THREE.Group();
+        scene.add(rightRaysGroup);
+
+        const pinholeCore = new THREE.Vector3(5.5, 0, 0);
+        const rightRayDefs = [
+            { start: new THREE.Vector3(2.8, 1.5, 0.7), screenBase: new THREE.Vector3(8.7, -1.1, 0.3) },
+            { start: new THREE.Vector3(2.8, 0.2, -0.1), screenBase: new THREE.Vector3(8.7, 0, -0.1) },
+            { start: new THREE.Vector3(2.8, -1.0, 0.4), screenBase: new THREE.Vector3(8.7, 1.1, 0.2) }
+        ];
+
+        const rightRays = rightRayDefs.map(def => {
+            const ray = createRayPath([def.start, pinholeCore, def.screenBase], 0x39a04d);
+            rightRaysGroup.add(ray.line);
+            return ray;
+        });
+
+        const projectionMarkers = rightRayDefs.map(() => {
+            const marker = new THREE.Mesh(
+                new THREE.CircleGeometry(0.4, 40),
+                new THREE.MeshBasicMaterial({ color: 0x9be26f, opacity: 0.65, transparent: true })
+            );
+            marker.rotation.y = Math.PI / 2;
+            projectionGroup.add(marker);
+            return marker;
+        });
+
+        const rayTravelers = [];
+        function addRayTraveler(ray, color) {
+            const sphere = new THREE.Mesh(
+                new THREE.SphereGeometry(0.08, 12, 12),
+                new THREE.MeshBasicMaterial({ color, opacity: 0.95, transparent: true })
+            );
+            sphere.visible = false;
+            scene.add(sphere);
+            rayTravelers.push({ mesh: sphere, rayRef: ray, curve: ray.curve, progress: Math.random(), speed: 0.1 + Math.random() * 0.05 });
+        }
+        leftRays.forEach(ray => addRayTraveler(ray, 0x1d8348));
+        rightRays.forEach(ray => addRayTraveler(ray, 0x2ecc71));
+
+        cacheBaseOpacity(leftScenario);
+        cacheBaseOpacity(rightTreeGroup);
+        cacheBaseOpacity(pinholeGroup);
+        cacheBaseOpacity(projectionGroup);
+        cacheBaseOpacity(rightRaysGroup);
+
+        const steps = [
+            {
+                text: 'Step 1/4 – Without a pinhole, each point on the diffuse wall mixes light from the whole tree, so no image forms.',
+                focus: () => {
+                    setGroupEmphasis(leftScenario, 1);
+                    setGroupEmphasis(rightTreeGroup, 0.3);
+                    setGroupEmphasis(pinholeGroup, 0.1);
+                    setGroupEmphasis(projectionGroup, 0.1);
+                    setGroupEmphasis(rightRaysGroup, 0.3);
+                }
+            },
+            {
+                text: 'Step 2/4 – Inserting the pinhole rejects most directions, leaving only narrow bundles of rays.',
+                focus: () => {
+                    setGroupEmphasis(leftScenario, 0.2);
+                    setGroupEmphasis(rightTreeGroup, 0.9);
+                    setGroupEmphasis(pinholeGroup, 1);
+                    setGroupEmphasis(projectionGroup, 0.3);
+                    setGroupEmphasis(rightRaysGroup, 0.9);
+                }
+            },
+            {
+                text: 'Step 3/4 – Rays that pass through the aperture cross and strike the projection wall at distinct locations, painting an inverted image.',
+                focus: () => {
+                    setGroupEmphasis(leftScenario, 0.2);
+                    setGroupEmphasis(rightTreeGroup, 0.5);
+                    setGroupEmphasis(pinholeGroup, 0.7);
+                    setGroupEmphasis(projectionGroup, 1);
+                    setGroupEmphasis(rightRaysGroup, 1);
+                }
+            },
+            {
+                text: 'Step 4/4 – Compare both setups: restricting rays preserves directional information, unlike the bare wall.',
+                focus: () => {
+                    setGroupEmphasis(leftScenario, 0.8);
+                    setGroupEmphasis(rightTreeGroup, 0.8);
+                    setGroupEmphasis(pinholeGroup, 0.8);
+                    setGroupEmphasis(projectionGroup, 0.8);
+                    setGroupEmphasis(rightRaysGroup, 0.8);
+                }
+            }
+        ];
+
+        const states = {
+            pinholeEnabled: true,
+            animateRays: false,
+            stepIndex: 0
+        };
+
+        const defaultAperture = parseFloat(apertureSlider.value);
+
+        function updateAperture(value) {
+            apertureValue.textContent = value.toFixed(2);
+            const spread = (value - 0.2) * 0.35;
+            holeMarker.scale.set(value / defaultAperture, value / defaultAperture, 1);
+
+            rightRays.forEach((ray, idx) => {
+                const def = rightRayDefs[idx];
+                const offsetY = (idx - 1) * spread * 0.8;
+                const offsetZ = (idx - 1) * spread * 0.9;
+                const pinholePoint = pinholeCore.clone().add(new THREE.Vector3(0, offsetY, offsetZ));
+                const screenPoint = def.screenBase.clone().add(new THREE.Vector3(0, offsetY * 2.6, offsetZ * 1.8));
+                const points = [def.start, pinholePoint, screenPoint];
+                updateRayPath(ray, points);
+                projectionMarkers[idx].position.copy(screenPoint.clone().add(new THREE.Vector3(0.02, 0, 0)));
+                const spotScale = 0.35 + value * 0.35;
+                projectionMarkers[idx].scale.set(spotScale, spotScale, 1);
+                rayTravelers
+                    .filter(entry => entry.rayRef === ray)
+                    .forEach(entry => { entry.curve = ray.curve; });
+            });
+        }
+
+        function applyStep(index) {
+            states.stepIndex = index;
+            steps[index].focus();
+            caption.textContent = steps[index].text;
+        }
+
+        togglePinholeBtn.addEventListener('click', () => {
+            states.pinholeEnabled = !states.pinholeEnabled;
+            pinholeGroup.visible = states.pinholeEnabled;
+            projectionGroup.visible = states.pinholeEnabled;
+            rightRaysGroup.visible = states.pinholeEnabled;
+            togglePinholeBtn.textContent = states.pinholeEnabled ? 'Hide pinhole wall' : 'Show pinhole wall';
+        });
+
+        animateBtn.addEventListener('click', () => {
+            states.animateRays = !states.animateRays;
+            animateBtn.textContent = states.animateRays ? 'Pause ray animation' : 'Play ray animation';
+        });
+
+        apertureSlider.addEventListener('input', () => {
+            updateAperture(parseFloat(apertureSlider.value));
+        });
+
+        guidedBtn.addEventListener('click', () => {
+            const nextIndex = (states.stepIndex + 1) % steps.length;
+            applyStep(nextIndex);
+        });
+
+        function resetView() {
+            camera.position.copy(defaultCameraPosition);
+            controls.target.copy(defaultTarget);
+            controls.update();
+            states.pinholeEnabled = true;
+            states.animateRays = false;
+            togglePinholeBtn.textContent = 'Hide pinhole wall';
+            animateBtn.textContent = 'Play ray animation';
+            pinholeGroup.visible = true;
+            projectionGroup.visible = true;
+            rightRaysGroup.visible = true;
+            apertureSlider.value = defaultAperture;
+            updateAperture(defaultAperture);
+            applyStep(0);
+        }
+
+        resetBtn.addEventListener('click', resetView);
+
+        window.addEventListener('resize', () => {
+            aspect = container.clientWidth / container.clientHeight;
+            camera.left = -viewHeight * aspect;
+            camera.right = viewHeight * aspect;
+            camera.top = viewHeight;
+            camera.bottom = -viewHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            const delta = clock.getDelta();
+            rayTravelers.forEach(entry => {
+                if (states.animateRays) {
+                    entry.mesh.visible = true;
+                    entry.progress = (entry.progress + delta * entry.speed) % 1;
+                    const position = entry.curve.getPointAt(entry.progress);
+                    entry.mesh.position.copy(position);
+                } else {
+                    entry.mesh.visible = false;
+                }
+            });
+            renderer.render(scene, camera);
+        }
+
+        resetView();
+        animate();
+    </script>
+</body>
+
+</html>

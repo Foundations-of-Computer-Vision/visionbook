@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Interactive Homography Visualization</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+            background: #f4f4f4;
+            overflow: hidden;
+            color: #111;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            max-width: 360px;
+            padding: 1rem 1.25rem;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        #overlay h1 {
+            margin: 0 0 0.5rem;
+            font-size: 1.5rem;
+            letter-spacing: 0.01em;
+        }
+
+        #overlay p {
+            margin: 0.2rem 0;
+            font-size: 0.95rem;
+            line-height: 1.3rem;
+        }
+
+        #controls {
+            position: absolute;
+            bottom: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 0.5rem;
+            width: min(900px, 94vw);
+            background: rgba(0, 0, 0, 0.75);
+            color: #f9f9f9;
+            padding: 1rem;
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+
+        #controls label {
+            grid-column: 1 / -1;
+            font-size: 0.95rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            font-weight: 600;
+        }
+
+        #warpRange {
+            width: 100%;
+        }
+
+        button {
+            border: none;
+            padding: 0.75rem 1rem;
+            font-size: 0.9rem;
+            border-radius: 999px;
+            cursor: pointer;
+            background: #f0f0f0;
+            color: #111;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        button:hover {
+            background: #ffd45f;
+        }
+
+        #status {
+            grid-column: 1 / -1;
+            font-size: 0.9rem;
+            text-align: center;
+            color: #cfe6ff;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="overlay">
+        <h1>Homography Warp</h1>
+        <p id="guideText">Use the controls below to see how a planar grid warps under a homography while keeping
+            colinear points on the same lines.</p>
+    </div>
+    <div id="controls">
+        <label>Warp amount (0 = identity, 1 = homography)
+            <input id="warpRange" type="range" min="0" max="1" step="0.01" value="1" />
+        </label>
+        <button id="playWarp">Play warp</button>
+        <button id="toggleCorrespondences">Show correspondences</button>
+        <button id="toggleColinear">Highlight colinear line</button>
+        <button id="guidedStep">Guided step</button>
+        <button id="resetView">Reset to textbook view</button>
+        <div id="status">Warp factor: 1.00</div>
+    </div>
+    <script type="module">
+        import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
+        import { OrbitControls } from "https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js";
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf4f4f4);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.5, 6);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.1);
+        scene.add(light);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 6, 4);
+        scene.add(dirLight);
+
+        const gridSize = 3;
+        const divisions = 4; // Matches the textbook grid density
+        const canonicalSegments = buildCanonicalSegments(gridSize, divisions);
+        const canonicalPoints = buildCanonicalPoints(gridSize, divisions);
+
+        const leftOffset = new THREE.Vector3(-2.2, 0, 0);
+        const rightOffset = new THREE.Vector3(2.2, 0, 0);
+
+        const baseMaterial = new THREE.LineBasicMaterial({ color: 0x1a1a1a, linewidth: 2 });
+        const warpMaterial = new THREE.LineBasicMaterial({ color: 0x274472, linewidth: 2 });
+
+        // Flat grid representing the original rectangular pattern from the textbook figure.
+        const originalGrid = makeStaticGrid(baseMaterial, leftOffset);
+        scene.add(originalGrid);
+
+        // Arrow to indicate "apply homography" direction.
+        const arrow = new THREE.ArrowHelper(
+            new THREE.Vector3(1, 0, 0).normalize(),
+            new THREE.Vector3(-0.4, 0, 0),
+            2.4,
+            0xff7b00,
+            0.35,
+            0.25
+        );
+        scene.add(arrow);
+
+        // Label sprites explain which plane is the original vs. warped view.
+        scene.add(createLabelSprite("Original grid", new THREE.Vector3(-2.2, 1.3, 0)));
+        scene.add(createLabelSprite("Warped grid", new THREE.Vector3(2.2, 1.3, 0)));
+
+        // Transformable grid representing the homography result (right-hand panel in the textbook figure).
+        const transformableGrid = makeTransformableGrid(warpMaterial, rightOffset, applyHomography);
+        scene.add(transformableGrid.line);
+
+        // Colinear markers show that points along a row remain colinear after warping.
+        const colinearData = createColinearMarkers();
+        colinearData.group.visible = false;
+        scene.add(colinearData.group);
+
+        // Correspondence lines connect matching grid intersections across both planes.
+        const correspondenceData = createCorrespondenceLines();
+        correspondenceData.group.visible = false;
+        scene.add(correspondenceData.group);
+
+        const warpSlider = document.getElementById("warpRange");
+        const playButton = document.getElementById("playWarp");
+        const correspondButton = document.getElementById("toggleCorrespondences");
+        const colinearButton = document.getElementById("toggleColinear");
+        const guidedButton = document.getElementById("guidedStep");
+        const resetButton = document.getElementById("resetView");
+        const statusText = document.getElementById("status");
+        const guideText = document.getElementById("guideText");
+
+        let warpFactor = 1;
+        let autoWarp = false;
+        let showCorrespondences = false;
+        let showColinear = false;
+        let guidedIndex = -1;
+
+        const guidedSteps = [
+            {
+                message: "Step 1: Start with the undistorted planar grid.",
+                action: () => {
+                    setWarpFactor(0);
+                    setCorrespondences(false);
+                    setColinear(false);
+                }
+            },
+            {
+                message: "Step 2: Apply the homography and observe corresponding points.",
+                action: () => {
+                    setWarpFactor(0.6);
+                    setCorrespondences(true);
+                    setColinear(false);
+                }
+            },
+            {
+                message: "Step 3: Highlight a colinear row to see it remains a straight line.",
+                action: () => {
+                    setWarpFactor(1);
+                    setCorrespondences(true);
+                    setColinear(true);
+                }
+            }
+        ];
+
+        warpSlider.addEventListener("input", (event) => {
+            guidedIndex = -1;
+            guideText.textContent = "Use the controls below to see how a planar grid warps under a homography while keeping colinear points on the same lines.";
+            setWarpFactor(parseFloat(event.target.value));
+        });
+
+        playButton.addEventListener("click", () => {
+            autoWarp = !autoWarp;
+            playButton.textContent = autoWarp ? "Pause warp" : "Play warp";
+        });
+
+        correspondButton.addEventListener("click", () => {
+            setCorrespondences(!showCorrespondences);
+        });
+
+        colinearButton.addEventListener("click", () => {
+            setColinear(!showColinear);
+        });
+
+        guidedButton.addEventListener("click", () => {
+            guidedIndex = (guidedIndex + 1) % guidedSteps.length;
+            guidedSteps[guidedIndex].action();
+            guideText.textContent = guidedSteps[guidedIndex].message;
+        });
+
+        resetButton.addEventListener("click", resetView);
+
+        function resetView() {
+            autoWarp = false;
+            playButton.textContent = "Play warp";
+            guidedIndex = -1;
+            guideText.textContent = "Reset: textbook view restored.";
+            setWarpFactor(1);
+            setCorrespondences(false);
+            setColinear(false);
+            camera.position.set(0, 1.5, 6);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        function setWarpFactor(value) {
+            warpFactor = value;
+            warpSlider.value = value;
+            statusText.textContent = `Warp factor: ${value.toFixed(2)}`;
+            updateTransformableGrid(value);
+            updateCorrespondenceLines(value);
+            updateColinearMarkers(value);
+        }
+
+        function setCorrespondences(value) {
+            showCorrespondences = value;
+            correspondenceData.group.visible = value;
+            correspondButton.textContent = value ? "Hide correspondences" : "Show correspondences";
+        }
+
+        function setColinear(value) {
+            showColinear = value;
+            colinearData.group.visible = value;
+            colinearButton.textContent = value ? "Hide colinear line" : "Highlight colinear line";
+        }
+
+        function updateTransformableGrid(factor) {
+            const posAttr = transformableGrid.attribute;
+            for (let i = 0; i < transformableGrid.base.length; i++) {
+                posAttr.array[i] = THREE.MathUtils.lerp(transformableGrid.base[i], transformableGrid.target[i], factor);
+            }
+            posAttr.needsUpdate = true;
+        }
+
+        function updateCorrespondenceLines(factor) {
+            const posAttr = correspondenceData.attribute;
+            for (let i = 0; i < correspondenceData.baseEnd.length; i++) {
+                posAttr.array[i * 6 + 3] = THREE.MathUtils.lerp(correspondenceData.baseEnd[i].x, correspondenceData.targetEnd[i].x, factor);
+                posAttr.array[i * 6 + 4] = THREE.MathUtils.lerp(correspondenceData.baseEnd[i].y, correspondenceData.targetEnd[i].y, factor);
+                posAttr.array[i * 6 + 5] = THREE.MathUtils.lerp(correspondenceData.baseEnd[i].z, correspondenceData.targetEnd[i].z, factor);
+            }
+            posAttr.needsUpdate = true;
+        }
+
+        function updateColinearMarkers(factor) {
+            colinearData.transformed.forEach((entry, index) => {
+                entry.position.set(
+                    THREE.MathUtils.lerp(colinearData.base[index].x, colinearData.targets[index].x, factor),
+                    THREE.MathUtils.lerp(colinearData.base[index].y, colinearData.targets[index].y, factor),
+                    THREE.MathUtils.lerp(colinearData.base[index].z, colinearData.targets[index].z, factor)
+                );
+            });
+        }
+
+        function buildCanonicalSegments(size, divs) {
+            const segments = [];
+            const step = size / divs;
+            const half = size / 2;
+            for (let i = 0; i <= divs; i++) {
+                const offset = -half + i * step;
+                segments.push({ start: { x: -half, y: offset }, end: { x: half, y: offset } });
+                segments.push({ start: { x: offset, y: -half }, end: { x: offset, y: half } });
+            }
+            return segments;
+        }
+
+        function buildCanonicalPoints(size, divs) {
+            const points = [];
+            const step = size / divs;
+            const half = size / 2;
+            for (let y = 0; y <= divs; y++) {
+                for (let x = 0; x <= divs; x++) {
+                    points.push({ x: -half + x * step, y: -half + y * step });
+                }
+            }
+            return points;
+        }
+
+        function makeStaticGrid(material, offset) {
+            const positions = new Float32Array(canonicalSegments.length * 6);
+            canonicalSegments.forEach((segment, index) => {
+                const i = index * 6;
+                positions[i] = segment.start.x + offset.x;
+                positions[i + 1] = segment.start.y + offset.y;
+                positions[i + 2] = offset.z;
+                positions[i + 3] = segment.end.x + offset.x;
+                positions[i + 4] = segment.end.y + offset.y;
+                positions[i + 5] = offset.z;
+            });
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+            return new THREE.LineSegments(geometry, material);
+        }
+
+        function makeTransformableGrid(material, offset, transformFn) {
+            const positions = new Float32Array(canonicalSegments.length * 6);
+            const base = new Float32Array(positions.length);
+            const target = new Float32Array(positions.length);
+
+            canonicalSegments.forEach((segment, index) => {
+                const i = index * 6;
+                const startBase = new THREE.Vector3(segment.start.x, segment.start.y, 0).add(offset);
+                const endBase = new THREE.Vector3(segment.end.x, segment.end.y, 0).add(offset);
+                const startTarget = transformPoint(segment.start, offset, transformFn);
+                const endTarget = transformPoint(segment.end, offset, transformFn);
+
+                base.set([startBase.x, startBase.y, startBase.z, endBase.x, endBase.y, endBase.z], i);
+                target.set([startTarget.x, startTarget.y, startTarget.z, endTarget.x, endTarget.y, endTarget.z], i);
+                positions.set([startTarget.x, startTarget.y, startTarget.z, endTarget.x, endTarget.y, endTarget.z], i);
+            });
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+            const line = new THREE.LineSegments(geometry, material);
+            return { line, base, target, attribute: geometry.getAttribute("position") };
+        }
+
+        // Applies a 2D homography similar to the textbook figure and embeds it in 3D for clarity.
+        function transformPoint(point, offset, transformFn) {
+            const { x, y, z } = transformFn(point.x, point.y);
+            return new THREE.Vector3(x + offset.x, y + offset.y, z + offset.z);
+        }
+
+        function applyHomography(x, y) {
+            const H = [
+                1, 0.32, 0,
+                0.08, 1, 0,
+                0.0015, 0.0008, 1
+            ];
+            const w = H[6] * x + H[7] * y + H[8];
+            const newX = (H[0] * x + H[1] * y + H[2]) / w;
+            const newY = (H[3] * x + H[4] * y + H[5]) / w;
+            const depth = -0.6 * (newX - x); // Depth cue indicates skew relative to the viewer.
+            return { x: newX, y: newY, z: depth };
+        }
+
+        function createCorrespondenceLines() {
+            const group = new THREE.Group();
+            const positions = new Float32Array(canonicalPoints.length * 6);
+            const baseEnd = [];
+            const targetEnd = [];
+
+            canonicalPoints.forEach((pt, idx) => {
+                const start = new THREE.Vector3(pt.x + leftOffset.x, pt.y + leftOffset.y, leftOffset.z);
+                const base = new THREE.Vector3(pt.x + rightOffset.x, pt.y + rightOffset.y, rightOffset.z);
+                const target = transformPoint(pt, rightOffset, applyHomography);
+                baseEnd.push(base);
+                targetEnd.push(target);
+                const i = idx * 6;
+                positions[i] = start.x;
+                positions[i + 1] = start.y;
+                positions[i + 2] = start.z;
+                positions[i + 3] = target.x;
+                positions[i + 4] = target.y;
+                positions[i + 5] = target.z;
+            });
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+            const material = new THREE.LineBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.75 });
+            const lines = new THREE.LineSegments(geometry, material);
+            group.add(lines);
+            return {
+                group,
+                attribute: geometry.getAttribute("position"),
+                baseEnd,
+                targetEnd
+            };
+        }
+
+        function createColinearMarkers() {
+            const group = new THREE.Group();
+            const markerMaterial = new THREE.MeshStandardMaterial({ color: 0xc2185b, emissive: 0x330011 });
+            const sphereGeom = new THREE.SphereGeometry(0.07, 24, 24);
+            const base = [];
+            const targets = [];
+            const transformed = [];
+
+            canonicalPoints.filter((pt) => Math.abs(pt.y) < 1e-4).forEach((pt) => {
+                const original = new THREE.Mesh(sphereGeom, markerMaterial.clone());
+                original.material.color.set(0x0a8754);
+                original.position.set(pt.x + leftOffset.x, pt.y + leftOffset.y, leftOffset.z + 0.01);
+                group.add(original);
+
+                const basePos = new THREE.Vector3(pt.x + rightOffset.x, pt.y + rightOffset.y, rightOffset.z + 0.01);
+                const targetPos = transformPoint(pt, rightOffset, applyHomography);
+                base.push(basePos);
+                targets.push(targetPos);
+                const warped = new THREE.Mesh(sphereGeom, markerMaterial.clone());
+                warped.position.copy(targetPos);
+                group.add(warped);
+                transformed.push(warped);
+            });
+
+            return { group, transformed, base, targets };
+        }
+
+        function createLabelSprite(text) {
+            const canvas = document.createElement("canvas");
+            canvas.width = 256;
+            canvas.height = 128;
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "rgba(255,255,255,0.92)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#111";
+            ctx.font = "28px 'Segoe UI'";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(1.8, 0.9, 1);
+            return sprite;
+        }
+
+        window.addEventListener("resize", () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            if (autoWarp) {
+                const newValue = (parseFloat(warpSlider.value) + delta * 0.3) % 1;
+                setWarpFactor(newValue);
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

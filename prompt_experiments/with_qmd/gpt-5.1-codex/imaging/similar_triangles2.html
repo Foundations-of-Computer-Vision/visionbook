@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>Perspective Projection – Similar Triangles</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #050a12;
+            color: #f0f4ff;
+        }
+
+        #scene-container {
+            position: absolute;
+            inset: 0;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 330px;
+            background: rgba(3, 9, 22, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 14px;
+            padding: 18px 20px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        #ui h2 {
+            margin: 0 0 14px 0;
+            font-size: 1.1rem;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            color: #9bd5ff;
+        }
+
+        .control {
+            margin-bottom: 14px;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            letter-spacing: 0.02em;
+            margin-bottom: 6px;
+            color: #a9c6ff;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        button {
+            width: 100%;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-top: 8px;
+            background: linear-gradient(120deg, #2a81ff, #19c1ff);
+            color: #fff;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        button.secondary {
+            background: linear-gradient(120deg, #394456, #222c3d);
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.35);
+        }
+
+        #demo {
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        #demo-text {
+            min-height: 70px;
+            background: rgba(255, 255, 255, 0.07);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+
+        #step-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        #step-buttons button {
+            flex: 1;
+            background: linear-gradient(120deg, #1f2937, #151c27);
+        }
+
+        #equation {
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+            padding: 12px 18px;
+            border-radius: 12px;
+            background: rgba(7, 14, 24, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.95rem;
+            letter-spacing: 0.02em;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+            max-width: 360px;
+        }
+
+        #equation.pulse {
+            box-shadow: 0 0 25px rgba(75, 227, 255, 0.6);
+            border-color: rgba(75, 227, 255, 0.8);
+        }
+
+        .label {
+            color: #fdfdfd;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
+            white-space: nowrap;
+        }
+
+        .small-label {
+            font-size: 0.75rem;
+            color: #b8c7ff;
+            font-weight: 500;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="scene-container"></div>
+    <div id="ui">
+        <h2>Perspective Projection</h2>
+        <div class="control">
+            <label for="depthSlider">World depth Z <span id="depthValue">10.0</span></label>
+            <input type="range" id="depthSlider" min="5" max="20" step="0.5" value="10" />
+        </div>
+        <div class="control">
+            <label for="xSlider">World offset X <span id="xValue">4.0</span></label>
+            <input type="range" id="xSlider" min="-6" max="6" step="0.2" value="4" />
+        </div>
+        <button id="toggleTriangles" class="secondary">Hide similar triangles</button>
+        <div id="demo">
+            <div id="demo-text">Step 1 · Locate the world point P(X,Y,Z) sitting on the green plane.</div>
+            <div id="step-buttons">
+                <button id="prevStep">◀ Prev</button>
+                <button id="nextStep">Next ▶</button>
+            </div>
+        </div>
+        <button id="resetBtn">Reset to textbook view</button>
+    </div>
+    <div id="equation">x = fX / Z, y = fY / Z</div>
+    <script type="module">
+        import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+        import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+        import { CSS2DRenderer, CSS2DObject } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/renderers/CSS2DRenderer.js";
+
+        const container = document.getElementById("scene-container");
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x030912);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = "absolute";
+        labelRenderer.domElement.style.top = "0px";
+        labelRenderer.domElement.style.pointerEvents = "none";
+        container.appendChild(labelRenderer.domElement);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+        const initialCameraPosition = new THREE.Vector3(13, 8, 15);
+        const initialTarget = new THREE.Vector3(0, 1.5, 6);
+        camera.position.copy(initialCameraPosition);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.copy(initialTarget);
+
+        const hemi = new THREE.HemisphereLight(0xcad4ff, 0x0c101a, 1.1);
+        scene.add(hemi);
+        const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+        dir.position.set(6, 10, 4);
+        scene.add(dir);
+
+        // Axes reproduce the reference frame from the 2D figure.
+        const axisLength = 10;
+        scene.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), axisLength, 0xff5c5c, 0.5, 0.3));
+        scene.add(new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), axisLength, 0x7dff8f, 0.5, 0.3));
+        scene.add(new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), axisLength, 0x6eb1ff, 0.5, 0.3));
+
+        const labels = [];
+        function makeLabel(text, small = false) {
+            const div = document.createElement("div");
+            div.className = small ? "label small-label" : "label";
+            div.textContent = text;
+            return new CSS2DObject(div);
+        }
+        function placeLabel(text, position, small = false) {
+            const label = makeLabel(text, small);
+            label.position.copy(position);
+            scene.add(label);
+            labels.push(label);
+            return label;
+        }
+        placeLabel("X", new THREE.Vector3(axisLength + 0.5, 0, 0));
+        placeLabel("Y", new THREE.Vector3(0, axisLength + 0.5, 0));
+        placeLabel("Z", new THREE.Vector3(0, 0, axisLength + 0.5));
+
+        const f = 4;
+        const origin = new THREE.Vector3(0, 0, 0);
+
+        // Gray plane = physical image plane behind the pinhole.
+        const sensorPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(9, 6),
+            new THREE.MeshStandardMaterial({ color: 0x9aa6b4, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+        );
+        sensorPlane.position.z = -f;
+        scene.add(sensorPlane);
+        placeLabel("Sensor plane (real image)", new THREE.Vector3(-2.2, 0.2, -f), true);
+
+        // Cyan plane = virtual image plane in front of the pinhole used in textbooks.
+        const virtualPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(8, 5.5),
+            new THREE.MeshStandardMaterial({ color: 0x3ac1ff, transparent: true, opacity: 0.15, side: THREE.DoubleSide })
+        );
+        virtualPlane.position.z = f;
+        scene.add(virtualPlane);
+        placeLabel("Virtual plane (textbook)", new THREE.Vector3(-2.2, 0.2, f), true);
+
+        const fLabel = placeLabel("f", new THREE.Vector3(0, 0.2, f / 2), true);
+
+        // World point matches the red sphere in the printed diagram.
+        const worldSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.2, 32, 16),
+            new THREE.MeshStandardMaterial({ color: 0xff4c4c, emissive: 0x300000, emissiveIntensity: 0.6 })
+        );
+        scene.add(worldSphere);
+        const worldLabel = makeLabel("P(X,Y,Z)");
+        worldSphere.add(worldLabel);
+        worldLabel.position.set(0.2, 0.35, 0);
+
+        // Brown point is the projected pixel on the virtual plane.
+        const virtualSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.18, 32, 16),
+            new THREE.MeshStandardMaterial({ color: 0xbb7c3b, emissive: 0x331400 })
+        );
+        scene.add(virtualSphere);
+        const virtualLabel = makeLabel("p(x,y)");
+        virtualSphere.add(virtualLabel);
+        virtualLabel.position.set(0.1, 0.32, 0);
+
+        // Inverted point on the physical sensor plane.
+        const sensorSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.16, 32, 16),
+            new THREE.MeshStandardMaterial({ color: 0xf6c07d, emissive: 0x332106 })
+        );
+        scene.add(sensorSphere);
+        const sensorLabel = makeLabel("p'(-x,-y)");
+        sensorSphere.add(sensorLabel);
+        sensorLabel.position.set(0.1, 0.28, 0);
+
+        // Similar triangle surfaces reconstruct the colored wedges from the 2D figure.
+        const bigTriMat = new THREE.MeshStandardMaterial({ color: 0x4fd47a, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
+        const smallTriMat = new THREE.MeshStandardMaterial({ color: 0x6dbbff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
+        const bigTriangle = new THREE.Mesh(new THREE.BufferGeometry(), bigTriMat);
+        const smallTriangle = new THREE.Mesh(new THREE.BufferGeometry(), smallTriMat);
+        const triangleGroup = new THREE.Group();
+        triangleGroup.add(bigTriangle);
+        triangleGroup.add(smallTriangle);
+        scene.add(triangleGroup);
+
+        function updateTriangleGeometry(mesh, points) {
+            mesh.geometry.dispose();
+            const geom = new THREE.BufferGeometry();
+            const data = new Float32Array(points.length * 3);
+            points.forEach((p, i) => {
+                data[i * 3 + 0] = p.x;
+                data[i * 3 + 1] = p.y;
+                data[i * 3 + 2] = p.z;
+            });
+            geom.setAttribute("position", new THREE.Float32BufferAttribute(data, 3));
+            geom.computeVertexNormals();
+            mesh.geometry = geom;
+        }
+
+        // Lines make the geometric constraints explicit for exploration.
+        const rayMaterial = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.35, gapSize: 0.2 });
+        const rayLine = new THREE.Line(new THREE.BufferGeometry(), rayMaterial);
+        scene.add(rayLine);
+
+        const sensorRay = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDashedMaterial({ color: 0x8888ff, dashSize: 0.3, gapSize: 0.2 }));
+        scene.add(sensorRay);
+
+        function makeSolidLine(color) {
+            return new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color, linewidth: 1 }));
+        }
+
+        const dropLine = makeSolidLine(0xffffff);
+        const baseLine = makeSolidLine(0xffffff);
+        const depthLine = makeSolidLine(0xffffff);
+        const imageDropLine = makeSolidLine(0xffffff);
+        const imageBaseLine = makeSolidLine(0xffffff);
+        scene.add(dropLine, baseLine, depthLine, imageDropLine, imageBaseLine);
+
+        function updateLine(line, points) {
+            line.geometry.dispose();
+            line.geometry = new THREE.BufferGeometry().setFromPoints(points);
+            if (line.material instanceof THREE.LineDashedMaterial) {
+                line.computeLineDistances();
+            }
+        }
+
+        const worldParams = { X: 4, Y: 2, Z: 10 };
+
+        const depthSlider = document.getElementById("depthSlider");
+        const xSlider = document.getElementById("xSlider");
+        const depthValue = document.getElementById("depthValue");
+        const xValue = document.getElementById("xValue");
+        const toggleTriangles = document.getElementById("toggleTriangles");
+        const resetBtn = document.getElementById("resetBtn");
+        const demoText = document.getElementById("demo-text");
+        const prevStepBtn = document.getElementById("prevStep");
+        const nextStepBtn = document.getElementById("nextStep");
+        const equationBox = document.getElementById("equation");
+
+        let trianglesVisible = true;
+
+        function updateGeometry() {
+            const worldPoint = new THREE.Vector3(worldParams.X, worldParams.Y, worldParams.Z);
+            worldSphere.position.copy(worldPoint);
+            worldLabel.element.textContent = `P(X=${worldPoint.x.toFixed(1)}, Y=${worldPoint.y.toFixed(1)}, Z=${worldPoint.z.toFixed(1)})`;
+
+            const imageX = (f * worldPoint.x) / worldPoint.z;
+            const imageY = (f * worldPoint.y) / worldPoint.z;
+            virtualSphere.position.set(imageX, imageY, f);
+            virtualLabel.element.textContent = `p(x=${imageX.toFixed(2)}, y=${imageY.toFixed(2)})`;
+
+            sensorSphere.position.set(-imageX, -imageY, -f);
+            sensorLabel.element.textContent = `p'(x=${(-imageX).toFixed(2)}, y=${(-imageY).toFixed(2)})`;
+
+            updateLine(rayLine, [origin, worldPoint]);
+            updateLine(sensorRay, [origin, sensorSphere.position.clone()]);
+
+            const footWorld = new THREE.Vector3(worldPoint.x, 0, worldPoint.z);
+            const depthPoint = new THREE.Vector3(0, 0, worldPoint.z);
+            updateLine(dropLine, [worldPoint, footWorld]);
+            updateLine(baseLine, [footWorld, depthPoint]);
+            updateLine(depthLine, [depthPoint, origin]);
+
+            const footImage = new THREE.Vector3(imageX, 0, f);
+            const depthImage = new THREE.Vector3(0, 0, f);
+            updateLine(imageDropLine, [virtualSphere.position.clone(), footImage]);
+            updateLine(imageBaseLine, [footImage, depthImage]);
+
+            updateTriangleGeometry(bigTriangle, [origin, footWorld, worldPoint]);
+            updateTriangleGeometry(smallTriangle, [origin, footImage, virtualSphere.position.clone()]);
+
+            equationBox.textContent = `x = fX/Z = ${(f).toFixed(1)} · ${worldPoint.x.toFixed(1)} / ${worldPoint.z.toFixed(1)} = ${imageX.toFixed(2)}    |    y = fY/Z = ${(f).toFixed(1)} · ${worldPoint.y.toFixed(1)} / ${worldPoint.z.toFixed(1)} = ${imageY.toFixed(2)}`;
+            fLabel.position.set(0, 0.15, worldPoint.z > f ? f / 2 : (worldPoint.z + f) / 2);
+        }
+
+        depthSlider.addEventListener("input", (event) => {
+            worldParams.Z = parseFloat(event.target.value);
+            depthValue.textContent = worldParams.Z.toFixed(1);
+            updateGeometry();
+        });
+
+        xSlider.addEventListener("input", (event) => {
+            worldParams.X = parseFloat(event.target.value);
+            xValue.textContent = worldParams.X.toFixed(1);
+            updateGeometry();
+        });
+
+        toggleTriangles.addEventListener("click", () => {
+            trianglesVisible = !trianglesVisible;
+            triangleGroup.visible = trianglesVisible;
+            toggleTriangles.textContent = trianglesVisible ? "Hide similar triangles" : "Show similar triangles";
+        });
+
+        // Guided demo walks the learner through the critical reasoning steps.
+        const steps = [
+            {
+                text: "Step 1 · Locate the world point P(X,Y,Z) sitting on the green plane.",
+                action: () => {
+                    worldSphere.scale.set(1.4, 1.4, 1.4);
+                    worldSphere.material.emissive.setHex(0x550000);
+                },
+            },
+            {
+                text: "Step 2 · Follow the dashed ray from the pinhole through P.",
+                action: () => {
+                    rayMaterial.color.setHex(0xffc577);
+                },
+            },
+            {
+                text: "Step 3 · See where the ray hits the virtual plane to form p(x,y).",
+                action: () => {
+                    virtualSphere.material.emissive.setHex(0x884400);
+                    sensorRay.material.color.setHex(0x9cc4ff);
+                },
+            },
+            {
+                text: "Step 4 · Observe the similar triangles that enforce x = fX/Z and y = fY/Z.",
+                action: () => {
+                    bigTriMat.opacity = 0.55;
+                    smallTriMat.opacity = 0.6;
+                    equationBox.classList.add("pulse");
+                },
+            },
+        ];
+
+        function clearStepHighlights() {
+            worldSphere.scale.set(1, 1, 1);
+            worldSphere.material.emissive.setHex(0x300000);
+            rayMaterial.color.setHex(0xffffff);
+            virtualSphere.material.emissive.setHex(0x331400);
+            sensorRay.material.color.setHex(0x8888ff);
+            bigTriMat.opacity = 0.35;
+            smallTriMat.opacity = 0.35;
+            equationBox.classList.remove("pulse");
+        }
+
+        let currentStep = 0;
+        function applyStep(index) {
+            currentStep = ((index % steps.length) + steps.length) % steps.length;
+            clearStepHighlights();
+            steps[currentStep].action();
+            demoText.textContent = steps[currentStep].text;
+        }
+
+        nextStepBtn.addEventListener("click", () => {
+            applyStep(currentStep + 1);
+        });
+        prevStepBtn.addEventListener("click", () => {
+            applyStep(currentStep - 1);
+        });
+
+        function resetView() {
+            worldParams.X = 4;
+            worldParams.Z = 10;
+            xSlider.value = worldParams.X;
+            depthSlider.value = worldParams.Z;
+            xValue.textContent = worldParams.X.toFixed(1);
+            depthValue.textContent = worldParams.Z.toFixed(1);
+            trianglesVisible = true;
+            triangleGroup.visible = true;
+            toggleTriangles.textContent = "Hide similar triangles";
+            clearStepHighlights();
+            applyStep(0);
+            camera.position.copy(initialCameraPosition);
+            controls.target.copy(initialTarget);
+            controls.update();
+            updateGeometry();
+        }
+
+        resetBtn.addEventListener("click", resetView);
+
+        window.addEventListener("resize", () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        resetView();
+        animate();
+    </script>
+</body>
+
+</html>

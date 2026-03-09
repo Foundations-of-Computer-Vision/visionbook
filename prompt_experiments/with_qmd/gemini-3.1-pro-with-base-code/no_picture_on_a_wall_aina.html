@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Pinhole Camera Interactive Concept</title>
+    <style>
+        html,
+        body,
+        #container {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: white;
+            font-family: sans-serif;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 350px;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            margin-top: 0;
+        }
+
+        p {
+            font-size: 0.9rem;
+            line-height: 1.4;
+            color: #333;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            margin-bottom: 8px;
+            padding: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            background: #eee;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-align: left;
+        }
+
+        button:hover {
+            background: #e0e0e0;
+        }
+
+        .active {
+            background: #d0e0ff;
+            border-color: #80a0ff;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <h1>Why are there no pictures on a wall?</h1>
+        <p id="desc">
+            Light reflects off objects in all directions. If you look at a blank wall, rays from
+            every part of the scene hit every part of the wall, blurring into a generic color.
+        </p>
+        <div id="controls">
+            <button id="btn-step1" class="active">Step 1: Wall without Pinhole (Blurry)</button>
+            <button id="btn-step2">Step 2: Add Pinhole Barrier</button>
+            <button id="btn-step3">Step 3: Show Restricted Rays & Image</button>
+            <button id="btn-reset" style="margin-top: 15px; text-align: center; font-weight: bold;">Reset to Textbook
+                View</button>
+        </div>
+    </div>
+
+    <div id="container"></div>
+
+    <script type="module">
+        import * as THREE from 'https://esm.sh/three';
+        import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+        import { CSS2DRenderer, CSS2DObject } from 'https://esm.sh/three/examples/jsm/renderers/CSS2DRenderer';
+
+        // ---------------------------------------------------------
+        // SCENE SETUP
+        // ---------------------------------------------------------
+        const container = document.getElementById('container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf0f0f0);
+
+        const aspect = container.clientWidth / container.clientHeight;
+        const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 100);
+        // Position camera to see the full setup: Tree, Barrier, Wall
+        camera.position.set(0, 5, 12);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(container.clientWidth, container.clientHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 10, 5);
+        scene.add(dirLight);
+
+        // ---------------------------------------------------------
+        // 3D GEOMETRY CONSTRUCTION (Mapping 2D elements to 3D)
+        // ---------------------------------------------------------
+
+        // 1. Target Projection Wall (mapped to a large plane at x = -4)
+        const wallGeo = new THREE.PlaneGeometry(8, 8);
+        const wallMat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+        const wall = new THREE.Mesh(wallGeo, wallMat);
+        wall.position.x = -4;
+        wall.rotation.y = Math.PI / 2;
+        scene.add(wall);
+
+        // 2. The Conceptual Tree (Object reflecting light)
+        // Placed at x = +4
+        const treeGroup = new THREE.Group();
+        treeGroup.position.set(4, -1.5, 0);
+        scene.add(treeGroup);
+
+        // Tree Trunk
+        const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 2, 16);
+        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.position.y = 1;
+        treeGroup.add(trunk);
+
+        // Tree Crown (Leaves)
+        const crownGeo = new THREE.SphereGeometry(1.5, 32, 32);
+        const crownMat = new THREE.MeshLambertMaterial({ color: 0x228b22 });
+        const crown = new THREE.Mesh(crownGeo, crownMat);
+        crown.position.y = 3;
+        treeGroup.add(crown);
+
+        // 3. Pinhole Barrier (The divider in figure (b))
+        // A black plane with a hole, situated at x = 0
+        // Constructed using a Shape with a hole to allow rays to physically pass through
+        const barrierShape = new THREE.Shape();
+        barrierShape.moveTo(-5, -5);
+        barrierShape.lineTo(5, -5);
+        barrierShape.lineTo(5, 5);
+        barrierShape.lineTo(-5, 5);
+        barrierShape.lineTo(-5, -5);
+
+        const holePath = new THREE.Path();
+        holePath.absarc(0, 0, 0.15, 0, Math.PI * 2, true);
+        barrierShape.holes.push(holePath);
+
+        const barrierGeo = new THREE.ExtrudeGeometry(barrierShape, { depth: 0.05, bevelEnabled: false });
+        const barrierMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        const barrier = new THREE.Mesh(barrierGeo, barrierMat);
+        barrier.rotation.y = Math.PI / 2;
+        // Hide initially
+        barrier.visible = false;
+        scene.add(barrier);
+
+        // 4. Projected Image (The inverted tree on the wall)
+        const projectedGeo = new THREE.PlaneGeometry(3, 4);
+
+        // We create a simple canvas texture to simulate the inverted projected tree
+        const canvas = document.createElement('canvas');
+        canvas.width = 256; canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 256, 256);
+        // Draw inverted tree
+        ctx.fillStyle = '#228b22'; // crown
+        ctx.beginPath(); ctx.arc(128, 160, 60, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#8b5a2b'; // trunk
+        ctx.fillRect(110, 30, 36, 80);
+        const projTex = new THREE.CanvasTexture(canvas);
+
+        const projectedMat = new THREE.MeshBasicMaterial({ map: projTex, transparent: true, opacity: 0 });
+        const projectedPlane = new THREE.Mesh(projectedGeo, projectedMat);
+        projectedPlane.position.set(-3.99, -0.2, 0); // slightly in front of wall to avoid z-fighting
+        projectedPlane.rotation.y = Math.PI / 2;
+        scene.add(projectedPlane);
+
+        // ---------------------------------------------------------
+        // RAYS VISUALIZATION (To teach the conceptual idea)
+        // ---------------------------------------------------------
+
+        const raysGroup = new THREE.Group();
+        scene.add(raysGroup);
+
+        // Function to create a line (ray)
+        function createRay(start, end, color = 0xffff00, opacity = 0.5) {
+            const points = [start, end];
+            const geo = new THREE.BufferGeometry().setFromPoints(points);
+            const mat = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: opacity });
+            return new THREE.Line(geo, mat);
+        }
+
+        // Key Light Source Points on Object (Tree)
+        // Map points from world space considering the treeGroup offset
+        const topOfTree = new THREE.Vector3(4, 1.5, 0);   // Relative to origin (crown is at y=3 relative to tree y=-1.5)
+        const botOfTree = new THREE.Vector3(4, -1, 0);    // Bottom of trunk
+
+        // Target points on the wall without pinhole (Many scattered rays)
+        const scatterTargets = [
+            new THREE.Vector3(-4, 3, 2), new THREE.Vector3(-4, 0, -1),
+            new THREE.Vector3(-4, -2, 2), new THREE.Vector3(-4, 2, -2),
+            new THREE.Vector3(-4, -3, -1)
+        ];
+
+        // Arrays to hold different sets of rays
+        const scatteredRaysTop = [];
+        const scatteredRaysBot = [];
+        const pinholeRays = [];
+
+        // Generate Scattered Rays (Interaction 1: Why there's no image)
+        scatterTargets.forEach(target => {
+            scatteredRaysTop.push(createRay(topOfTree, target, 0x00ff00, 0.4)); // Green rays from top
+            scatteredRaysBot.push(createRay(botOfTree, target, 0x8b5a2b, 0.4)); // Brown rays from bottom
+        });
+
+        scatteredRaysTop.forEach(r => raysGroup.add(r));
+        scatteredRaysBot.forEach(r => raysGroup.add(r));
+
+        // Generate Pinhole Rays (Interaction 3: Selecting specific rays)
+        // Ray from top of tree through origin (0,0,0) to wall (x=-4)
+        // Vector = (0-4, 0-1.5, 0-0) = (-4, -1.5, 0). Intersection at x=-4 is exactly (-4, -1.5, 0)
+        const pinholeTargetTop = new THREE.Vector3(-4, -1.5, 0);
+        // Vector from bottom of tree through origin
+        // Vector = (-4, 1, 0). Intersection at x=-4 is (-4, 1, 0)
+        const pinholeTargetBot = new THREE.Vector3(-4, 1, 0);
+
+        const pinholeRayTop = createRay(topOfTree, pinholeTargetTop, 0x00ff00, 1.0);
+        const pinholeRayBot = createRay(botOfTree, pinholeTargetBot, 0x8b5a2b, 1.0);
+        pinholeRayTop.visible = false;
+        pinholeRayBot.visible = false;
+        raysGroup.add(pinholeRayTop);
+        raysGroup.add(pinholeRayBot);
+
+
+        // ---------------------------------------------------------
+        // LABELS (Concept Clarity)
+        // ---------------------------------------------------------
+        function createLabel(text, position) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            div.style.backgroundColor = 'rgba(0,0,0,0.6)';
+            div.style.color = 'white';
+            div.style.padding = '4px 8px';
+            div.style.borderRadius = '4px';
+            div.style.fontSize = '12px';
+            div.style.marginTop = '-1em';
+            const label = new CSS2DObject(div);
+            label.position.copy(position);
+            scene.add(label);
+            return label;
+        }
+
+        createLabel("Object (Tree)", new THREE.Vector3(4, 3, 0));
+        createLabel("Blank Wall", new THREE.Vector3(-4, 4, 0));
+        const labelBarrier = createLabel("Pinhole Barrier", new THREE.Vector3(0, 3, 0));
+        labelBarrier.visible = false;
+
+        // ---------------------------------------------------------
+        // INTERACTIVITY (Educational flow)
+        // ---------------------------------------------------------
+
+        // UI References
+        const btnStep1 = document.getElementById('btn-step1');
+        const btnStep2 = document.getElementById('btn-step2');
+        const btnStep3 = document.getElementById('btn-step3');
+        const btnReset = document.getElementById('btn-reset');
+        const desc = document.getElementById('desc');
+
+        function setActiveBtn(btn) {
+            [btnStep1, btnStep2, btnStep3, btnReset].forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        btnStep1.addEventListener('click', () => {
+            setActiveBtn(btnStep1);
+            desc.innerHTML = "<b>Without Pinhole:</b> Light rays from every point on the tree scatter everywhere, hitting all parts of the wall. Colors mix, and no image forms.";
+            barrier.visible = false;
+            labelBarrier.visible = false;
+
+            // Show scattered rays
+            scatteredRaysTop.forEach(r => r.visible = true);
+            scatteredRaysBot.forEach(r => r.visible = true);
+
+            // Hide pinhole elements
+            pinholeRayTop.visible = false;
+            pinholeRayBot.visible = false;
+            projectedPlane.material.opacity = 0;
+        });
+
+        btnStep2.addEventListener('click', () => {
+            setActiveBtn(btnStep2);
+            desc.innerHTML = "<b>Add a Barrier:</b> By placing an opaque barrier with a small hole (pinhole) between the object and the wall, we block most of the scattered rays.";
+            barrier.visible = true;
+            labelBarrier.visible = true;
+
+            // Show scattered rays being blocked (visual trick: make them stop at the barrier)
+            scatteredRaysTop.forEach(r => {
+                r.visible = true;
+                r.geometry.attributes.position.setXYZ(1, 0, r.geometry.attributes.position.getY(0) * 0.5, r.geometry.attributes.position.getZ(1) * 0.5); // Roughly truncate
+                r.geometry.attributes.position.needsUpdate = true;
+            });
+            scatteredRaysBot.forEach(r => {
+                r.visible = true;
+                r.geometry.attributes.position.setXYZ(1, 0, r.geometry.attributes.position.getY(0) * 0.5, r.geometry.attributes.position.getZ(1) * 0.5); // Roughly truncate
+                r.geometry.attributes.position.needsUpdate = true;
+            });
+
+            pinholeRayTop.visible = false;
+            pinholeRayBot.visible = false;
+            projectedPlane.material.opacity = 0;
+        });
+
+        btnStep3.addEventListener('click', () => {
+            setActiveBtn(btnStep3);
+            desc.innerHTML = "<b>Restricted Rays Form Image:</b> Only the rays passing straight through the pinhole reach the wall. Because straight lines cross at the pinhole, the top of the tree projects to the bottom of the wall, forming an <b>inverted image</b>.";
+            barrier.visible = true;
+            labelBarrier.visible = true;
+
+            // Hide restricted scattered rays
+            scatteredRaysTop.forEach(r => r.visible = false);
+            scatteredRaysBot.forEach(r => r.visible = false);
+
+            // Show only straight rays through the hole
+            pinholeRayTop.visible = true;
+            pinholeRayBot.visible = true;
+
+            // Reveal projection
+            projectedPlane.material.opacity = 0.9;
+        });
+
+        btnReset.addEventListener('click', () => {
+            setActiveBtn(btnStep1); // reset highlights step 1 conceptually
+            btnStep1.click();       // trigger step 1 state
+            // Reset Camera
+            camera.position.set(0, 5, 12);
+            camera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+
+            // Reset ray geometries to full length for scattered state
+            scatterTargets.forEach((target, i) => {
+                scatteredRaysTop[i].geometry.attributes.position.setXYZ(1, target.x, target.y, target.z);
+                scatteredRaysTop[i].geometry.attributes.position.needsUpdate = true;
+                scatteredRaysBot[i].geometry.attributes.position.setXYZ(1, target.x, target.y, target.z);
+                scatteredRaysBot[i].geometry.attributes.position.needsUpdate = true;
+            });
+        });
+
+        // ---------------------------------------------------------
+        // ANIMATION LOOP
+        // ---------------------------------------------------------
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+        animate();
+
+        // Responsive setup
+        window.addEventListener('resize', () => {
+            const w = container.clientWidth, h = container.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+            labelRenderer.setSize(w, h);
+        });
+    </script>
+</body>
+
+</html>
