@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Base Scene</title>
+  <style>
+    html, body, #container {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    // Orthographic camera
+    const aspect = container.clientWidth / container.clientHeight;
+    const d = 3;
+    const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 20);
+    camera.position.set(3, 3.5, 3);
+    camera.lookAt(0, 0, 0);
+    camera.zoom = 1.2;
+    camera.updateProjectionMatrix();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth, h = container.clientHeight;
+      camera.left = -d * (w/h);
+      camera.right = d * (w/h);
+      camera.updateProjectionMatrix();
+      renderer.setSize(w,h);
+    });
+  </script>
+</body>
+</html>
+
+    /* ── Floating 3D labels ──────────────────────────────────────────────────────
+       Created via addLabel(text, vec3, options).
+       Auto-projected each frame in _syncLabels().
+       Supports HTML content for sub/superscripts: 'x<sub>1</sub>'          */
+    .lbl {
+      position: absolute;
+      font-family: sans-serif;
+      font-size: 13px;
+      line-height: 1.3;
+      color: #111;
+      background: rgba(255,255,255,0.85);
+      padding: 1px 5px;
+      border-radius: 3px;
+      pointer-events: none;
+      white-space: nowrap;
+      transform: translate(-50%, -50%);   /* centre on the projected point */
+      z-index: 2;
+    }
+
+    /* ── Control panel ───────────────────────────────────────────────────────────
+       Add <button> and <label><input type="range" …> inside #ui.
+       The Reset View button is already wired below.                         */
+    #ui {
+      position: absolute; top: 10px; left: 10px;
+      display: flex; flex-direction: column; gap: 6px;
+      font-family: sans-serif; font-size: 12px;
+      background: rgba(255,255,255,0.93);
+      padding: 8px 12px; border-radius: 6px;
+      border: 1px solid #ccc;
+      z-index: 10;
+    }
+    #ui button {
+      padding: 5px 12px; font-size: 12px; cursor: pointer;
+      background: #f5f5f5; border: 1px solid #aaa; border-radius: 4px;
+    }
+    #ui button:hover { background: #e0e0e0; }
+    #ui button.active { background: #c8e6c9; border-color: #4caf50; }
+    #ui label { display: flex; flex-direction: column; gap: 2px; color: #333; }
+    #ui input[type=range] { width: 150px; }
+    #ui hr { border: none; border-top: 1px solid #ddd; margin: 2px 0; }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <!-- ADD YOUR BUTTONS / SLIDERS BELOW THIS COMMENT -->
+
+  <hr/>
+  <button id="resetBtn">↺ Reset View</button>
+</div>
+
+<script type="module">
+import * as THREE from 'https://esm.sh/three';
+import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+// ── Renderer ──────────────────────────────────────────────────────────────────
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+
+// ── Scene ─────────────────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+
+// ── Orthographic camera ───────────────────────────────────────────────────────
+// No perspective distortion — ideal for textbook geometry diagrams.
+// TUNE: increase d if geometry is large; adjust position/zoom to frame the scene.
+const d = 3;
+const camera = new THREE.OrthographicCamera(
+  -d * (canvas.clientWidth / canvas.clientHeight),
+   d * (canvas.clientWidth / canvas.clientHeight),
+   d, -d, 0.1, 100
+);
+camera.position.set(4, 4, 4);
+camera.lookAt(0, 0, 0);
+camera.zoom = 1.2;
+camera.updateProjectionMatrix();
+
+// ── OrbitControls ─────────────────────────────────────────────────────────────
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+
+// ── Reset View ────────────────────────────────────────────────────────────────
+const _homePos    = camera.position.clone();
+const _homeTarget = new THREE.Vector3(0, 0, 0);
+const _homeZoom   = camera.zoom;
+document.getElementById('resetBtn').addEventListener('click', () => {
+  camera.position.copy(_homePos);
+  controls.target.copy(_homeTarget);
+  camera.zoom = _homeZoom;
+  camera.updateProjectionMatrix();
+  controls.update();
+});
+
+// ── Label system ──────────────────────────────────────────────────────────────
+// addLabel(text, position3D [, options]) → DOM element
+//   text        : HTML string — supports '<b>', '<sub>', '<sup>', etc.
+//   position3D  : THREE.Vector3 — 3D world position to anchor the label
+//   options     : {
+//     color      : CSS colour string, default '#111'
+//     fontSize   : CSS font-size string, default '13px'
+//     bold       : boolean
+//     offset     : [dx, dy] pixel offset from the projected point (default [0,0])
+//     background : CSS background string (default semi-white)
+//   }
+// To move a label later: entry.pos.set(x, y, z)  (entry = addLabel return value)
+const _labelEntries = [];
+const _projVec      = new THREE.Vector3();
+
+function addLabel(text, position3D, options = {}) {
+  const el = document.createElement('div');
+  el.className = 'lbl';
+  if (options.color)      el.style.color      = options.color;
+  if (options.fontSize)   el.style.fontSize   = options.fontSize;
+  if (options.bold)       el.style.fontWeight = 'bold';
+  if (options.background) el.style.background = options.background;
+  el.innerHTML = text;
+  document.body.appendChild(el);
+  const entry = { el, pos: position3D.clone(), offset: options.offset || [0, 0] };
+  _labelEntries.push(entry);
+  return entry;   // caller can do: entry.pos.set(x,y,z) to reposition
+}
+
+function _syncLabels() {
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  _labelEntries.forEach(({ el, pos, offset }) => {
+    _projVec.copy(pos).project(camera);
+    el.style.left = `${  _projVec.x * 0.5 * W + 0.5 * W + offset[0]}px`;
+    el.style.top  = `${-_projVec.y * 0.5 * H + 0.5 * H + offset[1]}px`;
+  });
+}
+
+// ── Resize (ResizeObserver — fires on any container resize, not just window) ──
+new ResizeObserver(() => {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.left  = -d * (w / h);
+  camera.right =  d * (w / h);
+  camera.updateProjectionMatrix();
+}).observe(canvas);
+
+// ── Render loop ───────────────────────────────────────────────────────────────
+(function tick() {
+  requestAnimationFrame(tick);
+  controls.update();
+  _syncLabels();
+  renderer.render(scene, camera);
+})();
+
+// ════════════════════════════════════════════════════════════════════════════════
+// ADD YOUR SCENE OBJECTS, GEOMETRY, LABELS, AND INTERACTION LOGIC BELOW HERE
+// Do NOT modify anything above this line.
+// ════════════════════════════════════════════════════════════════════════════════
+
+
+</script>
+</body>
+</html>

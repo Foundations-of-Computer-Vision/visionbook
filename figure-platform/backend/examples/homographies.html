@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>Simple Camera Setup</title>
+<style>
+    body { margin: 0; overflow: hidden; font-family: sans-serif; }
+    .label {
+      position: absolute;
+      font-size: 13px;
+      color: black;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+<div style="position: absolute; top: 10px; left: 10px; background: #eee; padding: 10px; z-index: 10;">
+<label for="xSlider">Rotate X: </label>
+<input id="xSlider" max="90" min="-90" type="range" value="-70"/><br/>
+<label for="ySlider">Rotate Y: </label>
+<input id="ySlider" max="90" min="-90" type="range" value="-60"/>
+</div>
+
+<script type="module">
+import * as THREE from 'https://esm.sh/three';
+import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+
+const aspect = window.innerWidth / window.innerHeight;
+const d = 5;
+const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+camera.position.set(5, 5, 5);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+// Camera center at origin
+const camCenter = new THREE.Mesh(
+  new THREE.SphereGeometry(0.1, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0x000000 })
+);
+camCenter.position.set(0, 0, 0);
+scene.add(camCenter);
+
+// Virtual image plane at distance 1 along X-axis
+const imagePlaneWidth = 3;
+const imagePlaneHeight = 2;
+const imagePlaneGeometry = new THREE.PlaneGeometry(imagePlaneWidth, imagePlaneHeight);
+const imagePlaneMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+const imagePlane = new THREE.Mesh(imagePlaneGeometry, imagePlaneMaterial);
+
+// Add black frame to image plane
+const frameGeometry = new THREE.EdgesGeometry(imagePlaneGeometry);
+const frameMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+const frame = new THREE.LineSegments(frameGeometry, frameMaterial);
+imagePlane.add(frame);
+imagePlane.rotation.y = -Math.PI / 2;
+imagePlane.position.set(1, 0, 0);
+scene.add(imagePlane);
+
+// Add x and y green arrows to image plane from bottom-right corner
+const planeOrigin = new THREE.Vector3(1, -imagePlaneHeight / 2, imagePlaneWidth / 2);
+const xArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), planeOrigin, 1, 0x00aa00);
+const yArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), planeOrigin, 1, 0x00aa00);
+scene.add(xArrow, yArrow);
+
+// Add labels for x and y axes
+const createLabel = (text, pos) => {
+  const div = document.createElement('div');
+  div.className = 'label';
+  div.innerHTML = text;
+  document.body.appendChild(div);
+  return { div, pos };
+};
+
+const labels = [
+  createLabel('y', planeOrigin.clone().add(new THREE.Vector3(0, 1.1, 0))),
+  createLabel('x', planeOrigin.clone().add(new THREE.Vector3(0, 0, -1.1)))
+];
+
+const vector = new THREE.Vector3();
+
+// Add smaller plane at distance 3 in front of the camera and slightly lower, rotated 70 degrees around X and Y
+const smallPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(2, 1.2),
+  new THREE.MeshBasicMaterial({ color: 0xff9933, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
+);
+smallPlane.rotation.set(-Math.PI * 70 / 180, -Math.PI * 60 / 180, 0);
+smallPlane.position.set(3, -0.5, 0);
+scene.add(smallPlane);
+
+// Add black frame to small plane
+const smallFrameGeometry = new THREE.EdgesGeometry(smallPlane.geometry);
+const smallFrameMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+const smallFrame = new THREE.LineSegments(smallFrameGeometry, smallFrameMaterial);
+smallFrame.rotation.copy(smallPlane.rotation);
+smallFrame.position.copy(smallPlane.position);
+scene.add(smallFrame);
+
+// Add world coordinate axes at center of smallPlane
+const origin = smallPlane.position.clone();
+const xAxis = new THREE.Vector3(1, 0, 0).applyEuler(smallPlane.rotation).normalize();
+const yAxis = new THREE.Vector3(0, 1, 0).applyEuler(smallPlane.rotation).normalize();
+const zAxis = new THREE.Vector3(0, 0, 1).applyEuler(smallPlane.rotation).normalize();
+
+const xHelper = new THREE.ArrowHelper(xAxis, origin, 0.5, 0xff0000);
+const yHelper = new THREE.ArrowHelper(yAxis, origin, 0.5, 0xff0000);
+const zHelper = new THREE.ArrowHelper(zAxis, origin, 0.5, 0xff0000);
+scene.add(xHelper);
+scene.add(yHelper);
+scene.add(zHelper);
+
+// Add a blue point (X, Y, 0) on the plane
+const localPoint = new THREE.Vector3(0.3, 0.2, 0);
+const worldPoint = localPoint.clone().applyEuler(smallPlane.rotation).add(smallPlane.position);
+const pointGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+const pointMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+const pointMesh = new THREE.Mesh(pointGeometry, pointMaterial);
+pointMesh.position.copy(worldPoint);
+scene.add(pointMesh);
+
+// Add dashed blue line from camera center to the blue point
+const linePoints = [camCenter.position.clone(), worldPoint.clone()];
+const lineGeometry = new THREE.BufferGeometry().setFromPoints(linePoints);
+const lineMaterial = new THREE.LineDashedMaterial({ color: 0x0000ff, dashSize: 0.05, gapSize: 0.05 });
+const dashedLine = new THREE.Line(lineGeometry, lineMaterial);
+dashedLine.computeLineDistances();
+scene.add(dashedLine);
+
+// Add projected blue point on the image plane
+const dirToProject = new THREE.Vector3().subVectors(worldPoint, camCenter.position).normalize();
+const t_proj = (1 - camCenter.position.x) / dirToProject.x;
+const projectedPoint = camCenter.position.clone().add(dirToProject.multiplyScalar(t_proj));
+const projPointMesh = new THREE.Mesh(pointGeometry.clone(), pointMaterial.clone());
+projPointMesh.position.copy(projectedPoint);
+scene.add(projPointMesh);
+labels.push(createLabel('(x,y)', projectedPoint.clone().add(new THREE.Vector3(0.2, 0.2, 0))));
+labels.push(createLabel('(X,Y,0)', worldPoint.clone().add(new THREE.Vector3(0.2, 0.2, 0))));
+
+labels.push(createLabel('X', origin.clone().add(xAxis.clone().multiplyScalar(0.6))));
+labels.push(createLabel('Y', origin.clone().add(yAxis.clone().multiplyScalar(0.6))));
+labels.push(createLabel('Z', origin.clone().add(zAxis.clone().multiplyScalar(0.6))));
+
+// Dashed lines from camera center to corners of smallPlane
+smallPlane.geometry.computeBoundingBox();
+const boundingBox = smallPlane.geometry.boundingBox;
+const planeCorners = [
+  new THREE.Vector3(boundingBox.min.x, boundingBox.min.y, 0),
+  new THREE.Vector3(boundingBox.max.x, boundingBox.min.y, 0),
+  new THREE.Vector3(boundingBox.max.x, boundingBox.max.y, 0),
+  new THREE.Vector3(boundingBox.min.x, boundingBox.max.y, 0)
+];
+
+const cornerLines = [];
+const projectedCorners = [];
+
+planeCorners.forEach(corner => {
+  const worldCorner = corner.clone().applyEuler(smallPlane.rotation).add(smallPlane.position);
+
+  // Draw dashed ray from camera center to corner
+  const points = [camCenter.position.clone(), worldCorner];
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  const material = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 0.1, gapSize: 0.1 });
+  const line = new THREE.Line(geometry, material);
+  line.computeLineDistances();
+  scene.add(line);
+  cornerLines.push(line);
+
+  // Project the corner onto the image plane at x = 1
+  const dir = new THREE.Vector3().subVectors(worldCorner, camCenter.position).normalize();
+  const t = (1 - camCenter.position.x) / dir.x;
+  const projected = camCenter.position.clone().add(dir.multiplyScalar(t));
+  projectedCorners.push(new THREE.Vector2(projected.z, projected.y));
+});
+
+// Draw the projected polygon
+const shape = new THREE.Shape();
+projectedCorners.forEach((pt, i) => {
+  if (i === 0) shape.moveTo(pt.x, pt.y);
+  else shape.lineTo(pt.x, pt.y);
+});
+shape.lineTo(projectedCorners[0].x, projectedCorners[0].y); // close the shape
+
+const projectedGeometry = new THREE.ShapeGeometry(shape);
+const projectedMaterial = new THREE.MeshBasicMaterial({ color: 0xff9933, opacity: 0.3, transparent: true, side: THREE.DoubleSide });
+const projectedMesh = new THREE.Mesh(projectedGeometry, projectedMaterial);
+projectedMesh.rotation.y = -Math.PI / 2;
+projectedMesh.position.set(1.001, 0, 0); // offset slightly from image plane to avoid z-fighting
+scene.add(projectedMesh);
+
+// Add black frame to projected polygon
+const projectedEdges = new THREE.EdgesGeometry(projectedGeometry);
+const projectedFrame = new THREE.LineSegments(projectedEdges, new THREE.LineBasicMaterial({ color: 0x000000 }));
+projectedFrame.rotation.y = -Math.PI / 2;
+projectedFrame.position.set(1.001, 0, 0);
+scene.add(projectedFrame);
+
+function updateLabels() {
+  labels.forEach(({ div, pos }) => {
+    vector.copy(pos).project(camera);
+    const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+    div.style.left = `${x}px`;
+    div.style.top = `${y}px`;
+  });
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  updateLabels();
+  renderer.render(scene, camera);
+}
+
+animate();
+
+window.addEventListener('resize', () => {
+  const aspect = window.innerWidth / window.innerHeight;
+  camera.left = -d * aspect;
+  camera.right = d * aspect;
+  camera.top = d;
+  camera.bottom = -d;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+document.getElementById('xSlider').addEventListener('input', updateScene);
+document.getElementById('ySlider').addEventListener('input', updateScene);
+
+function updateScene() {
+  const xDeg = parseFloat(document.getElementById('xSlider').value);
+  const yDeg = parseFloat(document.getElementById('ySlider').value);
+  const xRad = THREE.MathUtils.degToRad(xDeg);
+  const yRad = THREE.MathUtils.degToRad(yDeg);
+
+  const newEuler = new THREE.Euler(xRad, yRad, 0);
+
+  smallPlane.rotation.copy(newEuler);
+  smallFrame.rotation.copy(newEuler);
+
+  const origin = smallPlane.position.clone();
+  const xAxis = new THREE.Vector3(1, 0, 0).applyEuler(newEuler).normalize();
+  const yAxis = new THREE.Vector3(0, 1, 0).applyEuler(newEuler).normalize();
+  const zAxis = new THREE.Vector3(0, 0, 1).applyEuler(newEuler).normalize();
+
+  xHelper.setDirection(xAxis);
+  xHelper.position.copy(origin);
+  yHelper.setDirection(yAxis);
+  yHelper.position.copy(origin);
+  zHelper.setDirection(zAxis);
+  zHelper.position.copy(origin);
+
+  const localPoint = new THREE.Vector3(0.3, 0.2, 0);
+  const worldPoint = localPoint.clone().applyEuler(newEuler).add(smallPlane.position);
+  pointMesh.position.copy(worldPoint);
+
+  dashedLine.geometry.setFromPoints([camCenter.position.clone(), worldPoint]);
+  dashedLine.computeLineDistances();
+
+  const dirToProject = new THREE.Vector3().subVectors(worldPoint, camCenter.position).normalize();
+  const t_proj = (1 - camCenter.position.x) / dirToProject.x;
+  const projectedPoint = camCenter.position.clone().add(dirToProject.multiplyScalar(t_proj));
+  projPointMesh.position.copy(projectedPoint);
+
+  labels[2].pos.copy(projectedPoint.clone().add(new THREE.Vector3(0.2, 0.2, 0)));
+  labels[3].pos.copy(worldPoint.clone().add(new THREE.Vector3(0.2, 0.2, 0)));
+  labels[4].pos.copy(origin.clone().add(xAxis.clone().multiplyScalar(0.6)));
+  labels[5].pos.copy(origin.clone().add(yAxis.clone().multiplyScalar(0.6)));
+  labels[6].pos.copy(origin.clone().add(zAxis.clone().multiplyScalar(0.6)));
+
+  const corners = [
+    new THREE.Vector3(-1, -0.6, 0),
+    new THREE.Vector3(1, -0.6, 0),
+    new THREE.Vector3(1, 0.6, 0),
+    new THREE.Vector3(-1, 0.6, 0)
+  ];
+
+  const projected = [];
+  corners.forEach(corner => {
+    const worldCorner = corner.clone().applyEuler(newEuler).add(smallPlane.position);
+    const dir = new THREE.Vector3().subVectors(worldCorner, camCenter.position).normalize();
+    const t = (1 - camCenter.position.x) / dir.x;
+    projected.push(camCenter.position.clone().add(dir.multiplyScalar(t)));
+  });
+
+  const shape = new THREE.Shape();
+  projected.forEach((pt, i) => {
+    if (i === 0) shape.moveTo(pt.z, pt.y);
+    else shape.lineTo(pt.z, pt.y);
+  });
+  shape.lineTo(projected[0].z, projected[0].y);
+
+  cornerLines.forEach((line, i) => {
+    const worldCorner = corners[i].clone().applyEuler(newEuler).add(smallPlane.position);
+    const points = [camCenter.position.clone(), worldCorner];
+    line.geometry.setFromPoints(points);
+    line.computeLineDistances();
+  });
+
+
+  const newGeo = new THREE.ShapeGeometry(shape);
+  projectedMesh.geometry.dispose();
+  projectedMesh.geometry = newGeo;
+
+  const newEdges = new THREE.EdgesGeometry(newGeo);
+  projectedFrame.geometry.dispose();
+  projectedFrame.geometry = newEdges;
+}
+</script>
+</body>
+</html>
