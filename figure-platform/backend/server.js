@@ -4,9 +4,49 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const OpenAI = require('openai').default;
+const puppeteer = require('puppeteer');
+const { buildEvalPrompt, finaliseEval } = require('./critic');
+
+// ── Screenshot helper ────────────────────────────────────────────────────────────
+let _browser = null;
+async function getBrowser() {
+  if (!_browser || !_browser.connected) {
+    _browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    });
+  }
+  return _browser;
+}
+
+async function screenshotHtml(html, waitMs = 2800) {
+  let page;
+  try {
+    const browser = await getBrowser();
+    page = await browser.newPage();
+    await page.setViewport({ width: 900, height: 600 });
+    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await new Promise(r => setTimeout(r, waitMs));
+    const shot = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 82 });
+    return { data: shot, mediaType: 'image/jpeg' };
+  } catch (err) {
+    console.error('Screenshot failed:', err.message);
+    return null;
+  } finally {
+    if (page) await page.close().catch(() => {});
+  }
+}
 
 const app = express();
 const PORT = 3001;
+
+// ── Paths ─────────────────────────────────────────────────────────────────────
+const EXPERIMENTS_DIR    = path.join(__dirname, '..', '..', 'prompt_experiments');
+const FIGURES_DIR        = path.join(__dirname, '..', '..', 'figures');
+
+// ── API generation config (update when prompt or scaffold changes) ─────────────
+const CURRENT_EXPERIMENT = 'base_scene_robust';  // experiment label for all API-generated figures
+const CURRENT_MODEL      = 'gpt-4o';             // model used by the generator
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({ origin: 'http://localhost:3000' }));
@@ -170,26 +210,76 @@ app.post('/api/generate', async (req, res) => {
     const figureId = makeId();
     const timestamp = new Date().toISOString();
 
+    // Capture a screenshot of the generated figure as the thumbnail
+    const shot = await screenshotHtml(html);
+
     // Save result to disk
     const record = {
       id: figureId,
       filename,
-      base64thumb: base64,
+      base64thumb: shot ? shot.data : base64,        // thumbnail shown in UI (Puppeteer screenshot)
+      mediaType: shot ? shot.mediaType : (mediaType || 'image/png'),
+      source_base64: base64,                         // original input image — used by evaluator
+      source_media_type: mediaType,
       html,
       timestamp,
       source: 'api',
+      model: CURRENT_MODEL,
+      experiment: CURRENT_EXPERIMENT,
     };
-    fs.writeFileSync(
-      path.join(RESULTS_DIR, `${figureId}.json`),
-      JSON.stringify(record, null, 2)
-    );
+    const recordPath = path.join(RESULTS_DIR, `${figureId}.json`);
+    fs.writeFileSync(recordPath, JSON.stringify(record, null, 2));
 
-    return res.json({ html, figureId, timestamp });
+    // Auto-evaluate immediately after generation
+    let evaluation = null;
+    try {
+      evaluation = await runEvaluation(record, recordPath);
+      console.log(`Auto-eval for ${figureId}: overall=${evaluation.overall_average}`);
+    } catch (evalErr) {
+      console.warn('Auto-eval failed (result saved without scores):', evalErr.message);
+    }
+
+    return res.json({ html, figureId, timestamp, evaluation });
   } catch (err) {
     console.error('OpenAI error:', err?.message || err);
     return res.status(500).json({ error: err?.message || 'Unknown error from OpenAI.' });
   }
 });
+
+// ── Chapter inference ───────────────────────────────────────────────────────
+// 1. File lookup: search figures/<chDir>/<stem>.<ext>
+// 2. Name-based: chapter directory name appears as substring in figure stem
+//    e.g. "homography_plane_geometry2" → "homography"
+function inferChapter(stem) {
+  if (!stem || !fs.existsSync(FIGURES_DIR)) return null;
+
+  // Hardcoded hints for figures whose source image isn't in figures/ by exact name
+  const KNOWN = {
+    pinhole: 'imaging',
+    brdf:    'imaging',
+  };
+  if (KNOWN[stem.toLowerCase()]) return KNOWN[stem.toLowerCase()];
+
+  let chapters;
+  try { chapters = fs.readdirSync(FIGURES_DIR).filter(d => {
+    try { return fs.statSync(path.join(FIGURES_DIR, d)).isDirectory(); } catch { return false; }
+  }); } catch { return null; }
+
+  // 1. Exact file lookup
+  for (const ch of chapters) {
+    for (const ext of ['png', 'jpg', 'jpeg', 'PNG', 'JPG', 'eps']) {
+      if (fs.existsSync(path.join(FIGURES_DIR, ch, `${stem}.${ext}`))) return ch;
+    }
+  }
+
+  // 2. Chapter name is a substring of the figure stem (prefer longer chapter names)
+  const byLen = [...chapters].sort((a, b) => b.length - a.length);
+  for (const ch of byLen) {
+    if (stem.toLowerCase().includes(ch.toLowerCase())) return ch;
+  }
+
+  return null;
+}
 
 // ── GET /api/history ──────────────────────────────────────────────────────────
 app.get('/api/history', (req, res) => {
@@ -199,8 +289,13 @@ app.get('/api/history', (req, res) => {
       .map((f) => {
         try {
           const raw = fs.readFileSync(path.join(RESULTS_DIR, f), 'utf-8');
-          const { id, filename, base64thumb, timestamp, source } = JSON.parse(raw);
-          return { id, filename, base64thumb, timestamp, source: source || 'api' };
+          const parsed = JSON.parse(raw);
+          const { id, filename, base64thumb, timestamp, source, evaluation } = parsed;
+          const stem = filename ? filename.replace(/\.[^.]+$/, '') : '';
+          const chapter = inferChapter(stem);
+          const model = parsed.model || CURRENT_MODEL;
+          const experiment = parsed.experiment || CURRENT_EXPERIMENT;
+          return { id, filename, base64thumb, timestamp, source: source || 'api', model, experiment, evaluation: evaluation || null, chapter };
         } catch {
           return null;
         }
@@ -247,12 +342,87 @@ app.post('/api/save', (req, res) => {
     html,
     timestamp,
     source: source || 'chat',
+    model: req.body.model || CURRENT_MODEL,
+    experiment: req.body.experiment || CURRENT_EXPERIMENT,
   };
   fs.writeFileSync(
     path.join(RESULTS_DIR, `${id}.json`),
     JSON.stringify(record, null, 2)
   );
   return res.json({ id, timestamp });
+});
+
+// ── buildEvalPrompt + finaliseEval live in critic.js ─────────────────────────
+// Edit critic.js to change failure modes, score rubrics, or derived metrics.
+
+// ── Shared evaluation runner ─────────────────────────────────────────────────
+// Calls the evaluator model, finalises scores, persists to the record file,
+// and returns the evaluation object. Throws on error.
+async function runEvaluation(record, filePath) {
+  const { html, source_base64, source_media_type, base64thumb } = record;
+  if (!html) throw new Error('No HTML found for this result.');
+
+  // Always evaluate against the original source image, not the generated screenshot
+  const evalImage     = source_base64 || base64thumb;
+  const evalMediaType = source_media_type || 'image/png';
+
+  const userContent = [
+    ...(evalImage
+      ? [{ type: 'image_url', image_url: { url: `data:${evalMediaType};base64,${evalImage}` } }]
+      : []),
+    {
+      type: 'text',
+      text: `Here is the generated HTML code to evaluate:\n\n${html}\n\nOutput ONLY the JSON evaluation object.`,
+    },
+  ];
+
+  const response = await getOpenAI().chat.completions.create({
+    model: 'gpt-5.4',
+    max_completion_tokens: 512,
+    messages: [
+      { role: 'system', content: buildEvalPrompt() },
+      { role: 'user', content: userContent },
+    ],
+  });
+
+  let content = response.choices[0].message.content || '';
+  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) content = fenced[1].trim();
+  content = content.trim();
+
+  let evaluation;
+  try { evaluation = JSON.parse(content); }
+  catch { throw new Error('Evaluator did not return valid JSON: ' + content.slice(0, 200)); }
+
+  evaluation = finaliseEval(evaluation);
+
+  // Persist back to disk
+  record.evaluation = evaluation;
+  if (filePath) fs.writeFileSync(filePath, JSON.stringify(record, null, 2));
+
+  return evaluation;
+}
+
+// ── POST /api/evaluate ────────────────────────────────────────────────────────
+// Manual re-evaluation endpoint (used for existing results without scores).
+app.post('/api/evaluate', async (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ error: 'id is required.' });
+
+  const filePath = path.join(RESULTS_DIR, `${id}.json`);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Result not found.' });
+
+  let record;
+  try { record = JSON.parse(fs.readFileSync(filePath, 'utf-8')); }
+  catch { return res.status(500).json({ error: 'Failed to read result file.' }); }
+
+  try {
+    const evaluation = await runEvaluation(record, filePath);
+    return res.json(evaluation);
+  } catch (err) {
+    console.error('Evaluation error:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'Unknown error during evaluation.' });
+  }
 });
 
 // ── DELETE /api/result/:id ────────────────────────────────────────────────────
@@ -266,6 +436,238 @@ app.delete('/api/result/:id', (req, res) => {
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/base-scaffold ────────────────────────────────────────────────────
+app.get('/api/base-scaffold', (req, res) => {
+  res.json({ content: BASE_SCAFFOLD });
+});
+
+// ── GET /api/thumb/:id  — screenshot of a saved API result (cached as .thumb.b64) ─
+app.get('/api/thumb/:id', async (req, res) => {
+  const id = req.params.id.replace(/[^a-z0-9_-]/gi, '');
+  const jsonPath = path.join(RESULTS_DIR, `${id}.json`);
+  if (!fs.existsSync(jsonPath)) return res.status(404).json({ error: 'Not found' });
+
+  const thumbPath = path.join(RESULTS_DIR, `${id}.thumb.b64`);
+  if (fs.existsSync(thumbPath)) {
+    return res.json({ data: fs.readFileSync(thumbPath, 'utf-8'), mediaType: 'image/jpeg' });
+  }
+
+  try {
+    const record = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+    if (!record.html) return res.status(400).json({ error: 'No HTML in record' });
+    const shot = await screenshotHtml(record.html);
+    if (!shot) return res.status(500).json({ error: 'Screenshot failed' });
+    fs.writeFileSync(thumbPath, shot.data);
+    return res.json({ data: shot.data, mediaType: shot.mediaType });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/experiments/thumb  — lazy screenshot of an experiment HTML (cached) ────
+app.get('/api/experiments/thumb', async (req, res) => {
+  const p = path.resolve(req.query.path || '');
+  if (!p.startsWith(EXPERIMENTS_DIR) || !fs.existsSync(p))
+    return res.status(404).json({ error: 'Not found' });
+
+  const thumbPath = p.replace(/\.html$/, '.thumb.b64');
+  if (fs.existsSync(thumbPath)) {
+    return res.json({ data: fs.readFileSync(thumbPath, 'utf-8'), mediaType: 'image/jpeg' });
+  }
+
+  try {
+    const html = fs.readFileSync(p, 'utf-8');
+    const shot = await screenshotHtml(html);
+    if (!shot) return res.status(500).json({ error: 'Screenshot failed' });
+    fs.writeFileSync(thumbPath, shot.data);
+    return res.json({ data: shot.data, mediaType: shot.mediaType });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/experiments/html  — serve raw HTML for an experiment figure ──────
+app.get('/api/experiments/html', (req, res) => {
+  const p = path.resolve(req.query.path || '');
+  if (!p.startsWith(EXPERIMENTS_DIR) || !fs.existsSync(p)) return res.status(404).send('Not found');
+  res.setHeader('Content-Type', 'text/html');
+  res.send(fs.readFileSync(p, 'utf-8'));
+});
+
+// ── GET /api/experiments/image  — return base64 of source image ───────────────
+app.get('/api/experiments/image', (req, res) => {
+  const p = path.resolve(req.query.path || '');
+  if (!p.startsWith(FIGURES_DIR) || !fs.existsSync(p)) return res.status(404).send('');
+  res.send(fs.readFileSync(p).toString('base64'));
+});
+
+// ── GET /api/experiments/imageurl  — serve source image directly ──────────────
+app.get('/api/experiments/imageurl', (req, res) => {
+  const p = path.resolve(req.query.path || '');
+  if (!p.startsWith(FIGURES_DIR) || !fs.existsSync(p)) return res.status(404).send('');
+  res.sendFile(p);
+});
+
+// ── Experiment helpers ────────────────────────────────────────────────────────
+
+// Walk prompt_experiments/ and return structured index:
+// [ { experiment, prompt, models: [ { model, figures: [ { name, htmlPath, imagePath } ] } ] } ]
+function scanExperiments() {
+  if (!fs.existsSync(EXPERIMENTS_DIR)) return [];
+  const experiments = [];
+
+  for (const expName of fs.readdirSync(EXPERIMENTS_DIR).sort()) {
+    const expDir = path.join(EXPERIMENTS_DIR, expName);
+    if (!fs.statSync(expDir).isDirectory()) continue;
+
+    // Read prompt text (prompt.txt or prompt_with_base_code.txt)
+    let prompt = '';
+    for (const pf of ['prompt.txt', 'prompt_with_base_code.txt']) {
+      const pPath = path.join(expDir, pf);
+      if (fs.existsSync(pPath)) { prompt = fs.readFileSync(pPath, 'utf-8').trim(); break; }
+    }
+
+    const models = [];
+    for (const entry of fs.readdirSync(expDir).sort()) {
+      const modelDir = path.join(expDir, entry);
+      if (!fs.statSync(modelDir).isDirectory()) continue;
+
+      const figures = [];
+
+      // Figures may be directly in modelDir or in chapter subdirs (imaging/, homographies/)
+      const collectHtml = (dir, chapter) => {
+        for (const f of fs.readdirSync(dir).sort()) {
+          if (!f.endsWith('.html')) continue;
+          const figName = f.replace(/\.html$/, '');
+          const htmlPath = path.join(dir, f);
+
+          // Find matching source image: check figures/<chapter>/<name>.png|jpg
+          let imagePath = null;
+          const chapterToSearch = chapter || figName;
+          for (const ext of ['png', 'jpg', 'jpeg', 'PNG', 'JPG']) {
+            // Try figures/<chapter>/<name>.<ext>
+            if (chapter) {
+              const candidate = path.join(FIGURES_DIR, chapter, `${figName}.${ext}`);
+              if (fs.existsSync(candidate)) { imagePath = candidate; break; }
+            }
+            // Try all chapter dirs
+            for (const chDir of fs.readdirSync(FIGURES_DIR)) {
+              const candidate = path.join(FIGURES_DIR, chDir, `${figName}.${ext}`);
+              if (fs.existsSync(candidate)) { imagePath = candidate; break; }
+            }
+            if (imagePath) break;
+          }
+
+          const resolvedChapter = chapter || inferChapter(figName);
+          figures.push({ name: figName, chapter: resolvedChapter, htmlPath, imagePath });
+        }
+      };
+
+      const modelEntries = fs.readdirSync(modelDir);
+      const hasSubdirs = modelEntries.some(e => fs.statSync(path.join(modelDir, e)).isDirectory());
+
+      if (hasSubdirs) {
+        for (const sub of modelEntries.sort()) {
+          const subDir = path.join(modelDir, sub);
+          if (fs.statSync(subDir).isDirectory()) collectHtml(subDir, sub);
+        }
+      } else {
+        collectHtml(modelDir, null);
+      }
+
+      if (figures.length > 0) models.push({ model: entry, figures });
+    }
+
+    if (models.length > 0) experiments.push({ experiment: expName, prompt, models });
+  }
+
+  return experiments;
+}
+
+// Load evaluation cache for experiment figures (stored alongside the html as <name>.eval.json)
+function loadExpEval(htmlPath) {
+  const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
+  if (!fs.existsSync(evalPath)) return null;
+  try { return JSON.parse(fs.readFileSync(evalPath, 'utf-8')); } catch { return null; }
+}
+
+// ── GET /api/experiments ──────────────────────────────────────────────────────
+app.get('/api/experiments', (req, res) => {
+  try {
+    const tree = scanExperiments();
+    // Attach cached evaluations
+    for (const exp of tree) {
+      for (const m of exp.models) {
+        for (const fig of m.figures) {
+          fig.evaluation = loadExpEval(fig.htmlPath);
+        }
+      }
+    }
+    return res.json(tree);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/experiments/evaluate ───────────────────────────────────────────
+// Evaluate a single experiment figure in-place; cache result as <name>.eval.json
+app.post('/api/experiments/evaluate', async (req, res) => {
+  const { htmlPath, imagePath } = req.body;
+  if (!htmlPath) return res.status(400).json({ error: 'htmlPath required.' });
+
+  const absHtml = path.resolve(htmlPath);
+  if (!fs.existsSync(absHtml)) return res.status(404).json({ error: 'HTML file not found.' });
+
+  const html = fs.readFileSync(absHtml, 'utf-8');
+  let base64thumb = null;
+  if (imagePath) {
+    const absImg = path.resolve(imagePath);
+    if (fs.existsSync(absImg)) base64thumb = fs.readFileSync(absImg).toString('base64');
+  }
+
+  // Reuse same evaluation prompt from /api/evaluate
+  const evalSystemPrompt = buildEvalPrompt();
+
+  try {
+    const userContent = [
+      ...(base64thumb ? [{ type: 'image_url', image_url: { url: `data:image/png;base64,${base64thumb}` } }] : []),
+      { type: 'text', text: `Here is the generated HTML code to evaluate:\n\n${html}\n\nOutput ONLY the JSON evaluation object.` },
+    ];
+
+    const response = await getOpenAI().chat.completions.create({
+      model: 'gpt-5.4',
+      max_completion_tokens: 512,
+      messages: [
+        { role: 'system', content: evalSystemPrompt },
+        { role: 'user', content: userContent },
+      ],
+    });
+
+    let content = response.choices[0].message.content || '';
+    const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced) content = fenced[1].trim();
+    content = content.trim();
+
+    let evaluation;
+    try { evaluation = JSON.parse(content); }
+    catch { return res.status(502).json({ error: 'Model did not return valid JSON.', raw: content.slice(0, 300) }); }
+
+    const scoreKeys = ['geometry_accuracy', 'interactivity_usability', 'faithfulness', 'label_quality', 'concept_accuracy'];
+    for (const key of scoreKeys) evaluation[key] = Math.min(5, Math.max(1, Math.round(Number(evaluation[key]) || 3)));
+
+    evaluation.visual_aesthetics = Math.round(((evaluation.geometry_accuracy + evaluation.faithfulness + evaluation.label_quality) / 3) * 10) / 10;
+    evaluation.overall_average = Math.round(((evaluation.geometry_accuracy + evaluation.interactivity_usability + evaluation.faithfulness + evaluation.label_quality + evaluation.concept_accuracy) / 5) * 10) / 10;
+
+    // Cache alongside the HTML file
+    const evalPath = absHtml.replace(/\.html$/, '.eval.json');
+    fs.writeFileSync(evalPath, JSON.stringify(evaluation, null, 2));
+
+    return res.json(evaluation);
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || 'Unknown error.' });
   }
 });
 
