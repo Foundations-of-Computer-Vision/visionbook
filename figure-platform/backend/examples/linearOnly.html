@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Linear Mapping</title>
+  <style>
+    html, body, #container {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #fff;
+    }
+    .ui-panel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255,255,255,0.9);
+      padding: 8px;
+      border-radius: 4px;
+      font-family: sans-serif;
+      z-index: 5;
+    }
+    .ui-panel label {
+      font-size: 12px;
+      display: block;
+      margin: 4px 0 0;
+    }
+    .title {
+      position: absolute;
+      top: 20px;
+      width: 100%;
+      text-align: center;
+      font-size: 28px;
+      font-family: serif;
+      font-weight: bold;
+      color: black;
+      pointer-events: none;
+    }
+    .label {
+      position: absolute;
+      font-family: sans-serif;
+      font-weight: bold;
+      color: black;
+      pointer-events: none;
+    }
+    .xin  { font-size: 21px; }
+    .xout { font-size: 21px; }
+  </style>
+</head>
+<body>
+  <div id="container"></div>
+  <div class="title">linear</div>
+  <div class="label xin" id="labelIn"><b>x<sub>in</sub></b></div>
+  <div class="label xout" id="labelOut"><b>x<sub>out</sub></b></div>
+  <div class="ui-panel">
+    <label>Rotate Y (°): <input id="rotY" type="range" min="-90" max="90" value="30"/></label>
+    <label>Scale X: <input id="sX" type="range" min="0.2" max="2" step="0.05" value="1.3"/></label>
+    <label>Scale Z: <input id="sZ" type="range" min="0.2" max="2" step="0.05" value="1.2"/></label>
+    <label>Bias X: <input id="bX" type="range" min="-1" max="1" step="0.05" value="-0.7"/></label>
+    <label>Bias Z: <input id="bZ" type="range" min="-1" max="1" step="0.05" value="0"/></label>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://esm.sh/three';
+    import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+    const container = document.getElementById('container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    const aspect = container.clientWidth / container.clientHeight;
+    const d = 3;
+    const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 20);
+    camera.position.set(3, 3.5, 3);
+    camera.lookAt(0, 1.25, 0);
+    camera.zoom = 1;
+    camera.updateProjectionMatrix();
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    const planeSize = 2.5;
+    const Y1 = -1.6, Y2 = 1;
+    const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+    const planeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+    const edgeGeo = new THREE.EdgesGeometry(planeGeo);
+    const thickEdgeMat = new THREE.LineBasicMaterial({ color: 0x000000 });
+
+    function addPlane(y) {
+      const mesh = new THREE.Mesh(planeGeo, planeMat);
+      mesh.position.y = y;
+      mesh.rotation.x = -Math.PI / 2;
+      scene.add(mesh);
+
+      const edges = new THREE.LineSegments(edgeGeo, thickEdgeMat);
+      edges.position.y = y;
+      edges.rotation.x = -Math.PI / 2;
+      scene.add(edges);
+
+      const dashMat = new THREE.LineDashedMaterial({ color: 0x888888, dashSize: 0.05, gapSize: 0.025 });
+      const len = planeSize / 2;
+
+      const hGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-len, y + 0.001, 0),
+        new THREE.Vector3(len, y + 0.001, 0)
+      ]);
+      const vGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, y + 0.001, -len),
+        new THREE.Vector3(0, y + 0.001, len)
+      ]);
+
+      const hLine = new THREE.Line(hGeo, dashMat.clone());
+      const vLine = new THREE.Line(vGeo, dashMat.clone());
+      hLine.computeLineDistances();
+      vLine.computeLineDistances();
+      scene.add(hLine, vLine);
+    }
+
+    addPlane(Y1);
+    addPlane(Y2);
+
+    const frameMat = new THREE.LineDashedMaterial({ color: 0x888888, dashSize: 0.05, gapSize: 0.025 });
+    const corners = [
+      [-planeSize / 2, -planeSize / 2],
+      [planeSize / 2, -planeSize / 2],
+      [planeSize / 2, planeSize / 2],
+      [-planeSize / 2, planeSize / 2],
+    ];
+
+    const ptG = new THREE.SphereGeometry(0.022, 8, 8);
+    const redM = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+    const blackDotMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    const lnM = new THREE.LineDashedMaterial({ color: 0xff4444, dashSize: 0.03, gapSize: 0.03 });
+
+    const rotY = document.getElementById('rotY');
+    const sX = document.getElementById('sX');
+    const sZ = document.getElementById('sZ');
+    const bX = document.getElementById('bX');
+    const bZ = document.getElementById('bZ');
+
+    let group;
+    let cornerLines = [];
+
+    const N = 24;
+    let inputPoints = [];
+    for (let i = 0; i < N; i++) {
+      for (let j = 0; j < N; j++) {
+        let x = -0.8 + 1.6 * i / (N - 1) + (Math.random() - 0.5) * 0.15;
+        let z = -0.8 + 1.6 * j / (N - 1) + (Math.random() - 0.5) * 0.15;
+        if (Math.random() > Math.exp(-Math.hypot(x, z) * 2)) continue;
+        inputPoints.push(new THREE.Vector3(x, Y1, z));
+      }
+    }
+
+    function drawMapping() {
+      if (group) scene.remove(group);
+      group = new THREE.Group(); scene.add(group);
+      cornerLines.forEach(line => scene.remove(line));
+      cornerLines = [];
+
+      const theta = THREE.MathUtils.degToRad(parseFloat(rotY.value));
+      const wX = parseFloat(sX.value), wZ = parseFloat(sZ.value);
+      const biasX = parseFloat(bX.value), biasZ = parseFloat(bZ.value);
+      const cos = Math.cos(theta), sin = Math.sin(theta);
+
+      let topCorners = [];
+      corners.forEach(([x, z]) => {
+        const xOut = (x * cos - z * sin) * wX + biasX;
+        const zOut = (x * sin + z * cos) * wZ + biasZ;
+        topCorners.push(new THREE.Vector3(xOut, Y2, zOut));
+      });
+
+      for (let i = 0; i < 4; i++) {
+        const [x, z] = corners[i];
+        const bottom = new THREE.Vector3(x, Y1, z);
+        const top = topCorners[i];
+        const geo = new THREE.BufferGeometry().setFromPoints([bottom, top]);
+        const line = new THREE.Line(geo, frameMat.clone());
+        line.computeLineDistances();
+        scene.add(line);
+        cornerLines.push(line);
+      }
+
+      topCorners.forEach(pos => {
+        const dot = new THREE.Mesh(ptG, blackDotMat);
+        dot.position.copy(pos);
+        group.add(dot);
+      });
+
+      for (let i = 0; i < 4; i++) {
+        const a = topCorners[i];
+        const b = topCorners[(i + 1) % 4];
+        const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+        const line = new THREE.Line(geo, frameMat.clone());
+        line.computeLineDistances();
+        group.add(line);
+      }
+
+      for (let pIn of inputPoints) {
+        let x0 = pIn.x, z0 = pIn.z;
+        let x1 = (x0 * cos - z0 * sin) * wX + biasX;
+        let z1 = (x0 * sin + z0 * cos) * wZ + biasZ;
+        const pOut = new THREE.Vector3(x1, Y2, z1);
+
+        const dotIn = new THREE.Mesh(ptG, redM);
+        const dotOut = new THREE.Mesh(ptG, redM);
+        dotIn.position.copy(pIn);
+        dotOut.position.copy(pOut);
+        group.add(dotIn, dotOut);
+
+        const geo = new THREE.BufferGeometry().setFromPoints([pIn, pOut]);
+        const line = new THREE.Line(geo, lnM.clone());
+        line.computeLineDistances();
+        group.add(line);
+      }
+    }
+
+    [rotY, sX, sZ, bX, bZ].forEach(el => el.addEventListener('input', drawMapping));
+    drawMapping();
+
+    const labelIn = document.getElementById('labelIn');
+    const labelOut = document.getElementById('labelOut');
+    const posIn = new THREE.Vector3(-1.7, Y1, 1.25);
+    const posOut = new THREE.Vector3(-1.7, Y2, 1.25);
+    const vec = new THREE.Vector3();
+
+    function updateLabels() {
+      [[labelIn, posIn], [labelOut, posOut]].forEach(([d, p]) => {
+        vec.copy(p).project(camera);
+        d.style.left = `${(vec.x * 0.5 + 0.5) * innerWidth}px`;
+        d.style.top = `${(-vec.y * 0.5 + 0.5) * innerHeight}px`;
+      });
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      updateLabels();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth, h = container.clientHeight;
+      renderer.setSize(w, h);
+      camera.left = -d * (w / h);
+      camera.right = d * (w / h);
+      camera.updateProjectionMatrix();
+    });
+  </script>
+</body>
+</html>
