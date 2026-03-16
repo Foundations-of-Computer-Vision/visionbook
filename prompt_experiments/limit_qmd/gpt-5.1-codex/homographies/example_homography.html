@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Interactive Homography Grid</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap');
+
+        :root {
+            color-scheme: only light;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+            background: #fdfbf7;
+            color: #0f172a;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 14px;
+            padding: 16px 18px;
+            width: min(360px, calc(100vw - 40px));
+            box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
+        }
+
+        #ui h1 {
+            margin: 0 0 10px;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+
+        input[type='range'] {
+            width: 100%;
+            margin-top: 6px;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        button {
+            flex: 1 1 150px;
+            padding: 8px 10px;
+            border: none;
+            border-radius: 10px;
+            background: #0f172a;
+            color: #fff;
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            background: #1f2a44;
+        }
+
+        #message {
+            font-size: 14px;
+            line-height: 1.4;
+            min-height: 40px;
+            margin: 6px 0 0;
+        }
+
+        .label {
+            position: absolute;
+            z-index: 5;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.85);
+            color: #fff;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        #labelLine {
+            background: rgba(217, 83, 79, 0.95);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <h1>Homography Perspective Lab</h1>
+        <label>Plane tilt (homography strength)
+            <input type="range" id="tiltControl" min="0" max="1.4" step="0.01" />
+        </label>
+        <div class="controls">
+            <button id="applyBtn">Apply homography</button>
+            <button id="toggleLineBtn">Toggle colinear line</button>
+            <button id="demoBtn">Run guided demo</button>
+            <button id="resetBtn">Reset to textbook view</button>
+        </div>
+        <p id="message">Tilt the right grid to see how a planar transformation warps the square into a trapezoid while
+            lines remain straight.</p>
+    </div>
+    <div class="label" id="labelOriginal">Original grid (front view)</div>
+    <div class="label" id="labelHomography">Homography result (tilted plane)</div>
+    <div class="label" id="labelLine">Colinear row remains straight</div>
+    <script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+  }
+}
+</script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // -------------------------------------------------------------------------
+        // Scene setup keeps the camera close to the textbook illustration framing.
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf5f2ec);
+
+        const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 100);
+        const defaultCameraPosition = new THREE.Vector3(0, 4, 12);
+        camera.position.copy(defaultCameraPosition);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 0, 0);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.45);
+        dirLight.position.set(5, 9, 6);
+        scene.add(dirLight);
+
+        // -------------------------------------------------------------------------
+        // UI elements drive the educational interactions.
+        const overlayMessage = document.getElementById('message');
+        const tiltControl = document.getElementById('tiltControl');
+        const applyBtn = document.getElementById('applyBtn');
+        const toggleLineBtn = document.getElementById('toggleLineBtn');
+        const demoBtn = document.getElementById('demoBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        const labels = [
+            { element: document.getElementById('labelOriginal'), anchor: new THREE.Object3D(), requiresHighlight: false },
+            { element: document.getElementById('labelHomography'), anchor: new THREE.Object3D(), requiresHighlight: false },
+            { element: document.getElementById('labelLine'), anchor: new THREE.Object3D(), requiresHighlight: true }
+        ];
+
+        // -------------------------------------------------------------------------
+        // Converts the textbook's 2D grids into 3D planes with wireframe lattices.
+        function createGridPlane(colorHex) {
+            const group = new THREE.Group();
+            const geometry = new THREE.PlaneGeometry(4, 4, 4, 4);
+
+            // Semi-transparent mesh makes the planar surface legible when viewed in 3D.
+            const fill = new THREE.Mesh(
+                geometry,
+                new THREE.MeshBasicMaterial({
+                    color: new THREE.Color(colorHex).lerp(new THREE.Color(0xffffff), 0.7),
+                    transparent: true,
+                    opacity: 0.25,
+                    side: THREE.DoubleSide
+                })
+            );
+            group.add(fill);
+
+            const lattice = new THREE.LineSegments(
+                new THREE.WireframeGeometry(geometry),
+                new THREE.LineBasicMaterial({ color: colorHex })
+            );
+            group.add(lattice);
+
+            // Colinear row and marker points are toggled to show that straightness is preserved.
+            const highlightLine = new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(-2, 0.5, 0.02),
+                    new THREE.Vector3(2, 0.5, 0.02)
+                ]),
+                new THREE.LineBasicMaterial({ color: 0xd9534f, linewidth: 3 })
+            );
+            highlightLine.visible = false;
+            group.add(highlightLine);
+
+            const pointGeometry = new THREE.SphereGeometry(0.09, 16, 16);
+            const pointMaterial = new THREE.MeshBasicMaterial({ color: 0xd9534f });
+            const samplePoints = [-1.4, 0, 1.3].map(x => {
+                const point = new THREE.Mesh(pointGeometry, pointMaterial);
+                point.position.set(x, 0.5, 0.03);
+                point.visible = false;
+                group.add(point);
+                return point;
+            });
+
+            return { group, highlightLine, samplePoints };
+        }
+
+        const original = createGridPlane(0x0f172a);
+        original.group.position.set(-3, 0, 0);
+        scene.add(original.group);
+
+        const transformed = createGridPlane(0x0f172a);
+        transformed.group.position.set(3, 0, 0);
+        transformed.group.rotation.x = -0.08; // slight pitch shows depth when the plane tilts
+        scene.add(transformed.group);
+
+        // Label anchors follow the planes so annotations stay glued to the geometry.
+        original.group.add(labels[0].anchor);
+        labels[0].anchor.position.set(0, 2.4, 0);
+
+        transformed.group.add(labels[1].anchor);
+        labels[1].anchor.position.set(0, 2.4, 0);
+
+        transformed.group.add(labels[2].anchor);
+        labels[2].anchor.position.set(0.2, 0.8, 0.05);
+
+        let currentTilt = 0.65;
+        const defaultTilt = currentTilt;
+        tiltControl.value = currentTilt;
+
+        // Slider-driven tilt imitates camera rotation responsible for the homography.
+        function setTilt(value) {
+            currentTilt = value;
+            tiltControl.value = value;
+            transformed.group.rotation.y = -value;
+            transformed.group.position.z = value * -0.8;
+        }
+
+        setTilt(currentTilt);
+
+        // -------------------------------------------------------------------------
+        // Interaction state used by buttons and demo.
+        let highlightActive = false;
+        let demoRunning = false;
+
+        function setHighlightVisibility(flag) {
+            highlightActive = flag;
+            transformed.highlightLine.visible = flag;
+            original.highlightLine.visible = flag;
+            transformed.samplePoints.forEach(p => (p.visible = flag));
+            original.samplePoints.forEach(p => (p.visible = flag));
+        }
+
+        setHighlightVisibility(false);
+
+        // -------------------------------------------------------------------------
+        // Slider interaction: hands-on exploration of how tilt strength skews the grid.
+        tiltControl.addEventListener('input', event => {
+            setTilt(Number(event.target.value));
+            overlayMessage.textContent = 'You tilted the plane manually. Notice how the right grid becomes a trapezoid.';
+        });
+
+        // Animates the tilt to a target value, reinforcing the idea of applying a homography.
+        function animateTilt(target, duration = 900) {
+            const start = currentTilt;
+            const delta = target - start;
+            const startTime = performance.now();
+
+            function step(now) {
+                const t = Math.min((now - startTime) / duration, 1);
+                const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+                setTilt(start + delta * eased);
+                if (t < 1) requestAnimationFrame(step);
+            }
+
+            requestAnimationFrame(step);
+        }
+
+        applyBtn.addEventListener('click', () => {
+            animateTilt(1.15);
+            overlayMessage.textContent = 'Applying the homography tilts the planar surface: straight lines remain straight but angles change.';
+        });
+
+        // Toggle demonstrates that the highlighted row stays colinear before/after transforming.
+        toggleLineBtn.addEventListener('click', () => {
+            setHighlightVisibility(!highlightActive);
+            overlayMessage.textContent = highlightActive
+                ? 'Colinear row is highlighted on both planes.'
+                : 'Colinear row hidden. Toggle again to verify straightness.';
+        });
+
+        // Guided sequence walks through a mini-lesson combining tilt + highlight.
+        async function runGuidedDemo() {
+            if (demoRunning) return;
+            demoRunning = true;
+            setHighlightVisibility(false);
+            overlayMessage.textContent = 'Step 1: Start with the original square grid sitting flat in front of the camera.';
+            animateTilt(0);
+            await wait(1300);
+
+            overlayMessage.textContent = 'Step 2: Rotate the plane—this simulates capturing the same plane from a new viewpoint.';
+            animateTilt(0.85);
+            await wait(1500);
+
+            overlayMessage.textContent = 'Step 3: Highlight a row. Even after the warp, those points stay on a straight line.';
+            setHighlightVisibility(true);
+            animateTilt(1.05);
+            await wait(1200);
+
+            overlayMessage.textContent = 'Guided demo complete. Explore with the controls or reset to revisit the textbook pose.';
+            demoRunning = false;
+        }
+
+        function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        demoBtn.addEventListener('click', runGuidedDemo);
+
+        // Reset re-establishes the original textbook composition and clears highlights.
+        resetBtn.addEventListener('click', () => {
+            setHighlightVisibility(false);
+            animateTilt(defaultTilt);
+            overlayMessage.textContent = 'Reset view: compare the orthographic grid on the left with the tilted grid on the right.';
+            camera.position.copy(defaultCameraPosition);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        });
+
+        // -------------------------------------------------------------------------
+        // Label projection keeps textual annotations anchored to their 3D references.
+        const tempV = new THREE.Vector3();
+
+        function updateLabels() {
+            labels.forEach(({ element, anchor, requiresHighlight }) => {
+                if (requiresHighlight && !highlightActive) {
+                    element.style.display = 'none';
+                    return;
+                }
+
+                anchor.getWorldPosition(tempV).project(camera);
+                if (tempV.z < 1) {
+                    const x = (tempV.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (-tempV.y * 0.5 + 0.5) * window.innerHeight;
+                    element.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px)`;
+                    element.style.display = 'block';
+                } else {
+                    element.style.display = 'none';
+                }
+            });
+        }
+
+        // -------------------------------------------------------------------------
+        // Render loop handles animation, controls damping, and label updates.
+        renderer.setAnimationLoop(() => {
+            controls.update();
+            updateLabels();
+            renderer.render(scene, camera);
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

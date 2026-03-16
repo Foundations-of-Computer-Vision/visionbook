@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rotation Homography Visualization</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 1;
+        }
+
+        button {
+            margin: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info">
+        <p><strong>Interactive 3D Visualization: Camera Rotation and Homography</strong></p>
+        <p>Use the controls below to explore the concept:</p>
+        <button id="rotate">Rotate Camera</button>
+        <button id="reset">Reset to Textbook View</button>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // OrbitControls for interactivity
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Axes helper
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // Create planes for Camera 1 and Camera 2
+        const planeGeometry = new THREE.PlaneGeometry(4, 4);
+        const material1 = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const material2 = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+
+        const plane1 = new THREE.Mesh(planeGeometry, material1);
+        const plane2 = new THREE.Mesh(planeGeometry, material2);
+
+        plane1.position.set(0, 0, 0);
+        plane2.position.set(0, 0, 0);
+        plane2.rotation.y = Math.PI / 4; // Rotate Camera 2's plane
+
+        scene.add(plane1);
+        scene.add(plane2);
+
+        // Add points in 3D space
+        const pointGeometry = new THREE.SphereGeometry(0.05, 16, 16);
+        const pointMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+
+        const point1 = new THREE.Mesh(pointGeometry, pointMaterial);
+        point1.position.set(1, 1, 0);
+        scene.add(point1);
+
+        const point2 = new THREE.Mesh(pointGeometry, pointMaterial);
+        point2.position.set(1.5, 1.5, 0);
+        scene.add(point2);
+
+        const point3 = new THREE.Mesh(pointGeometry, pointMaterial);
+        point3.position.set(2, 1, 0);
+        scene.add(point3);
+
+        // Add lines connecting points
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+            point1.position,
+            point2.position,
+            point3.position
+        ]);
+        const line = new THREE.Line(lineGeometry, lineMaterial);
+        scene.add(line);
+
+        // Camera positions
+        camera.position.set(0, 0, 5);
+        controls.update();
+
+        // Animation variables
+        let rotationAngle = 0;
+        const rotationSpeed = 0.01;
+        let rotating = false;
+
+        // Rotate camera function
+        function rotateCamera() {
+            rotating = !rotating;
+        }
+
+        // Reset view function
+        function resetView() {
+            camera.position.set(0, 0, 5);
+            controls.reset();
+            rotationAngle = 0;
+            plane2.rotation.y = Math.PI / 4;
+        }
+
+        // Add event listeners
+        document.getElementById('rotate').addEventListener('click', rotateCamera);
+        document.getElementById('reset').addEventListener('click', resetView);
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (rotating) {
+                rotationAngle += rotationSpeed;
+                plane2.rotation.y = Math.PI / 4 + rotationAngle;
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

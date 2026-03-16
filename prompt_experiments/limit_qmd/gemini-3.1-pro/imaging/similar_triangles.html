@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Similar Triangles in Perspective Projection</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 10;
+        }
+
+        h1,
+        h2 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #333;
+        }
+
+        p {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .slider-group label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #444;
+        }
+
+        button {
+            padding: 8px 12px;
+            border: none;
+            background: #007bff;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .label {
+            color: black;
+            font-weight: bold;
+            font-family: serif;
+            font-size: 20px;
+            font-style: italic;
+            text-shadow: 1px 1px 0px white, -1px -1px 0px white, 1px -1px 0px white, -1px 1px 0px white;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info">
+        <h1>Perspective Projection: Similar Triangles</h1>
+        <p>This interactive visualization geometrically demonstrates the equations <b>x/f = X/Z</b> and <b>y/f =
+                Y/Z</b>.</p>
+        <p>The green triangles (horizontal component) and cyan triangles (vertical component) are strictly similar
+            because they share the same angles diverging from the pinhole (origin).</p>
+    </div>
+    <div id="controls">
+        <h2>Controls</h2>
+        <div class="slider-group">
+            <label for="sliderX">World X: <span id="valX">15</span></label>
+            <input type="range" id="sliderX" min="-30" max="30" value="15" step="1">
+        </div>
+        <div class="slider-group">
+            <label for="sliderY">World Y: <span id="valY">15</span></label>
+            <input type="range" id="sliderY" min="-30" max="30" value="15" step="1">
+        </div>
+        <div class="slider-group">
+            <label for="sliderZ">World Z: <span id="valZ">30</span></label>
+            <input type="range" id="sliderZ" min="10" max="50" value="30" step="1">
+        </div>
+        <div class="slider-group">
+            <label for="sliderF">Focal Length f: <span id="valF">10</span></label>
+            <input type="range" id="sliderF" min="5" max="25" value="10" step="0.5">
+        </div>
+        <button id="btnDemo">Play Guided Demo</button>
+        <button id="btnReset">Reset to Textbook View</button>
+    </div>
+
+    <!-- Import maps polyfill for ES modules mapping -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --- 1. Initialization ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#f5f5f5');
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // Start with a view highly similar to the textbook's 2D iso-like perspective
+        camera.position.set(-35, 20, 35);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // CSS2DRenderer for clean HTML labels (X, Y, Z, etc.) overlaying the 3D scene
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 0, 10);
+
+        // --- 2. 3D Elements & Mappings from 2D Figure ---
+        // All drawn elements belong here to match the specific diagram
+        const geometryGroup = new THREE.Group();
+        scene.add(geometryGroup);
+
+        let params = { X: 15, Y: 15, Z: 30, f: 10 };
+
+        // Reusable Materials exactly mapping the figure's colors
+        const matRedLine = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
+        const matDashedLine = new THREE.LineDashedMaterial({ color: 0x333333, dashSize: 0.8, gapSize: 0.4 });
+        const matGreenTri = new THREE.MeshBasicMaterial({ color: 0x99ff99, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+        const matCyanTri = new THREE.MeshBasicMaterial({ color: 0x99ffff, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+
+        // Projection Plane Background
+        const planeGeo = new THREE.PlaneGeometry(35, 35);
+        const planeMat = new THREE.MeshBasicMaterial({ color: 0xe0e0e0, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false });
+        const projectionPlane = new THREE.Mesh(planeGeo, planeMat);
+        geometryGroup.add(projectionPlane);
+
+        // Grid for projection plane boundary indication
+        const planeEdge = new THREE.LineSegments(new THREE.EdgesGeometry(planeGeo), new THREE.LineBasicMaterial({ color: 0x777777 }));
+        projectionPlane.add(planeEdge);
+
+        // Origin axes reference (small black arrows in center)
+        const axesHelper = new THREE.AxesHelper(4);
+        geometryGroup.add(axesHelper);
+
+        // 3D Point (Red, World) & Projected Point (Brownish, Image Plane)
+        const originDot = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+        geometryGroup.add(originDot);
+
+        const worldDot = new THREE.Mesh(new THREE.SphereGeometry(1.0, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+        geometryGroup.add(worldDot);
+
+        const imageDot = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), new THREE.MeshBasicMaterial({ color: 0x8b4513 }));
+        geometryGroup.add(imageDot);
+
+        // Grouping variables for dynamics updates
+        let linesMesh = new THREE.Group();
+        let trianglesMesh = new THREE.Group();
+        geometryGroup.add(linesMesh, trianglesMesh);
+
+        // Function to create HTML labels
+        function makeLabel(text) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            return new CSS2DObject(div);
+        }
+        const lblX = makeLabel('X');
+        const lblY = makeLabel('Y');
+        const lblZ = makeLabel('Z');
+        const lblx = makeLabel('x');
+        const lbly = makeLabel('y');
+        const lblf = makeLabel('f');
+        geometryGroup.add(lblX, lblY, lblZ, lblx, lbly, lblf);
+
+        // Update routine mirroring the Figure's geometric logic
+        function updateVisuals() {
+            const { X, Y, Z, f } = params;
+
+            // Similar triangle ratio applications for the projection coords
+            const x = -X * (f / Z);
+            const y = -Y * (f / Z);
+
+            // Positioning components
+            projectionPlane.position.set(0, 0, -f);
+            worldDot.position.set(X, Y, Z);
+            imageDot.position.set(x, y, -f);
+
+            linesMesh.clear();
+            const addLine = (p1, p2, dashed) => {
+                const geo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+                const l = new THREE.Line(geo, dashed ? matDashedLine : matRedLine);
+                if (dashed) l.computeLineDistances();
+                linesMesh.add(l);
+            };
+
+            const ptOrigin = new THREE.Vector3(0, 0, 0);
+
+            // World coordinate anchor points
+            const ptZ = new THREE.Vector3(0, 0, Z);
+            const ptXZ = new THREE.Vector3(X, 0, Z);
+            const ptW = new THREE.Vector3(X, Y, Z);
+
+            // Image coordinate anchor points
+            const ptf = new THREE.Vector3(0, 0, -f);
+            const ptxz = new THREE.Vector3(x, 0, -f);
+            const ptI = new THREE.Vector3(x, y, -f);
+
+            // Draw thick red lines along coordinate derivations (Z, X, Y)
+            addLine(ptOrigin, ptZ);
+            addLine(ptZ, ptXZ);
+            addLine(ptXZ, ptW);
+
+            // Draw thick red lines for image plane variants (f, x, y)
+            addLine(ptOrigin, ptf);
+            addLine(ptf, ptxz);
+            addLine(ptxz, ptI);
+
+            // Draw rays extending from world point to origin & image plane
+            addLine(ptOrigin, ptW, true);
+            addLine(ptOrigin, ptI, true);
+            addLine(ptOrigin, ptXZ, true);
+            addLine(ptOrigin, ptxz, true);
+
+            // Generate colored triangles enforcing perspective similar logic
+            trianglesMesh.clear();
+            const addTri = (p1, p2, p3, material) => {
+                const geo = new THREE.BufferGeometry().setFromPoints([p1, p2, p3]);
+                geo.computeVertexNormals();
+                trianglesMesh.add(new THREE.Mesh(geo, material));
+            };
+
+            // World Space mapping:
+            // x/f = X/Z derivation: Triangle built on Z baseline mapping sideways
+            addTri(ptOrigin, ptZ, ptXZ, matGreenTri);
+            // y/f = Y/Z derivation: Triangle built on hypotenuse mapping upwards
+            addTri(ptOrigin, ptXZ, ptW, matCyanTri);
+
+            // Image Space (Pinhole reversed mapping):
+            addTri(ptOrigin, ptf, ptxz, matGreenTri);
+            addTri(ptOrigin, ptxz, ptI, matCyanTri);
+
+            // Assign Label Positions centered on line segments
+            lblZ.position.set(0, 1.5, Z / 2);
+            lblX.position.set(X / 2, 0, Z);
+            lblY.position.set(X + 1.5, Y / 2, Z);
+
+            lblf.position.set(0, -1.5, -f / 2);
+            lblx.position.set(x / 2, 0, -f);
+            lbly.position.set(x - 1.5, y / 2, -f);
+        }
+
+        // --- 3. Education & Interactivity Logic ---
+        function hookSlider(id, key) {
+            const range = document.getElementById(id);
+            const val = document.getElementById(id.replace('slider', 'val'));
+            range.addEventListener('input', (e) => {
+                params[key] = parseFloat(e.target.value);
+                val.textContent = params[key];
+                updateVisuals();
+            });
+        }
+        hookSlider('sliderX', 'X');
+        hookSlider('sliderY', 'Y');
+        hookSlider('sliderZ', 'Z');
+        hookSlider('sliderF', 'f');
+
+        let animFrame;
+        document.getElementById('btnReset').addEventListener('click', () => {
+            cancelAnimationFrame(animFrame);
+            document.getElementById('btnDemo').textContent = "Play Guided Demo";
+            params = { X: 15, Y: 15, Z: 30, f: 10 };
+            document.getElementById('sliderX').value = params.X;
+            document.getElementById('sliderY').value = params.Y;
+            document.getElementById('sliderZ').value = params.Z;
+            document.getElementById('sliderF').value = params.f;
+            ['X', 'Y', 'Z', 'F'].forEach(k => {
+                document.getElementById('val' + k).textContent = params[k !== 'F' ? k : 'f'];
+            });
+            camera.position.set(-35, 20, 35);
+            controls.target.set(0, 0, 10);
+            updateVisuals();
+        });
+
+        document.getElementById('btnDemo').addEventListener('click', () => {
+            let startT = performance.now();
+            let startParams = { ...params };
+            const btn = document.getElementById('btnDemo');
+            btn.textContent = "Demonstrating Z variations...";
+
+            function step(t) {
+                const elapsed = t - startT;
+                const duration = 3000;
+                let phase = elapsed / duration;
+
+                if (phase <= 1.0) {
+                    // Ease Sine in out
+                    let ease = -(Math.cos(Math.PI * phase) - 1) / 2;
+                    // Move Z away to see how f/Z scales x and y inwards
+                    params.Z = startParams.Z + ease * 15;
+                    params.Y = startParams.Y - ease * 5;
+
+                    document.getElementById('sliderZ').value = params.Z;
+                    document.getElementById('valZ').textContent = params.Z.toFixed(1);
+                    document.getElementById('sliderY').value = params.Y;
+                    document.getElementById('valY').textContent = params.Y.toFixed(1);
+                    updateVisuals();
+                    animFrame = requestAnimationFrame(step);
+                } else {
+                    btn.textContent = "Play Guided Demo";
+                }
+            }
+            cancelAnimationFrame(animFrame);
+            animFrame = requestAnimationFrame(step);
+        });
+
+        // Responsive handling
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Standard render loop
+        function drawTick() {
+            requestAnimationFrame(drawTick);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        updateVisuals();
+        drawTick();
+
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRDF and Light Reflection</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        #ui-container { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.9); padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; }
+        .label { position: absolute; color: black; font-weight: bold; pointer-events: none; text-shadow: 1px 1px 2px white; font-size: 1.2em; }
+        .math { font-style: italic; font-family: serif; }
+        button, input, select { width: 100%; margin-top: 10px; padding: 5px; }
+        .slider-container { margin-top: 10px; }
+        .slider-container label { display: flex; justify-content: space-between; font-size: 0.9em; }
+    </style>
+    <!-- Import maps polyfill -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="ui-container">
+        <h3>Light Reflection & BRDF</h3>
+        <p>Demonstrates how incoming light $\ell_{in}$ interacts with a surface to produce outgoing light $\ell_{out}$.</p>
+        
+        <div class="slider-container">
+            <label><span>Incident Angle (θ)</span> <span id="theta-val">45°</span></label>
+            <input type="range" id="theta-slider" min="10" max="80" value="45">
+        </div>
+        
+        <div class="slider-container">
+            <label><span>Surface Type (BRDF)</span></label>
+            <select id="brdf-select">
+                <option value="diffuse">Diffuse (Lambertian)</option>
+                <option value="specular">Specular (Glossy)</option>
+                <option value="mixed">Mixed (Textbook View)</option>
+            </select>
+        </div>
+
+        <button id="btn-animate">Animate Incoming Light</button>
+        <button id="btn-reset">Reset to Textbook View</button>
+    </div>
+
+    <!-- Labels for 3D objects -->
+    <div id="label-n" class="label math"><b>n</b></div>
+    <div id="label-p" class="label math"><b>p</b></div>
+    <div id="label-q" class="label math"><b>q</b></div>
+    <div id="label-lin" class="label math">ℓ<sub>in</sub>(λ)</div>
+    <div id="label-lout" class="label math">ℓ<sub>out</sub>=F(...)</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Setup Scene ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf0f0f0);
+        
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(5, 4, 6);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 0, 0);
+
+        // --- Geometric Elements ---
+        
+        // 1. the bright green Surface
+        const planeGeo = new THREE.PlaneGeometry(6, 6);
+        const planeMat = new THREE.MeshBasicMaterial({ color: 0x7fff00, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+        const plane = new THREE.Mesh(planeGeo, planeMat);
+        plane.rotation.x = -Math.PI / 2;
+        scene.add(plane);
+        
+        // Edge for the plane (black border)
+        const edges = new THREE.EdgesGeometry(planeGeo);
+        const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 }));
+        plane.add(line);
+
+        // Helper function to create vectors mapping to 2D line elements
+        function createArrow(dir, origin, length, color, headScale = 1.0, thickness = 1.5) {
+            // we use cylinders and cones to make thick arrows instead of three's ArrowHelper for better visual matching
+            const group = new THREE.Group();
+            
+            const cylGeo = new THREE.CylinderGeometry(0.02 * thickness, 0.02 * thickness, length - 0.2 * headScale, 16);
+            cylGeo.translate(0, (length - 0.2 * headScale)/2, 0);
+            const cylMat = new THREE.MeshBasicMaterial({ color: color });
+            const cylinder = new THREE.Mesh(cylGeo, cylMat);
+            
+            const coneGeo = new THREE.ConeGeometry(0.08 * headScale, 0.2 * headScale, 16);
+            coneGeo.translate(0, length - 0.1 * headScale, 0);
+            const cone = new THREE.Mesh(coneGeo, cylMat);
+            
+            group.add(cylinder);
+            group.add(cone);
+            group.position.copy(origin);
+            
+            // Align group with direction
+            const quaternion = new THREE.Quaternion();
+            quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.clone().normalize());
+            group.setRotationFromQuaternion(quaternion);
+            
+            scene.add(group);
+            return group;
+        }
+
+        const origin = new THREE.Vector3(0, 0, 0);
+        
+        // 2. Normal vector n
+        const normalDir = new THREE.Vector3(0, 1, 0);
+        const normalArrow = createArrow(normalDir, origin, 1.5, 0x000000, 1.5, 2);
+        
+        // 3. Incoming ray (p vector towards source, yellow incoming ray)
+        // yellow ray extending far
+        const rayDir = new THREE.Vector3(-1, 1, 0).normalize();
+        
+        // A yellow cylinder for incoming ray lin
+        const linGeo = new THREE.CylinderGeometry(0.04, 0.04, 4, 16);
+        linGeo.translate(0, 2, 0);
+        const linMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 }); // yellow-orange
+        const linMesh = new THREE.Mesh(linGeo, linMat);
+        scene.add(linMesh);
+        
+        // Red arrow for incoming indication at the tip
+        const incomingArrowDir = rayDir.clone().negate();
+        const incomingArrow = createArrow(incomingArrowDir, origin.clone().add(rayDir.clone().multiplyScalar(1.5)), 0.5, 0xff0000, 1.2, 2.5);
+
+        // p vector (black arrow pointing towards light source)
+        const pArrow = createArrow(rayDir, origin, 1.2, 0x000000, 1.5, 2);
+
+        // 4. Outgoing vector q and spray
+        let qDir = new THREE.Vector3(1.2, 1, 0.2).normalize();
+        const qArrow = createArrow(qDir, origin, 2.0, 0x000000, 1.5, 2);
+        
+        // Spray of green outgoing rays
+        const sprayGroup = new THREE.Group();
+        scene.add(sprayGroup);
+        const sprayArrows = [];
+        
+        function updateSpray(brdfType) {
+            // clear old
+            for(let a of sprayArrows) {
+                 scene.remove(a);
+            }
+            sprayArrows.length = 0;
+            
+            // Generate rays based on BRDF lobe
+            const numRays = 15;
+            for(let i=0; i<numRays; i++) {
+                // random direction in hemisphere
+                let dir = new THREE.Vector3(
+                    (Math.random() - 0.5) * 2,
+                    Math.random(), // always positive y
+                    (Math.random() - 0.5) * 2
+                ).normalize();
+                
+                let length = 1.0;
+                let opacity = 0.5;
+                let color = 0x22aa22;
+                
+                if (brdfType === 'diffuse') {
+                    // Lambertian: intensity proportional to cos(theta)
+                    length = dir.y * 1.5; 
+                } else if (brdfType === 'specular') {
+                    // Phong-like specular lobe around reflection vector
+                    const reflectionDir = rayDir.clone();
+                    reflectionDir.x *= -1; // reflect across normal roughly
+                    reflectionDir.z *= -1;
+                    
+                    const dot = Math.max(0, dir.dot(reflectionDir));
+                    length = Math.pow(dot, 10) * 2.5; 
+                    if(length < 0.2) continue; // skip small rays
+                } else {
+                    // Mixed (Textbook view): a few distinct varied green arrows
+                    if(i > 8) break; // fewer arrows for textbook view
+                    let angle = (i / 8) * Math.PI - Math.PI/2;
+                    dir = new THREE.Vector3(Math.sin(angle), Math.abs(Math.cos(angle)), (Math.random()-0.5)*0.5).normalize();
+                    length = 1.0 + Math.random();
+                }
+                
+                let group = new THREE.Group();
+                const cyl = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, length, 8), new THREE.MeshBasicMaterial({color: color, transparent: true, opacity: opacity}));
+                cyl.position.y = length/2;
+                const co = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.2, 8), new THREE.MeshBasicMaterial({color: color, transparent: true, opacity: opacity}));
+                co.position.y = length;
+                group.add(cyl); group.add(co);
+                
+                const quat = new THREE.Quaternion();
+                quat.setFromUnitVectors(new THREE.Vector3(0,1,0), dir);
+                group.setRotationFromQuaternion(quat);
+                
+                scene.add(group);
+                sprayArrows.push(group);
+            }
+        }
+        updateSpray('mixed');
+
+        // Right angle indicator
+        const rightAngle = new THREE.LineSegments(
+            new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0.2, 0, 0), new THREE.Vector3(0.2, 0.2, 0),
+                new THREE.Vector3(0.2, 0.2, 0), new THREE.Vector3(0, 0.2, 0)
+            ]),
+            new THREE.LineBasicMaterial({color: 0x000000, depthTest: false})
+        );
+        scene.add(rightAngle);
+        
+        // Small circle at origin
+        const originCircle = new THREE.Mesh(
+            new THREE.RingGeometry(0.08, 0.1, 32),
+            new THREE.MeshBasicMaterial({color: 0x000000, side: THREE.DoubleSide})
+        );
+        originCircle.rotation.x = -Math.PI/2;
+        originCircle.position.y = 0.01; // slight offset to avoid z-fighting
+        scene.add(originCircle);
+
+
+        // --- UI & Interaction ---
+        
+        function updateIncomingAngle(thetaDeg) {
+            const rad = thetaDeg * Math.PI / 180;
+            // n is (0,1,0). Ray direction p:
+            const dirX = -Math.sin(rad);
+            const dirY = Math.cos(rad);
+            
+            rayDir.set(dirX, dirY, 0).normalize();
+            
+            // update p arrow
+            let quat = new THREE.Quaternion();
+            quat.setFromUnitVectors(new THREE.Vector3(0,1,0), rayDir);
+            pArrow.setRotationFromQuaternion(quat);
+            
+            // update incoming yellow bar
+            linMesh.setRotationFromQuaternion(quat);
+            
+            // update red incoming arrow tip
+            incomingArrowDir.copy(rayDir).negate();
+            incomingArrow.position.copy(rayDir.clone().multiplyScalar(1.5));
+            let quat2 = new THREE.Quaternion();
+            quat2.setFromUnitVectors(new THREE.Vector3(0,1,0), incomingArrowDir);
+            incomingArrow.setRotationFromQuaternion(quat2);
+            
+            // if specular, update spray to follow specular lobe
+            if(document.getElementById('brdf-select').value === 'specular') {
+                 updateSpray('specular');
+            }
+        }
+
+        document.getElementById('theta-slider').addEventListener('input', (e) => {
+            const val = e.target.value;
+            document.getElementById('theta-val').innerText = `${val}°`;
+            updateIncomingAngle(val);
+        });
+
+        document.getElementById('brdf-select').addEventListener('change', (e) => {
+            updateSpray(e.target.value);
+        });
+        
+        let animating = false;
+        let animPhase = 0;
+        document.getElementById('btn-animate').addEventListener('click', () => {
+             animating = !animating;
+             document.getElementById('btn-animate').innerText = animating ? "Stop Animation" : "Animate Incoming Light";
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            animating = false;
+            document.getElementById('btn-animate').innerText = "Animate Incoming Light";
+            
+            document.getElementById('theta-slider').value = 45;
+            document.getElementById('theta-val').innerText = `45°`;
+            updateIncomingAngle(45);
+            
+            document.getElementById('brdf-select').value = 'mixed';
+            updateSpray('mixed');
+            
+            camera.position.set(5, 4, 6);
+            controls.target.set(0, 0, 0);
+        });
+
+
+        // --- Labels Positioning ---
+        const labels = [
+            { el: document.getElementById('label-n'), pos: new THREE.Vector3(0.2, 1.4, 0) },
+            { el: document.getElementById('label-p'), pos: new THREE.Vector3(-0.9, 0.5, 0) }, // p is roughly here
+            { el: document.getElementById('label-q'), pos: new THREE.Vector3(1.0, 0.7, 0.2) }, // q is roughly here
+            { el: document.getElementById('label-lin'), pos: new THREE.Vector3(-1.5, 2.5, 0) },
+            { el: document.getElementById('label-lout'), pos: new THREE.Vector3(1.8, 1.8, 0.2) }
+        ];
+
+        function updateLabels() {
+            // dynamically update positions based on vectors
+            labels[1].pos.copy(rayDir).multiplyScalar(1.1).add(new THREE.Vector3(0.1, 0, 0));
+            labels[3].pos.copy(rayDir).multiplyScalar(3.0);
+            
+            for(let l of labels) {
+                const vector = l.pos.clone();
+                vector.project(camera);
+                
+                const x = (vector.x *  .5 + .5) * window.innerWidth;
+                const y = (vector.y * -.5 + .5) * window.innerHeight;
+                
+                // only show if in front of camera
+                if (vector.z < 1) {
+                    l.el.style.left = `${x}px`;
+                    l.el.style.top = `${y}px`;
+                    l.el.style.display = 'block';
+                } else {
+                    l.el.style.display = 'none';
+                }
+            }
+        }
+
+
+        // --- Render Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            
+            if(animating) {
+                animPhase += 0.02;
+                const newTheta = 45 + Math.sin(animPhase) * 35; // oscilate between 10 and 80
+                document.getElementById('theta-slider').value = newTheta;
+                document.getElementById('theta-val').innerText = `${Math.round(newTheta)}°`;
+                updateIncomingAngle(newTheta);
+            }
+            
+            updateLabels();
+            renderer.render(scene, camera);
+        }
+        
+        // Init
+        updateIncomingAngle(45);
+        animate();
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homography Plane Geometry</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        button {
+            margin: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <button id="resetView">Reset to Textbook View</button>
+        <button id="togglePlane">Toggle Plane Visibility</button>
+        <button id="toggleProjection">Toggle Projection Lines</button>
+        <button id="stepDemo">Step Through Demo</button>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // OrbitControls for interactivity
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Axes helper
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // Camera center
+        const cameraCenterGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+        const cameraCenterMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const cameraCenter = new THREE.Mesh(cameraCenterGeometry, cameraCenterMaterial);
+        cameraCenter.position.set(0, 0, 0);
+        scene.add(cameraCenter);
+
+        // Camera plane
+        const cameraPlaneGeometry = new THREE.PlaneGeometry(4, 3);
+        const cameraPlaneMaterial = new THREE.MeshBasicMaterial({ color: 0x808080, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const cameraPlane = new THREE.Mesh(cameraPlaneGeometry, cameraPlaneMaterial);
+        cameraPlane.position.set(0, 0, -2);
+        scene.add(cameraPlane);
+
+        // Planar surface
+        const planeGeometry = new THREE.PlaneGeometry(6, 4);
+        const planeMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc, side: THREE.DoubleSide, wireframe: true });
+        const planarSurface = new THREE.Mesh(planeGeometry, planeMaterial);
+        planarSurface.rotation.x = -Math.PI / 4;
+        planarSurface.position.set(0, -1, -5);
+        scene.add(planarSurface);
+
+        // Projection lines
+        const projectionMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff });
+        const projectionPoints = [
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(-2, -1, -5),
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(2, -1, -5),
+        ];
+        const projectionGeometry = new THREE.BufferGeometry().setFromPoints(projectionPoints);
+        const projectionLines = new THREE.LineSegments(projectionGeometry, projectionMaterial);
+        scene.add(projectionLines);
+
+        // Labels
+        const createLabel = (text, position) => {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            context.font = '24px Arial';
+            context.fillStyle = 'black';
+            context.fillText(text, 10, 30);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(1.5, 0.75, 1);
+            sprite.position.copy(position);
+            return sprite;
+        };
+
+        scene.add(createLabel('Camera Center', new THREE.Vector3(0, 0.2, 0)));
+        scene.add(createLabel('Camera Plane', new THREE.Vector3(0, 0, -2.5)));
+        scene.add(createLabel('Planar Surface', new THREE.Vector3(0, -1, -5.5)));
+
+        // Camera position
+        camera.position.set(5, 5, 10);
+        camera.lookAt(0, 0, 0);
+
+        // Interaction logic
+        let planeVisible = true;
+        let projectionVisible = true;
+        let demoStep = 0;
+
+        document.getElementById('resetView').addEventListener('click', () => {
+            camera.position.set(5, 5, 10);
+            camera.lookAt(0, 0, 0);
+            controls.reset();
+        });
+
+        document.getElementById('togglePlane').addEventListener('click', () => {
+            planeVisible = !planeVisible;
+            planarSurface.visible = planeVisible;
+        });
+
+        document.getElementById('toggleProjection').addEventListener('click', () => {
+            projectionVisible = !projectionVisible;
+            projectionLines.visible = projectionVisible;
+        });
+
+        document.getElementById('stepDemo').addEventListener('click', () => {
+            demoStep = (demoStep + 1) % 3;
+            switch (demoStep) {
+                case 0:
+                    camera.position.set(5, 5, 10);
+                    camera.lookAt(0, 0, 0);
+                    break;
+                case 1:
+                    camera.position.set(0, 5, 10);
+                    camera.lookAt(0, -1, -5);
+                    break;
+                case 2:
+                    camera.position.set(-5, 5, 10);
+                    camera.lookAt(0, -1, -5);
+                    break;
+            }
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

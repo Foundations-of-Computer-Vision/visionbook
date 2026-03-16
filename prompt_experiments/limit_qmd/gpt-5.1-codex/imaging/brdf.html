@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Interactive BRDF Visualization</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: radial-gradient(circle at top, #202533, #050608 60%);
+            color: #f5f5f5;
+            overflow: hidden;
+        }
+
+        #ui {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            background: rgba(10, 12, 18, 0.85);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            width: 285px;
+            z-index: 5;
+        }
+
+        #ui label {
+            font-size: 0.9rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+
+        #ui input[type="range"] {
+            accent-color: #76ff03;
+        }
+
+        #ui button {
+            padding: 0.45rem 0.7rem;
+            background: #2c8cff;
+            border: none;
+            border-radius: 0.5rem;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        #ui button.secondary {
+            background: #374151;
+        }
+
+        #ui button:active {
+            transform: translateY(1px);
+        }
+
+        #guide-panel {
+            position: absolute;
+            right: 1rem;
+            bottom: 1rem;
+            width: 320px;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            background: rgba(8, 10, 18, 0.88);
+            line-height: 1.4;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.45);
+            font-size: 0.95rem;
+            z-index: 5;
+            min-height: 120px;
+        }
+
+        #guide-panel h3 {
+            margin: 0 0 0.5rem;
+            font-size: 1rem;
+            color: #84dfff;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        .label {
+            color: #f7f7f7;
+            background: rgba(5, 5, 5, 0.65);
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.35rem;
+            font-size: 0.8rem;
+            letter-spacing: 0.03em;
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <label>
+            Incident angle (relative to normal): <span id="angleValue">35°</span>
+            <input id="angleSlider" type="range" min="0" max="75" value="35" />
+        </label>
+        <label>
+            Diffuse reflectance (albedo): <span id="albedoValue">0.6</span>
+            <input id="albedoSlider" type="range" min="0.1" max="1" step="0.05" value="0.6" />
+        </label>
+        <label style="flex-direction: row; align-items: center; gap: 0.45rem;">
+            <input id="specularToggle" type="checkbox" /> Show Phong specular lobe
+        </label>
+        <button id="resetBtn">Reset to textbook view</button>
+        <button id="demoBtn" class="secondary">Play guided demo</button>
+    </div>
+    <div id="guide-panel">
+        <h3>Guided Demo</h3>
+        <div id="guideText">Use the controls to explore how the BRDF links incoming and outgoing rays.</div>
+    </div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+      }
+    }
+  </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x06070b);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        const defaultCamPos = new THREE.Vector3(9, 7, 10);
+        camera.position.copy(defaultCamPos);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0, 0);
+        controls.enableDamping = true;
+
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x111111, 1.2);
+        scene.add(hemiLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        dirLight.position.set(6, 10, 4);
+        scene.add(dirLight);
+
+        // Surface patch that stands in for the green plane in the textbook figure.
+        const surfaceMaterial = new THREE.MeshStandardMaterial({ color: 0x5eff00, roughness: 0.8, metalness: 0.05 });
+        const surface = new THREE.Mesh(new THREE.PlaneGeometry(9, 6), surfaceMaterial);
+        surface.rotation.x = -Math.PI / 2;
+        scene.add(surface);
+
+        // Axes helper to hint at orientation (kept subtle to avoid clutter).
+        const axesHelper = new THREE.AxesHelper(3.5);
+        axesHelper.material.depthTest = false;
+        axesHelper.position.set(-4, 0.02, -2.5);
+        axesHelper.visible = false;
+        scene.add(axesHelper);
+
+        const normal = new THREE.Vector3(0, 1, 0);
+
+        // Normal arrow replicates the vector n shown in the book.
+        const normalArrow = new THREE.ArrowHelper(normal.clone().normalize(), new THREE.Vector3(0, 0, 0), 3.5, 0x111111, 0.8, 0.5);
+        scene.add(normalArrow);
+
+        // Incident light arrow (p) with adjustable angle.
+        const incidentArrow = new THREE.ArrowHelper(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 6, 0), 6, 0xffc107, 1.2, 0.6);
+        scene.add(incidentArrow);
+
+        // Diffuse outgoing rays (q) forming the BRDF lobes.
+        const outgoingDirections = [
+            new THREE.Vector3(-0.3, 1, -0.1),
+            new THREE.Vector3(-0.1, 1, 0.25),
+            new THREE.Vector3(0.15, 1, -0.15),
+            new THREE.Vector3(0.35, 1, 0.2),
+            new THREE.Vector3(-0.25, 1, 0.3)
+        ];
+
+        const outgoingArrows = outgoingDirections.map(dir => {
+            dir.normalize();
+            const arrow = new THREE.ArrowHelper(dir, new THREE.Vector3(0, 0.02, 0), 3, 0x66ffcc, 0.8, 0.45);
+            scene.add(arrow);
+            return arrow;
+        });
+
+        // Specular arrow demonstrates the Phong component toggled by the checkbox.
+        const specularArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0.02, 0), 4.2, 0xffffff, 1, 0.6);
+        specularArrow.visible = false;
+        scene.add(specularArrow);
+
+        // Labels map text from the 2D figure to anchored 3D locations.
+        const makeLabel = (text) => {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            return new CSS2DObject(div);
+        };
+
+        const incomingLabel = makeLabel('l_in(λ) / p');
+        incidentArrow.add(incomingLabel);
+        incomingLabel.position.set(0, 3.1, 0);
+
+        const normalLabel = makeLabel('n');
+        normalArrow.add(normalLabel);
+        normalLabel.position.set(0, 3, 0);
+
+        const outgoingLabel = makeLabel('l_out / q');
+        outgoingArrows[2].add(outgoingLabel);
+        outgoingLabel.position.set(0, 2, 0);
+
+        const formulaLabel = makeLabel('l_out = F(l_in, n, λ, p, q)');
+        formulaLabel.position.set(1.2, 0.3, 0.2);
+        surface.add(formulaLabel);
+
+        // UI elements
+        const angleSlider = document.getElementById('angleSlider');
+        const angleValue = document.getElementById('angleValue');
+        const albedoSlider = document.getElementById('albedoSlider');
+        const albedoValue = document.getElementById('albedoValue');
+        const specularToggle = document.getElementById('specularToggle');
+        const resetBtn = document.getElementById('resetBtn');
+        const demoBtn = document.getElementById('demoBtn');
+        const guideText = document.getElementById('guideText');
+
+        const hitPoint = new THREE.Vector3(0, 0.02, 0);
+        const incidentDir = new THREE.Vector3();
+
+        // Maps slider angle to the incoming ray and updates the reflected direction.
+        function updateIncident(angleDeg) {
+            const theta = THREE.MathUtils.degToRad(angleDeg);
+            incidentDir.set(Math.sin(theta), -Math.cos(theta), 0).normalize();
+            incidentArrow.setDirection(incidentDir);
+            const start = hitPoint.clone().sub(incidentDir.clone().multiplyScalar(6));
+            incidentArrow.position.copy(start);
+            incidentArrow.setLength(6, 1.2, 0.7);
+            updateSpecular();
+        }
+
+        // Adjusts outgoing ray lengths to mimic Lambertian scaling by albedo.
+        function updateOutgoing() {
+            const albedo = parseFloat(albedoSlider.value);
+            outgoingArrows.forEach((arrow, index) => {
+                const spreadFactor = 2.2 + index * 0.25;
+                arrow.setLength(spreadFactor * albedo + 0.8, 0.7, 0.35);
+                arrow.setColor(new THREE.Color().setHSL(0.45, 0.9, 0.5 * albedo + 0.35));
+            });
+        }
+
+        // Computes mirror reflection for the Phong arrow when enabled.
+        function updateSpecular() {
+            const reflectDir = incidentDir.clone().reflect(normal).normalize();
+            specularArrow.setDirection(reflectDir);
+            specularArrow.visible = specularToggle.checked;
+        }
+
+        angleSlider.addEventListener('input', () => {
+            angleValue.textContent = `${angleSlider.value}°`;
+            updateIncident(parseFloat(angleSlider.value));
+            guideText.textContent = 'Changing the incident angle alters how much the surface sees the light source.';
+        });
+
+        albedoSlider.addEventListener('input', () => {
+            albedoValue.textContent = Number(albedoSlider.value).toFixed(2);
+            updateOutgoing();
+            guideText.textContent = 'Increasing albedo makes every outgoing direction brighter under a Lambertian BRDF.';
+        });
+
+        specularToggle.addEventListener('change', () => {
+            updateSpecular();
+            guideText.textContent = specularToggle.checked ? 'Specular highlight (Phong term) overlays the diffuse lobe.' : 'Specular component hidden to show pure Lambertian behavior.';
+        });
+
+        function resetView() {
+            angleSlider.value = 35;
+            angleValue.textContent = '35°';
+            albedoSlider.value = 0.6;
+            albedoValue.textContent = '0.6';
+            specularToggle.checked = false;
+            updateIncident(35);
+            updateOutgoing();
+            updateSpecular();
+            camera.position.copy(defaultCamPos);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            guideText.textContent = 'Reset to the textbook configuration: grazing light, unit normal, diffuse spread.';
+            demoIndex = 0;
+        }
+
+        resetBtn.addEventListener('click', resetView);
+
+        const demoSteps = [
+            {
+                text: 'Step 1: Aim the light straight down so the cosine term equals 1 and the BRDF is maximized.',
+                action: () => {
+                    angleSlider.value = 0;
+                    angleValue.textContent = '0°';
+                    updateIncident(0);
+                    specularToggle.checked = false;
+                    updateSpecular();
+                }
+            },
+            {
+                text: 'Step 2: Increase the incident angle to show how the dot product reduces the diffuse intensity.',
+                action: () => {
+                    angleSlider.value = 60;
+                    angleValue.textContent = '60°';
+                    updateIncident(60);
+                }
+            },
+            {
+                text: 'Step 3: Raise the albedo to see every outgoing direction brighten equally (Lambertian behavior).',
+                action: () => {
+                    albedoSlider.value = 0.95;
+                    albedoValue.textContent = '0.95';
+                    updateOutgoing();
+                }
+            },
+            {
+                text: 'Step 4: Toggle the specular component to compare Lambertian and Phong reflections.',
+                action: () => {
+                    specularToggle.checked = true;
+                    updateSpecular();
+                }
+            }
+        ];
+
+        let demoIndex = 0;
+        demoBtn.addEventListener('click', () => {
+            demoSteps[demoIndex].action();
+            guideText.textContent = demoSteps[demoIndex].text;
+            demoIndex = (demoIndex + 1) % demoSteps.length;
+        });
+
+        // Initialize state to default "textbook" configuration.
+        resetView();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

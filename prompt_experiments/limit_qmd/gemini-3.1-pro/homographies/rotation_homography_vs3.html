@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Rotation Homography Visualization</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f0f0f0; font-family: sans-serif; }
+        #ui { position: absolute; top: 10px; left: 10px; background: rgba(255, 255, 255, 0.9); padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; }
+        h1 { font-size: 16px; margin: 0 0 10px 0; }
+        p { font-size: 12px; margin: 0 0 10px 0; }
+        button, input { margin-bottom: 5px; width: 100%; box-sizing: border-box; }
+        .label { position: absolute; color: black; font-weight: bold; pointer-events: none; transform: translate(-50%, -50%); font-size: 12px; text-shadow: 1px 1px 2px white; }
+    </style>
+    <!-- Import Maps -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="ui">
+        <h1>Camera Rotation Homography</h1>
+        <p>This demonstrates how rotating a camera around its center of projection maps points via a homography, independent of 3D depth.</p>
+        
+        <label for="rotY">Camera 2 Rotation (Y-axis):</label>
+        <input type="range" id="rotY" min="-45" max="45" value="20">
+        
+        <label for="rotX">Camera 2 Rotation (X-axis):</label>
+        <input type="range" id="rotX" min="-45" max="45" value="10">
+
+        <button id="movePoint">Randomize 3D Point (X,Y,Z)</button>
+        <button id="resetBtn">Reset to Textbook View</button>
+        
+        <div id="conceptBox" style="margin-top: 10px; font-size: 11px; background: #eef; padding: 5px;">
+            <b>Concept:</b> A pure rotation means the ray from the origin to (X,Y,Z) remains the same in world space. It just intersects the two image planes at different local coordinates (x,y) and (x',y').
+        </div>
+    </div>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(6, 4, 8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0, 2);
+        controls.update();
+
+        // Environment
+        const grid = new THREE.GridHelper(10, 10, 0xdddddd, 0xeeeeee);
+        grid.position.y = -2;
+        scene.add(grid);
+
+        // Core Elements
+        const origin = new THREE.Vector3(0, 0, 0);
+        
+        // Camera Center (Origin)
+        const centerMesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+        scene.add(centerMesh);
+
+        // Camera 1 (Green)
+        const cam1Group = new THREE.Group();
+        scene.add(cam1Group);
+        
+        const planeGeo = new THREE.PlaneGeometry(3, 4);
+        const edgesGeo = new THREE.EdgesGeometry(planeGeo);
+        
+        const cam1Mat = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide, transparent: true, opacity: 0.2 });
+        const cam1Mesh = new THREE.Mesh(planeGeo, cam1Mat);
+        cam1Mesh.position.z = 2; // Focal length = 2
+        cam1Group.add(cam1Mesh);
+        cam1Group.add(new THREE.LineSegments(edgesGeo, new THREE.LineBasicMaterial({ color: 0x00cc00 })).translateZ(2));
+
+        // Camera 2 (Red)
+        const cam2Group = new THREE.Group();
+        scene.add(cam2Group);
+        
+        const cam2Mat = new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide, transparent: true, opacity: 0.2 });
+        const cam2Mesh = new THREE.Mesh(planeGeo, cam2Mat);
+        cam2Mesh.position.z = 2;
+        cam2Group.add(cam2Mesh);
+        cam2Group.add(new THREE.LineSegments(edgesGeo, new THREE.LineBasicMaterial({ color: 0xcc0000 })).translateZ(2));
+
+        // The 3D Target Point (Cyan)
+        let targetPoint = new THREE.Vector3(1.5, 1, 5);
+        const pointMesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
+        scene.add(pointMesh);
+
+        // Ray line
+        const lineGeo = new THREE.BufferGeometry().setFromPoints([origin, targetPoint]);
+        const lineMat = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 0.2, gapSize: 0.1 });
+        const rayLine = new THREE.Line(lineGeo, lineMat);
+        rayLine.computeLineDistances();
+        scene.add(rayLine);
+
+        // Intersections dots
+        const dotGeo = new THREE.SphereGeometry(0.08, 16, 16);
+        const cam1Dot = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: 0x00ff00 }));
+        const cam2Dot = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+        scene.add(cam1Dot);
+        scene.add(cam2Dot);
+
+        // Labels
+        function createLabel(text, id) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.id = id;
+            div.innerText = text;
+            document.body.appendChild(div);
+            return div;
+        }
+
+        const labelC1 = createLabel('Camera 1', 'lblC1');
+        const labelC2 = createLabel('Camera 2', 'lblC2');
+        const labelP = createLabel('(X,Y,Z)', 'lblP');
+        const labelp1 = createLabel('(x,y)', 'lblp1');
+        const labelp2 = createLabel('(x\',y\')', 'lblp2');
+
+        function updatePositions() {
+            pointMesh.position.copy(targetPoint);
+            lineGeo.setFromPoints([origin, targetPoint]);
+            rayLine.computeLineDistances();
+
+            // Compute Intersections
+            // Ray from origin to targetPoint
+            const direction = targetPoint.clone().normalize();
+            const ray = new THREE.Ray(origin, direction);
+
+            // Plane 1
+            const p1Normal = new THREE.Vector3(0, 0, 1).applyQuaternion(cam1Group.quaternion);
+            const p1Cop = new THREE.Vector3(0, 0, 2).applyQuaternion(cam1Group.quaternion).add(cam1Group.position);
+            const plane1 = new THREE.Plane().setFromNormalAndCoplanarPoint(p1Normal, p1Cop);
+            let int1 = new THREE.Vector3();
+            ray.intersectPlane(plane1, int1);
+            if(int1) cam1Dot.position.copy(int1);
+
+            // Plane 2
+            const p2Normal = new THREE.Vector3(0, 0, 1).applyQuaternion(cam2Group.quaternion);
+            const p2Cop = new THREE.Vector3(0, 0, 2).applyQuaternion(cam2Group.quaternion).add(cam2Group.position);
+            const plane2 = new THREE.Plane().setFromNormalAndCoplanarPoint(p2Normal, p2Cop);
+            let int2 = new THREE.Vector3();
+            ray.intersectPlane(plane2, int2);
+            if(int2) cam2Dot.position.copy(int2);
+        }
+
+        // Project 3D vector to 2D screen space for labels
+        function updateLabels() {
+            const tempV = new THREE.Vector3();
+            
+            const toScreen = (obj, label, offset = {x:0, y:-15}) => {
+                tempV.copy(obj.position).project(camera);
+                const x = (tempV.x * .5 + .5) * window.innerWidth + offset.x;
+                const y = (tempV.y * -.5 + .5) * window.innerHeight + offset.y;
+                label.style.left = `${x}px`;
+                label.style.top = `${y}px`;
+            };
+
+            // Camera 1 label (top left of plane)
+            tempV.set(-1.5, 2, 2).applyMatrix4(cam1Group.matrixWorld);
+            const emptyObj1 = {position: tempV};
+            toScreen(emptyObj1, labelC1);
+
+            // Camera 2 label (top right of plane)
+            tempV.set(1.5, 2, 2).applyMatrix4(cam2Group.matrixWorld);
+            const emptyObj2 = {position: tempV};
+            toScreen(emptyObj2, labelC2);
+
+            toScreen(pointMesh, labelP, {x: 20, y: -20});
+            toScreen(cam1Dot, labelp1, {x: 25, y: -10});
+            toScreen(cam2Dot, labelp2, {x: -30, y: 15});
+        }
+
+        // Interactivity
+        const rotYSlider = document.getElementById('rotY');
+        const rotXSlider = document.getElementById('rotX');
+
+        function applyRotations() {
+            const ry = THREE.MathUtils.degToRad(parseFloat(rotYSlider.value));
+            const rx = THREE.MathUtils.degToRad(parseFloat(rotXSlider.value));
+            cam2Group.rotation.set(rx, ry, 0);
+            updatePositions();
+        }
+
+        rotYSlider.addEventListener('input', applyRotations);
+        rotXSlider.addEventListener('input', applyRotations);
+
+        document.getElementById('movePoint').addEventListener('click', () => {
+            targetPoint.set(
+                (Math.random() - 0.5) * 6,
+                (Math.random() - 0.5) * 4,
+                4 + Math.random() * 4
+            );
+            updatePositions();
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            rotYSlider.value = 20;
+            rotXSlider.value = 10;
+            cam1Group.rotation.set(0,0,0);
+            targetPoint.set(1.5, 1, 5);
+            controls.target.set(0,0,2);
+            camera.position.set(6, 4, 8);
+            controls.update();
+            applyRotations();
+        });
+
+        // Loop
+        applyRotations();
+
+        renderer.setAnimationLoop(() => {
+            renderer.render(scene, camera);
+            updateLabels();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pinhole Camera Coordinates - Interactive 3D</title>
+    <style>
+        :root {
+            --bg: #d8d8d8;
+            --panel: rgba(255, 255, 255, 0.92);
+            --text: #1f2428;
+            --muted: #5d6670;
+            --accent: #0f5c99;
+            --accent-2: #b41f1f;
+            --line: #2e3338;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: Georgia, "Times New Roman", serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        #app {
+            position: fixed;
+            inset: 0;
+        }
+
+        #ui {
+            position: fixed;
+            top: 14px;
+            left: 14px;
+            width: min(360px, calc(100vw - 28px));
+            background: var(--panel);
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+            padding: 12px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+            backdrop-filter: blur(2px);
+            z-index: 10;
+        }
+
+        #ui h1 {
+            margin: 0 0 8px;
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 0.2px;
+        }
+
+        #ui p {
+            margin: 6px 0;
+            font-size: 13px;
+            line-height: 1.35;
+            color: var(--muted);
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 8px 0;
+            flex-wrap: wrap;
+        }
+
+        .row label {
+            font-size: 13px;
+            color: var(--text);
+            min-width: 88px;
+        }
+
+        input[type="range"] {
+            width: 150px;
+            accent-color: var(--accent);
+        }
+
+        button {
+            border: 1px solid rgba(0, 0, 0, 0.18);
+            border-radius: 8px;
+            background: #ffffff;
+            padding: 6px 10px;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--text);
+        }
+
+        button:hover {
+            background: #f3f6f8;
+        }
+
+        #demoText {
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--text);
+            border-left: 3px solid var(--accent);
+            padding-left: 8px;
+            min-height: 40px;
+        }
+
+        .small {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .label {
+            color: #101418;
+            font-size: 26px;
+            white-space: nowrap;
+            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .label.small {
+            font-size: 20px;
+        }
+
+        .label.axis {
+            font-size: 54px;
+            font-style: italic;
+        }
+
+        .label.red {
+            color: var(--accent-2);
+            font-style: italic;
+            font-size: 52px;
+        }
+
+        @media (max-width: 700px) {
+            #ui {
+                width: min(420px, calc(100vw - 20px));
+                top: 10px;
+                left: 10px;
+                padding: 10px;
+            }
+
+            .label {
+                font-size: 18px;
+            }
+
+            .label.axis {
+                font-size: 36px;
+            }
+
+            .label.red {
+                font-size: 34px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app"></div>
+
+    <div id="ui">
+        <h1>Pinhole Camera Geometry</h1>
+        <p>Orbit to inspect, then use controls to see how a 3D point projects to the camera plane.</p>
+
+        <div class="row">
+            <label for="fSlider">Focal length f</label>
+            <input id="fSlider" type="range" min="1.6" max="4.8" step="0.05" value="3.0" />
+            <span id="fValue" class="small">3.00</span>
+        </div>
+
+        <div class="row">
+            <button id="toggleRays">Hide Rays</button>
+            <button id="toggleVirtual">Show Virtual Plane</button>
+            <button id="resetView">Reset to textbook view</button>
+        </div>
+
+        <div class="row">
+            <button id="prevStep">Prev Step</button>
+            <button id="nextStep">Next Step</button>
+            <span id="stepCounter" class="small"></span>
+        </div>
+
+        <div id="demoText"></div>
+    </div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.166.1/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.166.1/examples/jsm/"
+      }
+    }
+  </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        const app = document.getElementById('app');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xd8d8d8);
+
+        const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(9.2, 5.9, 11.0);
+        camera.lookAt(-1.4, 1.0, -2.1);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        app.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'fixed';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        app.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(-0.7, 0.8, -1.8);
+        controls.minDistance = 5;
+        controls.maxDistance = 30;
+
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x7f8c91, 0.9);
+        scene.add(hemi);
+        const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+        dir.position.set(8, 12, 7);
+        scene.add(dir);
+
+        const pinhole = new THREE.Vector3(0, 0, 0);
+        let f = 3.0;
+        const planeW = 5.8;
+        const planeH = 4.0;
+
+        const base = new THREE.Group();
+        scene.add(base);
+
+        // 2D figure mapping: the shaded camera box is recreated as 3 translucent planes
+        // so users can see both volume and alignment to the pinhole and projection plane.
+        const matFront = new THREE.MeshLambertMaterial({ color: 0x7f8a6f, transparent: true, opacity: 0.52, side: THREE.DoubleSide });
+        const matTop = new THREE.MeshLambertMaterial({ color: 0x8a9ba3, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+        const matSide = new THREE.MeshLambertMaterial({ color: 0x3d4a38, transparent: true, opacity: 0.78, side: THREE.DoubleSide });
+
+        const projectionPlane = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), matFront);
+        projectionPlane.position.set(0, 0, -f);
+
+        const topPlane = new THREE.Mesh(new THREE.PlaneGeometry(planeW, f), matTop);
+        topPlane.position.set(0, planeH / 2, -f / 2);
+        topPlane.rotation.x = Math.PI / 2;
+
+        const sidePlane = new THREE.Mesh(new THREE.PlaneGeometry(f, planeH), matSide);
+        sidePlane.position.set(planeW / 2, 0, -f / 2);
+        sidePlane.rotation.y = Math.PI / 2;
+
+        base.add(projectionPlane, topPlane, sidePlane);
+
+        const boxEdges = new THREE.LineSegments(
+            new THREE.EdgesGeometry(new THREE.BoxGeometry(planeW, planeH, f)),
+            new THREE.LineBasicMaterial({ color: 0x525a5f, transparent: true, opacity: 0.85 })
+        );
+        boxEdges.position.set(0, 0, -f / 2);
+        base.add(boxEdges);
+
+        const pinholeSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.17, 28, 28),
+            new THREE.MeshBasicMaterial({ color: 0x050505 })
+        );
+        pinholeSphere.position.copy(pinhole);
+        base.add(pinholeSphere);
+
+        const principalAxis = new THREE.ArrowHelper(
+            new THREE.Vector3(0, 0, 1),
+            pinhole,
+            7.2,
+            0x15181c,
+            0.45,
+            0.22
+        );
+        base.add(principalAxis);
+
+        // 2D figure mapping: world coordinates at camera center are shown as orthogonal 3D arrows.
+        const xArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0).normalize(), pinhole, 4.5, 0x101418, 0.34, 0.16);
+        const yArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0).normalize(), pinhole, 5.7, 0x101418, 0.34, 0.16);
+        const zArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1).normalize(), pinhole, 7.2, 0x101418, 0.34, 0.16);
+        base.add(xArrow, yArrow, zArrow);
+
+        const fGroup = new THREE.Group();
+        base.add(fGroup);
+
+        function makeArrowHead(position, directionSign) {
+            const cone = new THREE.Mesh(
+                new THREE.ConeGeometry(0.17, 0.48, 18),
+                new THREE.MeshBasicMaterial({ color: 0xd11f1f })
+            );
+            cone.position.copy(position);
+            cone.rotation.x = directionSign > 0 ? Math.PI / 2 : -Math.PI / 2;
+            return cone;
+        }
+
+        const fLineMat = new THREE.LineBasicMaterial({ color: 0xd11f1f });
+        const fLineGeo = new THREE.BufferGeometry();
+        const fLine = new THREE.Line(fLineGeo, fLineMat);
+        const fLeftHead = makeArrowHead(new THREE.Vector3(), -1);
+        const fRightHead = makeArrowHead(new THREE.Vector3(), 1);
+        fGroup.add(fLine, fLeftHead, fRightHead);
+
+        // Educational point/ray construction: one 3D world point and its projection onto planes.
+        const worldPoint = new THREE.Vector3(1.3, 1.0, 6.0);
+        const worldPointMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.13, 18, 18),
+            new THREE.MeshBasicMaterial({ color: 0x1f6aa8 })
+        );
+        worldPointMesh.position.copy(worldPoint);
+        scene.add(worldPointMesh);
+
+        const projectedOnReal = new THREE.Mesh(
+            new THREE.SphereGeometry(0.11, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0xb41f1f })
+        );
+        scene.add(projectedOnReal);
+
+        const virtualPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(planeW, planeH),
+            new THREE.MeshLambertMaterial({ color: 0x7da1c2, transparent: true, opacity: 0.28, side: THREE.DoubleSide })
+        );
+        virtualPlane.visible = false;
+        scene.add(virtualPlane);
+
+        const projectedOnVirtual = new THREE.Mesh(
+            new THREE.SphereGeometry(0.11, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0x1f7d4d })
+        );
+        projectedOnVirtual.visible = false;
+        scene.add(projectedOnVirtual);
+
+        const rayGroup = new THREE.Group();
+        scene.add(rayGroup);
+
+        function makeLine(a, b, color = 0x1e242a) {
+            const geometry = new THREE.BufferGeometry().setFromPoints([a, b]);
+            return new THREE.Line(geometry, new THREE.LineBasicMaterial({ color }));
+        }
+
+        const incomingRay = makeLine(worldPoint, pinhole, 0x1f6aa8);
+        const outgoingRayReal = makeLine(pinhole, new THREE.Vector3(), 0xb41f1f);
+        const outgoingRayVirtual = makeLine(pinhole, new THREE.Vector3(), 0x1f7d4d);
+        outgoingRayVirtual.visible = false;
+        rayGroup.add(incomingRay, outgoingRayReal, outgoingRayVirtual);
+
+        const rayToggleState = { visible: true };
+        const virtualToggleState = { visible: false };
+
+        function projectToPlane(point, planeZ) {
+            const t = planeZ / point.z;
+            return new THREE.Vector3(point.x * t, point.y * t, planeZ);
+        }
+
+        function updateGeometry() {
+            projectionPlane.position.z = -f;
+            topPlane.position.z = -f / 2;
+            topPlane.geometry.dispose();
+            topPlane.geometry = new THREE.PlaneGeometry(planeW, f);
+
+            sidePlane.position.z = -f / 2;
+            sidePlane.geometry.dispose();
+            sidePlane.geometry = new THREE.PlaneGeometry(f, planeH);
+
+            boxEdges.geometry.dispose();
+            boxEdges.geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(planeW, planeH, f));
+            boxEdges.position.z = -f / 2;
+
+            const yBottom = -planeH / 2 - 0.35;
+            const near = new THREE.Vector3(0, yBottom, 0);
+            const far = new THREE.Vector3(0, yBottom, -f);
+            fLine.geometry.setFromPoints([near, far]);
+            fLeftHead.position.copy(near);
+            fRightHead.position.copy(far);
+
+            virtualPlane.position.set(0, 0, f);
+
+            const pReal = projectToPlane(worldPoint, -f);
+            const pVirtual = projectToPlane(worldPoint, f);
+            projectedOnReal.position.copy(pReal);
+            projectedOnVirtual.position.copy(pVirtual);
+
+            outgoingRayReal.geometry.setFromPoints([pinhole, pReal]);
+            outgoingRayVirtual.geometry.setFromPoints([pinhole, pVirtual]);
+        }
+
+        function makeLabel(text, className, pos) {
+            const div = document.createElement('div');
+            div.className = className;
+            div.textContent = text;
+            const obj = new CSS2DObject(div);
+            obj.position.copy(pos);
+            scene.add(obj);
+            return obj;
+        }
+
+        const labels = {
+            title: makeLabel('Pinhole camera', 'label', new THREE.Vector3(-5.4, 3.35, -2.2)),
+            world: makeLabel('World coordinates', 'label', new THREE.Vector3(3.1, 3.35, 2.2)),
+            plane: makeLabel('Projection plane', 'label', new THREE.Vector3(-5.5, 1.0, -f + 0.2)),
+            principal: makeLabel('Optical / principal axis', 'label', new THREE.Vector3(3.5, 0.9, 4.6)),
+            center: makeLabel('Pinhole / camera center', 'label', new THREE.Vector3(0.9, -1.15, 0.4)),
+            x: makeLabel('X', 'label axis', new THREE.Vector3(5.0, 0.4, 0.0)),
+            y: makeLabel('Y', 'label axis', new THREE.Vector3(0.0, 6.2, 0.0)),
+            z: makeLabel('Z', 'label axis', new THREE.Vector3(0.0, -0.2, 7.7)),
+            f: makeLabel('f', 'label red', new THREE.Vector3(0.0, -2.6, -f)),
+            worldPoint: makeLabel('3D point P', 'label small', new THREE.Vector3(worldPoint.x + 0.25, worldPoint.y + 0.2, worldPoint.z)),
+            pReal: makeLabel('Image on projection plane', 'label small', new THREE.Vector3(0, 0, 0)),
+            pVirtual: makeLabel('Image on virtual plane', 'label small', new THREE.Vector3(0, 0, 0))
+        };
+
+        labels.pVirtual.visible = false;
+
+        function updateLabelPositions() {
+            labels.plane.position.set(-5.5, 1.0, -f + 0.2);
+            labels.f.position.set(0.0, -2.6, -f / 2);
+            labels.pReal.position.copy(projectedOnReal.position).add(new THREE.Vector3(0.22, 0.18, 0));
+            labels.pVirtual.position.copy(projectedOnVirtual.position).add(new THREE.Vector3(0.22, 0.18, 0));
+            labels.pVirtual.visible = virtualToggleState.visible;
+        }
+
+        const textbookCam = {
+            pos: new THREE.Vector3(9.2, 5.9, 11.0),
+            target: new THREE.Vector3(-0.7, 0.8, -1.8)
+        };
+
+        function resetTextbookView() {
+            camera.position.copy(textbookCam.pos);
+            controls.target.copy(textbookCam.target);
+            controls.update();
+        }
+
+        // Interaction teaching purpose:
+        // - focal slider shows x=fX/Z, y=fY/Z scaling on projection planes.
+        // - toggles reveal/compare ray routing and virtual (non-inverted) image plane.
+        const fSlider = document.getElementById('fSlider');
+        const fValue = document.getElementById('fValue');
+        const toggleRaysBtn = document.getElementById('toggleRays');
+        const toggleVirtualBtn = document.getElementById('toggleVirtual');
+        const resetViewBtn = document.getElementById('resetView');
+        const nextStepBtn = document.getElementById('nextStep');
+        const prevStepBtn = document.getElementById('prevStep');
+        const demoText = document.getElementById('demoText');
+        const stepCounter = document.getElementById('stepCounter');
+
+        fSlider.addEventListener('input', () => {
+            f = Number(fSlider.value);
+            fValue.textContent = f.toFixed(2);
+            updateGeometry();
+            updateLabelPositions();
+        });
+
+        toggleRaysBtn.addEventListener('click', () => {
+            rayToggleState.visible = !rayToggleState.visible;
+            rayGroup.visible = rayToggleState.visible;
+            projectedOnReal.visible = rayToggleState.visible;
+            if (!rayToggleState.visible) {
+                projectedOnVirtual.visible = false;
+            } else {
+                projectedOnVirtual.visible = virtualToggleState.visible;
+            }
+            toggleRaysBtn.textContent = rayToggleState.visible ? 'Hide Rays' : 'Show Rays';
+        });
+
+        toggleVirtualBtn.addEventListener('click', () => {
+            virtualToggleState.visible = !virtualToggleState.visible;
+            virtualPlane.visible = virtualToggleState.visible;
+            outgoingRayVirtual.visible = virtualToggleState.visible && rayToggleState.visible;
+            projectedOnVirtual.visible = virtualToggleState.visible && rayToggleState.visible;
+            labels.pVirtual.visible = virtualToggleState.visible;
+            toggleVirtualBtn.textContent = virtualToggleState.visible ? 'Hide Virtual Plane' : 'Show Virtual Plane';
+        });
+
+        resetViewBtn.addEventListener('click', () => {
+            resetTextbookView();
+            f = 3.0;
+            fSlider.value = String(f);
+            fValue.textContent = f.toFixed(2);
+            rayToggleState.visible = true;
+            virtualToggleState.visible = false;
+            rayGroup.visible = true;
+            projectedOnReal.visible = true;
+            projectedOnVirtual.visible = false;
+            outgoingRayVirtual.visible = false;
+            virtualPlane.visible = false;
+            labels.pVirtual.visible = false;
+            toggleRaysBtn.textContent = 'Hide Rays';
+            toggleVirtualBtn.textContent = 'Show Virtual Plane';
+            demoStep = 0;
+            applyDemoStep();
+            updateGeometry();
+            updateLabelPositions();
+        });
+
+        const demoSteps = [
+            {
+                text: 'Step 1: Textbook view. The projection plane sits behind the pinhole at distance f, while X, Y, Z axes originate at the camera center.',
+                apply: () => {
+                    resetTextbookView();
+                    rayGroup.visible = true;
+                    rayToggleState.visible = true;
+                    projectedOnReal.visible = true;
+                    virtualPlane.visible = false;
+                    projectedOnVirtual.visible = false;
+                    outgoingRayVirtual.visible = false;
+                    virtualToggleState.visible = false;
+                    labels.pVirtual.visible = false;
+                }
+            },
+            {
+                text: 'Step 2: Rays from point P pass through the pinhole and hit the projection plane, creating an inverted image point.',
+                apply: () => {
+                    rayGroup.visible = true;
+                    rayToggleState.visible = true;
+                    projectedOnReal.visible = true;
+                    virtualPlane.visible = false;
+                    projectedOnVirtual.visible = false;
+                    outgoingRayVirtual.visible = false;
+                    virtualToggleState.visible = false;
+                    labels.pVirtual.visible = false;
+                    camera.position.set(8.0, 4.5, 8.3);
+                    controls.target.set(0.0, 0.55, -2.4);
+                    controls.update();
+                }
+            },
+            {
+                text: 'Step 3: Show the virtual plane in front of the pinhole. The point lands upright there, while geometry is otherwise unchanged.',
+                apply: () => {
+                    rayGroup.visible = true;
+                    rayToggleState.visible = true;
+                    virtualPlane.visible = true;
+                    projectedOnVirtual.visible = true;
+                    outgoingRayVirtual.visible = true;
+                    virtualToggleState.visible = true;
+                    labels.pVirtual.visible = true;
+                    camera.position.set(7.2, 5.5, 10.8);
+                    controls.target.set(0.1, 0.7, 0.3);
+                    controls.update();
+                }
+            },
+            {
+                text: 'Step 4: Change f with the slider. Larger f moves the plane farther from the pinhole and scales the image position proportionally.',
+                apply: () => {
+                    rayGroup.visible = true;
+                    rayToggleState.visible = true;
+                    virtualPlane.visible = true;
+                    projectedOnVirtual.visible = true;
+                    outgoingRayVirtual.visible = true;
+                    virtualToggleState.visible = true;
+                    labels.pVirtual.visible = true;
+                    camera.position.set(10.5, 6.2, 12.2);
+                    controls.target.set(-0.3, 0.5, -1.5);
+                    controls.update();
+                }
+            }
+        ];
+
+        let demoStep = 0;
+
+        function applyDemoStep() {
+            demoSteps[demoStep].apply();
+            demoText.textContent = demoSteps[demoStep].text;
+            stepCounter.textContent = `Step ${demoStep + 1}/${demoSteps.length}`;
+            toggleRaysBtn.textContent = rayToggleState.visible ? 'Hide Rays' : 'Show Rays';
+            toggleVirtualBtn.textContent = virtualToggleState.visible ? 'Hide Virtual Plane' : 'Show Virtual Plane';
+        }
+
+        nextStepBtn.addEventListener('click', () => {
+            demoStep = (demoStep + 1) % demoSteps.length;
+            applyDemoStep();
+        });
+
+        prevStepBtn.addEventListener('click', () => {
+            demoStep = (demoStep - 1 + demoSteps.length) % demoSteps.length;
+            applyDemoStep();
+        });
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        window.addEventListener('resize', onResize);
+
+        updateGeometry();
+        updateLabelPositions();
+        applyDemoStep();
+
+        function animate() {
+            controls.update();
+            updateLabelPositions();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

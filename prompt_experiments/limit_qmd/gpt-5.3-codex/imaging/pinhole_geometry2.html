@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pinhole Geometry Interactive 3D</title>
+    <style>
+        :root {
+            --bg: #e6e6e6;
+            --panel: rgba(255, 255, 255, 0.9);
+            --text: #111;
+            --accent: #0a84ff;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            font-family: "Times New Roman", Georgia, serif;
+            color: var(--text);
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #ui {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 20;
+            width: min(390px, calc(100vw - 24px));
+            background: var(--panel);
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            padding: 10px 12px;
+            backdrop-filter: blur(2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            font-size: 15px;
+            line-height: 1.3;
+        }
+
+        #ui h1 {
+            margin: 0 0 8px;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        #ui .row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 6px 0;
+            flex-wrap: wrap;
+        }
+
+        #ui button {
+            border: 1px solid rgba(0, 0, 0, 0.25);
+            background: #fff;
+            border-radius: 8px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        #ui button:hover {
+            background: #f3f3f3;
+        }
+
+        #ui input[type="range"] {
+            width: 160px;
+        }
+
+        #stepText {
+            margin-top: 8px;
+            padding: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            background: #fff;
+            min-height: 44px;
+            font-size: 14px;
+        }
+
+        #hint {
+            margin-top: 6px;
+            font-size: 13px;
+            opacity: 0.85;
+        }
+    </style>
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+    <div id="app">
+        <div id="ui">
+            <h1>Pinhole Geometry: Perspective Projection</h1>
+            <div class="row">
+                <button id="prevStep">Prev step</button>
+                <button id="nextStep">Next step</button>
+                <button id="playDemo">Play demo</button>
+                <button id="resetView">Reset to textbook view</button>
+            </div>
+            <div class="row">
+                <label><input id="toggleRays" type="checkbox" checked /> show guide rays</label>
+                <label><input id="toggleBackPlane" type="checkbox" checked /> show projection plane</label>
+            </div>
+            <div class="row">
+                <label for="zSlider">Point depth Z:</label>
+                <input id="zSlider" type="range" min="8" max="28" step="0.1" value="18" />
+                <span id="zValue">18.0</span>
+            </div>
+            <div id="stepText"></div>
+            <div id="hint">Drag to orbit. Wheel to zoom. Right-drag to pan.</div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const app = document.getElementById('app');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xe6e6e6);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
+        const textbookCamPos = new THREE.Vector3(24, 13, 38);
+        const textbookTarget = new THREE.Vector3(8, 2, 8);
+        camera.position.copy(textbookCamPos);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        app.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.copy(textbookTarget);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+        const dir = new THREE.DirectionalLight(0xffffff, 0.5);
+        dir.position.set(6, 10, 12);
+        scene.add(dir);
+
+        function makeLabel(text, options = {}) {
+            const color = options.color || '#111111';
+            const bg = options.bg || 'rgba(255,255,255,0)';
+            const padding = options.padding ?? 14;
+            const fontPx = options.fontPx ?? 52;
+            const weight = options.weight || '700';
+
+            const c = document.createElement('canvas');
+            const ctx = c.getContext('2d');
+            ctx.font = `${weight} ${fontPx}px Times New Roman, serif`;
+            const tw = Math.ceil(ctx.measureText(text).width);
+            c.width = tw + padding * 2;
+            c.height = fontPx + padding * 2;
+
+            ctx.font = `${weight} ${fontPx}px Times New Roman, serif`;
+            if (bg !== 'transparent') {
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, c.width, c.height);
+            }
+            ctx.fillStyle = color;
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, padding, c.height * 0.52);
+
+            const tex = new THREE.CanvasTexture(c);
+            tex.needsUpdate = true;
+            tex.colorSpace = THREE.SRGBColorSpace;
+
+            const material = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+            const sprite = new THREE.Sprite(material);
+            const s = options.scale ?? 3.2;
+            sprite.scale.set(s * (c.width / c.height), s, 1);
+            return sprite;
+        }
+
+        function line(points, color = 0x222222, dashed = false) {
+            const geo = new THREE.BufferGeometry().setFromPoints(points);
+            let mat;
+            if (dashed) {
+                mat = new THREE.LineDashedMaterial({ color, dashSize: 0.9, gapSize: 0.65, transparent: true, opacity: 0.9 });
+            } else {
+                mat = new THREE.LineBasicMaterial({ color });
+            }
+            const l = new THREE.Line(geo, mat);
+            if (dashed) l.computeLineDistances();
+            return l;
+        }
+
+        const root = new THREE.Group();
+        scene.add(root);
+
+        const f = 6;
+        const planeW = 8;
+        const planeH = 10;
+
+        const pinhole = new THREE.Mesh(
+            new THREE.SphereGeometry(0.24, 24, 16),
+            new THREE.MeshStandardMaterial({ color: 0x111111 })
+        );
+        root.add(pinhole);
+
+        const pinLabel = makeLabel('Pinhole', { scale: 1.9, color: '#111' });
+        pinLabel.position.set(0.2, -1.15, 0);
+        root.add(pinLabel);
+
+        const originLabel = makeLabel('(0,0,0)', { scale: 1.45, color: '#222' });
+        originLabel.position.set(-0.9, 1.1, 0.05);
+        root.add(originLabel);
+
+        // 2D figure mapping: the black world axes in (a) are explicit 3D arrows from the pinhole origin.
+        const axisGroup = new THREE.Group();
+        root.add(axisGroup);
+        const xDir = new THREE.Vector3(0.7, 0.72, 0.18).normalize();
+        const yDir = new THREE.Vector3(0, 1, 0);
+        const zDir = new THREE.Vector3(1, 0, 0);
+
+        axisGroup.add(new THREE.ArrowHelper(xDir, new THREE.Vector3(0, 0, 0), 8.8, 0x111111, 0.9, 0.45));
+        axisGroup.add(new THREE.ArrowHelper(yDir, new THREE.Vector3(0, 0, 0), 8.5, 0x111111, 0.9, 0.45));
+        axisGroup.add(new THREE.ArrowHelper(zDir, new THREE.Vector3(0, 0, 0), 16.5, 0x111111, 1.0, 0.48));
+
+        const xLab = makeLabel('X', { scale: 2.2, color: '#111' });
+        xLab.position.copy(xDir.clone().multiplyScalar(9.7));
+        axisGroup.add(xLab);
+        const yLab = makeLabel('Y', { scale: 2.2, color: '#111' });
+        yLab.position.set(0, 9.5, 0);
+        axisGroup.add(yLab);
+        const zLab = makeLabel('Z', { scale: 2.2, color: '#111' });
+        zLab.position.set(17.5, -0.2, 0);
+        axisGroup.add(zLab);
+
+        const worldCoordLabel = makeLabel('World coordinates', { scale: 2.0, color: '#111' });
+        worldCoordLabel.position.set(4.5, 8.8, -0.4);
+        axisGroup.add(worldCoordLabel);
+
+        function makePlane(zPos, labelText, dashedBorder = false) {
+            const g = new THREE.Group();
+
+            const mesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(planeW, planeH),
+                new THREE.MeshStandardMaterial({
+                    color: 0x9aafb6,
+                    transparent: true,
+                    opacity: 0.56,
+                    side: THREE.DoubleSide,
+                    roughness: 0.8,
+                    metalness: 0.04
+                })
+            );
+            mesh.position.set(0, 0, zPos);
+            g.add(mesh);
+
+            const corners = [
+                new THREE.Vector3(-planeW / 2, -planeH / 2, zPos),
+                new THREE.Vector3(planeW / 2, -planeH / 2, zPos),
+                new THREE.Vector3(planeW / 2, planeH / 2, zPos),
+                new THREE.Vector3(-planeW / 2, planeH / 2, zPos),
+                new THREE.Vector3(-planeW / 2, -planeH / 2, zPos)
+            ];
+            g.add(line(corners, 0x222222, dashedBorder));
+
+            const lab = makeLabel(labelText, { scale: 2.0, color: '#111' });
+            lab.position.set(0, -planeH / 2 - 1.2, zPos);
+            g.add(lab);
+
+            return { group: g, mesh, corners };
+        }
+
+        // 2D figure mapping: both shaded quadrilaterals are represented as actual 3D planes at z=+f and z=-f.
+        const projPlane = makePlane(-f, 'Projection plane', true);
+        const virtPlane = makePlane(+f, 'Virtual camera plane', false);
+        root.add(projPlane.group);
+        root.add(virtPlane.group);
+
+        // Camera coordinates axes on virtual plane (green), matching panel (a) style.
+        const cameraAxesGroup = new THREE.Group();
+        root.add(cameraAxesGroup);
+        const camAxisColor = 0x30d020;
+        const camOrigin = new THREE.Vector3(0, 0, f + 0.02);
+        const xArrow = new THREE.ArrowHelper(new THREE.Vector3(-1, 0, 0), camOrigin, 2.6, camAxisColor, 0.55, 0.3);
+        const yArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), camOrigin, 2.7, camAxisColor, 0.55, 0.3);
+        cameraAxesGroup.add(xArrow, yArrow);
+
+        const xCamLabel = makeLabel('x', { scale: 1.55, color: '#111' });
+        xCamLabel.position.set(-2.95, 0.03, f + 0.12);
+        cameraAxesGroup.add(xCamLabel);
+        const yCamLabel = makeLabel('y', { scale: 1.55, color: '#111' });
+        yCamLabel.position.set(0.06, 3.0, f + 0.12);
+        cameraAxesGroup.add(yCamLabel);
+
+        // Red focal distance arrows on z-axis (both directions), to mirror textbook labels "f".
+        const fArrows = new THREE.Group();
+        root.add(fArrows);
+        fArrows.add(new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), f, 0xff2020, 0.45, 0.26));
+        fArrows.add(new THREE.ArrowHelper(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 0), f, 0xff2020, 0.45, 0.26));
+        const fLabL = makeLabel('f', { scale: 1.9, color: '#111' });
+        fLabL.position.set(-f * 0.53, -0.95, 0.05);
+        const fLabR = makeLabel('f', { scale: 1.9, color: '#111' });
+        fLabR.position.set(f * 0.54, -0.95, 0.05);
+        fArrows.add(fLabL, fLabR);
+
+        const cyanMat = new THREE.MeshStandardMaterial({ color: 0x5cd8ff, roughness: 0.3, metalness: 0.05 });
+        const pointGeom = new THREE.SphereGeometry(0.34, 24, 16);
+
+        const P = new THREE.Mesh(pointGeom, cyanMat);
+        root.add(P);
+        const pVirt = new THREE.Mesh(new THREE.SphereGeometry(0.30, 20, 14), cyanMat);
+        root.add(pVirt);
+        const pProj = new THREE.Mesh(new THREE.SphereGeometry(0.30, 20, 14), cyanMat);
+        root.add(pProj);
+
+        const PLab = makeLabel('P', { scale: 2.0, color: '#111' });
+        root.add(PLab);
+        const pVirtLab = makeLabel('p', { scale: 1.9, color: '#111' });
+        root.add(pVirtLab);
+        const pProjLab = makeLabel('p', { scale: 1.9, color: '#111' });
+        root.add(pProjLab);
+
+        const guideRaysGroup = new THREE.Group();
+        root.add(guideRaysGroup);
+
+        let rayLineFront = null;
+        let rayLineBack = null;
+        let connector = null;
+
+        const pointState = { X: 4.8, Y: 3.0, Z: 18.0 };
+
+        function updateProjectionGeometry() {
+            const { X, Y, Z } = pointState;
+            const p = new THREE.Vector3(X, Y, Z);
+            P.position.copy(p);
+
+            const tFront = f / Z;
+            const tBack = -f / Z;
+            const pFront = new THREE.Vector3(X * tFront, Y * tFront, f);
+            const pBack = new THREE.Vector3(X * tBack, Y * tBack, -f);
+
+            pVirt.position.copy(pFront);
+            pProj.position.copy(pBack);
+
+            PLab.position.copy(p).add(new THREE.Vector3(-0.1, 1.0, 0));
+            pVirtLab.position.copy(pFront).add(new THREE.Vector3(0.5, 0.9, 0.2));
+            pProjLab.position.copy(pBack).add(new THREE.Vector3(-0.55, -0.85, 0.2));
+
+            if (rayLineFront) guideRaysGroup.remove(rayLineFront);
+            if (rayLineBack) guideRaysGroup.remove(rayLineBack);
+            if (connector) guideRaysGroup.remove(connector);
+
+            // 2D figure mapping: dashed construction rays become 3D dashed lines through P, pinhole, and both plane intersections.
+            rayLineFront = line([new THREE.Vector3(0, 0, 0), p, pFront], 0xc7cfd1, true);
+            rayLineBack = line([new THREE.Vector3(0, 0, 0), pBack], 0xc7cfd1, true);
+            connector = line([p, new THREE.Vector3(X, 0, Z), new THREE.Vector3(f, 0, Z)], 0x9fb2b8, false);
+            guideRaysGroup.add(rayLineFront, rayLineBack, connector);
+
+            const scale = Z / 18;
+            P.scale.setScalar(1 + 0.05 * (scale - 1));
+
+            const zVal = document.getElementById('zValue');
+            zVal.textContent = Z.toFixed(1);
+        }
+
+        // Panel (b): coordinate relation between camera (x,y) and image (n,m) axes.
+        const panelB = new THREE.Group();
+        root.add(panelB);
+        panelB.position.set(26, 2.2, 8);
+
+        const panelW = 14;
+        const panelH = 10;
+
+        const panelMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(panelW, panelH),
+            new THREE.MeshStandardMaterial({ color: 0xe8e8e8, side: THREE.DoubleSide, roughness: 0.95 })
+        );
+        panelMesh.rotation.y = -Math.PI / 2;
+        panelB.add(panelMesh);
+
+        const panelFramePts = [];
+        const pz = 0.02;
+        panelFramePts.push(new THREE.Vector3(0, -panelH / 2, -panelW / 2 + pz));
+        panelFramePts.push(new THREE.Vector3(0, -panelH / 2, panelW / 2 - pz));
+        panelFramePts.push(new THREE.Vector3(0, panelH / 2, panelW / 2 - pz));
+        panelFramePts.push(new THREE.Vector3(0, panelH / 2, -panelW / 2 + pz));
+        panelFramePts.push(new THREE.Vector3(0, -panelH / 2, -panelW / 2 + pz));
+        panelB.add(line(panelFramePts, 0x222222));
+
+        function toPanel(u, v, eps = 0.03) {
+            return new THREE.Vector3(eps, v, u);
+        }
+
+        const panelPoint = new THREE.Mesh(new THREE.SphereGeometry(0.26, 18, 12), cyanMat);
+        panelPoint.position.copy(toPanel(-2.7, 1.7));
+        panelB.add(panelPoint);
+
+        const panelPLabel = makeLabel('p', { scale: 1.5, color: '#111' });
+        panelPLabel.position.copy(toPanel(-2.65, 0.85));
+        panelB.add(panelPLabel);
+
+        const camCenter = toPanel(0.9, 0.5);
+        const camX = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), camCenter, 2.1, 0x30d020, 0.45, 0.24);
+        const camY = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), camCenter, 2.0, 0x30d020, 0.45, 0.24);
+        panelB.add(camX, camY);
+
+        const panelXLabel = makeLabel('x', { scale: 1.35, color: '#111' });
+        panelXLabel.position.copy(toPanel(-1.45, 0.2));
+        panelB.add(panelXLabel);
+        const panelYLabel = makeLabel('y', { scale: 1.35, color: '#111' });
+        panelYLabel.position.copy(toPanel(1.15, 2.7));
+        panelB.add(panelYLabel);
+
+        const centerLabel = makeLabel('(0,0)', { scale: 1.22, color: '#222' });
+        centerLabel.position.copy(toPanel(2.3, 0.05));
+        panelB.add(centerLabel);
+
+        const imgOrigin = toPanel(-5.8, -3.6);
+        const nArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), imgOrigin, 2.4, 0x1a36ff, 0.45, 0.24);
+        const mArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), imgOrigin, 2.2, 0x1a36ff, 0.45, 0.24);
+        panelB.add(nArrow, mArrow);
+
+        const nLabel = makeLabel('n', { scale: 1.35, color: '#111' });
+        nLabel.position.copy(toPanel(-3.2, -3.8));
+        panelB.add(nLabel);
+        const mLabel = makeLabel('m', { scale: 1.35, color: '#111' });
+        mLabel.position.copy(toPanel(-5.55, -1.25));
+        panelB.add(mLabel);
+
+        const origin2Label = makeLabel('(0,0)', { scale: 1.1, color: '#222' });
+        origin2Label.position.copy(toPanel(-6.8, -4.15));
+        panelB.add(origin2Label);
+
+        const panelTitle1 = makeLabel('Camera coordinates', { scale: 1.45, color: '#111' });
+        panelTitle1.position.copy(toPanel(2.6, 2.95));
+        panelB.add(panelTitle1);
+
+        const panelTitle2 = makeLabel('Image coordinates', { scale: 1.45, color: '#111' });
+        panelTitle2.position.copy(toPanel(-2.7, -2.15));
+        panelB.add(panelTitle2);
+
+        const panelBottom = makeLabel('Virtual camera plane', { scale: 1.5, color: '#111' });
+        panelBottom.position.copy(toPanel(2.3, -4.55));
+        panelB.add(panelBottom);
+
+        const panelBLabel = makeLabel('(b)', { scale: 1.9, color: '#111' });
+        panelBLabel.position.copy(toPanel(4.7, -5.9));
+        panelB.add(panelBLabel);
+
+        const panelALabel = makeLabel('(a)', { scale: 1.9, color: '#111' });
+        panelALabel.position.set(0, -8.1, 0);
+        root.add(panelALabel);
+
+        const eqLabel = makeLabel('x = fX/Z,  y = fY/Z', { scale: 1.55, color: '#111', bg: 'rgba(255,255,255,0.85)' });
+        eqLabel.position.set(9.5, 7.6, 2.7);
+        root.add(eqLabel);
+
+        const stepText = document.getElementById('stepText');
+
+        // Interaction teaching goal: each step isolates one conceptual layer (ray path, projection equations, inversion, coordinate conversion).
+        const steps = [
+            'Step 1: Full textbook geometry. A 3D point P projects through the pinhole onto the virtual camera plane and the physical projection plane.',
+            'Step 2: The dashed ray shows one line of sight. Every image point is an intersection of this ray with a plane.',
+            'Step 3: On the virtual camera plane at z = +f, the intersection gives p with x = fX/Z and y = fY/Z.',
+            'Step 4: On the projection plane at z = -f, the point is inverted (same ray, opposite side of pinhole).',
+            'Step 5: Panel (b) links camera axes (x,y) to image axes (n,m), showing orientation differences used for pixel indexing.'
+        ];
+
+        let stepIndex = 0;
+        let demoTimer = null;
+
+        function applyStep(i) {
+            stepIndex = ((i % steps.length) + steps.length) % steps.length;
+            stepText.textContent = steps[stepIndex];
+
+            // Interaction teaching goal: toggles and visibility changes focus attention on one idea at a time.
+            if (stepIndex === 0) {
+                guideRaysGroup.visible = true;
+                projPlane.group.visible = document.getElementById('toggleBackPlane').checked;
+                panelB.visible = true;
+                eqLabel.visible = true;
+            } else if (stepIndex === 1) {
+                guideRaysGroup.visible = true;
+                projPlane.group.visible = false;
+                panelB.visible = false;
+                eqLabel.visible = false;
+            } else if (stepIndex === 2) {
+                guideRaysGroup.visible = true;
+                projPlane.group.visible = false;
+                panelB.visible = false;
+                eqLabel.visible = true;
+            } else if (stepIndex === 3) {
+                guideRaysGroup.visible = true;
+                projPlane.group.visible = true;
+                panelB.visible = false;
+                eqLabel.visible = false;
+            } else {
+                guideRaysGroup.visible = true;
+                projPlane.group.visible = document.getElementById('toggleBackPlane').checked;
+                panelB.visible = true;
+                eqLabel.visible = false;
+            }
+
+            const showRays = document.getElementById('toggleRays').checked;
+            if (!showRays) guideRaysGroup.visible = false;
+        }
+
+        function resetToTextbookView() {
+            camera.position.copy(textbookCamPos);
+            controls.target.copy(textbookTarget);
+            controls.update();
+
+            pointState.X = 4.8;
+            pointState.Y = 3.0;
+            pointState.Z = 18.0;
+            document.getElementById('zSlider').value = String(pointState.Z);
+            document.getElementById('toggleRays').checked = true;
+            document.getElementById('toggleBackPlane').checked = true;
+
+            updateProjectionGeometry();
+            applyStep(0);
+        }
+
+        document.getElementById('nextStep').addEventListener('click', () => applyStep(stepIndex + 1));
+        document.getElementById('prevStep').addEventListener('click', () => applyStep(stepIndex - 1));
+
+        document.getElementById('playDemo').addEventListener('click', () => {
+            if (demoTimer) {
+                clearInterval(demoTimer);
+                demoTimer = null;
+                document.getElementById('playDemo').textContent = 'Play demo';
+                return;
+            }
+            applyStep(0);
+            document.getElementById('playDemo').textContent = 'Pause demo';
+            demoTimer = setInterval(() => {
+                applyStep(stepIndex + 1);
+            }, 2300);
+        });
+
+        document.getElementById('resetView').addEventListener('click', () => {
+            if (demoTimer) {
+                clearInterval(demoTimer);
+                demoTimer = null;
+                document.getElementById('playDemo').textContent = 'Play demo';
+            }
+            resetToTextbookView();
+        });
+
+        document.getElementById('toggleRays').addEventListener('change', (e) => {
+            guideRaysGroup.visible = e.target.checked;
+        });
+
+        document.getElementById('toggleBackPlane').addEventListener('change', (e) => {
+            const show = e.target.checked;
+            if (stepIndex !== 1 && stepIndex !== 2) projPlane.group.visible = show;
+        });
+
+        document.getElementById('zSlider').addEventListener('input', (e) => {
+            pointState.Z = Number(e.target.value);
+            updateProjectionGeometry();
+        });
+
+        updateProjectionGeometry();
+        applyStep(0);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            const t = performance.now() * 0.0005;
+            const breathe = 0.03 * Math.sin(t * 3.7);
+            PLab.position.y = P.position.y + 1.0 + breathe;
+            pVirtLab.position.y = pVirt.position.y + 0.9 + breathe;
+            pProjLab.position.y = pProj.position.y - 0.85 + breathe;
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

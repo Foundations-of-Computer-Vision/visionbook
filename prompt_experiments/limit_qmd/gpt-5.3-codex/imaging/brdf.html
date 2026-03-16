@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BRDF Geometry Interactive</title>
+    <style>
+        :root {
+            --bg: #d9d9d9;
+            --panel: rgba(255, 255, 255, 0.9);
+            --text: #111;
+            --accent: #0b7a0b;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            color: var(--text);
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            width: min(360px, calc(100vw - 24px));
+            background: var(--panel);
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            border-radius: 10px;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+            padding: 12px;
+            backdrop-filter: blur(3px);
+            z-index: 20;
+        }
+
+        #ui h1 {
+            margin: 0 0 8px;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+
+        .row input[type="range"] {
+            width: 100%;
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        button {
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            background: #fff;
+            border-radius: 8px;
+            padding: 8px 10px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        button:hover {
+            background: #f2f2f2;
+        }
+
+        #guide {
+            margin-top: 10px;
+            font-size: 12px;
+            line-height: 1.4;
+            padding: 8px;
+            border-radius: 8px;
+            background: rgba(11, 122, 11, 0.08);
+            border: 1px solid rgba(11, 122, 11, 0.25);
+            min-height: 52px;
+        }
+
+        #readout {
+            margin-top: 8px;
+            font-size: 12px;
+            line-height: 1.35;
+            background: rgba(0, 0, 0, 0.04);
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        @media (max-width: 700px) {
+            #ui {
+                top: auto;
+                bottom: 10px;
+            }
+        }
+    </style>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+    <div id="app"></div>
+
+    <div id="ui">
+        <h1>Interactive BRDF Figure</h1>
+
+        <div class="row">
+            <label for="theta">Incident angle θ</label>
+            <span id="thetaVal">40°</span>
+        </div>
+        <div class="row">
+            <input id="theta" type="range" min="5" max="80" value="40" />
+            <span></span>
+        </div>
+
+        <div class="row">
+            <label for="alpha">Specular sharpness α</label>
+            <span id="alphaVal">30</span>
+        </div>
+        <div class="row">
+            <input id="alpha" type="range" min="2" max="120" value="30" />
+            <span></span>
+        </div>
+
+        <div class="row">
+            <label for="showDiffuse">Show diffuse outgoing rays</label>
+            <input id="showDiffuse" type="checkbox" checked />
+        </div>
+
+        <div class="row">
+            <label for="showSpec">Show specular direction r</label>
+            <input id="showSpec" type="checkbox" checked />
+        </div>
+
+        <div class="buttons">
+            <button id="nextStep">Next demo step</button>
+            <button id="resetView">Reset to textbook view</button>
+        </div>
+
+        <div id="guide"></div>
+        <div id="readout"></div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const app = document.getElementById('app');
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        app.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xd9d9d9);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+
+        const textbookCamera = {
+            position: new THREE.Vector3(9, 5.2, 7.5),
+            target: new THREE.Vector3(0, 0.35, 0)
+        };
+
+        camera.position.copy(textbookCamera.position);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.copy(textbookCamera.target);
+        controls.enableDamping = true;
+        controls.maxPolarAngle = Math.PI * 0.49;
+        controls.minDistance = 3;
+        controls.maxDistance = 22;
+
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x6a6a6a, 0.8);
+        scene.add(hemi);
+
+        const dir = new THREE.DirectionalLight(0xffffff, 0.95);
+        dir.position.set(8, 10, 6);
+        scene.add(dir);
+
+        // 2D green patch in the textbook figure -> 3D surface plane in world coordinates.
+        const plane = new THREE.Mesh(
+            new THREE.PlaneGeometry(16, 10),
+            new THREE.MeshPhongMaterial({ color: 0x73ff00, side: THREE.DoubleSide, shininess: 10 })
+        );
+        plane.rotation.x = -Math.PI / 2;
+        plane.rotation.z = -0.18;
+        scene.add(plane);
+
+        const hitPoint = new THREE.Vector3(0, 0, 0);
+
+        const hitMarker = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.26, 0.26, 0.04, 32),
+            new THREE.MeshBasicMaterial({ color: 0x7dff5f })
+        );
+        hitMarker.position.copy(hitPoint).add(new THREE.Vector3(0, 0.02, 0));
+        scene.add(hitMarker);
+
+        const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(0.36, 0.05, 16, 48),
+            new THREE.MeshBasicMaterial({ color: 0x2f5a2f })
+        );
+        ring.position.copy(hitPoint).add(new THREE.Vector3(0, 0.025, 0));
+        ring.rotation.x = Math.PI / 2;
+        scene.add(ring);
+
+        function makeArrow(start, end, color = 0x111111, shaftRadius = 0.04, headLength = 0.28, headRadius = 0.13, opacity = 1) {
+            const group = new THREE.Group();
+            const dirVec = new THREE.Vector3().subVectors(end, start);
+            const len = dirVec.length();
+            const unit = dirVec.clone().normalize();
+
+            const shaftLen = Math.max(0.001, len - headLength);
+            const shaft = new THREE.Mesh(
+                new THREE.CylinderGeometry(shaftRadius, shaftRadius, shaftLen, 14),
+                new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity })
+            );
+
+            const head = new THREE.Mesh(
+                new THREE.ConeGeometry(headRadius, headLength, 16),
+                new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity })
+            );
+
+            const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), unit);
+            shaft.quaternion.copy(quat);
+            head.quaternion.copy(quat);
+
+            shaft.position.copy(start).addScaledVector(unit, shaftLen / 2);
+            head.position.copy(start).addScaledVector(unit, shaftLen + headLength / 2);
+
+            group.add(shaft, head);
+            return group;
+        }
+
+        function makeLine(start, end, color = 0xffaa00, opacity = 1, width = 0.06) {
+            const line = new THREE.Mesh(
+                new THREE.CylinderGeometry(width, width, start.distanceTo(end), 12),
+                new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity })
+            );
+            const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+            const dirVec = new THREE.Vector3().subVectors(end, start).normalize();
+            const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirVec);
+            line.position.copy(mid);
+            line.quaternion.copy(quat);
+            return line;
+        }
+
+        function textSprite(text, opts = {}) {
+            const {
+                size = 96,
+                color = '#111',
+                bg = 'rgba(255,255,255,0)',
+                font = 'italic 62px Times New Roman',
+                scale = 1.6
+            } = opts;
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = size * 4;
+            canvas.height = size * 2;
+
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = font;
+            ctx.fillStyle = color;
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 20, canvas.height / 2 + 2);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.needsUpdate = true;
+            tex.minFilter = THREE.LinearFilter;
+
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+            sprite.scale.set(scale * 2.2, scale, 1);
+            return sprite;
+        }
+
+        const ui = {
+            theta: document.getElementById('theta'),
+            thetaVal: document.getElementById('thetaVal'),
+            alpha: document.getElementById('alpha'),
+            alphaVal: document.getElementById('alphaVal'),
+            showDiffuse: document.getElementById('showDiffuse'),
+            showSpec: document.getElementById('showSpec'),
+            nextStep: document.getElementById('nextStep'),
+            resetView: document.getElementById('resetView'),
+            guide: document.getElementById('guide'),
+            readout: document.getElementById('readout')
+        };
+
+        const state = {
+            thetaDeg: 40,
+            alpha: 30,
+            showDiffuse: true,
+            showSpec: true,
+            demoStep: 0,
+            p: new THREE.Vector3(),
+            q: new THREE.Vector3(0.92, 0.36, -0.18).normalize(),
+            n: new THREE.Vector3(0, 1, 0)
+        };
+
+        const incomingGroup = new THREE.Group();
+        const vectorGroup = new THREE.Group();
+        const diffuseGroup = new THREE.Group();
+        const specGroup = new THREE.Group();
+
+        scene.add(incomingGroup, vectorGroup, diffuseGroup, specGroup);
+
+        const labelGroup = new THREE.Group();
+        scene.add(labelGroup);
+
+        // 2D labels from the figure -> billboarding text sprites placed near their 3D counterparts.
+        const lblLin = textSprite('l_in(λ)', { font: 'italic 68px Times New Roman', scale: 2.1 });
+        const lblEquation = textSprite('l_out = F(l_in, n, λ, p, q)', { font: 'italic 58px Times New Roman', scale: 2.9 });
+        const lblP = textSprite('p', { font: 'bold 70px Times New Roman', scale: 0.95 });
+        const lblN = textSprite('n', { font: 'bold 70px Times New Roman', scale: 0.95 });
+        const lblQ = textSprite('q', { font: 'bold 70px Times New Roman', scale: 0.95 });
+        const lblR = textSprite('r', { font: 'bold 62px Times New Roman', color: '#0b5f0b', scale: 0.85 });
+
+        labelGroup.add(lblLin, lblEquation, lblP, lblN, lblQ, lblR);
+
+        function clearGroup(group) {
+            while (group.children.length > 0) {
+                const child = group.children.pop();
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+                    else child.material.dispose();
+                }
+            }
+        }
+
+        function sphericalToDir(thetaDeg, phiDeg) {
+            const t = THREE.MathUtils.degToRad(thetaDeg);
+            const p = THREE.MathUtils.degToRad(phiDeg);
+            const x = Math.sin(t) * Math.cos(p);
+            const y = Math.cos(t);
+            const z = Math.sin(t) * Math.sin(p);
+            return new THREE.Vector3(x, y, z).normalize();
+        }
+
+        function rebuildSceneGeometry() {
+            clearGroup(incomingGroup);
+            clearGroup(vectorGroup);
+            clearGroup(diffuseGroup);
+            clearGroup(specGroup);
+
+            state.p.copy(sphericalToDir(state.thetaDeg, 210));
+
+            const source = hitPoint.clone().addScaledVector(state.p, 6.8);
+
+            // Incoming power ray (yellow/orange) maps the 2D diagonal l_in(λ) stroke into 3D.
+            const inRay1 = makeLine(source, hitPoint, 0xffde00, 1, 0.085);
+            const inRay2 = makeLine(source.clone().lerp(hitPoint, 0.25), hitPoint, 0xff9c00, 0.95, 0.072);
+            incomingGroup.add(inRay1, inRay2);
+
+            // Vector p (toward source), surface normal n, and outgoing viewing direction q.
+            const pArrow = makeArrow(hitPoint, hitPoint.clone().addScaledVector(state.p, 2.1), 0x111111, 0.035, 0.27, 0.11);
+            const nArrow = makeArrow(hitPoint, hitPoint.clone().addScaledVector(state.n, 2.2), 0x111111, 0.04, 0.29, 0.13);
+            const qArrow = makeArrow(hitPoint, hitPoint.clone().addScaledVector(state.q, 2.6), 0x111111, 0.04, 0.29, 0.13);
+            vectorGroup.add(pArrow, nArrow, qArrow);
+
+            const inDir = state.p.clone().negate().normalize();
+            const r = inDir.reflect(state.n).normalize();
+
+            if (state.showSpec) {
+                const rArrow = makeArrow(hitPoint, hitPoint.clone().addScaledVector(r, 2.0), 0x0b8f0b, 0.03, 0.24, 0.1, 0.92);
+                specGroup.add(rArrow);
+
+                const coneLength = 1.5;
+                const cone = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.45, coneLength, 20, 1, true),
+                    new THREE.MeshBasicMaterial({ color: 0x34c334, transparent: true, opacity: 0.22, side: THREE.DoubleSide })
+                );
+                const coneDir = r.clone();
+                const coneQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), coneDir);
+                cone.quaternion.copy(coneQuat);
+                cone.position.copy(hitPoint).addScaledVector(coneDir, coneLength * 0.5);
+                specGroup.add(cone);
+
+                lblR.visible = true;
+                lblR.position.copy(hitPoint).addScaledVector(r, 2.35);
+            } else {
+                lblR.visible = false;
+            }
+
+            if (state.showDiffuse) {
+                // Diffuse hemisphere rays teach that Lambertian reflection scatters in many outgoing directions.
+                const rings = 3;
+                const perRing = 10;
+                for (let i = 1; i <= rings; i++) {
+                    const elev = i / (rings + 1);
+                    const y = elev;
+                    const rad = Math.sqrt(Math.max(0.01, 1 - y * y));
+                    for (let j = 0; j < perRing; j++) {
+                        const a = (j / perRing) * Math.PI * 2;
+                        const dirH = new THREE.Vector3(rad * Math.cos(a), y, rad * Math.sin(a)).normalize();
+                        const len = 1.4 + 0.35 * Math.random();
+                        const opacity = 0.18 + 0.22 * y;
+                        diffuseGroup.add(makeArrow(hitPoint, hitPoint.clone().addScaledVector(dirH, len), 0x48d948, 0.017, 0.16, 0.06, opacity));
+                    }
+                }
+            }
+
+            lblLin.position.copy(source).add(new THREE.Vector3(-0.2, 0.55, -0.2));
+            lblEquation.position.set(5.8, 3.0, -0.4);
+            lblP.position.copy(hitPoint.clone().addScaledVector(state.p, 1.2).add(new THREE.Vector3(-0.16, 0.2, 0.1)));
+            lblN.position.copy(hitPoint.clone().addScaledVector(state.n, 1.35).add(new THREE.Vector3(0.15, 0.1, 0.1)));
+            lblQ.position.copy(hitPoint.clone().addScaledVector(state.q, 1.25).add(new THREE.Vector3(0.1, 0.16, 0.12)));
+
+            const ndotp = Math.max(0, state.n.dot(state.p));
+            const rdotq = Math.max(0, r.dot(state.q));
+            const lambert = ndotp;
+            const specular = Math.pow(rdotq, state.alpha);
+            const total = 0.6 * lambert + 0.8 * specular;
+
+            ui.readout.innerHTML =
+                'Lambert term  a(n·p): <b>' + lambert.toFixed(3) + '</b><br>' +
+                'Specular term  (r·q)<sup>α</sup>: <b>' + specular.toFixed(3) + '</b><br>' +
+                'Illustrative l<sub>out</sub> scale: <b>' + total.toFixed(3) + '</b>';
+        }
+
+        const guideSteps = [
+            {
+                text: 'Step 1: Textbook view. The incoming light l_in(λ) strikes the surface at the hit point; n is the surface normal.',
+                apply: () => {
+                    state.thetaDeg = 40;
+                    state.alpha = 30;
+                    state.showDiffuse = true;
+                    state.showSpec = true;
+                }
+            },
+            {
+                text: 'Step 2: Increase incident angle θ. As p tilts away from n, the Lambert term n·p decreases.',
+                apply: () => {
+                    state.thetaDeg = 68;
+                    state.showDiffuse = false;
+                    state.showSpec = false;
+                }
+            },
+            {
+                text: 'Step 3: Turn on diffuse rays. Lambertian reflection sends light into many outgoing directions.',
+                apply: () => {
+                    state.showDiffuse = true;
+                    state.showSpec = false;
+                }
+            },
+            {
+                text: 'Step 4: Turn on specular direction r. This is the mirror reflection direction of the incoming ray.',
+                apply: () => {
+                    state.showSpec = true;
+                    state.alpha = 12;
+                }
+            },
+            {
+                text: 'Step 5: Increase α. Specular lobe narrows, so only q near r receives strong highlights.',
+                apply: () => {
+                    state.alpha = 90;
+                    state.showDiffuse = true;
+                    state.showSpec = true;
+                }
+            }
+        ];
+
+        function syncUiFromState() {
+            ui.theta.value = String(state.thetaDeg);
+            ui.alpha.value = String(state.alpha);
+            ui.showDiffuse.checked = state.showDiffuse;
+            ui.showSpec.checked = state.showSpec;
+            ui.thetaVal.textContent = state.thetaDeg + '°';
+            ui.alphaVal.textContent = String(state.alpha);
+        }
+
+        // Interactions are designed to teach how BRDF output changes with angle and specular sharpness.
+        ui.theta.addEventListener('input', () => {
+            state.thetaDeg = Number(ui.theta.value);
+            ui.thetaVal.textContent = state.thetaDeg + '°';
+            state.demoStep = 0;
+            rebuildSceneGeometry();
+        });
+
+        ui.alpha.addEventListener('input', () => {
+            state.alpha = Number(ui.alpha.value);
+            ui.alphaVal.textContent = String(state.alpha);
+            state.demoStep = 0;
+            rebuildSceneGeometry();
+        });
+
+        ui.showDiffuse.addEventListener('change', () => {
+            state.showDiffuse = ui.showDiffuse.checked;
+            state.demoStep = 0;
+            rebuildSceneGeometry();
+        });
+
+        ui.showSpec.addEventListener('change', () => {
+            state.showSpec = ui.showSpec.checked;
+            state.demoStep = 0;
+            rebuildSceneGeometry();
+        });
+
+        ui.nextStep.addEventListener('click', () => {
+            const idx = state.demoStep % guideSteps.length;
+            guideSteps[idx].apply();
+            ui.guide.textContent = guideSteps[idx].text;
+            state.demoStep += 1;
+            syncUiFromState();
+            rebuildSceneGeometry();
+        });
+
+        function resetToTextbookView() {
+            state.thetaDeg = 40;
+            state.alpha = 30;
+            state.showDiffuse = true;
+            state.showSpec = true;
+            state.demoStep = 0;
+            camera.position.copy(textbookCamera.position);
+            controls.target.copy(textbookCamera.target);
+            controls.update();
+            ui.guide.textContent = 'Reset to textbook view. Use orbit/zoom to inspect geometry, then run demo steps.';
+            syncUiFromState();
+            rebuildSceneGeometry();
+        }
+
+        ui.resetView.addEventListener('click', resetToTextbookView);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        ui.guide.textContent = 'Click "Next demo step" for a guided walkthrough of how l_out depends on p, n, q, and α.';
+        syncUiFromState();
+        rebuildSceneGeometry();
+
+        function animate() {
+            controls.update();
+            renderer.render(scene, camera);
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

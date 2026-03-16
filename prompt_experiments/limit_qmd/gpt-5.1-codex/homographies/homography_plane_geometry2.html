@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Homography: Planar Surface Projection</title>
+  <style>
+    body {
+      margin: 0;
+      background: #0f1115;
+      color: #f0f0f0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      overflow: hidden;
+    }
+    #scene {
+      width: 100vw;
+      height: 100vh;
+    }
+    #ui {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      padding: 16px;
+      max-width: 320px;
+      background: rgba(10, 12, 18, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #ui h2 {
+      margin: 0 0 4px 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    #ui button,
+    #ui input[type="range"] {
+      width: 100%;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    #ui label {
+      font-size: 13px;
+    }
+    #stepText {
+      font-size: 13px;
+      line-height: 1.4;
+      min-height: 48px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 6px;
+      padding: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div id="scene"></div>
+  <div id="ui">
+    <h2>Homography Explorer</h2>
+    <label for="tilt">Plane tilt: <span id="tiltValue">15°</span></label>
+    <input id="tilt" type="range" min="0" max="35" value="15" />
+    <button id="toggleRays">Hide Projection Rays</button>
+    <button id="highlightPoint">Highlight Correspondence</button>
+    <button id="step">Guided Step ➜</button>
+    <div id="stepText">Step 1 · Align the planar surface with its own coordinate frame.</div>
+    <button id="reset">Reset to textbook view</button>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x06070b);
+
+    const cam = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    cam.position.set(12, 8, 16);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.getElementById('scene').appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(cam, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 0, -6);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    const labels = [];
+    function createLabel(text, color = '#ffffff') {
+      const canvas = document.createElement('canvas');
+      const size = 256;
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = 'rgba(0,0,0,0)';
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = color;
+      ctx.font = '28px "Segoe UI"';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, size / 2, size / 2);
+      const texture = new THREE.CanvasTexture(canvas);
+      const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(2.5, 2.5, 1);
+      labels.push(sprite);
+      return sprite;
+    }
+
+    // Camera center (black dot in 2D diagram) mapped to a 3D sphere at the origin
+    const cameraCenter = new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 32, 32),
+      new THREE.MeshStandardMaterial({ color: 0x111111 })
+    );
+    scene.add(cameraCenter);
+    const cameraLabel = createLabel('Camera center');
+    cameraLabel.position.set(0.6, 0.6, 0.2);
+    scene.add(cameraLabel);
+
+    // Camera image plane (vertical rectangle in original figure)
+    const imagePlaneZ = -3;
+    const cameraPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(5, 5),
+      new THREE.MeshStandardMaterial({ color: 0xeeeeee, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+    );
+    cameraPlane.position.z = imagePlaneZ;
+    scene.add(cameraPlane);
+    const cameraPlaneLabel = createLabel('Camera plane', '#9ad7ff');
+    cameraPlaneLabel.position.set(0, 3.5, imagePlaneZ);
+    scene.add(cameraPlaneLabel);
+
+    // Small patch inside camera plane showing the projected region
+    const imagePatch = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.5, 1.5),
+      new THREE.MeshStandardMaterial({ color: 0x777777, opacity: 0.8, transparent: true, side: THREE.DoubleSide })
+    );
+    imagePatch.position.set(-0.8, 0.1, imagePlaneZ + 0.02);
+    scene.add(imagePatch);
+
+    // Frustum edges from camera center to camera plane corners to mimic dashed outlines in 2D
+    const frustumGroup = new THREE.Group();
+    const halfW = 2.5;
+    const halfH = 2.5;
+    const corners = [
+      new THREE.Vector3(-halfW, -halfH, imagePlaneZ),
+      new THREE.Vector3(halfW, -halfH, imagePlaneZ),
+      new THREE.Vector3(halfW, halfH, imagePlaneZ),
+      new THREE.Vector3(-halfW, halfH, imagePlaneZ)
+    ];
+    const frustumMaterial = new THREE.LineDashedMaterial({ color: 0x4f4f4f, dashSize: 0.5, gapSize: 0.2 });
+    corners.forEach((corner, idx) => {
+      const geom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), corner]);
+      const line = new THREE.Line(geom, frustumMaterial);
+      line.computeLineDistances();
+      frustumGroup.add(line);
+      if (idx < 4) {
+        const edgeGeom = new THREE.BufferGeometry().setFromPoints([corner, corners[(idx + 1) % 4]]);
+        const edge = new THREE.Line(edgeGeom, frustumMaterial);
+        edge.computeLineDistances();
+        frustumGroup.add(edge);
+      }
+    });
+    scene.add(frustumGroup);
+
+    // Planar surface group containing the plane, its axes, and the surface patch
+    const planeGroup = new THREE.Group();
+    planeGroup.position.set(0, -0.5, -10);
+    scene.add(planeGroup);
+
+    // Large planar surface (gray polygon in 2D)
+    const planarSurface = new THREE.Mesh(
+      new THREE.PlaneGeometry(10, 6),
+      new THREE.MeshStandardMaterial({ color: 0x9c9c9c, side: THREE.DoubleSide, opacity: 0.9, transparent: true })
+    );
+    planarSurface.rotation.y = THREE.MathUtils.degToRad(-20);
+    planarSurface.rotation.x = THREE.MathUtils.degToRad(15);
+    planeGroup.add(planarSurface);
+    const planeLabel = createLabel('Planar surface', '#ffffff');
+    planeLabel.position.set(0, 4, -1);
+    planarSurface.add(planeLabel);
+
+    // Plane coordinate axes (red X, Y, Z as in diagram)
+    function arrow(color, dir) {
+      const length = 2;
+      const arrowHelper = new THREE.ArrowHelper(dir.clone().normalize(), new THREE.Vector3(), length, color, 0.35, 0.2);
+      return arrowHelper;
+    }
+    const axisGroup = new THREE.Group();
+    axisGroup.add(arrow(0xff4b4b, new THREE.Vector3(1, 0, 0)));
+    axisGroup.add(arrow(0xff8f1f, new THREE.Vector3(0, 1, 0)));
+    axisGroup.add(arrow(0xff1f7a, new THREE.Vector3(0, 0, 1)));
+    axisGroup.position.set(-2, 0.2, -1.5);
+    planeGroup.add(axisGroup);
+
+    const xLabel = createLabel('X', '#ff4b4b');
+    const yLabel = createLabel('Y', '#ff8f1f');
+    const zLabel = createLabel('Z', '#ff1f7a');
+    axisGroup.add(xLabel);
+    axisGroup.add(yLabel);
+    axisGroup.add(zLabel);
+    xLabel.position.set(2.2, 0, 0);
+    yLabel.position.set(0, 2.2, 0);
+    zLabel.position.set(0, 0, 2.2);
+
+    // Image axes (green x/y) near camera center
+    const imageAxes = new THREE.AxesHelper(2.5);
+    imageAxes.material.depthTest = false;
+    imageAxes.position.set(0, 0, -0.1);
+    scene.add(imageAxes);
+    const imageAxesLabelX = createLabel('x', '#9cff94');
+    const imageAxesLabelY = createLabel('y', '#9cff94');
+    imageAxesLabelX.position.set(2.7, -0.2, -0.3);
+    imageAxesLabelY.position.set(-0.2, 2.7, -0.3);
+    scene.add(imageAxesLabelX);
+    scene.add(imageAxesLabelY);
+
+    // Corresponding point on plane and its projection on the image plane
+    const planePoint = new THREE.Mesh(
+      new THREE.SphereGeometry(0.25, 32, 32),
+      new THREE.MeshStandardMaterial({ color: 0x00d0ff })
+    );
+    planePoint.position.set(2, 0.5, 0);
+    planarSurface.add(planePoint); // stays on planar surface mesh
+
+    const planePointLabel = createLabel('(X, Y, 0)', '#00e5ff');
+    planePointLabel.position.set(0.4, 0.4, 0);
+    planePoint.add(planePointLabel);
+
+    const imagePoint = new THREE.Mesh(
+      new THREE.SphereGeometry(0.22, 32, 32),
+      new THREE.MeshStandardMaterial({ color: 0x00d0ff })
+    );
+    scene.add(imagePoint);
+    const imagePointLabel = createLabel('(x, y)', '#00e5ff');
+    imagePoint.add(imagePointLabel);
+    imagePointLabel.position.set(0.4, 0.4, 0);
+
+    // Projection rays lines (light blue dashed lines in figure)
+    const rayMaterial = new THREE.LineDashedMaterial({ color: 0x00c8ff, dashSize: 0.6, gapSize: 0.25 });
+    const rayToPlaneGeom = new THREE.BufferGeometry();
+    rayToPlaneGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const rayToPlane = new THREE.Line(rayToPlaneGeom, rayMaterial);
+    rayToPlane.computeLineDistances();
+    scene.add(rayToPlane);
+
+    const rayToImageGeom = new THREE.BufferGeometry();
+    rayToImageGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const rayToImage = new THREE.Line(rayToImageGeom, rayMaterial);
+    rayToImage.computeLineDistances();
+    scene.add(rayToImage);
+
+    // Line connecting plane point to projected point highlights the mapping inside the plane
+    const connectGeom = new THREE.BufferGeometry();
+    connectGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+    const connectLine = new THREE.Line(
+      connectGeom,
+      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 })
+    );
+    scene.add(connectLine);
+
+    const tempWorld = new THREE.Vector3();
+    const projected = new THREE.Vector3();
+    function updateProjectionLines() {
+      planePoint.getWorldPosition(tempWorld);
+      const t = imagePlaneZ / tempWorld.z;
+      projected.copy(tempWorld).multiplyScalar(t);
+      imagePoint.position.copy(projected);
+
+      const rp = rayToPlane.geometry.attributes.position.array;
+      rp[0] = 0; rp[1] = 0; rp[2] = 0;
+      rp[3] = tempWorld.x; rp[4] = tempWorld.y; rp[5] = tempWorld.z;
+      rayToPlane.geometry.attributes.position.needsUpdate = true;
+      rayToPlane.computeLineDistances();
+
+      const ri = rayToImage.geometry.attributes.position.array;
+      ri[0] = 0; ri[1] = 0; ri[2] = 0;
+      ri[3] = projected.x; ri[4] = projected.y; ri[5] = projected.z;
+      rayToImage.geometry.attributes.position.needsUpdate = true;
+      rayToImage.computeLineDistances();
+
+      const cp = connectLine.geometry.attributes.position.array;
+      cp[0] = tempWorld.x; cp[1] = tempWorld.y; cp[2] = tempWorld.z;
+      cp[3] = projected.x; cp[4] = projected.y; cp[5] = projected.z;
+      connectLine.geometry.attributes.position.needsUpdate = true;
+    }
+
+    updateProjectionLines();
+
+    // UI interactions
+    const tiltSlider = document.getElementById('tilt');
+    const tiltValue = document.getElementById('tiltValue');
+    tiltSlider.addEventListener('input', () => {
+      const deg = Number(tiltSlider.value);
+      tiltValue.textContent = `${deg}°`;
+      // Rotating planar surface around the x-axis simulates different plane orientations
+      planeGroup.rotation.x = THREE.MathUtils.degToRad(deg - 15);
+      updateProjectionLines();
+    });
+
+    let raysVisible = true;
+    document.getElementById('toggleRays').addEventListener('click', (e) => {
+      raysVisible = !raysVisible;
+      rayToPlane.visible = raysVisible;
+      rayToImage.visible = raysVisible;
+      connectLine.visible = raysVisible;
+      e.target.textContent = raysVisible ? 'Hide Projection Rays' : 'Show Projection Rays';
+    });
+
+    let highlight = false;
+    const highlightButton = document.getElementById('highlightPoint');
+    highlightButton.addEventListener('click', () => {
+      highlight = !highlight;
+      const emissive = highlight ? 0xffffff : 0x000000;
+      planePoint.material.emissive = new THREE.Color(emissive);
+      imagePoint.material.emissive = new THREE.Color(emissive);
+      highlightButton.textContent = highlight ? 'Unhighlight Correspondence' : 'Highlight Correspondence';
+    });
+
+    const steps = [
+      {
+        text: 'Step 1 · Align the planar surface with its own coordinate frame.',
+        action: () => {
+          tiltSlider.value = 15;
+          tiltSlider.dispatchEvent(new Event('input'));
+          raysVisible = true;
+          document.getElementById('toggleRays').textContent = 'Hide Projection Rays';
+          rayToPlane.visible = rayToImage.visible = connectLine.visible = true;
+        }
+      },
+      {
+        text: 'Step 2 · Rays from the camera center hit both the plane and the image plane.',
+        action: () => {
+          highlight = false;
+          highlightButton.textContent = 'Highlight Correspondence';
+          planePoint.material.emissive = imagePoint.material.emissive = new THREE.Color(0x000000);
+          planePoint.material.color.set(0x00e5ff);
+          imagePoint.material.color.set(0x00e5ff);
+          raysVisible = true;
+          document.getElementById('toggleRays').textContent = 'Hide Projection Rays';
+          rayToPlane.visible = rayToImage.visible = connectLine.visible = true;
+        }
+      },
+      {
+        text: 'Step 3 · Tilting the plane still maps each point to the image plane via a homography.',
+        action: () => {
+          tiltSlider.value = 30;
+          tiltSlider.dispatchEvent(new Event('input'));
+          highlight = true;
+          highlightButton.textContent = 'Unhighlight Correspondence';
+          planePoint.material.emissive = imagePoint.material.emissive = new THREE.Color(0xffffff);
+        }
+      }
+    ];
+
+    let currentStep = 0;
+    const stepText = document.getElementById('stepText');
+    document.getElementById('step').addEventListener('click', () => {
+      currentStep = (currentStep + 1) % steps.length;
+      const step = steps[currentStep];
+      step.action();
+      stepText.textContent = step.text;
+    });
+
+    document.getElementById('reset').addEventListener('click', () => {
+      tiltSlider.value = 15;
+      tiltSlider.dispatchEvent(new Event('input'));
+      raysVisible = true;
+      highlight = false;
+      planePoint.material.emissive = imagePoint.material.emissive = new THREE.Color(0x000000);
+      document.getElementById('toggleRays').textContent = 'Hide Projection Rays';
+      document.getElementById('highlightPoint').textContent = 'Highlight Correspondence';
+      document.getElementById('stepText').textContent = steps[0].text;
+      currentStep = 0;
+      controls.reset();
+      controls.target.set(0, 0, -6);
+      cam.position.set(12, 8, 16);
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      labels.forEach((sprite) => sprite.lookAt(cam.position));
+      controls.update();
+      renderer.render(scene, cam);
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+      cam.aspect = window.innerWidth / window.innerHeight;
+      cam.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

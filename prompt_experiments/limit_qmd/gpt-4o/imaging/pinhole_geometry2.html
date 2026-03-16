@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinhole Camera Geometry</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        button {
+            margin: 5px;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <button id="resetView">Reset to Textbook View</button>
+        <button id="toggleProjection">Toggle Projection</button>
+        <button id="stepDemo">Step Through Demo</button>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Orbit Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Axes Helper
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // Geometry and Materials
+        const materialRed = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const materialGreen = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const materialBlue = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+        const materialGray = new THREE.MeshBasicMaterial({ color: 0x808080, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+
+        // Projection Plane
+        const planeGeometry = new THREE.PlaneGeometry(5, 5);
+        const projectionPlane = new THREE.Mesh(planeGeometry, materialGray);
+        projectionPlane.position.set(0, 0, -5);
+        scene.add(projectionPlane);
+
+        // Pinhole
+        const pinholeGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+        const pinhole = new THREE.Mesh(pinholeGeometry, materialRed);
+        pinhole.position.set(0, 0, 0);
+        scene.add(pinhole);
+
+        // Light Rays
+        const createRay = (start, end, color) => {
+            const points = [
+                new THREE.Vector3(...start),
+                new THREE.Vector3(...end)
+            ];
+            const rayGeometry = new THREE.BufferGeometry().setFromPoints(points);
+            const rayMaterial = new THREE.LineBasicMaterial({ color });
+            return new THREE.Line(rayGeometry, rayMaterial);
+        };
+
+        const ray1 = createRay([0, 0, 0], [2, 2, -5], 0x00ff00); // Green ray
+        const ray2 = createRay([0, 0, 0], [-2, -2, -5], 0x0000ff); // Blue ray
+        scene.add(ray1, ray2);
+
+        // Labels
+        const createLabel = (text, position) => {
+            const div = document.createElement('div');
+            div.style.position = 'absolute';
+            div.style.color = 'black';
+            div.style.backgroundColor = 'white';
+            div.style.padding = '2px 5px';
+            div.style.borderRadius = '3px';
+            div.style.fontSize = '12px';
+            div.innerText = text;
+            document.body.appendChild(div);
+
+            const updatePosition = () => {
+                const vector = position.clone().project(camera);
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+                div.style.left = `${x}px`;
+                div.style.top = `${y}px`;
+            };
+
+            return { div, updatePosition };
+        };
+
+        const labels = [
+            createLabel('Pinhole', new THREE.Vector3(0, 0, 0)),
+            createLabel('Projection Plane', new THREE.Vector3(0, 0, -5)),
+            createLabel('Ray 1', new THREE.Vector3(2, 2, -5)),
+            createLabel('Ray 2', new THREE.Vector3(-2, -2, -5))
+        ];
+
+        // Animation Loop
+        const animate = () => {
+            requestAnimationFrame(animate);
+            controls.update();
+            labels.forEach(label => label.updatePosition());
+            renderer.render(scene, camera);
+        };
+
+        // Camera Position
+        camera.position.set(0, 0, 10);
+        controls.update();
+
+        // Interaction Handlers
+        document.getElementById('resetView').addEventListener('click', () => {
+            camera.position.set(0, 0, 10);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        });
+
+        document.getElementById('toggleProjection').addEventListener('click', () => {
+            projectionPlane.visible = !projectionPlane.visible;
+        });
+
+        let demoStep = 0;
+        const demoSteps = [
+            () => {
+                camera.position.set(0, 0, 10);
+                controls.target.set(0, 0, 0);
+                controls.update();
+            },
+            () => {
+                camera.position.set(5, 5, 10);
+                controls.target.set(0, 0, -5);
+                controls.update();
+            },
+            () => {
+                camera.position.set(-5, -5, 10);
+                controls.target.set(0, 0, -5);
+                controls.update();
+            }
+        ];
+
+        document.getElementById('stepDemo').addEventListener('click', () => {
+            demoSteps[demoStep]();
+            demoStep = (demoStep + 1) % demoSteps.length;
+        });
+
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start Animation
+        animate();
+    </script>
+</body>
+
+</html>

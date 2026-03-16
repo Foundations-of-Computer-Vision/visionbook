@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinhole Camera Coordinate System</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 300px;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+        }
+
+        p {
+            margin: 0 0 15px 0;
+            font-size: 14px;
+            color: #333;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            margin-bottom: 8px;
+            padding: 8px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .slider-container {
+            margin-bottom: 15px;
+        }
+
+        .slider-container label {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .slider-container input {
+            width: 100%;
+        }
+
+        .label {
+            color: #000;
+            font-size: 14px;
+            padding: 2px 4px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 3px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui-container">
+        <h1>Pinhole Camera System</h1>
+        <p>Interactive 3D visualization of the pinhole camera geometry and right-hand coordinate system.</p>
+
+        <div class="slider-container">
+            <label for="focal-length">Focal Length (f): <span id="f-val">2.0</span></label>
+            <input type="range" id="focal-length" min="1" max="4" step="0.1" value="2.0">
+        </div>
+
+        <button id="btn-toggle-box">Toggle Camera Box</button>
+        <button id="btn-animate-ray">Animate Light Ray</button>
+        <button id="btn-reset">Reset to Textbook View</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <!-- Import map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --- Setup Scene ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // --- Helper: Create Labels ---
+        function createLabel(text, position, offset = [0, 0, 0]) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            const label = new CSS2DObject(div);
+            label.position.copy(position);
+            label.position.add(new THREE.Vector3(...offset));
+            scene.add(label);
+            return label;
+        }
+
+        // --- 3D Elements ---
+
+        // Origins & Axes (Right-Hand Rule)
+        // Y is Up, Z is Optical axis (Forward), X is Right (Wait, normally X is right, Y is up, Z is back for right hand. 
+        // In the textbook image: Z is pointing right-forward, Y is up, X is pointing deep left back. 
+        // Let's orient the scene so natural XYZ maps to the figure.
+
+        const origin = new THREE.Vector3(0, 0, 0);
+
+        // Axes
+        const axesGroup = new THREE.Group();
+        const arrowLength = 3;
+        const xAxis = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), origin, arrowLength, 0x000000, 0.2, 0.1); // Represents X in figure
+        const yAxis = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), origin, arrowLength, 0x000000, 0.2, 0.1);
+        const zAxis = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), origin, arrowLength + 1.5, 0x000000, 0.2, 0.1); // Represents Z (Optical axis)
+
+        axesGroup.add(xAxis);
+        axesGroup.add(yAxis);
+        axesGroup.add(zAxis);
+        scene.add(axesGroup);
+
+        createLabel('X', new THREE.Vector3(0, 0, -arrowLength), [0, 10, 0]);
+        createLabel('Y', new THREE.Vector3(0, arrowLength, 0), [0, 10, 0]);
+        createLabel('Z', new THREE.Vector3(arrowLength + 1.5, 0, 0), [0, 10, 0]);
+        createLabel('World coordinates', new THREE.Vector3(0, arrowLength - 0.5, -arrowLength / 2), [0, 0, 0]);
+
+        // Camera Box (Mapping 2D box to 3D geometry)
+        // Positioned behind the pinhole (origin)
+        let focalLength = 2.0;
+        const boxMaterial = new THREE.MeshBasicMaterial({ color: 0x8a988d, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
+        const boxGeometry = new THREE.BoxGeometry(focalLength, 2.5, 2.5);
+        // Box is extending along negative Z axis of our transformed coordinates (which is -X in arbitrary three.js space)
+        const cameraBox = new THREE.Mesh(boxGeometry, boxMaterial);
+        cameraBox.position.set(-focalLength / 2, 0, 0); // Center of box is half focal length behind origin
+
+        // Edge lines for the box
+        const edges = new THREE.EdgesGeometry(boxGeometry);
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x555555, linewidth: 2 });
+        const boxEdges = new THREE.LineSegments(edges, lineMaterial);
+        cameraBox.add(boxEdges);
+        scene.add(cameraBox);
+
+        // Pinhole (Origin)
+        const pinholeGeo = new THREE.SphereGeometry(0.1, 16, 16);
+        const pinholeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const pinhole = new THREE.Mesh(pinholeGeo, pinholeMat);
+        scene.add(pinhole);
+        createLabel('Pinhole / camera center', new THREE.Vector3(0, -0.3, 0.5), [0, 20, 0]);
+        createLabel('Optical / principal axis', new THREE.Vector3(3.5, 0.2, 0), [0, 10, 0]);
+
+        // Projection Plane
+        const planeGeo = new THREE.PlaneGeometry(2.5, 2.5);
+        const planeMat = new THREE.MeshBasicMaterial({ color: 0xc1cac1, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
+        const projPlane = new THREE.Mesh(planeGeo, planeMat);
+        projPlane.rotation.y = Math.PI / 2;
+        projPlane.position.set(-focalLength, 0, 0);
+        scene.add(projPlane);
+
+        const projPlaneLabel = createLabel('Projection plane', new THREE.Vector3(-focalLength, 1.5, 1.5), [0, 0, 0]);
+
+        // Focal Length indicator (f)
+        const fArrowGeo = new THREE.BufferGeometry();
+        const fArrowMat = new THREE.LineBasicMaterial({ color: 0xff0000 });
+        const fLine = new THREE.Line(fArrowGeo, fArrowMat);
+        scene.add(fLine);
+        const fLabel = createLabel('f', new THREE.Vector3(-focalLength / 2, -1.5, 1.25), [0, -10, 0]);
+
+        function updateFocalLength(f) {
+            focalLength = f;
+            cameraBox.scale.set(f / 2.0, 1, 1);
+            cameraBox.position.set(-f / 2, 0, 0);
+            projPlane.position.set(-f, 0, 0);
+            projPlaneLabel.position.set(-f, 1.5, 1.5);
+
+            fLabel.position.set(-f / 2, -1.5, 1.25);
+
+            const points = [];
+            points.push(new THREE.Vector3(-f, -1.4, 1.25));
+            points.push(new THREE.Vector3(0, -1.4, 1.25));
+            fLine.geometry.setFromPoints(points);
+        }
+        updateFocalLength(2.0);
+
+        // Animated Ray
+        const rayPointGeo = new THREE.SphereGeometry(0.08, 16, 16);
+        const rayPointMat = new THREE.MeshBasicMaterial({ color: 0xffa500 });
+        const rayPoint = new THREE.Mesh(rayPointGeo, rayPointMat);
+        scene.add(rayPoint);
+        rayPoint.visible = false;
+
+        const rayLineMat = new THREE.LineDashedMaterial({ color: 0xffa500, dashSize: 0.1, gapSize: 0.05 });
+        const rayLineGeo = new THREE.BufferGeometry();
+        const rayLine = new THREE.LineSegments(rayLineGeo, rayLineMat);
+        scene.add(rayLine);
+
+        let isAnimating = false;
+        let animProgress = 0;
+        const startPoint = new THREE.Vector3(4, 2, -2);
+        let endPoint = new THREE.Vector3();
+
+        // --- Interaction Logic ---
+
+        // Textbook View
+        function resetView() {
+            // Match the angle of the image as closely as possible
+            camera.position.set(4, 3, 6);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+        resetView();
+
+        document.getElementById('btn-reset').addEventListener('click', resetView);
+
+        document.getElementById('btn-toggle-box').addEventListener('click', () => {
+            boxMaterial.opacity = boxMaterial.opacity === 0.8 ? 0.2 : 0.8;
+            boxEdges.visible = !boxEdges.visible;
+        });
+
+        document.getElementById('focal-length').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            document.getElementById('f-val').innerText = val.toFixed(1);
+            updateFocalLength(val);
+        });
+
+        document.getElementById('btn-animate-ray').addEventListener('click', () => {
+            if (isAnimating) return;
+            isAnimating = true;
+            animProgress = 0;
+            rayPoint.visible = true;
+
+            // Similar triangles property: x_proj = -f * X/Z, y_proj = -f * Y/Z
+            // Here, our Z is actually pointing right (World Z in image). 
+            // The textbook has Z as the optical axis.
+            // In our Three.js setup:
+            // World Z (Optical Axis) = Three.js X
+            // World Y = Three.js Y
+            // World X = Three.js -Z
+            const Z = startPoint.x;
+            const Y = startPoint.y;
+            const X = -startPoint.z;
+
+            // Projection on plane (at Three.js x = -focalLength)
+            endPoint.set(-focalLength, -(focalLength / Z) * Y, (focalLength / Z) * X);
+
+            const points = [startPoint.clone(), endPoint.clone()];
+            rayLineGeo.setFromPoints(points);
+            rayLine.computeLineDistances();
+            rayLine.visible = true;
+        });
+
+        // --- Render Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isAnimating) {
+                animProgress += 0.01;
+                if (animProgress <= 1) {
+                    rayPoint.position.lerpVectors(startPoint, endPoint, animProgress);
+                } else {
+                    isAnimating = false;
+                    setTimeout(() => {
+                        rayPoint.visible = false;
+                        rayLine.visible = false;
+                    }, 2000);
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

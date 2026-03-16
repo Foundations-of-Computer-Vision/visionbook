@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interactive Homography Figure</title>
+    <style>
+        :root {
+            --bg: #e6e6e6;
+            --panel: rgba(255, 255, 255, 0.9);
+            --ink: #111111;
+            --accent: #0f5a9c;
+            --line: #1f1f1f;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+            color: var(--ink);
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #ui {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            width: min(360px, calc(100% - 28px));
+            background: var(--panel);
+            border: 1px solid rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+            backdrop-filter: blur(2px);
+            z-index: 10;
+        }
+
+        #ui h1 {
+            margin: 0 0 8px 0;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+
+        #ui p {
+            margin: 0 0 10px 0;
+            font-size: 13px;
+            line-height: 1.35;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .row label {
+            min-width: 104px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+        }
+
+        button {
+            border: 1px solid rgba(0, 0, 0, 0.25);
+            background: white;
+            color: var(--ink);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #f4f7fb;
+        }
+
+        .small {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        #stepText {
+            margin-top: 6px;
+            padding: 8px;
+            border-radius: 8px;
+            background: rgba(15, 90, 156, 0.08);
+            border: 1px solid rgba(15, 90, 156, 0.2);
+            font-size: 12.5px;
+            line-height: 1.35;
+            min-height: 48px;
+        }
+
+        #footer {
+            margin-top: 8px;
+            font-size: 11.5px;
+            opacity: 0.8;
+        }
+    </style>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+    <div id="app"></div>
+    <div id="ui">
+        <h1>Homography: Grid to Warped Grid</h1>
+        <p>Drag to orbit. This recreates the textbook figure as two 2D planes in 3D with a projective mapping between
+            them.</p>
+
+        <div class="row">
+            <label for="warp">Warp strength</label>
+            <input id="warp" type="range" min="0" max="1" step="0.01" value="1" />
+            <span id="warpValue" class="small">1.00</span>
+        </div>
+
+        <div class="row">
+            <label for="corresp">Correspondences</label>
+            <input id="corresp" type="checkbox" checked />
+            <span class="small">show point matches</span>
+        </div>
+
+        <div class="row">
+            <label for="vanishing">Vanishing trend</label>
+            <input id="vanishing" type="checkbox" />
+            <span class="small">extend warped lines</span>
+        </div>
+
+        <div class="row">
+            <button id="prevStep">Previous step</button>
+            <button id="nextStep">Next step</button>
+            <button id="playDemo">Play demo</button>
+        </div>
+
+        <div id="stepText"></div>
+
+        <div class="row">
+            <button id="resetView">Reset to textbook view</button>
+        </div>
+
+        <div id="footer">Concept: homographies preserve straight lines and intersections, but not angles or parallelism.
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const app = document.getElementById('app');
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0xe6e6e6, 1);
+        app.appendChild(renderer.domElement);
+
+        const scene = new THREE.Scene();
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(0, 1.2, 18);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 0, 0);
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.85);
+        scene.add(ambient);
+        const dir = new THREE.DirectionalLight(0xffffff, 0.35);
+        dir.position.set(2, 4, 8);
+        scene.add(dir);
+
+        const leftCenter = new THREE.Vector3(-7.2, 0, 0);
+        const rightCenter = new THREE.Vector3(7.2, 0, -0.9);
+        const leftW = 7.2;
+        const leftH = 7.2;
+
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x000000 });
+        const lineMatThin = new THREE.LineBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.9 });
+        const helperMat = new THREE.LineBasicMaterial({ color: 0x0f5a9c, transparent: true, opacity: 0.4 });
+        const vanishingMat = new THREE.LineBasicMaterial({ color: 0x9c4f0f, transparent: true, opacity: 0.75 });
+
+        const sourceGroup = new THREE.Group();
+        const targetGroup = new THREE.Group();
+        const correspGroup = new THREE.Group();
+        const vanishingGroup = new THREE.Group();
+        const arrowGroup = new THREE.Group();
+
+        scene.add(sourceGroup, targetGroup, correspGroup, vanishingGroup, arrowGroup);
+
+        // Maps textbook 2D source coordinates to the left 3D panel.
+        function srcToWorld(u, v) {
+            return new THREE.Vector3(
+                leftCenter.x + u,
+                leftCenter.y + v,
+                leftCenter.z
+            );
+        }
+
+        // Maps transformed 2D coordinates to the right 3D panel.
+        function dstToWorld(x, y) {
+            return new THREE.Vector3(
+                rightCenter.x + x,
+                rightCenter.y + y,
+                rightCenter.z
+            );
+        }
+
+        function addLine(group, a, b, material = lineMat) {
+            const geom = new THREE.BufferGeometry().setFromPoints([a, b]);
+            const line = new THREE.Line(geom, material);
+            group.add(line);
+            return line;
+        }
+
+        function createTextSprite(text, color = '#111') {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 128;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'rgba(255,255,255,0.0)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = '600 42px Segoe UI, Arial, sans-serif';
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.needsUpdate = true;
+            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+            const sprite = new THREE.Sprite(mat);
+            sprite.scale.set(4.2, 1.05, 1);
+            return sprite;
+        }
+
+        function drawArrow() {
+            const shaftA = new THREE.Vector3(-1.9, 0, 0);
+            const shaftB = new THREE.Vector3(1.9, 0, 0);
+            addLine(arrowGroup, shaftA, shaftB, lineMat);
+            addLine(arrowGroup, new THREE.Vector3(1.9, 0, 0), new THREE.Vector3(1.2, 0.35, 0), lineMat);
+            addLine(arrowGroup, new THREE.Vector3(1.9, 0, 0), new THREE.Vector3(1.2, -0.35, 0), lineMat);
+            const label = createTextSprite('H', '#0f5a9c');
+            label.position.set(0, 0.65, 0);
+            arrowGroup.add(label);
+        }
+
+        // Solves for a homography from 4 point correspondences with h33 fixed to 1.
+        function solveHomography4(srcPts, dstPts) {
+            const A = [];
+            const b = [];
+            for (let i = 0; i < 4; i++) {
+                const [x, y] = srcPts[i];
+                const [u, v] = dstPts[i];
+                A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]);
+                b.push(u);
+                A.push([0, 0, 0, x, y, 1, -v * x, -v * y]);
+                b.push(v);
+            }
+
+            // Gaussian elimination for 8x8 linear system.
+            const n = 8;
+            for (let i = 0; i < n; i++) {
+                let pivot = i;
+                let maxVal = Math.abs(A[i][i]);
+                for (let r = i + 1; r < n; r++) {
+                    const val = Math.abs(A[r][i]);
+                    if (val > maxVal) {
+                        maxVal = val;
+                        pivot = r;
+                    }
+                }
+                if (pivot !== i) {
+                    [A[i], A[pivot]] = [A[pivot], A[i]];
+                    [b[i], b[pivot]] = [b[pivot], b[i]];
+                }
+
+                const diag = A[i][i] || 1e-12;
+                for (let c = i; c < n; c++) A[i][c] /= diag;
+                b[i] /= diag;
+
+                for (let r = 0; r < n; r++) {
+                    if (r === i) continue;
+                    const f = A[r][i];
+                    if (Math.abs(f) < 1e-12) continue;
+                    for (let c = i; c < n; c++) A[r][c] -= f * A[i][c];
+                    b[r] -= f * b[i];
+                }
+            }
+
+            const h = b;
+            return [
+                [h[0], h[1], h[2]],
+                [h[3], h[4], h[5]],
+                [h[6], h[7], 1]
+            ];
+        }
+
+        function applyH(H, x, y) {
+            const u = H[0][0] * x + H[0][1] * y + H[0][2];
+            const v = H[1][0] * x + H[1][1] * y + H[1][2];
+            const w = H[2][0] * x + H[2][1] * y + H[2][2];
+            return [u / w, v / w];
+        }
+
+        const srcCorners = [
+            [-2, 2],
+            [2, 2],
+            [2, -2],
+            [-2, -2]
+        ];
+
+        const dstCorners = [
+            [-2.4, 2.6],
+            [2.3, 1.1],
+            [2.25, -1.1],
+            [-2.4, -2.6]
+        ];
+
+        const Hfull = solveHomography4(srcCorners, dstCorners);
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function clearGroup(g) {
+            while (g.children.length) {
+                const child = g.children.pop();
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) {
+                    if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                    else child.material.dispose();
+                }
+            }
+        }
+
+        const N = 4;
+        let warpStrength = 1.0;
+        let showCorrespondences = true;
+        let showVanishing = false;
+
+        function transformPoint(x, y, t) {
+            const [u, v] = applyH(Hfull, x, y);
+            return [lerp(x, u, t), lerp(y, v, t)];
+        }
+
+        function buildSourceGrid() {
+            clearGroup(sourceGroup);
+
+            for (let i = 0; i <= N; i++) {
+                const u = -leftW / 2 + i * (leftW / N);
+                const x = (u / (leftW / 2)) * 2;
+                addLine(sourceGroup, srcToWorld(u, -leftH / 2), srcToWorld(u, leftH / 2), lineMat);
+
+                const y = (-leftH / 2 + i * (leftH / N));
+                const sy = (y / (leftH / 2)) * 2;
+                addLine(sourceGroup, srcToWorld(-leftW / 2, y), srcToWorld(leftW / 2, y), lineMat);
+            }
+
+            const border = [
+                srcToWorld(-leftW / 2, -leftH / 2),
+                srcToWorld(leftW / 2, -leftH / 2),
+                srcToWorld(leftW / 2, leftH / 2),
+                srcToWorld(-leftW / 2, leftH / 2)
+            ];
+            addLine(sourceGroup, border[0], border[1], lineMat);
+            addLine(sourceGroup, border[1], border[2], lineMat);
+            addLine(sourceGroup, border[2], border[3], lineMat);
+            addLine(sourceGroup, border[3], border[0], lineMat);
+
+            const label = createTextSprite('Original grid', '#111');
+            label.position.set(leftCenter.x, leftCenter.y + leftH / 2 + 1.0, leftCenter.z);
+            sourceGroup.add(label);
+        }
+
+        function mapSourceUnitsToWorld(x, y) {
+            const u = (x / 2) * (leftW / 2);
+            const v = (y / 2) * (leftH / 2);
+            return [u, v];
+        }
+
+        function mapTargetUnitsToWorld(x, y) {
+            const scale = 1.8;
+            return [x * scale, y * scale];
+        }
+
+        function buildTargetGrid() {
+            clearGroup(targetGroup);
+            clearGroup(correspGroup);
+            clearGroup(vanishingGroup);
+
+            // 2D textbook elements are mapped to 3D lines by transforming each source grid line with H.
+            for (let i = 0; i <= N; i++) {
+                const x = -2 + (4 * i / N);
+                const pA = transformPoint(x, -2, warpStrength);
+                const pB = transformPoint(x, 2, warpStrength);
+                const [ax, ay] = mapTargetUnitsToWorld(pA[0], pA[1]);
+                const [bx, by] = mapTargetUnitsToWorld(pB[0], pB[1]);
+                addLine(targetGroup, dstToWorld(ax, ay), dstToWorld(bx, by), lineMat);
+            }
+
+            for (let i = 0; i <= N; i++) {
+                const y = -2 + (4 * i / N);
+                const pA = transformPoint(-2, y, warpStrength);
+                const pB = transformPoint(2, y, warpStrength);
+                const [ax, ay] = mapTargetUnitsToWorld(pA[0], pA[1]);
+                const [bx, by] = mapTargetUnitsToWorld(pB[0], pB[1]);
+                addLine(targetGroup, dstToWorld(ax, ay), dstToWorld(bx, by), lineMat);
+
+                if (showVanishing) {
+                    const dirX = bx - ax;
+                    const dirY = by - ay;
+                    const len = Math.hypot(dirX, dirY) || 1;
+                    const ux = dirX / len;
+                    const uy = dirY / len;
+                    const ext = 3.2;
+                    const aExt = dstToWorld(ax - ux * ext, ay - uy * ext);
+                    const bExt = dstToWorld(bx + ux * ext, by + uy * ext);
+                    addLine(vanishingGroup, aExt, bExt, vanishingMat);
+                }
+            }
+
+            const corners = [
+                transformPoint(-2, -2, warpStrength),
+                transformPoint(2, -2, warpStrength),
+                transformPoint(2, 2, warpStrength),
+                transformPoint(-2, 2, warpStrength)
+            ].map(([x, y]) => {
+                const [wx, wy] = mapTargetUnitsToWorld(x, y);
+                return dstToWorld(wx, wy);
+            });
+            addLine(targetGroup, corners[0], corners[1], lineMat);
+            addLine(targetGroup, corners[1], corners[2], lineMat);
+            addLine(targetGroup, corners[2], corners[3], lineMat);
+            addLine(targetGroup, corners[3], corners[0], lineMat);
+
+            const label = createTextSprite('After homography H', '#111');
+            label.position.set(rightCenter.x, rightCenter.y + 5.1, rightCenter.z);
+            targetGroup.add(label);
+
+            if (showCorrespondences) {
+                // Interaction: these lines teach that intersections correspond under a single projective transform.
+                const sample = [
+                    [-2, -2], [-1, -1], [0, 0], [1, 1], [2, 2],
+                    [-2, 2], [2, -2], [-1, 1], [1, -1]
+                ];
+                for (const [x, y] of sample) {
+                    const [su, sv] = mapSourceUnitsToWorld(x, y);
+                    const s = srcToWorld(su, sv);
+                    const [tx, ty] = transformPoint(x, y, warpStrength);
+                    const [tu, tv] = mapTargetUnitsToWorld(tx, ty);
+                    const t = dstToWorld(tu, tv);
+                    addLine(correspGroup, s, t, helperMat);
+
+                    const g = new THREE.SphereGeometry(0.075, 12, 10);
+                    const m = new THREE.MeshBasicMaterial({ color: 0x0f5a9c });
+                    const ms = new THREE.Mesh(g, m);
+                    const mt = new THREE.Mesh(g, m);
+                    ms.position.copy(s);
+                    mt.position.copy(t);
+                    correspGroup.add(ms, mt);
+                }
+            }
+        }
+
+        drawArrow();
+        buildSourceGrid();
+        buildTargetGrid();
+
+        const titleA = createTextSprite('Preserves straight lines', '#0f5a9c');
+        titleA.position.set(0, -4.8, 0);
+        scene.add(titleA);
+
+        const steps = [
+            {
+                text: 'Step 1: Start from the regular square grid. Lines are straight and parallel.',
+                apply: () => {
+                    setWarp(0);
+                    setCorresp(false);
+                    setVanishing(false);
+                }
+            },
+            {
+                text: 'Step 2: Turn on correspondences. The same intersections are paired across the mapping.',
+                apply: () => {
+                    setWarp(0.35);
+                    setCorresp(true);
+                    setVanishing(false);
+                }
+            },
+            {
+                text: 'Step 3: Increase warp. A homography keeps lines straight but changes angles and spacing.',
+                apply: () => {
+                    setWarp(1.0);
+                    setCorresp(true);
+                    setVanishing(false);
+                }
+            },
+            {
+                text: 'Step 4: Extend transformed rows. Originally parallel lines can converge (vanishing trend).',
+                apply: () => {
+                    setWarp(1.0);
+                    setCorresp(false);
+                    setVanishing(true);
+                }
+            }
+        ];
+
+        let stepIdx = 0;
+        let demoTimer = null;
+
+        const warpEl = document.getElementById('warp');
+        const warpValueEl = document.getElementById('warpValue');
+        const correspEl = document.getElementById('corresp');
+        const vanishingEl = document.getElementById('vanishing');
+        const stepTextEl = document.getElementById('stepText');
+
+        function setWarp(v) {
+            warpStrength = Number(v);
+            warpEl.value = String(warpStrength);
+            warpValueEl.textContent = warpStrength.toFixed(2);
+            buildTargetGrid();
+        }
+
+        function setCorresp(v) {
+            showCorrespondences = Boolean(v);
+            correspEl.checked = showCorrespondences;
+            buildTargetGrid();
+        }
+
+        function setVanishing(v) {
+            showVanishing = Boolean(v);
+            vanishingEl.checked = showVanishing;
+            buildTargetGrid();
+        }
+
+        function applyStep(i) {
+            stepIdx = (i + steps.length) % steps.length;
+            steps[stepIdx].apply();
+            stepTextEl.textContent = steps[stepIdx].text;
+        }
+
+        function resetTextbookView() {
+            camera.position.set(0, 1.2, 18);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            applyStep(2);
+        }
+
+        document.getElementById('nextStep').addEventListener('click', () => applyStep(stepIdx + 1));
+        document.getElementById('prevStep').addEventListener('click', () => applyStep(stepIdx - 1));
+
+        document.getElementById('playDemo').addEventListener('click', () => {
+            if (demoTimer) {
+                clearInterval(demoTimer);
+                demoTimer = null;
+                return;
+            }
+            applyStep(0);
+            demoTimer = setInterval(() => {
+                applyStep(stepIdx + 1);
+            }, 2400);
+            setTimeout(() => {
+                if (demoTimer) {
+                    clearInterval(demoTimer);
+                    demoTimer = null;
+                }
+            }, 9600);
+        });
+
+        document.getElementById('resetView').addEventListener('click', resetTextbookView);
+
+        warpEl.addEventListener('input', (e) => setWarp(e.target.value));
+        correspEl.addEventListener('change', (e) => setCorresp(e.target.checked));
+        vanishingEl.addEventListener('change', (e) => setVanishing(e.target.checked));
+
+        applyStep(2);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        renderer.setAnimationLoop(() => {
+            controls.update();
+            renderer.render(scene, camera);
+        });
+    </script>
+</body>
+
+</html>

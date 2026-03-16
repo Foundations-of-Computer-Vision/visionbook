@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Homogeneous Coordinates 3D Visualization (Zoomed)</title>
+  <style>
+    body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: white; }
+    .label {
+      position: absolute;
+      font-size: 13px;
+      color: black;
+      transform: translate(0, -50%);
+      pointer-events: none;
+      z-index: 1;
+    }
+  </style>
+</head>
+<body>
+<script type="module">
+  import * as THREE from 'https://esm.sh/three';
+  import { OrbitControls } from 'https://esm.sh/three/examples/jsm/controls/OrbitControls';
+
+  // --- Scene & Renderer ---
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xffffff);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  // --- Camera with Zoom ---
+  const aspect = window.innerWidth / window.innerHeight;
+  const d = 5;
+  const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+  camera.position.set(3, 4, 6);
+  camera.lookAt(0, 0, 0);
+
+  // ZOOM factor
+  camera.zoom = 2;                  // increase this to zoom in more
+  camera.updateProjectionMatrix();  // must call after changing zoom
+
+  // --- Controls ---
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.enableZoom = true;       // allow mouse-wheel zoom
+  controls.zoomSpeed = 1.2;         // adjust scroll sensitivity
+  controls.minZoom = 0.5;           // how far out you can zoom
+  controls.maxZoom = 5;             // how far in you can zoom
+
+  // --- Axes ---
+  const makeAxis = (dir, label, offset) => {
+    const arrow = new THREE.ArrowHelper(dir.clone().normalize(), new THREE.Vector3(0, 0, 0), 2.5, 0x000000, 0.2, 0.1);
+    scene.add(arrow);
+    return { label, position: dir.clone().normalize().multiplyScalar(2.8).add(offset) };
+  };
+  const axisLabels = [
+    makeAxis(new THREE.Vector3(1, 0, 0), 'x', new THREE.Vector3(0.1, 0, 0)),
+    makeAxis(new THREE.Vector3(0, 1, 0), 'y', new THREE.Vector3(0, 0.1, 0)),
+    makeAxis(new THREE.Vector3(0, 0, 1), 'w', new THREE.Vector3(0, 0, 0.1)),
+  ];
+
+  // --- Planes ---
+  const createPlane = (z, color, labelText, labelOffset) => {
+    const geometry = new THREE.PlaneGeometry(3, 3);
+    const material = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.2 });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(0, 0, z);
+    scene.add(mesh);
+    return { label: labelText, position: labelOffset };
+  };
+  const planes = [
+    createPlane(0, 0x3399ff, 'Heterogeneous', new THREE.Vector3(-2.2, 1.2, 0)),
+    createPlane(1, 0x66cc66, 'Homogeneous', new THREE.Vector3(2.2, 0.6, 1)),
+  ];
+
+  // --- Points ---
+  const pointMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+  const pointGeom = new THREE.SphereGeometry(0.06, 16, 16);
+  const p1 = new THREE.Mesh(pointGeom, pointMat);
+  const p2 = new THREE.Mesh(pointGeom, pointMat);
+  const p3 = new THREE.Mesh(pointGeom, pointMat);
+  p1.position.set(1.2, 1.2, 0);
+  p2.position.set(1.2, 1.2, 1);
+  p3.position.set(2.4, 2.4, 2);
+  scene.add(p1, p2, p3);
+
+  const pointLabels = [
+    { label: '(x, y)', position: p1.position.clone().add(new THREE.Vector3(0.15, 0, 0)) },
+    { label: '(x, y, 1)', position: p2.position.clone().add(new THREE.Vector3(0.15, 0, 0)) },
+    { label: '(λx, λy, λ)', position: p3.position.clone().add(new THREE.Vector3(0.15, 0, 0)) },
+  ];
+
+  // --- Lines ---
+  const dottedLineMat = new THREE.LineDashedMaterial({ color: 0x333333, dashSize: 0.05, gapSize: 0.05 });
+  const dottedLineGeom = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, 0),
+    p3.position,
+  ]);
+  const dottedLine = new THREE.Line(dottedLineGeom, dottedLineMat);
+  dottedLine.computeLineDistances();
+  scene.add(dottedLine);
+
+  const lineSolidGeom = new THREE.BufferGeometry().setFromPoints([
+    p1.position,
+    p2.position,
+  ]);
+  const lineSolid = new THREE.Line(lineSolidGeom, new THREE.LineBasicMaterial({ color: 0x333333 }));
+  scene.add(lineSolid);
+
+  // --- Tick at w=1 ---
+  const tickGeom = new THREE.CylinderGeometry(0.03, 0.03, 0.05, 16);
+  const tickMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const tick = new THREE.Mesh(tickGeom, tickMat);
+  tick.position.set(0, 0, 1);
+  tick.rotation.x = Math.PI / 2;
+  scene.add(tick);
+
+  const tickLabel = { label: '(0, 0, 1)', position: tick.position.clone().add(new THREE.Vector3(0.1, 0.1, 0)) };
+
+  // --- HTML Labels ---
+  const vector = new THREE.Vector3();
+  const createLabel = text => {
+    const div = document.createElement('div');
+    div.className = 'label';
+    div.innerHTML = text;
+    document.body.appendChild(div);
+    return div;
+  };
+  const allLabels = [
+    ...axisLabels.map(a => ({ div: createLabel(a.label), pos: a.position })),
+    ...planes.map(p => ({ div: createLabel(p.label), pos: p.position })),
+    ...pointLabels.map(p => ({ div: createLabel(p.label), pos: p.position })),
+    { div: createLabel(tickLabel.label), pos: tickLabel.position },
+  ];
+  const updateLabels = () => {
+    allLabels.forEach(({ div, pos }) => {
+      vector.copy(pos).project(camera);
+      const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+      const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+      div.style.left = `${x}px`;
+      div.style.top = `${y}px`;
+    });
+  };
+
+  // --- Animation Loop ---
+  const animate = () => {
+    requestAnimationFrame(animate);
+    controls.update();
+    updateLabels();
+    renderer.render(scene, camera);
+  };
+  animate();
+
+  // --- Handle Resize ---
+  window.addEventListener('resize', () => {
+    const aspect = window.innerWidth / window.innerHeight;
+    camera.left = -d * aspect;
+    camera.right = d * aspect;
+    camera.top = d;
+    camera.bottom = -d;
+    camera.updateProjectionMatrix();  
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+</script>
+</body>
+</html>

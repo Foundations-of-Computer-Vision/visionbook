@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Perspective Projection Similar Triangles</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: "Segoe UI", system-ui, sans-serif;
+            color: #0f172a;
+            background: radial-gradient(circle at top right, #f5fbff, #e5ecf5 45%, #f7f7fb 100%);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #scene {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .ui-panel {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 320px;
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: 0 18px 35px rgba(15, 23, 42, 0.18);
+            border-radius: 16px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.85rem;
+            backdrop-filter: blur(6px);
+        }
+
+        .ui-panel h1 {
+            font-size: 1.15rem;
+            margin: 0;
+            color: #0f172a;
+            letter-spacing: 0.02em;
+        }
+
+        label {
+            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .value {
+            font-size: 0.8rem;
+            color: #475569;
+        }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        button {
+            border: none;
+            border-radius: 999px;
+            padding: 0.65rem 1rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            background: linear-gradient(120deg, #2563eb, #1d4ed8);
+            color: white;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        button.secondary {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 18px rgba(37, 99, 235, 0.25);
+        }
+
+        #guideText {
+            font-size: 0.85rem;
+            color: #0f172a;
+            padding: 0.75rem;
+            border-radius: 12px;
+            background: #edf2ff;
+            line-height: 1.4;
+        }
+    </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+
+<body>
+    <div id="scene"></div>
+    <div class="ui-panel">
+        <h1>Perspective Projection Lab</h1>
+        <label>
+            World depth Z (distance from pinhole)
+            <input type="range" id="depthRange" min="3" max="10" step="0.1" value="6" />
+            <span class="value" id="depthValue">6.0 units</span>
+        </label>
+        <label>
+            World lateral X (horizontal offset)
+            <input type="range" id="xRange" min="0.5" max="3.5" step="0.1" value="1.4" />
+            <span class="value" id="xValue">1.4 units</span>
+        </label>
+        <label>
+            World height Y (vertical offset)
+            <input type="range" id="yRange" min="0.5" max="3" step="0.1" value="1.2" />
+            <span class="value" id="yValue">1.2 units</span>
+        </label>
+        <label class="toggle-row">
+            <input type="checkbox" id="sensorToggle" checked />
+            Show physical sensor plane (inverted image)
+        </label>
+        <button id="stepButton">Guided Step →</button>
+        <button id="resetButton" class="secondary">Reset to textbook view</button>
+        <div id="guideText">Step 1 · Place a 3D point P(X, Y, Z) in front of the pinhole.</div>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const container = document.getElementById('scene');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xfafafa);
+
+        const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 200);
+        const defaultCameraPos = new THREE.Vector3(8, 5, 8);
+        camera.position.copy(defaultCameraPos);
+        camera.lookAt(0, 1, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 1, 4);
+
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.75);
+        scene.add(hemi);
+        const dir = new THREE.DirectionalLight(0xffffff, 0.65);
+        dir.position.set(6, 8, 4);
+        scene.add(dir);
+
+        const pinhole = new THREE.Mesh(
+            new THREE.SphereGeometry(0.07, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0x222222 })
+        );
+        scene.add(pinhole);
+
+        function buildAxis(dirVec, length, color) {
+            const arrow = new THREE.ArrowHelper(dirVec.clone().normalize(), new THREE.Vector3(0, 0, 0), length, color, 0.2, 0.1);
+            scene.add(arrow);
+            return arrow;
+        }
+
+        const axisX = buildAxis(new THREE.Vector3(1, 0, 0), 5, 0xd9480f); // figure X axis
+        const axisY = buildAxis(new THREE.Vector3(0, 1, 0), 4, 0x111111);
+        const axisZ = buildAxis(new THREE.Vector3(0, 0, 1), 6, 0x0f62cc);
+
+        const f = 1.6; // focal distance matching figure proportions
+
+        // Virtual image plane (in front) conveys the non-flipped view used for analysis.
+        const virtualPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(6, 4),
+            new THREE.MeshBasicMaterial({ color: 0xcfe9ff, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
+        );
+        virtualPlane.position.z = f;
+        scene.add(virtualPlane);
+        const virtualFrame = new THREE.LineSegments(
+            new THREE.EdgesGeometry(virtualPlane.geometry),
+            new THREE.LineBasicMaterial({ color: 0x2563eb })
+        );
+        virtualPlane.add(virtualFrame);
+
+        // Physical sensor plane (behind the pinhole) shows the flipped image.
+        const realPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(6, 4),
+            new THREE.MeshBasicMaterial({ color: 0xf3f4f6, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
+        );
+        realPlane.position.z = -f;
+        scene.add(realPlane);
+        const realFrame = new THREE.LineSegments(
+            new THREE.EdgesGeometry(realPlane.geometry),
+            new THREE.LineDashedMaterial({ color: 0x475569, dashSize: 0.2, gapSize: 0.2 })
+        );
+        realFrame.computeLineDistances();
+        realPlane.add(realFrame);
+
+        // Helper to convert short text into sprites for axis + point labels.
+        function createLabel(text, color = '#0f172a') {
+            const canvas = document.createElement('canvas');
+            const size = 256;
+            canvas.width = canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0,0,0,0)';
+            ctx.fillRect(0, 0, size, size);
+            ctx.fillStyle = color;
+            ctx.font = 'bold 140px "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, size / 2, size / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(0.7, 0.7, 0.7);
+            scene.add(sprite);
+            return sprite;
+        }
+
+        const labels = {
+            Xaxis: createLabel('X', '#d9480f'),
+            Yaxis: createLabel('Y', '#111111'),
+            Zaxis: createLabel('Z', '#0f62cc'),
+            worldPoint: createLabel('P'),
+            imagePoint: createLabel('p'),
+            realPoint: createLabel('p′'),
+            fLabel: createLabel('f'),
+            xLabel: createLabel('x', '#0d9488'),
+            yLabel: createLabel('y', '#0ea5e9')
+        };
+
+        const worldPointMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.12, 24, 24),
+            new THREE.MeshStandardMaterial({ color: 0xc81e1e })
+        );
+        scene.add(worldPointMesh);
+
+        const imagePointMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.09, 24, 24),
+            new THREE.MeshStandardMaterial({ color: 0x0f766e })
+        );
+        scene.add(imagePointMesh);
+
+        const realPointMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0x6b7280 })
+        );
+        scene.add(realPointMesh);
+
+        // Rays illustrating how a 3D point maps to the image plane.
+        const rayGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, 1)]);
+        const worldRay = new THREE.Line(
+            rayGeometry.clone(),
+            new THREE.LineBasicMaterial({ color: 0x111111, linewidth: 2 })
+        );
+        scene.add(worldRay);
+
+        const imageRay = new THREE.Line(
+            rayGeometry.clone(),
+            new THREE.LineDashedMaterial({ color: 0x0f766e, dashSize: 0.2, gapSize: 0.1 })
+        );
+        imageRay.computeLineDistances();
+        scene.add(imageRay);
+
+        const realRay = new THREE.Line(
+            rayGeometry.clone(),
+            new THREE.LineDashedMaterial({ color: 0x94a3b8, dashSize: 0.15, gapSize: 0.1 })
+        );
+        realRay.computeLineDistances();
+        scene.add(realRay);
+
+        // Triangles showing the proportional relationships used in the derivation.
+        const horizontalPositions = new Float32Array(9);
+        const horizontalGeometry = new THREE.BufferGeometry();
+        horizontalGeometry.setAttribute('position', new THREE.BufferAttribute(horizontalPositions, 3));
+        const horizontalTriangle = new THREE.Mesh(
+            horizontalGeometry,
+            new THREE.MeshBasicMaterial({ color: 0x84cc16, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+        );
+        scene.add(horizontalTriangle);
+
+        const verticalPositions = new Float32Array(9);
+        const verticalGeometry = new THREE.BufferGeometry();
+        verticalGeometry.setAttribute('position', new THREE.BufferAttribute(verticalPositions, 3));
+        const verticalTriangle = new THREE.Mesh(
+            verticalGeometry,
+            new THREE.MeshBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+        );
+        scene.add(verticalTriangle);
+
+        // Controls & UI bindings -------------------------------------------------
+        const depthRange = document.getElementById('depthRange');
+        const xRange = document.getElementById('xRange');
+        const yRange = document.getElementById('yRange');
+        const depthValue = document.getElementById('depthValue');
+        const xValue = document.getElementById('xValue');
+        const yValue = document.getElementById('yValue');
+        const sensorToggle = document.getElementById('sensorToggle');
+        const stepButton = document.getElementById('stepButton');
+        const resetButton = document.getElementById('resetButton');
+        const guideText = document.getElementById('guideText');
+
+        const defaults = { X: 1.4, Y: 1.2, Z: 6, showSensor: true, step: 0 };
+
+        const steps = [
+            'Step 1 · Place a 3D point P(X, Y, Z) in front of the pinhole.',
+            'Step 2 · Trace the ray through the pinhole. Similar triangles appear in both planes.',
+            'Step 3 · Read off x = f·X/Z and y = f·Y/Z on the virtual image plane.'
+        ];
+
+        function applyStepHighlight(index) {
+            horizontalTriangle.material.opacity = index === 1 || index === 2 ? 0.48 : 0.25;
+            verticalTriangle.material.opacity = index === 1 || index === 2 ? 0.48 : 0.25;
+            imageRay.material.opacity = index >= 1 ? 1 : 0.35;
+            guideText.textContent = steps[index];
+        }
+
+        // Shared vectors reused to avoid allocations.
+        const worldPoint = new THREE.Vector3();
+        const projectedVirtual = new THREE.Vector3();
+        const projectedReal = new THREE.Vector3();
+
+        function updateScene() {
+            worldPoint.set(parseFloat(xRange.value), parseFloat(yRange.value), parseFloat(depthRange.value));
+            depthValue.textContent = `${worldPoint.z.toFixed(1)} units`;
+            xValue.textContent = `${worldPoint.x.toFixed(1)} units`;
+            yValue.textContent = `${worldPoint.y.toFixed(1)} units`;
+
+            worldPointMesh.position.copy(worldPoint);
+
+            const tVirtual = f / worldPoint.z;
+            projectedVirtual.set(worldPoint.x * tVirtual, worldPoint.y * tVirtual, f);
+            imagePointMesh.position.copy(projectedVirtual);
+
+            const tReal = -f / worldPoint.z;
+            projectedReal.set(worldPoint.x * tReal, worldPoint.y * tReal, -f);
+            realPointMesh.position.copy(projectedReal);
+
+            const worldPositions = worldRay.geometry.attributes.position.array;
+            worldPositions.set([0, 0, 0, worldPoint.x, worldPoint.y, worldPoint.z]);
+            worldRay.geometry.attributes.position.needsUpdate = true;
+
+            const imagePositions = imageRay.geometry.attributes.position.array;
+            imagePositions.set([projectedVirtual.x, projectedVirtual.y, projectedVirtual.z, worldPoint.x, worldPoint.y, worldPoint.z]);
+            imageRay.geometry.attributes.position.needsUpdate = true;
+            imageRay.computeLineDistances();
+
+            const realPositions = realRay.geometry.attributes.position.array;
+            realPositions.set([projectedReal.x, projectedReal.y, projectedReal.z, 0, 0, 0]);
+            realRay.geometry.attributes.position.needsUpdate = true;
+            realRay.computeLineDistances();
+            realRay.visible = sensorToggle.checked;
+
+            horizontalPositions.set([
+                0, 0, 0,
+                worldPoint.x, 0, worldPoint.z,
+                projectedVirtual.x, 0, projectedVirtual.z
+            ]);
+            horizontalTriangle.geometry.attributes.position.needsUpdate = true;
+            horizontalTriangle.geometry.computeVertexNormals();
+
+            verticalPositions.set([
+                0, 0, 0,
+                0, worldPoint.y, worldPoint.z,
+                0, projectedVirtual.y, projectedVirtual.z
+            ]);
+            verticalTriangle.geometry.attributes.position.needsUpdate = true;
+            verticalTriangle.geometry.computeVertexNormals();
+
+            realPlane.visible = sensorToggle.checked;
+            realPointMesh.visible = sensorToggle.checked;
+
+            labels.worldPoint.position.copy(worldPoint).add(new THREE.Vector3(0.1, 0.25, 0));
+            labels.imagePoint.position.copy(projectedVirtual).add(new THREE.Vector3(0.1, 0.15, 0));
+            labels.realPoint.position.copy(projectedReal).add(new THREE.Vector3(-0.1, -0.15, 0));
+            labels.fLabel.position.set(0.25, -0.25, f / 2);
+            labels.xLabel.position.set(projectedVirtual.x * 0.5, -0.25, projectedVirtual.z + 0.05);
+            labels.yLabel.position.set(-0.3, projectedVirtual.y * 0.5, projectedVirtual.z);
+            labels.Xaxis.position.set(5.2, -0.1, 0);
+            labels.Yaxis.position.set(0, 4.3, 0);
+            labels.Zaxis.position.set(0, 0.1, 6.4);
+        }
+
+        // Slider interactions: move P(X,Y,Z) to show how x=fX/Z, y=fY/Z scale with depth.
+        depthRange.addEventListener('input', () => updateScene());
+        xRange.addEventListener('input', () => updateScene());
+        yRange.addEventListener('input', () => updateScene());
+        // Toggle reveals the real sensor plane so learners can compare flipped vs virtual images.
+        sensorToggle.addEventListener('change', () => updateScene());
+
+        // Guided stepper walks through the similar-triangle argument.
+        stepButton.addEventListener('click', () => {
+            defaults.step = (defaults.step + 1) % steps.length;
+            applyStepHighlight(defaults.step);
+        });
+
+        resetButton.addEventListener('click', () => {
+            depthRange.value = defaults.Z;
+            xRange.value = defaults.X;
+            yRange.value = defaults.Y;
+            sensorToggle.checked = defaults.showSensor;
+            defaults.step = 0;
+            applyStepHighlight(defaults.step);
+            controls.target.set(0, 1, 4); // Reset orbit view to match textbook vantage point.
+            camera.position.copy(defaultCameraPos);
+            controls.update();
+            updateScene();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        applyStepHighlight(0);
+        updateScene();
+
+        renderer.setAnimationLoop(() => {
+            controls.update();
+            renderer.render(scene, camera);
+        });
+    </script>
+</body>
+
+</html>

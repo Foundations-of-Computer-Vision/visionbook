@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orthographic Projection Visualization</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+            background-color: #f0f0f0;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 320px;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            color: #333;
+        }
+
+        p {
+            font-size: 0.9rem;
+            color: #555;
+            line-height: 1.4;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.85rem;
+            color: #444;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            width: 100%;
+            margin-bottom: 8px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .value-disp {
+            float: right;
+            font-weight: normal;
+            color: #007bff;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 400px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+    <!-- Import Three.js as ES module -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="ui-panel">
+        <h2>Orthographic Projection</h2>
+        <p>Demonstrates how parallel rays map 3D coordinates (X, Y, Z) to 2D coordinates (x, y) on a projection plane,
+            invariant of depth (Z).</p>
+
+        <div class="control-group">
+            <label for="z-slider">Object Distance (Z-axis) <span id="z-val" class="value-disp">10.0</span></label>
+            <input type="range" id="z-slider" min="2" max="25" step="0.1" value="10">
+            <p style="font-size: 0.75rem; color: #666; margin-top: 4px;">Notice how the projected size remains exactly
+                the same regardless of distance, which is the defining property of orthographic projection.</p>
+        </div>
+
+        <div class="control-group">
+            <label for="scale-slider">Object Size Scale <span id="scale-val" class="value-disp">1.0</span></label>
+            <input type="range" id="scale-slider" min="0.5" max="2.0" step="0.1" value="1.0">
+        </div>
+
+        <div class="control-group">
+            <button id="toggle-rays">Toggle Projection Rays</button>
+            <button id="btn-reset">Reset to Textbook View</button>
+        </div>
+    </div>
+
+    <div id="instructions">
+        <strong>Guided Exploration:</strong>
+        <ol style="margin: 5px 0 0 0; padding-left: 20px; font-size: 0.9rem;">
+            <li>Rotate the camera (left-click + drag) to see the 3D relationship.</li>
+            <li>Move the "Object Distance" slider. In orthographic projection, parallel rays preserve the (X, Y) scale
+                entirely regardless of Z position (depth).</li>
+            <li>The projection equations are: <code>x = X</code>, <code>y = Y</code>.</li>
+        </ol>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        // --- Setup Scene, Camera, Renderer ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xfcfcfc);
+
+        // We use a PerspectiveCamera to look AT the orthographic projection setup
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Label Renderer Setup
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0px';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        container.appendChild(labelRenderer.domElement);
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 15);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // --- Materials for the concept ---
+        // Top: Green, Front: Red, Side: Blue (matching textbook)
+        const matRed = new THREE.MeshPhongMaterial({ color: 0xff3333, flatShading: true });
+        const matGreen = new THREE.MeshPhongMaterial({ color: 0x33ff33, flatShading: true });
+        const matBlue = new THREE.MeshPhongMaterial({ color: 0x33b8ff, flatShading: true });
+
+        // --- 1. The Projection Plane (XY Plane at Z=0) ---
+        const planeGeo = new THREE.PlaneGeometry(20, 15);
+        const planeMat = new THREE.MeshBasicMaterial({
+            color: 0xdddddd,
+            transparent: true,
+            opacity: 0.5,
+            side: THREE.DoubleSide
+        });
+        const projectionPlane = new THREE.Mesh(planeGeo, planeMat);
+        scene.add(projectionPlane);
+
+        // Plane Grid & Border
+        const gridHelper = new THREE.GridHelper(20, 20, 0x000000, 0xaaaaaa);
+        gridHelper.rotation.x = Math.PI / 2;
+        scene.add(gridHelper);
+
+        // 2D Axes on Projection Plane (x, y)
+        const axisLength = 9;
+        const arrowX = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), axisLength, 0x000000, 0.8, 0.5);
+        const arrowY = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), axisLength, 0x000000, 0.8, 0.5);
+        scene.add(arrowX);
+        scene.add(arrowY);
+
+        function createLabel(text, color) {
+            const div = document.createElement('div');
+            div.className = 'label';
+            div.textContent = text;
+            div.style.color = color;
+            div.style.fontFamily = 'serif';
+            div.style.fontStyle = 'italic';
+            div.style.fontSize = '1.3rem';
+            div.style.fontWeight = 'bold';
+            div.style.textShadow = '1px 1px 2px white';
+            return new CSS2DObject(div);
+        }
+
+        const labelX = createLabel('x, X', 'black');
+        labelX.position.set(axisLength + 1, 0, 0);
+        scene.add(labelX);
+
+        const labelY = createLabel('y, Y', 'black');
+        labelY.position.set(0, axisLength + 1, 0);
+        scene.add(labelY);
+
+        const labelZ = createLabel('Z', 'black');
+        labelZ.position.set(0, 0, 26);
+        scene.add(labelZ);
+
+        // 3D Axis Z
+        const arrowZ = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), 25, 0x000000, 0.8, 0.5);
+        scene.add(arrowZ);
+
+        // --- 2. The 3D Object (L-Shape / Staircase) ---
+        // We compose it out of two boxes
+        const objectGroup = new THREE.Group();
+
+        // Geometries for the two parts of the 'L' stairs
+        // Base block
+        const baseGeo = new THREE.BoxGeometry(4, 2, 3);
+        // Top block
+        const topGeo = new THREE.BoxGeometry(4, 2, 1.5);
+
+        // Multi-materials for the Box (Right, Left, Top, Bottom, Front, Back)
+        const cMatsBase = [matBlue, matBlue, matGreen, matBlue, matRed, matRed];
+        const cMatsTop = [matBlue, matBlue, matGreen, matBlue, matRed, matRed];
+
+        const baseMesh = new THREE.Mesh(baseGeo, cMatsBase);
+        baseMesh.position.set(2, 1, 1.5); // align with axes
+
+        const topMesh = new THREE.Mesh(topGeo, cMatsTop);
+        topMesh.position.set(2, 3, 0.75); // sitting on top, towards back
+
+        objectGroup.add(baseMesh);
+        objectGroup.add(topMesh);
+
+        // Initial Z position
+        let currentZ = 10;
+        let currentScale = 1.0;
+        objectGroup.position.set(0, 0, currentZ);
+        scene.add(objectGroup);
+
+        // --- 3. The 2D Projected Shape on the Plane ---
+        // A flattened version of the front red faces, placed slightly above Z=0
+        const projGroup = new THREE.Group();
+        const matProjRed = new THREE.MeshBasicMaterial({ color: 0xff3333, side: THREE.DoubleSide });
+
+        const projBaseGeo = new THREE.PlaneGeometry(4, 2);
+        const projBaseMesh = new THREE.Mesh(projBaseGeo, matProjRed);
+        projBaseMesh.position.set(2, 1, 0);
+
+        const projTopGeo = new THREE.PlaneGeometry(4, 2);
+        const projTopMesh = new THREE.Mesh(projTopGeo, matProjRed);
+        projTopMesh.position.set(2, 3, 0);
+
+        projGroup.add(projBaseMesh);
+        projGroup.add(projTopMesh);
+
+        // Slight offset to avoid z-fighting with the grey projection plane
+        projGroup.position.set(0, 0, 0.02);
+        scene.add(projGroup);
+
+        // --- 4. Projection Rays (Dashed Lines) ---
+        // Vertices of the front red faces to project
+        const rayVertices = [
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(4, 0, 0),
+            new THREE.Vector3(4, 2, 0),
+            new THREE.Vector3(0, 2, 0),
+            new THREE.Vector3(0, 4, 0),
+            new THREE.Vector3(4, 4, 0),
+            // Corners of the L-shape inwards
+            new THREE.Vector3(4, 2, 1.5),
+            new THREE.Vector3(0, 2, 1.5)
+        ];
+
+        const raysGroup = new THREE.Group();
+        const lineMat = new THREE.LineDashedMaterial({
+            color: 0x444444,
+            dashSize: 0.5,
+            gapSize: 0.3,
+            linewidth: 1
+        });
+
+        const projectionLines = [];
+
+        rayVertices.forEach(localPos => {
+            const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+            const line = new THREE.Line(geo, lineMat);
+            line.userData.localPos = localPos;
+            projectionLines.push(line);
+            raysGroup.add(line);
+        });
+        scene.add(raysGroup);
+
+        // --- Textbook View Reset Settings ---
+        function setViewTextbook() {
+            // Isometric perspective matching textbook (Z points right, Y up, X diagonal)
+            camera.position.set(16, 12, 28);
+            controls.target.set(3, 2, 5);
+            controls.update();
+
+            zSlider.value = 10;
+            updateObjectState();
+
+            scaleSlider.value = 1.0;
+            updateObjectState();
+
+            raysGroup.visible = true;
+        }
+
+        // --- Update Logic ---
+        function updateObjectState() {
+            currentZ = parseFloat(zSlider.value);
+            currentScale = parseFloat(scaleSlider.value);
+            document.getElementById('z-val').innerText = currentZ.toFixed(1);
+            document.getElementById('scale-val').innerText = currentScale.toFixed(1);
+
+            // Scale and move 3D object
+            objectGroup.scale.set(currentScale, currentScale, currentScale);
+            objectGroup.position.set(0, 0, currentZ);
+
+            // The projected 2D shape mirrors the exact X,Y scale of the 3D object!
+            // This is the core teaching point of Orthographic Projection
+            projGroup.scale.set(currentScale, currentScale, 1);
+
+            // Update Projection Rays connecting object to projection plane
+            // The magic: regardless of Z, the projected (x,y) coordinates are identical
+            // to the object's (X,Y) coordinates.
+            projectionLines.forEach((line) => {
+                const local = line.userData.localPos;
+
+                // Absolute 3D point of vertex on the object
+                const startPoint = new THREE.Vector3(
+                    local.x * currentScale,
+                    local.y * currentScale,
+                    (local.z * currentScale) + currentZ // Factor in object's depth + its global Z offset
+                );
+
+                // Projected point on Z=0 plane (notice X and Y do not change due to depth!)
+                const endPoint = new THREE.Vector3(
+                    local.x * currentScale,
+                    local.y * currentScale,
+                    0
+                );
+
+                // Update line geometry
+                line.geometry.setFromPoints([startPoint, endPoint]);
+                line.computeLineDistances(); // Required for dashed material
+            });
+        }
+
+        // --- Interaction Handlers ---
+        const zSlider = document.getElementById('z-slider');
+        zSlider.addEventListener('input', updateObjectState);
+
+        const scaleSlider = document.getElementById('scale-slider');
+        scaleSlider.addEventListener('input', updateObjectState);
+
+        const toggleRaysBtn = document.getElementById('toggle-rays');
+        toggleRaysBtn.addEventListener('click', () => {
+            raysGroup.visible = !raysGroup.visible;
+        });
+
+        const resetBtn = document.getElementById('btn-reset');
+        resetBtn.addEventListener('click', setViewTextbook);
+
+
+        // --- Render Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        // Initialization
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        setViewTextbook();
+        animate();
+    </script>
+</body>
+
+</html>

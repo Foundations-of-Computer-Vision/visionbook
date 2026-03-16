@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Homography Plane Geometry - Interactive 3D</title>
+    <style>
+        :root {
+            --bg: #e6e6e8;
+            --panel: rgba(255, 255, 255, 0.88);
+            --ink: #121418;
+            --muted: #3e434b;
+            --accent: #00d8e6;
+            --red: #e2362c;
+            --green: #27cf2a;
+            --line: #1f2429;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: radial-gradient(circle at 20% 18%, #f2f2f4 0%, #dddddf 62%, #d6d6d9 100%);
+            font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+            color: var(--ink);
+        }
+
+        #app {
+            position: fixed;
+            inset: 0;
+        }
+
+        #ui {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            width: min(360px, calc(100vw - 24px));
+            max-height: calc(100vh - 24px);
+            overflow: auto;
+            background: var(--panel);
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            border-radius: 10px;
+            padding: 12px 12px 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.14);
+            backdrop-filter: blur(4px);
+        }
+
+        #ui h1 {
+            font-size: 16px;
+            margin: 0 0 6px;
+            line-height: 1.2;
+            letter-spacing: 0.2px;
+        }
+
+        #ui p {
+            font-size: 12px;
+            line-height: 1.35;
+            margin: 6px 0 10px;
+            color: var(--muted);
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            align-items: center;
+            margin: 6px 0;
+            font-size: 12px;
+        }
+
+        .row input[type="range"] {
+            width: 100%;
+        }
+
+        .row.compact {
+            grid-template-columns: auto 1fr;
+            gap: 8px;
+        }
+
+        .btns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        button {
+            border: 1px solid rgba(0, 0, 0, 0.16);
+            border-radius: 8px;
+            background: #f8f9fb;
+            color: var(--ink);
+            padding: 8px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: transform 120ms ease, background 120ms ease;
+        }
+
+        button:hover {
+            background: #f2f5f8;
+            transform: translateY(-1px);
+        }
+
+        #demoText {
+            margin-top: 9px;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 12px;
+            line-height: 1.35;
+            background: rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        #legend {
+            margin-top: 8px;
+            font-size: 11px;
+            color: var(--muted);
+            line-height: 1.25;
+        }
+
+        #legend span {
+            display: inline-block;
+            margin-right: 8px;
+            white-space: nowrap;
+        }
+
+        .swatch {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            vertical-align: -1px;
+            margin-right: 4px;
+            border: 1px solid rgba(0, 0, 0, 0.22);
+        }
+
+        .hint {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #2f3a46;
+            opacity: 0.88;
+        }
+    </style>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+
+<body>
+    <div id="app"></div>
+
+    <div id="ui">
+        <h1>Planar Surface Projection (Homography Setup)</h1>
+        <p>
+            A 3D point on the plane <strong>(X,Y,0)</strong> projects through the camera center onto the camera plane as
+            <strong>(x,y)</strong>. Because all points lie on one plane, this mapping is a homography.
+        </p>
+
+        <div class="row compact">
+            <label for="sliderX">Plane point X</label>
+            <input id="sliderX" type="range" min="-3" max="3" step="0.01" value="1.2" />
+        </div>
+        <div class="row compact">
+            <label for="sliderY">Plane point Y</label>
+            <input id="sliderY" type="range" min="-2" max="2" step="0.01" value="0.65" />
+        </div>
+
+        <div class="row">
+            <label><input id="toggleRays" type="checkbox" checked /> Show projection rays</label>
+            <span></span>
+        </div>
+        <div class="row">
+            <label><input id="toggleSamples" type="checkbox" checked /> Show sample correspondences</label>
+            <span></span>
+        </div>
+
+        <div class="btns">
+            <button id="nextStep">Next demo step</button>
+            <button id="playPause">Play demo</button>
+            <button id="resetView">Reset to textbook view</button>
+            <button id="resetPoint">Reset point</button>
+        </div>
+
+        <div id="demoText"></div>
+
+        <div id="legend">
+            <span><i class="swatch" style="background:#00d8e6"></i>Tracked point & ray</span>
+            <span><i class="swatch" style="background:#e2362c"></i>World axes on plane</span>
+            <span><i class="swatch" style="background:#27cf2a"></i>Image plane axes</span>
+            <span><i class="swatch" style="background:#1f2429"></i>Structure edges/rays</span>
+        </div>
+
+        <div class="hint">Drag to orbit. Right drag to pan. Wheel to zoom.</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const container = document.getElementById('app');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xe3e3e5);
+
+        const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 200);
+        const textbookCamPos = new THREE.Vector3(-8.0, 4.2, 6.8);
+        const textbookTarget = new THREE.Vector3(3.8, 1.1, 0.2);
+        camera.position.copy(textbookCamPos);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.copy(textbookTarget);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.06;
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.82);
+        scene.add(ambient);
+
+        const dir1 = new THREE.DirectionalLight(0xffffff, 0.48);
+        dir1.position.set(8, 10, 6);
+        scene.add(dir1);
+
+        const dir2 = new THREE.DirectionalLight(0xffffff, 0.28);
+        dir2.position.set(-10, 4, -5);
+        scene.add(dir2);
+
+        const grayPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(60, 40),
+            new THREE.MeshStandardMaterial({ color: 0xdadadc, roughness: 1, metalness: 0, side: THREE.DoubleSide })
+        );
+        grayPlane.rotation.x = -Math.PI / 2;
+        grayPlane.position.y = -3.2;
+        scene.add(grayPlane);
+
+        const lineMatDark = new THREE.LineDashedMaterial({ color: 0x1b1f24, dashSize: 0.42, gapSize: 0.3, linewidth: 1 });
+        const lineMatCyan = new THREE.LineDashedMaterial({ color: 0x00d8e6, dashSize: 0.35, gapSize: 0.28, linewidth: 1 });
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0x161a1f, linewidth: 1.6 });
+
+        function makeLabelSprite(text, color = '#101216', scale = 1) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const fontSize = 54;
+            const pad = 20;
+            ctx.font = `${fontSize}px Georgia, "Times New Roman", serif`;
+            const w = Math.ceil(ctx.measureText(text).width + pad * 2);
+            const h = fontSize + pad * 2;
+            canvas.width = w;
+            canvas.height = h;
+            ctx.font = `${fontSize}px Georgia, "Times New Roman", serif`;
+            ctx.fillStyle = 'rgba(255,255,255,0)';
+            ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = color;
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, pad, h / 2);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.minFilter = THREE.LinearFilter;
+            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+            const sprite = new THREE.Sprite(mat);
+            const aspect = w / h;
+            sprite.scale.set(1.8 * aspect * scale, 1.8 * scale, 1);
+            return sprite;
+        }
+
+        function dashedLine(a, b, mat) {
+            const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+            const line = new THREE.Line(geo, mat);
+            line.computeLineDistances();
+            return line;
+        }
+
+        function solidPolyline(points, material) {
+            const geo = new THREE.BufferGeometry().setFromPoints(points);
+            return new THREE.Line(geo, material);
+        }
+
+        const worldRoot = new THREE.Group();
+        scene.add(worldRoot);
+
+        const cameraCenter = new THREE.Vector3(0, 0.95, 0);
+        const cameraSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.28, 28, 20),
+            new THREE.MeshStandardMaterial({ color: 0x020406, roughness: 0.45, metalness: 0.1 })
+        );
+        cameraSphere.position.copy(cameraCenter);
+        worldRoot.add(cameraSphere);
+
+        const labelCam = makeLabelSprite('Camera center', '#0f1114', 0.95);
+        labelCam.position.copy(cameraCenter).add(new THREE.Vector3(-1.7, 0.55, 0));
+        worldRoot.add(labelCam);
+
+        const imagePlane = new THREE.Group();
+        worldRoot.add(imagePlane);
+
+        // 2D image-plane rectangle in the textbook figure mapped to a real 3D plane near camera center.
+        const imgCenter = new THREE.Vector3(2.2, 0.95, 0);
+        const imgNormal = new THREE.Vector3(1, 0.08, -0.03).normalize();
+        const helperUp = new THREE.Vector3(0, 1, 0);
+        const imgU = new THREE.Vector3().crossVectors(helperUp, imgNormal).normalize();
+        const imgV = new THREE.Vector3().crossVectors(imgNormal, imgU).normalize();
+        const imgW = 3.6;
+        const imgH = 4.5;
+
+        const imgCorners = {
+            tl: new THREE.Vector3().copy(imgCenter).addScaledVector(imgU, -imgW / 2).addScaledVector(imgV, imgH / 2),
+            tr: new THREE.Vector3().copy(imgCenter).addScaledVector(imgU, imgW / 2).addScaledVector(imgV, imgH / 2),
+            br: new THREE.Vector3().copy(imgCenter).addScaledVector(imgU, imgW / 2).addScaledVector(imgV, -imgH / 2),
+            bl: new THREE.Vector3().copy(imgCenter).addScaledVector(imgU, -imgW / 2).addScaledVector(imgV, -imgH / 2)
+        };
+
+        const imgPlaneMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(imgW, imgH),
+            new THREE.MeshStandardMaterial({ color: 0xfbfbfc, transparent: true, opacity: 0.35, side: THREE.DoubleSide, roughness: 1 })
+        );
+        imgPlaneMesh.position.copy(imgCenter);
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), imgNormal);
+        imgPlaneMesh.quaternion.copy(q);
+        imagePlane.add(imgPlaneMesh);
+
+        const imgFrame = solidPolyline([
+            imgCorners.tl, imgCorners.tr, imgCorners.br, imgCorners.bl, imgCorners.tl
+        ], new THREE.LineBasicMaterial({ color: 0x33373d }));
+        imagePlane.add(imgFrame);
+
+        const labelCameraPlane = makeLabelSprite('Camera plane', '#11141a', 0.9);
+        labelCameraPlane.position.copy(imgCorners.tl).add(new THREE.Vector3(-0.6, 0.8, 0.1));
+        worldRoot.add(labelCameraPlane);
+
+        // 2D planar quadrilateral in the original sketch mapped to a tilted 3D planar surface.
+        const planeGroup = new THREE.Group();
+        worldRoot.add(planeGroup);
+
+        const planeOrigin = new THREE.Vector3(8.2, -1.5, 1.0);
+        const pU = new THREE.Vector3(0.98, 0.08, -0.19).normalize();
+        const pV = new THREE.Vector3(0.22, 0.88, 0.42).normalize();
+        const pN = new THREE.Vector3().crossVectors(pU, pV).normalize();
+
+        const P0 = new THREE.Vector3().copy(planeOrigin).addScaledVector(pU, -1.8).addScaledVector(pV, -1.2);
+        const P1 = new THREE.Vector3().copy(planeOrigin).addScaledVector(pU, 2.8).addScaledVector(pV, -0.7);
+        const P2 = new THREE.Vector3().copy(planeOrigin).addScaledVector(pU, 2.3).addScaledVector(pV, 1.8);
+        const P3 = new THREE.Vector3().copy(planeOrigin).addScaledVector(pU, -1.0).addScaledVector(pV, 1.45);
+
+        const planeGeom = new THREE.BufferGeometry();
+        const verts = new Float32Array([
+            P0.x, P0.y, P0.z,
+            P1.x, P1.y, P1.z,
+            P2.x, P2.y, P2.z,
+            P0.x, P0.y, P0.z,
+            P2.x, P2.y, P2.z,
+            P3.x, P3.y, P3.z
+        ]);
+        planeGeom.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+        planeGeom.computeVertexNormals();
+
+        const planarMesh = new THREE.Mesh(
+            planeGeom,
+            new THREE.MeshStandardMaterial({ color: 0xd2d3d4, roughness: 0.9, metalness: 0.02, side: THREE.DoubleSide, transparent: true, opacity: 0.92 })
+        );
+        planeGroup.add(planarMesh);
+
+        const planeOutline = solidPolyline([P0, P1, P2, P3, P0], new THREE.LineBasicMaterial({ color: 0x161a1f, linewidth: 2 }));
+        planeGroup.add(planeOutline);
+
+        const labelPlane = makeLabelSprite('planar surface', '#0f1114', 1.0);
+        labelPlane.position.copy(P1).add(new THREE.Vector3(0.6, -0.1, -0.2));
+        worldRoot.add(labelPlane);
+
+        const planeAxes = new THREE.Group();
+        worldRoot.add(planeAxes);
+
+        // Red world axes drawn on the planar surface: this maps the textbook (X,Y,Z) triad.
+        const xDir = pU.clone().normalize();
+        const yDir = pV.clone().normalize();
+        const zDir = pN.clone().normalize();
+
+        const axX = new THREE.ArrowHelper(xDir, planeOrigin, 1.2, 0xe2362c, 0.28, 0.16);
+        const axY = new THREE.ArrowHelper(yDir, planeOrigin, 1.2, 0xe2362c, 0.28, 0.16);
+        const axZ = new THREE.ArrowHelper(zDir, planeOrigin, 1.2, 0xe2362c, 0.28, 0.16);
+        planeAxes.add(axX, axY, axZ);
+
+        const labelX = makeLabelSprite('X', '#c11616', 0.7);
+        labelX.position.copy(planeOrigin).addScaledVector(xDir, 1.38);
+        const labelY = makeLabelSprite('Y', '#c11616', 0.7);
+        labelY.position.copy(planeOrigin).addScaledVector(yDir, 1.38);
+        const labelZ = makeLabelSprite('Z', '#c11616', 0.7);
+        labelZ.position.copy(planeOrigin).addScaledVector(zDir, 1.38);
+        worldRoot.add(labelX, labelY, labelZ);
+
+        const imageAxes = new THREE.Group();
+        worldRoot.add(imageAxes);
+
+        // Green image-plane axes in 3D represent the textbook x and y axes on camera plane.
+        const imgOrigin = imgCorners.bl.clone().addScaledVector(imgU, 0.25).addScaledVector(imgV, 0.25);
+        const axx = new THREE.ArrowHelper(imgU.clone().multiplyScalar(-1).normalize(), imgOrigin, 1.35, 0x27cf2a, 0.28, 0.16);
+        const axy = new THREE.ArrowHelper(imgV.clone().normalize(), imgOrigin, 1.35, 0x27cf2a, 0.28, 0.16);
+        imageAxes.add(axx, axy);
+
+        const labelx = makeLabelSprite('x', '#1f9121', 0.75);
+        labelx.position.copy(imgOrigin).addScaledVector(imgU, -1.6).addScaledVector(imgV, -0.08);
+        const labely = makeLabelSprite('y', '#1f9121', 0.75);
+        labely.position.copy(imgOrigin).addScaledVector(imgV, 1.52);
+        worldRoot.add(labelx, labely);
+
+        const pointPlane = new THREE.Mesh(
+            new THREE.SphereGeometry(0.17, 22, 18),
+            new THREE.MeshStandardMaterial({ color: 0x00d8e6, emissive: 0x0d4a50, emissiveIntensity: 0.35 })
+        );
+        const pointImage = pointPlane.clone();
+        worldRoot.add(pointPlane, pointImage);
+
+        const pointLabelPlane = makeLabelSprite('(X,Y,0)', '#00b4c1', 0.86);
+        const pointLabelImg = makeLabelSprite('(x,y)', '#00b4c1', 0.84);
+        worldRoot.add(pointLabelPlane, pointLabelImg);
+
+        let cyanRay = dashedLine(cameraCenter, imgCenter, lineMatCyan);
+        worldRoot.add(cyanRay);
+
+        const edgeRays = new THREE.Group();
+        worldRoot.add(edgeRays);
+
+        const structuralRays = [
+            dashedLine(cameraCenter, imgCorners.tl, lineMatDark),
+            dashedLine(cameraCenter, imgCorners.br, lineMatDark),
+            dashedLine(cameraCenter, P0, lineMatDark),
+            dashedLine(cameraCenter, P2, lineMatDark),
+            dashedLine(cameraCenter, P1, lineMatDark)
+        ];
+        structuralRays.forEach((r) => edgeRays.add(r));
+
+        function projectToImagePlane(worldPoint) {
+            const d = worldPoint.clone().sub(cameraCenter).normalize();
+            const denom = d.dot(imgNormal);
+            if (Math.abs(denom) < 1e-7) return null;
+            const t = imgCenter.clone().sub(cameraCenter).dot(imgNormal) / denom;
+            if (t <= 0) return null;
+            return cameraCenter.clone().addScaledVector(d, t);
+        }
+
+        function planePointFromXY(X, Y) {
+            return planeOrigin.clone().addScaledVector(pU, X).addScaledVector(pV, Y);
+        }
+
+        const sampleGroup = new THREE.Group();
+        worldRoot.add(sampleGroup);
+
+        const samplePairs = [];
+        const sampleXY = [
+            [-1.4, -0.8],
+            [1.6, -0.3],
+            [1.2, 1.0],
+            [-0.8, 0.9],
+            [0.2, 0.3]
+        ];
+
+        // Sample correspondences visualize that many points on one plane map to image points via one homography.
+        for (const [sx, sy] of sampleXY) {
+            const w = planePointFromXY(sx, sy);
+            const i = projectToImagePlane(w);
+            const wp = new THREE.Mesh(
+                new THREE.SphereGeometry(0.08, 14, 12),
+                new THREE.MeshStandardMaterial({ color: 0x111418 })
+            );
+            wp.position.copy(w);
+            const ip = new THREE.Mesh(
+                new THREE.SphereGeometry(0.07, 14, 12),
+                new THREE.MeshStandardMaterial({ color: 0x111418 })
+            );
+            ip.position.copy(i);
+            const ray = dashedLine(cameraCenter, w, new THREE.LineDashedMaterial({ color: 0x2a2f36, dashSize: 0.2, gapSize: 0.18 }));
+            sampleGroup.add(wp, ip, ray);
+            samplePairs.push({ w, i, wp, ip, ray });
+        }
+
+        const projectedPoly = new THREE.Group();
+        worldRoot.add(projectedPoly);
+
+        function rebuildProjectedPolygon() {
+            projectedPoly.clear();
+            const planeVerts = [P0, P1, P2, P3];
+            const imgPts = planeVerts.map(projectToImagePlane);
+            const polyLine = solidPolyline([...imgPts, imgPts[0]], new THREE.LineBasicMaterial({ color: 0x00a7b4, linewidth: 2 }));
+            projectedPoly.add(polyLine);
+
+            for (const p of imgPts) {
+                const m = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.06, 12, 10),
+                    new THREE.MeshStandardMaterial({ color: 0x00a7b4 })
+                );
+                m.position.copy(p);
+                projectedPoly.add(m);
+            }
+        }
+
+        rebuildProjectedPolygon();
+
+        let X = 1.2;
+        let Y = 0.65;
+
+        function updateTrackedPoint() {
+            const w = planePointFromXY(X, Y);
+            const i = projectToImagePlane(w);
+            pointPlane.position.copy(w);
+            pointImage.position.copy(i);
+
+            pointLabelPlane.position.copy(w).addScaledVector(pU, 0.4).addScaledVector(pV, 0.35);
+            pointLabelImg.position.copy(i).addScaledVector(imgV, 0.3).addScaledVector(imgU, -0.14);
+
+            if (cyanRay) worldRoot.remove(cyanRay);
+            cyanRay = dashedLine(cameraCenter, w, lineMatCyan);
+            worldRoot.add(cyanRay);
+
+            controls.target.lerpVectors(controls.target, planeOrigin, 0.0);
+        }
+
+        updateTrackedPoint();
+
+        const ui = {
+            sliderX: document.getElementById('sliderX'),
+            sliderY: document.getElementById('sliderY'),
+            toggleRays: document.getElementById('toggleRays'),
+            toggleSamples: document.getElementById('toggleSamples'),
+            nextStep: document.getElementById('nextStep'),
+            playPause: document.getElementById('playPause'),
+            resetView: document.getElementById('resetView'),
+            resetPoint: document.getElementById('resetPoint'),
+            demoText: document.getElementById('demoText')
+        };
+
+        const demoSteps = [
+            {
+                text: 'Step 1: Start with the geometry. The camera center projects toward a tilted camera plane and a tilted world plane.',
+                apply: () => {
+                    edgeRays.visible = true;
+                    projectedPoly.visible = false;
+                    sampleGroup.visible = false;
+                    ui.toggleRays.checked = true;
+                    ui.toggleSamples.checked = false;
+                    pointLabelImg.visible = true;
+                    pointLabelPlane.visible = true;
+                }
+            },
+            {
+                text: 'Step 2: Track one planar point (X,Y,0). Move the X and Y sliders to see its image point (x,y) move on the camera plane.',
+                apply: () => {
+                    edgeRays.visible = true;
+                    projectedPoly.visible = false;
+                    sampleGroup.visible = false;
+                    ui.toggleRays.checked = true;
+                    ui.toggleSamples.checked = false;
+                }
+            },
+            {
+                text: 'Step 3: Show several correspondences. Every sampled point on the same plane maps to the image plane by the same projective rule.',
+                apply: () => {
+                    sampleGroup.visible = true;
+                    ui.toggleSamples.checked = true;
+                    projectedPoly.visible = false;
+                    edgeRays.visible = true;
+                }
+            },
+            {
+                text: 'Step 4: The projected outline of the planar patch is a quadrilateral on the image plane, illustrating a planar homography.',
+                apply: () => {
+                    sampleGroup.visible = true;
+                    projectedPoly.visible = true;
+                    edgeRays.visible = true;
+                    ui.toggleSamples.checked = true;
+                }
+            }
+        ];
+
+        let stepIdx = 0;
+        let autoplay = false;
+        let autoClock = 0;
+
+        function applyStep() {
+            demoSteps[stepIdx].apply();
+            ui.demoText.textContent = demoSteps[stepIdx].text;
+        }
+
+        applyStep();
+
+        function resetTextbookView() {
+            camera.position.copy(textbookCamPos);
+            controls.target.copy(textbookTarget);
+            controls.update();
+            stepIdx = 0;
+            autoplay = false;
+            ui.playPause.textContent = 'Play demo';
+            applyStep();
+        }
+
+        function resetPoint() {
+            X = 1.2;
+            Y = 0.65;
+            ui.sliderX.value = String(X);
+            ui.sliderY.value = String(Y);
+            updateTrackedPoint();
+        }
+
+        ui.sliderX.addEventListener('input', () => {
+            X = Number(ui.sliderX.value);
+            updateTrackedPoint();
+        });
+
+        ui.sliderY.addEventListener('input', () => {
+            Y = Number(ui.sliderY.value);
+            updateTrackedPoint();
+        });
+
+        ui.toggleRays.addEventListener('change', () => {
+            edgeRays.visible = ui.toggleRays.checked;
+            cyanRay.visible = ui.toggleRays.checked;
+        });
+
+        ui.toggleSamples.addEventListener('change', () => {
+            sampleGroup.visible = ui.toggleSamples.checked;
+            projectedPoly.visible = ui.toggleSamples.checked && stepIdx >= 3;
+        });
+
+        // Guided sequence highlights the conceptual teaching flow from geometry to homography correspondence.
+        ui.nextStep.addEventListener('click', () => {
+            stepIdx = (stepIdx + 1) % demoSteps.length;
+            applyStep();
+        });
+
+        ui.playPause.addEventListener('click', () => {
+            autoplay = !autoplay;
+            ui.playPause.textContent = autoplay ? 'Pause demo' : 'Play demo';
+        });
+
+        // Reset returns camera and explanation state to match the textbook orientation.
+        ui.resetView.addEventListener('click', () => {
+            resetTextbookView();
+        });
+
+        ui.resetPoint.addEventListener('click', () => {
+            resetPoint();
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+
+            if (autoplay) {
+                autoClock += dt;
+                if (autoClock > 3.1) {
+                    autoClock = 0;
+                    stepIdx = (stepIdx + 1) % demoSteps.length;
+                    applyStep();
+                }
+
+                if (stepIdx === 1 || stepIdx === 2 || stepIdx === 3) {
+                    const t = clock.elapsedTime;
+                    X = 1.4 * Math.cos(t * 0.55) + 0.45;
+                    Y = 0.85 * Math.sin(t * 0.9);
+                    ui.sliderX.value = String(X);
+                    ui.sliderY.value = String(Y);
+                    updateTrackedPoint();
+                }
+            }
+
+            pointPlane.rotation.y += dt * 0.8;
+            pointImage.rotation.y += dt * 0.8;
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

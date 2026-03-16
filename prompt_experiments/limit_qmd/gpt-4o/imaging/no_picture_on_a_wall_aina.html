@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinhole Camera Visualization</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        body {
+            margin: 0;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        #ui button {
+            margin: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <button id="resetView">Reset to Textbook View</button>
+        <button id="toggleRays">Toggle Rays</button>
+        <button id="stepDemo">Step Demo</button>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // OrbitControls for interactivity
+        const controls = new OrbitControls(camera, renderer.domElement);
+
+        // Light setup
+        const light = new THREE.PointLight(0xffffff, 1, 100);
+        light.position.set(10, 10, 10);
+        scene.add(light);
+
+        const ambientLight = new THREE.AmbientLight(0x404040); // Soft light
+        scene.add(ambientLight);
+
+        // Wall
+        const wallGeometry = new THREE.PlaneGeometry(10, 10);
+        const wallMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+        wall.position.set(0, 0, -5);
+        scene.add(wall);
+
+        // Pinhole
+        const pinholeGeometry = new THREE.CircleGeometry(0.1, 32);
+        const pinholeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const pinhole = new THREE.Mesh(pinholeGeometry, pinholeMaterial);
+        pinhole.position.set(0, 0, 0);
+        scene.add(pinhole);
+
+        // Tree (simplified as a cone and cylinder)
+        const treeTrunkGeometry = new THREE.CylinderGeometry(0.2, 0.2, 2, 32);
+        const treeTrunkMaterial = new THREE.MeshBasicMaterial({ color: 0x8B4513 });
+        const treeTrunk = new THREE.Mesh(treeTrunkGeometry, treeTrunkMaterial);
+        treeTrunk.position.set(-2, -3, 0);
+        scene.add(treeTrunk);
+
+        const treeFoliageGeometry = new THREE.ConeGeometry(1, 2, 32);
+        const treeFoliageMaterial = new THREE.MeshBasicMaterial({ color: 0x228B22 });
+        const treeFoliage = new THREE.Mesh(treeFoliageGeometry, treeFoliageMaterial);
+        treeFoliage.position.set(-2, -1, 0);
+        scene.add(treeFoliage);
+
+        // Light rays
+        const rayMaterial = new THREE.LineBasicMaterial({ color: 0xffd700 });
+        const rayGeometry1 = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-2, -1, 0),
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(0, 0, -5)
+        ]);
+        const ray1 = new THREE.Line(rayGeometry1, rayMaterial);
+        scene.add(ray1);
+
+        const rayGeometry2 = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(-2, -2, 0),
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(0, 0, -5)
+        ]);
+        const ray2 = new THREE.Line(rayGeometry2, rayMaterial);
+        scene.add(ray2);
+
+        // Camera position
+        camera.position.z = 10;
+
+        // Interaction elements
+        const resetViewButton = document.getElementById('resetView');
+        const toggleRaysButton = document.getElementById('toggleRays');
+        const stepDemoButton = document.getElementById('stepDemo');
+
+        let raysVisible = true;
+        let demoStep = 0;
+
+        resetViewButton.addEventListener('click', () => {
+            camera.position.set(0, 0, 10);
+            controls.reset();
+        });
+
+        toggleRaysButton.addEventListener('click', () => {
+            raysVisible = !raysVisible;
+            ray1.visible = raysVisible;
+            ray2.visible = raysVisible;
+        });
+
+        stepDemoButton.addEventListener('click', () => {
+            demoStep = (demoStep + 1) % 3;
+            switch (demoStep) {
+                case 0:
+                    treeTrunk.position.set(-2, -3, 0);
+                    treeFoliage.position.set(-2, -1, 0);
+                    break;
+                case 1:
+                    treeTrunk.position.set(-1, -3, 0);
+                    treeFoliage.position.set(-1, -1, 0);
+                    break;
+                case 2:
+                    treeTrunk.position.set(-3, -3, 0);
+                    treeFoliage.position.set(-3, -1, 0);
+                    break;
+            }
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

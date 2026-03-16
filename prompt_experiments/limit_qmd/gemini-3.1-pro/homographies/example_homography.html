@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Homography Visualization</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+
+        h1 {
+            font-size: 16px;
+            margin-top: 0;
+        }
+
+        p {
+            font-size: 12px;
+            color: #333;
+        }
+
+        button {
+            margin-top: 10px;
+            width: 100%;
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        .slider-group {
+            margin-top: 10px;
+        }
+
+        label {
+            font-size: 12px;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        input[type=range] {
+            width: 100%;
+        }
+
+        #labels {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .label {
+            position: absolute;
+            background: white;
+            padding: 2px 6px;
+            border: 1px solid black;
+            font-size: 12px;
+            font-weight: bold;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui-container">
+        <h1>Homography (Transformation)</h1>
+        <p>Colinear points remain colinear, but angles and lengths are not preserved.</p>
+
+        <div class="slider-group">
+            <label for="warpX">Perspective X (g)</label>
+            <input type="range" id="warpX" min="-0.1" max="0.1" step="0.01" value="0.05">
+        </div>
+        <div class="slider-group">
+            <label for="warpY">Perspective Y (h)</label>
+            <input type="range" id="warpY" min="-0.1" max="0.1" step="0.01" value="0.0">
+        </div>
+
+        <button id="btn-animate">Animate Transformation</button>
+        <button id="btn-reset">Reset to Textbook View</button>
+    </div>
+
+    <!-- Import Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Set up scene, camera, renderer
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 0, 15);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Group to hold our grids
+        const group = new THREE.Group();
+        scene.add(group);
+
+        // Materials
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+        const originalMaterial = new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.3 });
+
+        // Generate grid vertices (4x4 squares means 5x5 lines)
+        const gridSize = 4;
+        const size = 6;
+        const step = size / gridSize;
+        const basePts = [];
+
+        // Vertical lines
+        for (let i = 0; i <= gridSize; i++) {
+            const x = (i * step) - (size / 2);
+            for (let j = 0; j <= gridSize; j++) {
+                const y = (j * step) - (size / 2);
+                basePts.push(new THREE.Vector3(x, y, 0));
+            }
+        }
+
+        // Let's create a better structured line segments geometry
+        const lineGeom = new THREE.BufferGeometry();
+        const positions = [];
+
+        // Add vertical lines
+        for (let i = 0; i <= gridSize; i++) {
+            let x = (i * step) - (size / 2);
+            positions.push(x, -size / 2, 0, x, size / 2, 0);
+        }
+        // Add horizontal lines
+        for (let i = 0; i <= gridSize; i++) {
+            let y = (i * step) - (size / 2);
+            positions.push(-size / 2, y, 0, size / 2, y, 0);
+        }
+
+        const basePositions = new Float32Array(positions);
+        lineGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+
+        // Create the warped grid mesh
+        const warpedGrid = new THREE.LineSegments(lineGeom, lineMaterial);
+        group.add(warpedGrid);
+
+        // Create the original shadow grid
+        const originalGeom = new THREE.BufferGeometry();
+        originalGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+        const originalGrid = new THREE.LineSegments(originalGeom, originalMaterial);
+        originalGrid.position.z = -0.1; // slightly behind
+        group.add(originalGrid);
+
+        // Variables for animation and homography
+        let g = 0.05;
+        let h = 0.0;
+        let transition = 1.0;
+        let animating = false;
+
+        // Apply homography matrix H to a 2D point (x, y) -> (x', y')
+        // H = [1  0  0]
+        //     [0  1  0]
+        //     [g  h  1]
+        function applyHomography() {
+            const posAttr = warpedGrid.geometry.attributes.position;
+
+            for (let i = 0; i < basePositions.length; i += 3) {
+                const bx = basePositions[i];
+                const by = basePositions[i + 1];
+
+                // apply a linear blend based on 'transition'
+                const currentG = g * transition;
+                const currentH = h * transition;
+
+                const denominator = (currentG * bx + currentH * by + 1.0);
+                let newX = bx / denominator;
+                let newY = by / denominator;
+
+                posAttr.setXYZ(i, newX, newY, 0);
+            }
+            posAttr.needsUpdate = true;
+        }
+
+        // Setup interaction
+        const warpXSlider = document.getElementById('warpX');
+        const warpYSlider = document.getElementById('warpY');
+
+        warpXSlider.addEventListener('input', (e) => { g = parseFloat(e.target.value); transition = 1.0; applyHomography(); });
+        warpYSlider.addEventListener('input', (e) => { h = parseFloat(e.target.value); transition = 1.0; applyHomography(); });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            transition = 1.0;
+            g = 0.05; h = 0.0;
+            warpXSlider.value = g;
+            warpYSlider.value = h;
+            camera.position.set(0, 0, 15);
+            controls.target.set(0, 0, 0);
+            applyHomography();
+        });
+
+        document.getElementById('btn-animate').addEventListener('click', () => {
+            animating = true;
+            transition = 0.0;
+        });
+
+        // Animation loop
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (animating) {
+                const dt = clock.getDelta();
+                transition += dt * 0.5;
+                if (transition >= 1.0) {
+                    transition = 1.0;
+                    animating = false;
+                }
+                applyHomography();
+            } else {
+                clock.getDelta(); // keep clock updated
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Initialize state
+        applyHomography();
+        animate();
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+
+</html>

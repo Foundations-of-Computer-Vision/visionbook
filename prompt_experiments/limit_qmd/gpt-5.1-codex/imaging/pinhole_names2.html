@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Pinhole Camera Coordinate Systems</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: "DM Sans", "Segoe UI", sans-serif;
+            background: #0b1220;
+            color: #10121a;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            padding: 1rem 1.2rem;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            width: 320px;
+            color: #1c2234;
+            box-shadow: 0 15px 40px rgba(3, 9, 21, 0.25);
+        }
+
+        #ui h1 {
+            margin: 0;
+            font-size: 1.2rem;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #0c256b;
+        }
+
+        .control {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        label {
+            font-size: 0.86rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #1f2f69;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 0.4rem;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        button {
+            border: none;
+            background: #0f62fe;
+            color: white;
+            padding: 0.45rem 0.8rem;
+            border-radius: 999px;
+            cursor: pointer;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        button.secondary {
+            background: #ffd239;
+            color: #1b1f2f;
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        #annotation {
+            position: absolute;
+            bottom: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 0.8rem 1.2rem;
+            background: rgba(9, 14, 30, 0.85);
+            color: white;
+            border-radius: 999px;
+            font-size: 0.9rem;
+            letter-spacing: 0.04em;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        #legend {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.8rem 1rem;
+            background: rgba(12, 20, 37, 0.85);
+            color: white;
+            border-radius: 10px;
+            width: 260px;
+            font-size: 0.82rem;
+            line-height: 1.4;
+        }
+
+        #legend h2 {
+            margin: 0 0 0.4rem;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #7dc2ff;
+        }
+
+        #legend span {
+            display: block;
+            margin-bottom: 0.3rem;
+        }
+    </style>
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.162.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+
+<body>
+    <div id="ui">
+        <h1>Pinhole Projection Explorer</h1>
+        <div class="control">
+            <label for="depthSlider">World point depth Z</label>
+            <input type="range" id="depthSlider" min="1.2" max="5" step="0.05" value="2.5" />
+            <div class="control-row"><small>Distance: <span id="depthValue">2.5</span></small></div>
+        </div>
+        <div class="control">
+            <label for="xSlider">World point X offset</label>
+            <input type="range" id="xSlider" min="-1.5" max="1.5" step="0.05" value="0.8" />
+            <div class="control-row"><small>X: <span id="xValue">0.8</span></small></div>
+        </div>
+        <div class="control-row">
+            <label for="virtualToggle">Show virtual plane</label>
+            <input type="checkbox" id="virtualToggle" />
+        </div>
+        <div class="control-row">
+            <button id="resetBtn">Reset to textbook view</button>
+            <button id="stepBtn" class="secondary">Next guided step</button>
+        </div>
+        <small>Interact: orbit, pan, or zoom. Use the sliders and steps to see how $x = f X / Z$ emerges.</small>
+    </div>
+    <div id="legend">
+        <h2>Legend</h2>
+        <span>Orange sphere: world point $\mathbf{P}(X,Y,Z)$</span>
+        <span>Blue plane: projection plane at $-f$</span>
+        <span>Teal plane: virtual (non-inverted) plane at $+f$</span>
+        <span>Yellow ray: light path through pinhole</span>
+    </div>
+    <div id="annotation">Perspective projection ready.</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xe8f0ff);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(4, 2.5, 6);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const labelRenderer = new CSS2DRenderer();
+        labelRenderer.setSize(window.innerWidth, window.innerHeight);
+        labelRenderer.domElement.style.position = 'absolute';
+        labelRenderer.domElement.style.top = '0';
+        labelRenderer.domElement.style.pointerEvents = 'none';
+        document.body.appendChild(labelRenderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 0, 1);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        keyLight.position.set(4, 6, 5);
+        scene.add(keyLight);
+
+        const focalLength = 1.2;
+        const origin = new THREE.Vector3(0, 0, 0);
+
+        const labelStyle = (text) => {
+            const div = document.createElement('div');
+            div.textContent = text;
+            div.style.padding = '2px 6px';
+            div.style.background = 'rgba(10, 18, 40, 0.8)';
+            div.style.color = '#fff';
+            div.style.borderRadius = '999px';
+            div.style.fontSize = '0.72rem';
+            div.style.letterSpacing = '0.05em';
+            return div;
+        };
+
+        const createLabel = (target, text, offset = new THREE.Vector3()) => {
+            const label = new CSS2DObject(labelStyle(text));
+            label.position.copy(offset);
+            target.add(label);
+            return label;
+        };
+
+        // Camera body replicates the rectangular prism in the 2D figure.
+        const cameraBody = new THREE.Mesh(
+            new THREE.BoxGeometry(2.6, 1.8, 3.4),
+            new THREE.MeshPhysicalMaterial({ color: 0x5f738c, transparent: true, opacity: 0.92, roughness: 0.7 })
+        );
+        cameraBody.position.z = -1.7;
+        scene.add(cameraBody);
+
+        // Projection plane mapped from the shaded rectangle in the figure.
+        const projectionPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.1, 1.4),
+            new THREE.MeshBasicMaterial({ color: 0x7fb0ff, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
+        );
+        projectionPlane.position.z = -focalLength;
+        scene.add(projectionPlane);
+        createLabel(projectionPlane, 'Projection plane', new THREE.Vector3(1.1, 0.6, 0.02));
+
+        // Virtual plane allows students to view the non-inverted helper plane discussed in the text.
+        const virtualPlane = new THREE.Mesh(
+            new THREE.PlaneGeometry(2.1, 1.4),
+            new THREE.MeshBasicMaterial({ color: 0x3fe2c5, transparent: true, opacity: 0.22, side: THREE.DoubleSide })
+        );
+        virtualPlane.position.z = focalLength;
+        virtualPlane.visible = false;
+        scene.add(virtualPlane);
+        createLabel(virtualPlane, 'Virtual camera plane', new THREE.Vector3(1.1, 0.6, 0.02));
+
+        // Pinhole marker where the 2D diagram shows the camera center.
+        const pinhole = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.08, 0.08, 0.08, 32),
+            new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.6, roughness: 0.2 })
+        );
+        pinhole.rotation.x = Math.PI / 2;
+        scene.add(pinhole);
+        createLabel(pinhole, 'Camera center / pinhole', new THREE.Vector3(0.2, 0.2, 0));
+
+        // Axes arrows reflect the labeled X, Y, Z axes in the original figure.
+        const axisLength = 3;
+        const axes = [
+            { dir: new THREE.Vector3(1, 0, 0), color: 0xff4d4d, text: 'X' },
+            { dir: new THREE.Vector3(0, 1, 0), color: 0x4cff4c, text: 'Y' },
+            { dir: new THREE.Vector3(0, 0, 1), color: 0x4db0ff, text: 'Z (optical axis)' }
+        ];
+        axes.forEach(({ dir, color, text }) => {
+            const arrow = new THREE.ArrowHelper(dir.clone().normalize(), origin, axisLength, color, 0.15, 0.08);
+            scene.add(arrow);
+            createLabel(arrow, text, dir.clone().multiplyScalar(axisLength));
+        });
+
+        // Optical axis line for clarity.
+        const axisLineGeom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, -focalLength - 0.2), new THREE.Vector3(0, 0, axisLength)]);
+        const axisLine = new THREE.Line(axisLineGeom, new THREE.LineDashedMaterial({ color: 0x2c4d96, dashSize: 0.2, gapSize: 0.1 }));
+        axisLine.computeLineDistances();
+        scene.add(axisLine);
+
+        // World point representing P(X,Y,Z).
+        const worldPoint = new THREE.Mesh(
+            new THREE.SphereGeometry(0.09, 32, 32),
+            new THREE.MeshStandardMaterial({ color: 0xff9557, emissive: 0x331400 })
+        );
+        scene.add(worldPoint);
+        const worldPointLabel = createLabel(worldPoint, 'World point P');
+
+        // Projected point on real plane.
+        const projectionPoint = new THREE.Mesh(
+            new THREE.SphereGeometry(0.07, 32, 32),
+            new THREE.MeshStandardMaterial({ color: 0x2957d0 })
+        );
+        scene.add(projectionPoint);
+        const projectionLabel = createLabel(projectionPoint, 'Image point p');
+
+        // Projected point on virtual plane (not inverted, toggled on demand).
+        const projectionPointVirtual = new THREE.Mesh(
+            new THREE.SphereGeometry(0.07, 32, 32),
+            new THREE.MeshStandardMaterial({ color: 0x119e88 })
+        );
+        scene.add(projectionPointVirtual);
+        const projectionVirtualLabel = createLabel(projectionPointVirtual, 'Virtual image p\'');
+
+        // Yellow ray illustrates light path through camera.
+        const rayMaterial = new THREE.LineBasicMaterial({ color: 0xffc300, linewidth: 2 });
+        const rayGeometry = new THREE.BufferGeometry();
+        const rayLine = new THREE.Line(rayGeometry, rayMaterial);
+        scene.add(rayLine);
+
+        // Helper function to update the ray geometry.
+        const updateRayLine = (points) => {
+            rayGeometry.setFromPoints(points);
+        };
+
+        const annotation = document.getElementById('annotation');
+        const depthSlider = document.getElementById('depthSlider');
+        const xSlider = document.getElementById('xSlider');
+        const depthValue = document.getElementById('depthValue');
+        const xValue = document.getElementById('xValue');
+        const virtualToggle = document.getElementById('virtualToggle');
+        const resetBtn = document.getElementById('resetBtn');
+        const stepBtn = document.getElementById('stepBtn');
+
+        const baseY = 0.55;
+
+        const highlightColor = {
+            point: worldPoint.material.emissive.getHex(),
+            ray: rayMaterial.color.getHex(),
+            projection: projectionPoint.material.color.getHex()
+        };
+
+        const setWorldPoint = () => {
+            const depth = parseFloat(depthSlider.value);
+            const xPos = parseFloat(xSlider.value);
+            depthValue.textContent = depth.toFixed(2);
+            xValue.textContent = xPos.toFixed(2);
+            worldPoint.position.set(xPos, baseY, depth);
+            updateProjection();
+        };
+
+        // Updates the projection to show x = f X / Z on both planes.
+        const updateProjection = () => {
+            const dir = worldPoint.position.clone().normalize();
+            const tReal = -focalLength / dir.z;
+            const tVirtual = focalLength / dir.z;
+            const realPoint = dir.clone().multiplyScalar(tReal);
+            const virtualPoint = dir.clone().multiplyScalar(tVirtual);
+            projectionPoint.position.copy(realPoint);
+            projectionPointVirtual.position.copy(virtualPoint);
+            projectionPointVirtual.visible = virtualPlane.visible;
+            projectionVirtualLabel.element.style.display = virtualPlane.visible ? 'block' : 'none';
+
+            updateRayLine([realPoint, origin, worldPoint.position.clone()]);
+
+            const X = worldPoint.position.x.toFixed(2);
+            const Z = worldPoint.position.z.toFixed(2);
+            const imgX = virtualPoint.x.toFixed(2);
+            annotation.textContent = `Perspective mapping: x = (f * X) / Z = (${focalLength.toFixed(2)} * ${X}) / ${Z} = ${imgX}`;
+        };
+
+        // Depth slider interaction: demonstrates inverse relationship between depth and image extent.
+        depthSlider.addEventListener('input', () => {
+            setWorldPoint();
+            annotation.textContent = 'Depth slider: increasing Z shrinks p because x = fX / Z.';
+        });
+
+        // Horizontal slider interaction: shows lateral offsets project according to the same ratio.
+        xSlider.addEventListener('input', () => {
+            setWorldPoint();
+            annotation.textContent = 'X slider: moving P sideways shifts p while still scaled by Z.';
+        });
+
+        // Virtual plane toggle: compares inverted and upright constructions from the text.
+        virtualToggle.addEventListener('change', () => {
+            virtualPlane.visible = virtualToggle.checked;
+            projectionPointVirtual.visible = virtualToggle.checked;
+            annotation.textContent = virtualToggle.checked ? 'Virtual plane mirrors the non-inverted helper image.' : 'Viewing only the true projection plane.';
+        });
+
+        // Reset button returns the scene to the textbook configuration.
+        const resetView = () => {
+            depthSlider.value = 2.5;
+            xSlider.value = 0.8;
+            virtualToggle.checked = false;
+            virtualPlane.visible = false;
+            projectionPointVirtual.visible = false;
+            controls.reset();
+            camera.position.set(4, 2.5, 6);
+            controls.target.set(0, 0, 1);
+            currentStep = -1;
+            setWorldPoint();
+            clearHighlights();
+            annotation.textContent = 'Perspective projection reset to textbook view.';
+        };
+
+        resetBtn.addEventListener('click', resetView);
+
+        const clearHighlights = () => {
+            worldPoint.material.emissive.setHex(highlightColor.point);
+            rayMaterial.color.setHex(highlightColor.ray);
+            projectionPoint.material.color.setHex(highlightColor.projection);
+        };
+
+        // Guided demo steps walk through the figure's narrative in order.
+        const steps = [
+            {
+                title: 'Step 1 — Locate the world point',
+                desc: 'P is somewhere in space; note its (X,Y,Z).',
+                action: () => {
+                    clearHighlights();
+                    worldPoint.material.emissive.setHex(0x00ffc6);
+                }
+            },
+            {
+                title: 'Step 2 — Trace the ray',
+                desc: 'Light travels along a single ray through the pinhole.',
+                action: () => {
+                    clearHighlights();
+                    rayMaterial.color.setHex(0xff4d00);
+                }
+            },
+            {
+                title: 'Step 3 — Hit the projection plane',
+                desc: 'Where the ray meets the plane forms p.',
+                action: () => {
+                    clearHighlights();
+                    projectionPoint.material.color.setHex(0xfff04d);
+                }
+            },
+            {
+                title: 'Step 4 — Compare with virtual plane',
+                desc: 'Mirroring to +f removes the inversion.',
+                action: () => {
+                    clearHighlights();
+                    virtualToggle.checked = true;
+                    virtualPlane.visible = true;
+                    projectionPointVirtual.visible = true;
+                    projectionPointVirtual.material.color.setHex(0xff2ef2);
+                }
+            }
+        ];
+
+        let currentStep = -1;
+        stepBtn.addEventListener('click', () => {
+            currentStep = (currentStep + 1) % steps.length;
+            const step = steps[currentStep];
+            step.action();
+            annotation.textContent = `${step.title}: ${step.desc}`;
+        });
+
+        window.addEventListener('resize', () => {
+            const { innerWidth, innerHeight } = window;
+            camera.aspect = innerWidth / innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight);
+            labelRenderer.setSize(innerWidth, innerHeight);
+        });
+
+        const animate = () => {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        };
+
+        resetView();
+        animate();
+    </script>
+</body>
+
+</html>

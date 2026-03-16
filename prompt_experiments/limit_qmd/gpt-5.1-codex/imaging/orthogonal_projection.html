@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Orthographic Projection Explorer</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #f5f7fa;
+        }
+
+        #scene-container {
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            overflow: hidden;
+        }
+
+        .ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.92);
+            padding: 14px 16px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+            max-width: 320px;
+        }
+
+        .ui-panel h1 {
+            font-size: 16px;
+            margin: 0 0 10px 0;
+        }
+
+        .ui-panel button,
+        .ui-panel input[type="range"] {
+            width: 100%;
+            margin: 6px 0;
+            padding: 7px 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .ui-panel button {
+            background: #1f7aec;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        .ui-panel button.secondary {
+            background: #dfe6f2;
+            color: #1f2b45;
+        }
+
+        #status {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(13, 26, 56, 0.9);
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 999px;
+            font-size: 15px;
+            letter-spacing: 0.2px;
+        }
+
+        label {
+            font-size: 13px;
+            display: block;
+            margin-top: 6px;
+            color: #1b2735;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="scene-container"></div>
+    <div class="ui-panel">
+        <h1>Orthographic Projection</h1>
+        <label for="depthControl">Object depth (Z)</label>
+        <input id="depthControl" type="range" min="1" max="4" step="0.1" value="1.5" />
+        <button id="toggleLines" class="secondary">Hide Projection Lines</button>
+        <button id="toggleMode">Show perspective distortion</button>
+        <button id="demo">Play guided demo</button>
+        <button id="reset">Reset to textbook view</button>
+    </div>
+    <div id="status">Orthographic projection keeps object size constant regardless of depth.</div>
+    <script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.1/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.1/examples/jsm/"
+  }
+}
+</script>
+    <script type="module">
+        // Three.js setup using ES modules
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const container = document.getElementById('scene-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf2f5f9);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(8, 5, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 1, 3);
+        controls.enableDamping = true;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        dirLight.position.set(5, 7, 4);
+        scene.add(dirLight);
+
+        const grid = new THREE.GridHelper(20, 20, 0x7f8c8d, 0xbdc3c7);
+        grid.position.y = -0.01;
+        scene.add(grid);
+
+        // Axes mapping the textbook arrows into 3D space
+        function addAxis(color, dir, label) {
+            const arrow = new THREE.ArrowHelper(dir.clone().normalize(), new THREE.Vector3(0, 0, 0), 2.5, color, 0.3, 0.2);
+            scene.add(arrow);
+            const axisLabel = makeLabel(label, color);
+            axisLabel.position.copy(dir.clone().setLength(2.9));
+            scene.add(axisLabel);
+        }
+        addAxis(0xdc3545, new THREE.Vector3(1, 0, 0), 'X');
+        addAxis(0x28a745, new THREE.Vector3(0, 1, 0), 'Y');
+        addAxis(0x1f7aec, new THREE.Vector3(0, 0, 1), 'Z');
+
+        const planeZ = 6;
+        const projectionPlaneMat = new THREE.MeshStandardMaterial({
+            color: 0xdfe6ef,
+            transparent: true,
+            opacity: 0.55,
+            side: THREE.DoubleSide
+        });
+        const projectionPlane = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), projectionPlaneMat);
+        projectionPlane.position.z = planeZ;
+        scene.add(projectionPlane);
+        const planeLabel = makeLabel('Projection plane', '#1f2b45');
+        planeLabel.position.set(-2.4, 2.2, planeZ);
+        scene.add(planeLabel);
+
+        // Helper to create canvas-based sprite labels for concept clarity
+        function makeLabel(text, color = '#111') {
+            const canvas = document.createElement('canvas');
+            const size = 256;
+            canvas.width = canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0,0,0,0)';
+            ctx.fillRect(0, 0, size, size);
+            ctx.fillStyle = color;
+            ctx.font = '48px "Segoe UI"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, size / 2, size / 2);
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(1.4, 0.7, 1);
+            return sprite;
+        }
+
+        // Create the stepped object that the original 2D figure depicted
+        function buildBlock(width, height, depth) {
+            const faceMaterials = [
+                new THREE.MeshStandardMaterial({ color: 0x2e86de }), // +X face (blue)
+                new THREE.MeshStandardMaterial({ color: 0x2e86de }), // -X face (blue)
+                new THREE.MeshStandardMaterial({ color: 0x58d68d }), // top (green)
+                new THREE.MeshStandardMaterial({ color: 0xe5e7e9 }), // bottom (light gray)
+                new THREE.MeshStandardMaterial({ color: 0xe74c3c }), // +Z face (red)
+                new THREE.MeshStandardMaterial({ color: 0xe74c3c })  // -Z face (red)
+            ];
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), faceMaterials);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            const edges = new THREE.LineSegments(
+                new THREE.EdgesGeometry(mesh.geometry),
+                new THREE.LineBasicMaterial({ color: 0x17202a, linewidth: 1 })
+            );
+            mesh.add(edges);
+            return mesh;
+        }
+
+        const objectGroup = new THREE.Group();
+        const lowerBlock = buildBlock(2, 0.8, 2);
+        lowerBlock.position.set(0, 0.4, 1);
+        objectGroup.add(lowerBlock);
+        const upperBlock = buildBlock(2, 0.8, 1);
+        upperBlock.position.set(0, 1.2, 1.5);
+        objectGroup.add(upperBlock);
+        objectGroup.position.z = 1.5; // default textbook depth
+        scene.add(objectGroup);
+
+        const objectLabel = makeLabel('3D object', '#0d1b2a');
+        objectLabel.position.set(-1.4, 1.6, 1.2);
+        scene.add(objectLabel);
+
+        // 2D projection blocks glued to the projection plane for teaching the orthographic mapping
+        const projectionGroup = new THREE.Group();
+        projectionGroup.position.z = planeZ + 0.03;
+        scene.add(projectionGroup);
+
+        const projLower = buildBlock(2, 0.8, 0.05);
+        projLower.position.set(0, 0.4, 0);
+        projectionGroup.add(projLower);
+        const projUpper = buildBlock(2, 0.8, 0.05);
+        projUpper.position.set(0, 1.2, 0.25);
+        projectionGroup.add(projUpper);
+        const projLabel = makeLabel('Image on plane', '#0d1b2a');
+        projLabel.position.set(0, 2.1, planeZ + 0.05);
+        scene.add(projLabel);
+
+        // Points sampled from the object to draw projection rays (mapping 2D guides -> 3D lines)
+        const localPoints = [
+            new THREE.Vector3(-1, 0, 0),
+            new THREE.Vector3(1, 0, 0),
+            new THREE.Vector3(-1, 0.8, 0),
+            new THREE.Vector3(1, 0.8, 0),
+            new THREE.Vector3(-1, 1.6, 1),
+            new THREE.Vector3(1, 1.6, 1)
+        ];
+
+        const projectionLines = [];
+        const projectedMarkers = [];
+        localPoints.forEach(() => {
+            const geometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(),
+                new THREE.Vector3()
+            ]);
+            const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0x616a6b }));
+            scene.add(line);
+            projectionLines.push(line);
+            const marker = new THREE.Mesh(
+                new THREE.SphereGeometry(0.06, 16, 16),
+                new THREE.MeshStandardMaterial({ color: 0x111111 })
+            );
+            scene.add(marker);
+            projectedMarkers.push(marker);
+        });
+
+        let perspectiveMode = false;
+        let linesVisible = true;
+        const statusBox = document.getElementById('status');
+        const depthControl = document.getElementById('depthControl');
+        const toggleLinesBtn = document.getElementById('toggleLines');
+        const toggleModeBtn = document.getElementById('toggleMode');
+        const resetBtn = document.getElementById('reset');
+        const demoBtn = document.getElementById('demo');
+
+        function updateProjection() {
+            const depthValue = parseFloat(depthControl.value);
+            objectGroup.position.z = depthValue;
+
+            // Scale the 2D imprint only when simulating perspective shrinkage
+            const perspectiveScale = perspectiveMode ? planeZ / (objectGroup.position.z + 1.5) : 1;
+            projectionGroup.scale.set(perspectiveScale, perspectiveScale, 1);
+
+            localPoints.forEach((localPoint, idx) => {
+                const worldPoint = localPoint.clone();
+                objectGroup.localToWorld(worldPoint);
+
+                const projectedPoint = perspectiveMode
+                    ? new THREE.Vector3(
+                        worldPoint.x * (planeZ / worldPoint.z),
+                        worldPoint.y * (planeZ / worldPoint.z),
+                        planeZ
+                    )
+                    : new THREE.Vector3(worldPoint.x, worldPoint.y, planeZ);
+
+                const positions = projectionLines[idx].geometry.attributes.position.array;
+                positions[0] = worldPoint.x;
+                positions[1] = worldPoint.y;
+                positions[2] = worldPoint.z;
+                positions[3] = projectedPoint.x;
+                positions[4] = projectedPoint.y;
+                positions[5] = projectedPoint.z;
+                projectionLines[idx].geometry.attributes.position.needsUpdate = true;
+
+                projectedMarkers[idx].position.copy(projectedPoint);
+            });
+        }
+
+        updateProjection();
+
+        // Interaction handlers illustrate the conceptual levers from the textbook figure
+        depthControl.addEventListener('input', () => {
+            updateProjection();
+            statusBox.textContent = perspectiveMode
+                ? 'In perspective mode, the projected footprint shrinks with distance.'
+                : 'Orthographic mode keeps the projection size fixed even as the object moves.';
+        });
+
+        toggleLinesBtn.addEventListener('click', () => {
+            linesVisible = !linesVisible;
+            projectionLines.forEach(line => line.visible = linesVisible);
+            projectedMarkers.forEach(marker => marker.visible = linesVisible);
+            toggleLinesBtn.textContent = linesVisible ? 'Hide Projection Lines' : 'Show Projection Lines';
+        });
+
+        toggleModeBtn.addEventListener('click', () => {
+            perspectiveMode = !perspectiveMode;
+            toggleModeBtn.textContent = perspectiveMode
+                ? 'Show orthographic projection'
+                : 'Show perspective distortion';
+            statusBox.textContent = perspectiveMode
+                ? 'Perspective mapping: notice how rays now meet at the origin.'
+                : 'Orthographic mapping: rays stay parallel to the projection plane.';
+            updateProjection();
+        });
+
+        function resetView() {
+            perspectiveMode = false;
+            linesVisible = true;
+            depthControl.value = '1.5';
+            toggleLinesBtn.textContent = 'Hide Projection Lines';
+            toggleModeBtn.textContent = 'Show perspective distortion';
+            statusBox.textContent = 'Orthographic projection keeps object size constant regardless of depth.';
+            projectionLines.forEach(line => line.visible = true);
+            projectedMarkers.forEach(marker => marker.visible = true);
+            controls.target.set(0, 1, 3);
+            updateProjection();
+        }
+
+        resetBtn.addEventListener('click', resetView);
+
+        let demoRunning = false;
+        const demoSteps = [
+            () => {
+                statusBox.textContent = 'Step 1: Orthographic rays stay parallel, so follow the dashed guides.';
+                linesVisible = true;
+                projectionLines.forEach(line => line.visible = true);
+                projectedMarkers.forEach(marker => marker.visible = true);
+                toggleLinesBtn.textContent = 'Hide Projection Lines';
+            },
+            () => {
+                statusBox.textContent = 'Step 2: Move the object deeper—note the image stays the same size.';
+                depthControl.value = '4';
+                updateProjection();
+            },
+            () => {
+                statusBox.textContent = 'Step 3: Switch to perspective to contrast the behaviors.';
+                perspectiveMode = true;
+                toggleModeBtn.textContent = 'Show orthographic projection';
+                updateProjection();
+            },
+            () => {
+                statusBox.textContent = 'Step 4: Reset to the textbook orthographic view.';
+                resetView();
+            }
+        ];
+
+        function runDemo() {
+            if (demoRunning) return;
+            demoRunning = true;
+            let idx = 0;
+            const advance = () => {
+                demoSteps[idx]();
+                idx += 1;
+                if (idx < demoSteps.length) {
+                    setTimeout(advance, 2200);
+                } else {
+                    demoRunning = false;
+                }
+            };
+            advance();
+        }
+
+        demoBtn.addEventListener('click', runDemo);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        renderer.setAnimationLoop(() => {
+            controls.update();
+            renderer.render(scene, camera);
+        });
+    </script>
+</body>
+
+</html>

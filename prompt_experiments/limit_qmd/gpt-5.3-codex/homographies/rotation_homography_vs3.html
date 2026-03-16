@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Camera Rotation Homography - Interactive 3D</title>
+    <style>
+        :root {
+            --bg: #dcdcdc;
+            --panel: rgba(255, 255, 255, 0.9);
+            --text: #1f1f1f;
+            --accent: #0b6cff;
+            --line: rgba(0, 0, 0, 0.18);
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--text);
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        #ui {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 10;
+            width: min(360px, calc(100% - 24px));
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 12px 12px 10px;
+            backdrop-filter: blur(2px);
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        #ui h1 {
+            margin: 0 0 8px;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            align-items: center;
+            margin: 8px 0;
+        }
+
+        .row input[type="range"] {
+            width: 100%;
+        }
+
+        .buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        button {
+            border: 1px solid #888;
+            background: white;
+            color: #111;
+            border-radius: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button.primary {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        button:hover {
+            filter: brightness(0.97);
+        }
+
+        #demoText {
+            margin-top: 8px;
+            padding: 8px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.85);
+            font-size: 13px;
+            line-height: 1.3;
+            min-height: 48px;
+        }
+
+        #legend {
+            margin-top: 8px;
+            font-size: 12px;
+            line-height: 1.25;
+            color: #333;
+        }
+
+        @media (max-width: 700px) {
+            #ui {
+                width: calc(100% - 24px);
+            }
+
+            #ui h1 {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div id="ui">
+            <h1>Homography from Camera Rotation</h1>
+
+            <div class="row">
+                <label for="rotation">Rotation R (deg)</label>
+                <span id="rotationVal">35</span>
+            </div>
+            <div class="row" style="grid-template-columns: 1fr; margin-top: -2px;">
+                <input id="rotation" type="range" min="-65" max="65" value="35" step="1" />
+            </div>
+
+            <div class="row">
+                <label for="depth">3D Point Depth</label>
+                <span id="depthVal">12.0</span>
+            </div>
+            <div class="row" style="grid-template-columns: 1fr; margin-top: -2px;">
+                <input id="depth" type="range" min="6" max="24" value="12" step="0.1" />
+            </div>
+
+            <div class="row" style="grid-template-columns: auto 1fr; gap: 10px;">
+                <input id="showHelpers" type="checkbox" checked />
+                <label for="showHelpers">Show projection rays and helper geometry</label>
+            </div>
+
+            <div class="buttons">
+                <button id="stepBtn" class="primary">Next Demo Step</button>
+                <button id="playBtn">Play Guided Demo</button>
+                <button id="resetBtn">Reset to textbook view</button>
+            </div>
+
+            <div id="demoText"></div>
+            <div id="legend">
+                Green plane: Camera 1 image plane. Red plane: Camera 2 image plane. Cyan points: image points and 3D
+                point.
+            </div>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+      }
+    }
+  </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const app = document.getElementById('app');
+        const rotationEl = document.getElementById('rotation');
+        const depthEl = document.getElementById('depth');
+        const rotationValEl = document.getElementById('rotationVal');
+        const depthValEl = document.getElementById('depthVal');
+        const showHelpersEl = document.getElementById('showHelpers');
+        const stepBtn = document.getElementById('stepBtn');
+        const playBtn = document.getElementById('playBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const demoText = document.getElementById('demoText');
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xdcdcdc);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(-7.5, 5.2, 16.0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        app.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.target.set(4.2, 1.7, 1.8);
+        controls.enableDamping = true;
+
+        const hemi = new THREE.HemisphereLight(0xffffff, 0x8f8f8f, 1.0);
+        scene.add(hemi);
+        const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+        dir.position.set(8, 12, 6);
+        scene.add(dir);
+
+        const origin = new THREE.Vector3(0, 0, 0);
+
+        function makeLabel(text, color = '#111') {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512;
+            canvas.height = 256;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = 'italic 74px Georgia';
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 256, 128);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+            const sprite = new THREE.Sprite(mat);
+            sprite.scale.set(2.4, 1.2, 1);
+            return sprite;
+        }
+
+        const worldGroup = new THREE.Group();
+        scene.add(worldGroup);
+
+        // 2D figure mapping: black camera center dot -> 3D origin sphere.
+        const centerDot = new THREE.Mesh(
+            new THREE.SphereGeometry(0.22, 24, 24),
+            new THREE.MeshStandardMaterial({ color: 0x111111 })
+        );
+        worldGroup.add(centerDot);
+
+        function addAxis(dirVec, labelText) {
+            const arrow = new THREE.ArrowHelper(dirVec.clone().normalize(), origin, 4.3, 0x35d535, 0.65, 0.35);
+            worldGroup.add(arrow);
+            const lbl = makeLabel(labelText, '#1a1a1a');
+            lbl.position.copy(dirVec.clone().normalize().multiplyScalar(4.9));
+            worldGroup.add(lbl);
+        }
+        addAxis(new THREE.Vector3(1, 0.45, 0.4), 'X');
+        addAxis(new THREE.Vector3(0, 1, 0), 'Y');
+        addAxis(new THREE.Vector3(0.95, -0.05, 0.18), 'Z');
+
+        const camera1Label = makeLabel('Camera 1', '#111');
+        const camera2Label = makeLabel('Camera 2', '#111');
+        const xyzLabel = makeLabel('(X,Y,Z)', '#111');
+        const xyLabel = makeLabel('(x,y)', '#111');
+        const xypLabel = makeLabel("(x',y')", '#111');
+        const rLabel = makeLabel('R', '#111');
+        worldGroup.add(camera1Label, camera2Label, xyzLabel, xyLabel, xypLabel, rLabel);
+
+        const planeW = 8.0;
+        const planeH = 6.0;
+        const f = 5.0;
+
+        const planeGeom = new THREE.PlaneGeometry(planeW, planeH);
+        const plane1 = new THREE.Mesh(
+            planeGeom,
+            new THREE.MeshStandardMaterial({ color: 0x2cff2c, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+        );
+        const plane2 = new THREE.Mesh(
+            planeGeom,
+            new THREE.MeshStandardMaterial({ color: 0xff2e2e, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+        );
+        worldGroup.add(plane1, plane2);
+
+        const centerLine = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([origin, new THREE.Vector3(1, 0, 0)]),
+            new THREE.LineDashedMaterial({ color: 0x202020, dashSize: 0.35, gapSize: 0.22 })
+        );
+        centerLine.computeLineDistances();
+        worldGroup.add(centerLine);
+
+        // 2D figure mapping: cyan dots for 3D point and projected image points.
+        const cyanMat = new THREE.MeshStandardMaterial({ color: 0x20d9e8, emissive: 0x08363a, emissiveIntensity: 0.18 });
+        const p3d = new THREE.Mesh(new THREE.SphereGeometry(0.28, 24, 24), cyanMat);
+        const pCam1 = new THREE.Mesh(new THREE.SphereGeometry(0.24, 24, 24), cyanMat);
+        const pCam2 = new THREE.Mesh(new THREE.SphereGeometry(0.24, 24, 24), cyanMat);
+        worldGroup.add(p3d, pCam1, pCam2);
+
+        const rayToP = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([origin, new THREE.Vector3(1, 0, 0)]),
+            new THREE.LineDashedMaterial({ color: 0x1f1f1f, dashSize: 0.35, gapSize: 0.18 })
+        );
+        const rayToCam1 = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([origin, new THREE.Vector3(1, 0, 0)]),
+            new THREE.LineBasicMaterial({ color: 0x111111 })
+        );
+        const rayToCam2 = new THREE.Line(
+            new THREE.BufferGeometry().setFromPoints([origin, new THREE.Vector3(1, 0, 0)]),
+            new THREE.LineBasicMaterial({ color: 0x111111 })
+        );
+        worldGroup.add(rayToP, rayToCam1, rayToCam2);
+
+        function updateLine(line, a, b) {
+            line.geometry.setFromPoints([a, b]);
+            if (line.material.isLineDashedMaterial) line.computeLineDistances();
+        }
+
+        const arcGroup = new THREE.Group();
+        worldGroup.add(arcGroup);
+        const arcLine = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({ color: 0x222222 })
+        );
+        const arcArrow = new THREE.Mesh(
+            new THREE.ConeGeometry(0.18, 0.46, 12),
+            new THREE.MeshStandardMaterial({ color: 0x222222 })
+        );
+        arcGroup.add(arcLine, arcArrow);
+
+        const planeNormalLine1 = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({ color: 0x126d12 })
+        );
+        const planeNormalLine2 = new THREE.Line(
+            new THREE.BufferGeometry(),
+            new THREE.LineBasicMaterial({ color: 0x8a1111 })
+        );
+        worldGroup.add(planeNormalLine1, planeNormalLine2);
+
+        const defaultRayDir = new THREE.Vector3(0.95, 0.2, 0.32).normalize();
+        const defaultCam1Rot = new THREE.Euler(THREE.MathUtils.degToRad(-6), THREE.MathUtils.degToRad(-18), THREE.MathUtils.degToRad(8), 'XYZ');
+
+        let demoStep = 0;
+        let demoTimer = null;
+
+        const steps = [
+            'Step 1: Two cameras share one center of projection (black dot). Green is Camera 1 image plane, red is Camera 2 image plane.',
+            'Step 2: Rotate Camera 2 using slider R. Because motion is pure rotation, a homography maps points between image planes.',
+            'Step 3: Move the 3D point along the same viewing ray with Depth. (x,y) and (x\',y\') stay fixed on their planes.',
+            'Step 4: Orbit around to inspect 3D geometry, then use Reset to return to textbook view.'
+        ];
+
+        function setDemoText() {
+            demoText.textContent = steps[demoStep];
+        }
+
+        function basisFromQuaternion(q) {
+            const n = new THREE.Vector3(0, 0, 1).applyQuaternion(q).normalize();
+            const u = new THREE.Vector3(1, 0, 0).applyQuaternion(q).normalize();
+            const v = new THREE.Vector3(0, 1, 0).applyQuaternion(q).normalize();
+            return { n, u, v };
+        }
+
+        function placePlane(mesh, basis) {
+            mesh.position.copy(basis.n.clone().multiplyScalar(f));
+            mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(basis.u, basis.v, basis.n));
+        }
+
+        function projectToPlane(rayDir, basis) {
+            const denom = basis.n.dot(rayDir);
+            const t = f / denom;
+            return rayDir.clone().multiplyScalar(t);
+        }
+
+        function updateArc(angleRad) {
+            const r = 4.2;
+            const y = 3.7;
+            const start = -Math.PI * 0.12;
+            const end = start + angleRad;
+            const segments = 48;
+            const pts = [];
+            for (let i = 0; i <= segments; i++) {
+                const t = i / segments;
+                const a = start + (end - start) * t;
+                pts.push(new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r));
+            }
+            arcLine.geometry.setFromPoints(pts);
+            const tip = pts[pts.length - 1];
+            const prev = pts[Math.max(0, pts.length - 2)];
+            const tangent = tip.clone().sub(prev).normalize();
+            arcArrow.position.copy(tip);
+            arcArrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent);
+            rLabel.position.copy(tip.clone().add(new THREE.Vector3(0.22, 0.58, 0.2)));
+        }
+
+        function setTextbookView() {
+            camera.position.set(-7.5, 5.2, 16.0);
+            controls.target.set(4.2, 1.7, 1.8);
+            controls.update();
+        }
+
+        function applyDemoStep() {
+            if (demoStep === 0) {
+                rotationEl.value = '35';
+                depthEl.value = '12';
+                showHelpersEl.checked = true;
+            }
+            if (demoStep === 1) {
+                rotationEl.value = '52';
+                showHelpersEl.checked = true;
+            }
+            if (demoStep === 2) {
+                depthEl.value = '22';
+            }
+            if (demoStep === 3) {
+                setTextbookView();
+            }
+            syncUI();
+            setDemoText();
+        }
+
+        function syncUI() {
+            rotationValEl.textContent = rotationEl.value;
+            depthValEl.textContent = Number(depthEl.value).toFixed(1);
+            updateScene();
+        }
+
+        function updateScene() {
+            const rotDeg = Number(rotationEl.value);
+            const depth = Number(depthEl.value);
+            const angle = THREE.MathUtils.degToRad(rotDeg);
+
+            const q1 = new THREE.Quaternion().setFromEuler(defaultCam1Rot);
+            const qRot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+            const q2 = qRot.clone().multiply(q1);
+
+            const b1 = basisFromQuaternion(q1);
+            const b2 = basisFromQuaternion(q2);
+
+            // 2D figure mapping: green and red tilted quadrilaterals -> actual 3D camera image planes.
+            placePlane(plane1, b1);
+            placePlane(plane2, b2);
+
+            const rayDir = defaultRayDir.clone();
+            const P = rayDir.clone().multiplyScalar(depth);
+
+            // 2D figure mapping: dotted line through (x,y), (x',y'), (X,Y,Z) -> one 3D ray from the shared camera center.
+            const p1 = projectToPlane(rayDir, b1);
+            const p2 = projectToPlane(rayDir, b2);
+
+            p3d.position.copy(P);
+            pCam1.position.copy(p1);
+            pCam2.position.copy(p2);
+
+            updateLine(rayToP, origin, P);
+            updateLine(rayToCam1, origin, pCam1.position);
+            updateLine(rayToCam2, origin, pCam2.position);
+
+            const longPoint = rayDir.clone().multiplyScalar(28);
+            updateLine(centerLine, origin, longPoint);
+
+            // Interaction teaching: helper normals make the camera rotation relation explicit.
+            updateLine(planeNormalLine1, plane1.position, plane1.position.clone().add(b1.n.clone().multiplyScalar(2.0)));
+            updateLine(planeNormalLine2, plane2.position, plane2.position.clone().add(b2.n.clone().multiplyScalar(2.0)));
+
+            const helpersVisible = showHelpersEl.checked;
+            rayToCam1.visible = helpersVisible;
+            rayToCam2.visible = helpersVisible;
+            centerLine.visible = helpersVisible;
+            planeNormalLine1.visible = helpersVisible;
+            planeNormalLine2.visible = helpersVisible;
+
+            updateArc(angle);
+
+            camera1Label.position.copy(plane1.position.clone().add(b1.v.clone().multiplyScalar(3.9)).add(b1.u.clone().multiplyScalar(-2.2)));
+            camera2Label.position.copy(plane2.position.clone().add(b2.v.clone().multiplyScalar(-3.5)).add(b2.u.clone().multiplyScalar(1.8)));
+
+            xyLabel.position.copy(pCam1.position.clone().add(new THREE.Vector3(0.2, 0.5, 0.2)));
+            xypLabel.position.copy(pCam2.position.clone().add(new THREE.Vector3(0.2, -0.65, 0.2)));
+            xyzLabel.position.copy(p3d.position.clone().add(new THREE.Vector3(0.9, 0.5, 0.2)));
+        }
+
+        // Interaction teaching: step-through controls deliberately sequence the core homography idea.
+        stepBtn.addEventListener('click', () => {
+            demoStep = (demoStep + 1) % steps.length;
+            applyDemoStep();
+        });
+
+        playBtn.addEventListener('click', () => {
+            if (demoTimer !== null) {
+                clearInterval(demoTimer);
+                demoTimer = null;
+                playBtn.textContent = 'Play Guided Demo';
+                return;
+            }
+            playBtn.textContent = 'Stop Demo';
+            demoStep = 0;
+            applyDemoStep();
+            demoTimer = setInterval(() => {
+                demoStep = (demoStep + 1) % steps.length;
+                applyDemoStep();
+            }, 2600);
+        });
+
+        resetBtn.addEventListener('click', () => {
+            rotationEl.value = '35';
+            depthEl.value = '12';
+            showHelpersEl.checked = true;
+            demoStep = 0;
+            if (demoTimer !== null) {
+                clearInterval(demoTimer);
+                demoTimer = null;
+                playBtn.textContent = 'Play Guided Demo';
+            }
+            setTextbookView();
+            syncUI();
+            setDemoText();
+        });
+
+        rotationEl.addEventListener('input', syncUI);
+        depthEl.addEventListener('input', syncUI);
+        showHelpersEl.addEventListener('change', updateScene);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        setDemoText();
+        syncUI();
+        setTextbookView();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+
+</html>

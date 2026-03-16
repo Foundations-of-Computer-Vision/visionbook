@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>No Picture on a Wall - Interactive 3D</title>
+  <style>
+    :root {
+      --bg: #d9d9d9;
+      --panel: rgba(255, 255, 255, 0.88);
+      --text: #222;
+      --accent: #2a9d2a;
+      --line: #7a4e2a;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      font-family: "Georgia", "Times New Roman", serif;
+      color: var(--text);
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+    }
+
+    #ui {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 20;
+      width: min(410px, calc(100vw - 24px));
+      background: var(--panel);
+      border: 1px solid rgba(0, 0, 0, 0.15);
+      border-radius: 10px;
+      padding: 12px 12px 10px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+      backdrop-filter: blur(4px);
+    }
+
+    #ui h1 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    #ui p {
+      margin: 6px 0;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 7px 0;
+      flex-wrap: wrap;
+    }
+
+    label {
+      font-size: 13px;
+      user-select: none;
+    }
+
+    input[type="range"] {
+      width: 150px;
+    }
+
+    button {
+      font-size: 13px;
+      padding: 5px 9px;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 0, 0, 0.25);
+      background: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #f3f3f3;
+    }
+
+    #status {
+      margin-top: 8px;
+      border-left: 4px solid var(--accent);
+      padding: 7px 8px;
+      background: rgba(42, 157, 42, 0.08);
+      font-size: 13px;
+      min-height: 38px;
+    }
+
+    .label {
+      color: #111;
+      font-size: 18px;
+      font-weight: 600;
+      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+      white-space: nowrap;
+      user-select: none;
+      pointer-events: none;
+    }
+
+    .label.small {
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    @media (max-width: 860px) {
+      #ui {
+        width: calc(100vw - 20px);
+        top: 10px;
+        left: 10px;
+      }
+      .label {
+        font-size: 14px;
+      }
+      .label.small {
+        font-size: 12px;
+      }
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.165.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.165.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="ui">
+    <h1>No Picture on a Wall: 3D Concept Demo</h1>
+    <p>Compare (a) a wall receiving mixed light rays vs (b) a pinhole camera that maps direction to position and forms an image.</p>
+
+    <div class="row">
+      <label><input id="toggleLeftRays" type="checkbox" checked /> Show mixed rays on wall (a)</label>
+    </div>
+    <div class="row">
+      <label><input id="toggleRightRays" type="checkbox" checked /> Show rays through pinhole (b)</label>
+    </div>
+    <div class="row">
+      <label><input id="toggleImage" type="checkbox" checked /> Show projected image on wall (b)</label>
+    </div>
+
+    <div class="row">
+      <label for="aperture">Aperture size:</label>
+      <input id="aperture" type="range" min="0.1" max="1.2" step="0.01" value="0.25" />
+      <span id="apertureValue">0.25</span>
+    </div>
+
+    <div class="row">
+      <button id="nextStep">Next step</button>
+      <button id="autoDemo">Auto demo</button>
+      <button id="resetView">Reset to textbook view</button>
+    </div>
+
+    <div id="status">Step 1/5: Both setups shown. Use orbit to inspect geometry.</div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+    const app = document.getElementById('app');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xd9d9d9);
+
+    const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const textbookCamPos = new THREE.Vector3(0, 4.5, 31);
+    const textbookTarget = new THREE.Vector3(0, 1.2, 0);
+    camera.position.copy(textbookCamPos);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    app.appendChild(renderer.domElement);
+
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(window.innerWidth, window.innerHeight);
+    labelRenderer.domElement.style.position = 'fixed';
+    labelRenderer.domElement.style.top = '0';
+    labelRenderer.domElement.style.left = '0';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    labelRenderer.domElement.style.zIndex = '10';
+    app.appendChild(labelRenderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.copy(textbookTarget);
+    controls.minDistance = 10;
+    controls.maxDistance = 80;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.95));
+    const key = new THREE.DirectionalLight(0xffffff, 0.7);
+    key.position.set(10, 15, 8);
+    scene.add(key);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(90, 34),
+      new THREE.MeshStandardMaterial({ color: 0xd3d3d3, roughness: 0.98, metalness: 0.02 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -4.2;
+    scene.add(floor);
+
+    function makeLabel(text, className = 'label') {
+      const div = document.createElement('div');
+      div.className = className;
+      div.textContent = text;
+      return new CSS2DObject(div);
+    }
+
+    function makeTree() {
+      const g = new THREE.Group();
+      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a5a2b, roughness: 0.95 });
+      const leavesMats = [
+        new THREE.MeshStandardMaterial({ color: 0x2ea300, roughness: 0.9 }),
+        new THREE.MeshStandardMaterial({ color: 0x47f400, roughness: 0.9 }),
+        new THREE.MeshStandardMaterial({ color: 0x69ff00, roughness: 0.9 })
+      ];
+
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.75, 5.2, 18), trunkMat);
+      trunk.position.set(0, -0.7, 0);
+      g.add(trunk);
+
+      const branch = new THREE.Mesh(new THREE.TorusGeometry(1.45, 0.18, 14, 48, Math.PI), trunkMat);
+      branch.rotation.z = Math.PI / 2;
+      branch.position.set(0.1, 1.35, 0);
+      g.add(branch);
+
+      const blobs = [
+        [0, 2.8, 0, 2.2, 0],
+        [1.55, 2.2, 0.55, 1.45, 1],
+        [-1.62, 2.6, -0.5, 1.6, 0],
+        [0.25, 3.4, -1.05, 1.35, 2],
+        [-0.2, 2.1, 1.2, 1.25, 2]
+      ];
+      for (const [x, y, z, r, c] of blobs) {
+        const m = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 20), leavesMats[c]);
+        m.position.set(x, y, z);
+        g.add(m);
+      }
+
+      return g;
+    }
+
+    function makeVase() {
+      const vaseMat = new THREE.MeshStandardMaterial({ color: 0xc0aa97, roughness: 0.85 });
+      const vase = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.05, 0.3, 22), vaseMat);
+      base.position.y = -2.8;
+      vase.add(base);
+
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.54, 3.2, 26), vaseMat);
+      body.position.y = -1.1;
+      vase.add(body);
+
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.54, 1.2, 22), vaseMat);
+      neck.position.y = 1.1;
+      vase.add(neck);
+
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.09, 12, 26), vaseMat);
+      rim.rotation.x = Math.PI / 2;
+      rim.position.y = 1.75;
+      vase.add(rim);
+
+      return vase;
+    }
+
+    function makeWallFrame(width = 5.8, height = 8.7) {
+      const group = new THREE.Group();
+      const wall = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, height),
+        new THREE.MeshStandardMaterial({ color: 0xdcdcdc, side: THREE.DoubleSide, roughness: 0.95 })
+      );
+      group.add(wall);
+
+      const edgeMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+      const t = 0.09;
+      const left = new THREE.Mesh(new THREE.BoxGeometry(t, height + t, t), edgeMat);
+      left.position.set(-width / 2, 0, 0);
+      const right = left.clone();
+      right.position.x = width / 2;
+      const top = new THREE.Mesh(new THREE.BoxGeometry(width + t, t, t), edgeMat);
+      top.position.set(0, height / 2, 0);
+      const bottom = top.clone();
+      bottom.position.y = -height / 2;
+      group.add(left, right, top, bottom);
+      return group;
+    }
+
+    function line(points, color, opacity = 1, width = 1) {
+      const geo = new THREE.BufferGeometry().setFromPoints(points);
+      const mat = new THREE.LineBasicMaterial({ color, transparent: opacity < 1, opacity, linewidth: width });
+      return new THREE.Line(geo, mat);
+    }
+
+    // 2D subfigure (a) -> this 3D group: wall and object with many rays mixing at wall points.
+    const left = new THREE.Group();
+    left.position.x = -11;
+    scene.add(left);
+
+    const leftWallX = -4.2;
+    const leftWall = makeWallFrame();
+    leftWall.position.set(leftWallX, 0, 0);
+    left.add(leftWall);
+
+    const leftTree = makeTree();
+    leftTree.position.set(3.9, -0.2, 0.2);
+    left.add(leftTree);
+
+    const leftA = makeLabel('(a)', 'label');
+    leftA.position.set(0, -4.0, 0);
+    left.add(leftA);
+
+    const wallLabelL = makeLabel('Wall', 'label');
+    wallLabelL.position.set(leftWallX - 0.6, 3.9, -1.9);
+    left.add(wallLabelL);
+
+    // 2D subfigure (b) -> this 3D group: wall, pinhole plate, object, and inverted projection.
+    const right = new THREE.Group();
+    right.position.x = 11;
+    scene.add(right);
+
+    const rightWallX = -4.2;
+    const rightWall = makeWallFrame();
+    rightWall.position.set(rightWallX, 0, 0);
+    right.add(rightWall);
+
+    const pinholePlate = new THREE.Mesh(
+      new THREE.BoxGeometry(1.5, 8.8, 4.8),
+      new THREE.MeshStandardMaterial({ color: 0x090909, roughness: 0.7 })
+    );
+    pinholePlate.position.set(0, 0, 0);
+    right.add(pinholePlate);
+
+    const apertureRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.25, 0.04, 14, 36),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 })
+    );
+    apertureRing.rotation.y = Math.PI / 2;
+    right.add(apertureRing);
+
+    const rightTree = makeTree();
+    rightTree.position.set(4.4, -0.2, 1.2);
+    right.add(rightTree);
+
+    const rightVase = makeVase();
+    rightVase.position.set(3.6, -0.05, -1.6);
+    right.add(rightVase);
+
+    const rightB = makeLabel('(b)', 'label');
+    rightB.position.set(0, -4.0, 0);
+    right.add(rightB);
+
+    const wallLabelR = makeLabel('Wall', 'label');
+    wallLabelR.position.set(rightWallX - 0.6, 3.9, -1.9);
+    right.add(wallLabelR);
+
+    const pinholeLabel = makeLabel('Pinhole', 'label');
+    pinholeLabel.position.set(0.2, 4.0, 0);
+    right.add(pinholeLabel);
+
+    const raysLeftGroup = new THREE.Group();
+    left.add(raysLeftGroup);
+
+    const raysRightGroup = new THREE.Group();
+    right.add(raysRightGroup);
+
+    const projectedGroup = new THREE.Group();
+    right.add(projectedGroup);
+    let pinholeGlow = null;
+
+    const sourcePtsLeft = [
+      new THREE.Vector3(4.4, 3.4, 0.9),
+      new THREE.Vector3(4.8, 1.7, 0.2),
+      new THREE.Vector3(3.8, -1.0, -0.2),
+      new THREE.Vector3(3.3, 0.6, -0.8)
+    ];
+
+    const wallPtsLeft = [
+      new THREE.Vector3(leftWallX, 1.2, 0.8),
+      new THREE.Vector3(leftWallX, -1.4, -0.7)
+    ];
+
+    for (const s of sourcePtsLeft) {
+      for (const w of wallPtsLeft) {
+        raysLeftGroup.add(line([s, w], 0x7a4e2a, 0.95));
+      }
+    }
+    raysLeftGroup.add(line([sourcePtsLeft[0], new THREE.Vector3(leftWallX, 2.2, 0.2)], 0x28a428, 1));
+    raysLeftGroup.add(line([sourcePtsLeft[1], new THREE.Vector3(leftWallX, -2.0, 0.6)], 0x33c233, 1));
+
+    const samplePoints = [
+      { p: new THREE.Vector3(4.9, 3.1, 1.45), c: 0x2da900, name: 'tree top' },
+      { p: new THREE.Vector3(4.6, 1.7, 0.7), c: 0x57f600, name: 'tree middle' },
+      { p: new THREE.Vector3(4.35, -1.25, 0.8), c: 0x8b5a2b, name: 'trunk' },
+      { p: new THREE.Vector3(3.7, 1.8, -1.6), c: 0xb79982, name: 'vase rim' }
+    ];
+
+    const holeCenter = new THREE.Vector3(0, 0, 0);
+    const rightWallNormalX = rightWallX;
+
+    function projectToWall(objectPoint, aperturePoint) {
+      const dir = new THREE.Vector3().subVectors(aperturePoint, objectPoint);
+      const t = (rightWallNormalX - objectPoint.x) / dir.x;
+      return objectPoint.clone().add(dir.multiplyScalar(t));
+    }
+
+    // Interaction teaching goal: aperture slider changes hole radius, showing sharp-vs-blurry projection.
+    let apertureRadius = 0.25;
+    function apertureSamples(r) {
+      return [
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, r, 0),
+        new THREE.Vector3(0, -r, 0),
+        new THREE.Vector3(0, 0, r),
+        new THREE.Vector3(0, 0, -r)
+      ];
+    }
+
+    function clearGroup(g) {
+      while (g.children.length) {
+        const c = g.children[0];
+        g.remove(c);
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) {
+          if (Array.isArray(c.material)) {
+            for (const m of c.material) m.dispose();
+          } else {
+            c.material.dispose();
+          }
+        }
+      }
+    }
+
+    // 2D bright inverted patch on wall in (b) -> in 3D we place discs at computed intersections.
+    function rebuildRightProjection() {
+      clearGroup(raysRightGroup);
+      clearGroup(projectedGroup);
+
+      const samples = apertureSamples(apertureRadius);
+      for (const s of samplePoints) {
+        const accum = [];
+
+        for (const a of samples) {
+          const intersection = projectToWall(s.p, a);
+          accum.push(intersection);
+
+          const ray = line([s.p, a, intersection], s.c, 0.85);
+          raysRightGroup.add(ray);
+        }
+
+        const mean = new THREE.Vector3();
+        for (const p of accum) mean.add(p);
+        mean.multiplyScalar(1 / accum.length);
+
+        const blurRadius = 0.12 + apertureRadius * 0.45;
+        const disc = new THREE.Mesh(
+          new THREE.CircleGeometry(blurRadius, 24),
+          new THREE.MeshBasicMaterial({ color: s.c, transparent: true, opacity: 0.48, side: THREE.DoubleSide })
+        );
+        disc.rotation.y = Math.PI / 2;
+        disc.position.copy(mean);
+        projectedGroup.add(disc);
+      }
+
+      if (pinholeGlow) {
+        right.remove(pinholeGlow);
+        pinholeGlow.geometry.dispose();
+        pinholeGlow.material.dispose();
+      }
+      pinholeGlow = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12 + apertureRadius * 0.1, 18, 14),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 })
+      );
+      pinholeGlow.position.copy(holeCenter);
+      right.add(pinholeGlow);
+
+      apertureRing.geometry.dispose();
+      apertureRing.geometry = new THREE.TorusGeometry(apertureRadius, 0.04, 14, 36);
+      apertureRing.rotation.y = Math.PI / 2;
+    }
+
+    rebuildRightProjection();
+
+    const ui = {
+      leftRays: document.getElementById('toggleLeftRays'),
+      rightRays: document.getElementById('toggleRightRays'),
+      image: document.getElementById('toggleImage'),
+      aperture: document.getElementById('aperture'),
+      apertureValue: document.getElementById('apertureValue'),
+      nextStep: document.getElementById('nextStep'),
+      autoDemo: document.getElementById('autoDemo'),
+      resetView: document.getElementById('resetView'),
+      status: document.getElementById('status')
+    };
+
+    function syncVisibility() {
+      raysLeftGroup.visible = ui.leftRays.checked;
+      raysRightGroup.visible = ui.rightRays.checked;
+      projectedGroup.visible = ui.image.checked;
+    }
+
+    ui.leftRays.addEventListener('change', syncVisibility);
+    ui.rightRays.addEventListener('change', syncVisibility);
+    ui.image.addEventListener('change', syncVisibility);
+
+    ui.aperture.addEventListener('input', () => {
+      apertureRadius = parseFloat(ui.aperture.value);
+      ui.apertureValue.textContent = apertureRadius.toFixed(2);
+      rebuildRightProjection();
+      syncVisibility();
+    });
+
+    const steps = [
+      {
+        left: false,
+        right: false,
+        image: false,
+        aperture: 0.25,
+        text: 'Step 1/5: Geometry only. Left is an open wall; right inserts a pinhole barrier.'
+      },
+      {
+        left: true,
+        right: false,
+        image: false,
+        aperture: 0.25,
+        text: 'Step 2/5: In (a), many directions hit each wall point, so information is mixed.'
+      },
+      {
+        left: false,
+        right: true,
+        image: false,
+        aperture: 0.25,
+        text: 'Step 3/5: In (b), rays are forced through one tiny aperture (direction selection).' 
+      },
+      {
+        left: false,
+        right: true,
+        image: true,
+        aperture: 0.25,
+        text: 'Step 4/5: Selected rays map to wall position, producing an inverted image.'
+      },
+      {
+        left: false,
+        right: true,
+        image: true,
+        aperture: 0.95,
+        text: 'Step 5/5: Larger aperture makes projection brighter but blurrier (overlapping mappings).'
+      }
+    ];
+
+    let currentStep = 0;
+    let autoTimer = null;
+
+    // Interaction teaching goal: guided sequence reveals why pinhole creates images while open wall does not.
+    function applyStep(idx) {
+      const s = steps[idx];
+      ui.leftRays.checked = s.left;
+      ui.rightRays.checked = s.right;
+      ui.image.checked = s.image;
+      apertureRadius = s.aperture;
+      ui.aperture.value = String(s.aperture);
+      ui.apertureValue.textContent = s.aperture.toFixed(2);
+      ui.status.textContent = s.text;
+      rebuildRightProjection();
+      syncVisibility();
+    }
+
+    ui.nextStep.addEventListener('click', () => {
+      currentStep = (currentStep + 1) % steps.length;
+      applyStep(currentStep);
+    });
+
+    ui.autoDemo.addEventListener('click', () => {
+      if (autoTimer) {
+        clearInterval(autoTimer);
+        autoTimer = null;
+        ui.autoDemo.textContent = 'Auto demo';
+      } else {
+        ui.autoDemo.textContent = 'Stop demo';
+        autoTimer = setInterval(() => {
+          currentStep = (currentStep + 1) % steps.length;
+          applyStep(currentStep);
+        }, 1800);
+      }
+    });
+
+    // Interaction teaching goal: recover the original textbook framing and default settings.
+    ui.resetView.addEventListener('click', () => {
+      currentStep = 0;
+      applyStep(currentStep);
+      camera.position.copy(textbookCamPos);
+      controls.target.copy(textbookTarget);
+      controls.update();
+      if (autoTimer) {
+        clearInterval(autoTimer);
+        autoTimer = null;
+        ui.autoDemo.textContent = 'Auto demo';
+      }
+    });
+
+    applyStep(0);
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const t = clock.getElapsedTime();
+
+      leftTree.rotation.y = 0.03 * Math.sin(t * 0.5);
+      rightTree.rotation.y = 0.03 * Math.sin(t * 0.45 + 0.6);
+
+      controls.update();
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      labelRenderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

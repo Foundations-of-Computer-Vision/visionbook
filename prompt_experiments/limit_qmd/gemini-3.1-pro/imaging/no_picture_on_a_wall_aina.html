@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinhole Camera Image Formation</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 350px;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+
+        p {
+            font-size: 0.9rem;
+            margin-bottom: 15px;
+            line-height: 1.4;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 8px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .active {
+            background: #28a745;
+        }
+
+        .active:hover {
+            background: #1e7e34;
+        }
+
+        #labels {
+            position: absolute;
+            pointer-events: none;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .label {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            transform: translate(-50%, -50%);
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container"></div>
+    <div id="labels">
+        <div id="label-wall" class="label">Projection Wall</div>
+        <div id="label-barrier" class="label">Pinhole Barrier</div>
+        <div id="label-objects" class="label">Objects</div>
+    </div>
+    <div id="ui-container">
+        <h1>Pinhole Camera Concept</h1>
+        <p id="description">Explore why pictures don't appear on regular walls and how a pinhole creates an image.</p>
+
+        <button id="step-1">(a) No Barrier: Rays mix everywhere</button>
+        <button id="step-2">(b) With Pinhole: Rays are separated</button>
+        <button id="toggle-rays">Toggle Light Rays</button>
+        <button id="reset-view" style="margin-top: 15px; background: #6c757d; text-align: center;">Reset to Textbook
+            View</button>
+    </div>
+
+    <!-- Import Three.js as ES module -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xf0f0f0);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(15, 10, 25);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.target.set(0, 5, 0);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // --- 2D to 3D Mapping ---
+        // 2D: Objects (tree, person) -> 3D: Simple colored shapes (cone+cylinder for tree, spheres/cylinders for person)
+        // 2D: Wall -> 3D: A large plane receiving shadows and light rays
+        // 2D: Barrier with hole -> 3D: A plane with a hole in the middle
+        // 2D: Light rays -> 3D: ArrowHelpers or LineSegments between objects and the wall
+
+        const objectsGroup = new THREE.Group();
+        scene.add(objectsGroup);
+
+        // Object 1: Tree (Green)
+        const treeGroup = new THREE.Group();
+        const trunkGeo = new THREE.CylinderGeometry(0.2, 0.2, 1);
+        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.position.y = 0.5;
+        const leavesGeo = new THREE.ConeGeometry(1, 2, 8);
+        const leavesMat = new THREE.MeshLambertMaterial({ color: 0x228b22 });
+        const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+        leaves.position.y = 2;
+        treeGroup.add(trunk);
+        treeGroup.add(leaves);
+        treeGroup.position.set(-3, 0, 8);
+        objectsGroup.add(treeGroup);
+
+        // Object 2: Box (Red)
+        const boxGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5);
+        const boxMat = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+        const box = new THREE.Mesh(boxGeo, boxMat);
+        box.position.set(3, 0.75, 7);
+        objectsGroup.add(box);
+
+        // Object 3: Sphere (Blue)
+        const sphereGeo = new THREE.SphereGeometry(1, 16, 16);
+        const sphereMat = new THREE.MeshLambertMaterial({ color: 0x0000ff });
+        const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+        sphere.position.set(0, 5, 6);
+        objectsGroup.add(sphere);
+
+        // The Wall (Projection Screen)
+        const wallGeo = new THREE.PlaneGeometry(15, 10);
+        const wallMat = new THREE.MeshLambertMaterial({ color: 0xdcdcdc, side: THREE.DoubleSide });
+        const wall = new THREE.Mesh(wallGeo, wallMat);
+        wall.position.set(0, 5, -5);
+        scene.add(wall);
+
+        // The Barrier (Pinhole)
+        const barrierGroup = new THREE.Group();
+        const barrierMat = new THREE.MeshLambertMaterial({ color: 0x333333, side: THREE.DoubleSide });
+
+        // Creating a plane with a hole
+        const shape = new THREE.Shape();
+        shape.moveTo(-8, -6);
+        shape.lineTo(8, -6);
+        shape.lineTo(8, 6);
+        shape.lineTo(-8, 6);
+        shape.lineTo(-8, -6);
+
+        const holePath = new THREE.Path();
+        holePath.absarc(0, 0, 0.4, 0, Math.PI * 2, true);
+        shape.holes.push(holePath);
+
+        const barrierGeo = new THREE.ShapeGeometry(shape);
+        const barrier = new THREE.Mesh(barrierGeo, barrierMat);
+        barrierGroup.add(barrier);
+        barrierGroup.position.set(0, 5, 0);
+        scene.add(barrierGroup);
+
+        // Ray Visualization
+        const raysGroup = new THREE.Group();
+        scene.add(raysGroup);
+
+        // Helper function to create a line ray
+        function createRay(start, end, color) {
+            const material = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.6 });
+            const points = [];
+            points.push(start);
+            points.push(end);
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            return new THREE.Line(geometry, material);
+        }
+
+        // Generate Rays
+        const objectPoints = [
+            { pos: new THREE.Vector3(-3, 2, 8), color: 0x228b22 }, // Tree top
+            { pos: new THREE.Vector3(3, 0.75, 7), color: 0xff0000 }, // Box
+            { pos: new THREE.Vector3(0, 5, 6), color: 0x0000ff } // Sphere
+        ];
+
+        // Rays for state A (no barrier, hitting everywhere)
+        const raysA = new THREE.Group();
+        const wallPointsA = [
+            new THREE.Vector3(-4, 8, -5), new THREE.Vector3(0, 8, -5), new THREE.Vector3(4, 8, -5),
+            new THREE.Vector3(-4, 5, -5), new THREE.Vector3(0, 5, -5), new THREE.Vector3(4, 5, -5),
+            new THREE.Vector3(-4, 2, -5), new THREE.Vector3(0, 2, -5), new THREE.Vector3(4, 2, -5)
+        ];
+        objectPoints.forEach(obj => {
+            wallPointsA.forEach(wp => {
+                raysA.add(createRay(obj.pos, wp, obj.color));
+            });
+        });
+
+        // Rays for state B (with barrier, intersecting hole)
+        const raysB = new THREE.Group();
+        const holePos = new THREE.Vector3(0, 5, 0);
+        objectPoints.forEach(obj => {
+            // Ray from object through hole to wall
+            const dir = new THREE.Vector3().subVectors(holePos, obj.pos).normalize();
+            // distance to wall (z = -5). current z is obj.pos.z, hole is at z=0.
+            const t = (-5 - obj.pos.z) / dir.z;
+            const wallHit = new THREE.Vector3().copy(obj.pos).add(dir.multiplyScalar(t));
+            raysB.add(createRay(obj.pos, wallHit, obj.color));
+
+            // Add a blob on the wall to represent the image point
+            const hitDot = new THREE.Mesh(new THREE.CircleGeometry(0.3, 16), new THREE.MeshBasicMaterial({ color: obj.color }));
+            hitDot.position.copy(wallHit);
+            hitDot.position.z += 0.01; // Avoid z-fighting
+            raysB.add(hitDot);
+        });
+
+        raysGroup.add(raysA);
+        raysGroup.add(raysB);
+
+        // --- Interaction Logic ---
+
+        let currentState = 'A'; // 'A' or 'B'
+        let raysVisible = true;
+
+        const btnStep1 = document.getElementById('step-1');
+        const btnStep2 = document.getElementById('step-2');
+        const btnToggleRays = document.getElementById('toggle-rays');
+        const btnReset = document.getElementById('reset-view');
+        const description = document.getElementById('description');
+
+        function updateState() {
+            if (currentState === 'A') {
+                barrierGroup.visible = false;
+                raysA.visible = raysVisible;
+                raysB.visible = false;
+                btnStep1.classList.add('active');
+                btnStep2.classList.remove('active');
+                description.innerHTML = "<b>Without a barrier:</b> Light rays from every point on objects scatter and hit every point on the wall. The colors mix, resulting in no discernible image.";
+            } else {
+                barrierGroup.visible = true;
+                raysA.visible = false;
+                raysB.visible = raysVisible;
+                btnStep1.classList.remove('active');
+                btnStep2.classList.add('active');
+                description.innerHTML = "<b>With a pinhole barrier:</b> The barrier blocks most rays. Only rays traveling in a straight line through the pinhole reach the wall, mapping one point on the object to one point on the wall (forming an inverted image).";
+            }
+        }
+
+        btnStep1.addEventListener('click', () => { currentState = 'A'; updateState(); });
+        btnStep2.addEventListener('click', () => { currentState = 'B'; updateState(); });
+
+        btnToggleRays.addEventListener('click', () => {
+            raysVisible = !raysVisible;
+            updateState();
+            btnToggleRays.classList.toggle('active', raysVisible);
+        });
+
+        btnReset.addEventListener('click', () => {
+            camera.position.set(15, 10, 25);
+            controls.target.set(0, 5, 0);
+            currentState = 'A';
+            raysVisible = true;
+            updateState();
+            btnToggleRays.classList.add('active');
+        });
+
+        // Initialize state
+        updateState();
+        btnToggleRays.classList.add('active');
+
+        // Labels update
+        const labelWall = document.getElementById('label-wall');
+        const labelBarrier = document.getElementById('label-barrier');
+        const labelObjects = document.getElementById('label-objects');
+
+        function updateLabels() {
+            const tempV = new THREE.Vector3();
+
+            // Wall label
+            tempV.set(0, 10.5, -5).project(camera);
+            labelWall.style.left = (tempV.x * .5 + .5) * window.innerWidth + 'px';
+            labelWall.style.top = (tempV.y * -.5 + .5) * window.innerHeight + 'px';
+            labelWall.style.display = tempV.z > 1 ? 'none' : 'block';
+
+            // Barrier label
+            if (currentState === 'B') {
+                tempV.set(0, 11, 0).project(camera);
+                labelBarrier.style.left = (tempV.x * .5 + .5) * window.innerWidth + 'px';
+                labelBarrier.style.top = (tempV.y * -.5 + .5) * window.innerHeight + 'px';
+                labelBarrier.style.display = tempV.z > 1 ? 'none' : 'block';
+            } else {
+                labelBarrier.style.display = 'none';
+            }
+
+            // Objects label
+            tempV.set(0, 7, 7).project(camera);
+            labelObjects.style.left = (tempV.x * .5 + .5) * window.innerWidth + 'px';
+            labelObjects.style.top = (tempV.y * -.5 + .5) * window.innerHeight + 'px';
+            labelObjects.style.display = tempV.z > 1 ? 'none' : 'block';
+        }
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            updateLabels();
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+
+</html>

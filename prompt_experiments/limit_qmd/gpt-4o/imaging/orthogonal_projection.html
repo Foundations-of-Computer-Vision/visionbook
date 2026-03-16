@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orthogonal Projection</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 1;
+        }
+
+        button {
+            margin: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info">
+        <p><strong>Interactive 3D Visualization: Perspective Projection</strong></p>
+        <p>Use the controls below to explore the concept:</p>
+        <button id="resetView">Reset to Textbook View</button>
+        <button id="toggleProjection">Toggle Projection Lines</button>
+        <button id="stepDemo">Step Through Demo</button>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // OrbitControls for interactivity
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Axes helper
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // Projection plane
+        const planeGeometry = new THREE.PlaneGeometry(5, 5);
+        const planeMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const projectionPlane = new THREE.Mesh(planeGeometry, planeMaterial);
+        projectionPlane.rotation.x = -Math.PI / 2;
+        projectionPlane.position.z = -5;
+        scene.add(projectionPlane);
+
+        // 3D object (box)
+        const boxGeometry = new THREE.BoxGeometry(2, 1, 1);
+        const boxMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+        const box = new THREE.Mesh(boxGeometry, boxMaterial);
+        box.position.set(0, 0.5, -10);
+        scene.add(box);
+
+        // Projection lines
+        const projectionLines = [];
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+
+        function createProjectionLine(start, end) {
+            const points = [start, end];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, lineMaterial);
+            projectionLines.push(line);
+            scene.add(line);
+        }
+
+        function addProjectionLines() {
+            const vertices = [
+                new THREE.Vector3(-1, 0, -10),
+                new THREE.Vector3(1, 0, -10),
+                new THREE.Vector3(1, 1, -10),
+                new THREE.Vector3(-1, 1, -10)
+            ];
+
+            vertices.forEach(vertex => {
+                createProjectionLine(vertex, new THREE.Vector3(vertex.x, vertex.y, -5));
+            });
+        }
+
+        function removeProjectionLines() {
+            projectionLines.forEach(line => scene.remove(line));
+            projectionLines.length = 0;
+        }
+
+        // Add projection lines initially
+        addProjectionLines();
+
+        // Light
+        const light = new THREE.PointLight(0xffffff, 1, 100);
+        light.position.set(10, 10, 10);
+        scene.add(light);
+
+        // Camera position
+        camera.position.set(5, 5, 10);
+        camera.lookAt(0, 0, -5);
+
+        // Interaction buttons
+        const resetButton = document.getElementById('resetView');
+        const toggleProjectionButton = document.getElementById('toggleProjection');
+        const stepDemoButton = document.getElementById('stepDemo');
+
+        resetButton.addEventListener('click', () => {
+            camera.position.set(5, 5, 10);
+            camera.lookAt(0, 0, -5);
+            controls.reset();
+        });
+
+        let projectionVisible = true;
+        toggleProjectionButton.addEventListener('click', () => {
+            if (projectionVisible) {
+                removeProjectionLines();
+            } else {
+                addProjectionLines();
+            }
+            projectionVisible = !projectionVisible;
+        });
+
+        let demoStep = 0;
+        stepDemoButton.addEventListener('click', () => {
+            demoStep++;
+            if (demoStep === 1) {
+                camera.position.set(0, 5, 10);
+                camera.lookAt(0, 0, -5);
+            } else if (demoStep === 2) {
+                camera.position.set(0, 10, 0);
+                camera.lookAt(0, 0, -5);
+            } else {
+                demoStep = 0;
+                resetButton.click();
+            }
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+    </script>
+</body>
+
+</html>

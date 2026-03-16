@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homography Visualization</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+        }
+
+        button {
+            margin: 5px;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="ui">
+        <button id="resetView">Reset to Textbook View</button>
+        <button id="toggleGrid">Toggle Grid</button>
+        <button id="applyHomography">Apply Homography</button>
+        <button id="resetHomography">Reset Homography</button>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // OrbitControls for interactivity
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Add a grid helper
+        const gridHelper = new THREE.GridHelper(10, 10);
+        scene.add(gridHelper);
+
+        // Create a plane geometry to represent the grid
+        const planeGeometry = new THREE.PlaneGeometry(8, 8, 4, 4);
+        const planeMaterial = new THREE.MeshBasicMaterial({
+            color: 0x0077ff,
+            wireframe: true
+        });
+        const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+        plane.rotation.x = -Math.PI / 2; // Align with the ground
+        scene.add(plane);
+
+        // Add labels to the grid
+        const labelMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const labelPositions = [
+            { x: -4, y: 0.1, z: -4, text: 'A' },
+            { x: 4, y: 0.1, z: -4, text: 'B' },
+            { x: -4, y: 0.1, z: 4, text: 'C' },
+            { x: 4, y: 0.1, z: 4, text: 'D' }
+        ];
+
+        labelPositions.forEach(pos => {
+            const label = createTextLabel(pos.text);
+            label.position.set(pos.x, pos.y, pos.z);
+            scene.add(label);
+        });
+
+        function createTextLabel(text) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            context.font = '24px Arial';
+            context.fillStyle = 'black';
+            context.fillText(text, 2, 24);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.scale.set(0.5, 0.25, 1);
+            return sprite;
+        }
+
+        // Add a directional light
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 10, 7.5);
+        scene.add(light);
+
+        // Camera position
+        camera.position.set(5, 5, 5);
+        camera.lookAt(0, 0, 0);
+
+        // Homography transformation matrix
+        const homographyMatrix = new THREE.Matrix4();
+        homographyMatrix.set(
+            1, 0.2, 0, 0,
+            0.2, 1, 0, 0,
+            0.001, 0.001, 1, 0,
+            0, 0, 0, 1
+        );
+
+        // Apply homography transformation
+        function applyHomography() {
+            plane.applyMatrix4(homographyMatrix);
+        }
+
+        // Reset homography transformation
+        function resetHomography() {
+            plane.matrix.identity();
+            plane.matrixAutoUpdate = true;
+            plane.position.set(0, 0, 0);
+            plane.rotation.set(-Math.PI / 2, 0, 0);
+        }
+
+        // Toggle grid visibility
+        function toggleGrid() {
+            gridHelper.visible = !gridHelper.visible;
+        }
+
+        // Reset to textbook view
+        function resetView() {
+            camera.position.set(5, 5, 5);
+            camera.lookAt(0, 0, 0);
+            controls.reset();
+        }
+
+        // Add event listeners for buttons
+        document.getElementById('resetView').addEventListener('click', resetView);
+        document.getElementById('toggleGrid').addEventListener('click', toggleGrid);
+        document.getElementById('applyHomography').addEventListener('click', applyHomography);
+        document.getElementById('resetHomography').addEventListener('click', resetHomography);
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>

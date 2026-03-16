@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinhole Camera Visualization</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 1;
+        }
+
+        button {
+            margin: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="info">
+        <p><strong>Pinhole Camera Visualization</strong></p>
+        <p>Use the controls to explore the 3D geometry of a pinhole camera.</p>
+        <button id="resetView">Reset to Textbook View</button>
+        <button id="step1">Step 1: Show World Coordinates</button>
+        <button id="step2">Step 2: Show Projection Plane</button>
+        <button id="step3">Step 3: Show Perspective Projection</button>
+    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Orbit Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        // Axes Helper
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // Pinhole Camera Geometry
+        const pinholeGeometry = new THREE.CylinderGeometry(0.05, 0.05, 2, 32);
+        const pinholeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const pinhole = new THREE.Mesh(pinholeGeometry, pinholeMaterial);
+        pinhole.rotation.x = Math.PI / 2;
+        pinhole.position.z = -1;
+        scene.add(pinhole);
+
+        // Projection Plane
+        const planeGeometry = new THREE.PlaneGeometry(4, 4);
+        const planeMaterial = new THREE.MeshBasicMaterial({ color: 0x87CEEB, side: THREE.DoubleSide, transparent: true, opacity: 0.5 });
+        const projectionPlane = new THREE.Mesh(planeGeometry, planeMaterial);
+        projectionPlane.position.z = -3;
+        scene.add(projectionPlane);
+
+        // World Coordinate Point
+        const worldPointGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+        const worldPointMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const worldPoint = new THREE.Mesh(worldPointGeometry, worldPointMaterial);
+        worldPoint.position.set(1, 1, 3);
+        scene.add(worldPoint);
+
+        // Line from World Point to Pinhole
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
+        const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(1, 1, 3),
+            new THREE.Vector3(0, 0, -1)
+        ]);
+        const line = new THREE.Line(lineGeometry, lineMaterial);
+        scene.add(line);
+
+        // Line from Pinhole to Projection Plane
+        const lineToPlaneGeometry = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(0, 0, -1),
+            new THREE.Vector3(0.5, 0.5, -3)
+        ]);
+        const lineToPlane = new THREE.Line(lineToPlaneGeometry, lineMaterial);
+        scene.add(lineToPlane);
+
+        // Projected Point on Plane
+        const projectedPointGeometry = new THREE.SphereGeometry(0.1, 32, 32);
+        const projectedPointMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const projectedPoint = new THREE.Mesh(projectedPointGeometry, projectedPointMaterial);
+        projectedPoint.position.set(0.5, 0.5, -3);
+        scene.add(projectedPoint);
+
+        // Camera Position
+        camera.position.set(5, 5, 5);
+        camera.lookAt(0, 0, 0);
+
+        // Interaction Buttons
+        const resetButton = document.getElementById('resetView');
+        const step1Button = document.getElementById('step1');
+        const step2Button = document.getElementById('step2');
+        const step3Button = document.getElementById('step3');
+
+        resetButton.addEventListener('click', () => {
+            camera.position.set(5, 5, 5);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        });
+
+        step1Button.addEventListener('click', () => {
+            worldPoint.visible = true;
+            line.visible = false;
+            lineToPlane.visible = false;
+            projectedPoint.visible = false;
+        });
+
+        step2Button.addEventListener('click', () => {
+            line.visible = true;
+            lineToPlane.visible = false;
+            projectedPoint.visible = false;
+        });
+
+        step3Button.addEventListener('click', () => {
+            lineToPlane.visible = true;
+            projectedPoint.visible = true;
+        });
+
+        // Initial Visibility
+        worldPoint.visible = false;
+        line.visible = false;
+        lineToPlane.visible = false;
+        projectedPoint.visible = false;
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+
+</html>
