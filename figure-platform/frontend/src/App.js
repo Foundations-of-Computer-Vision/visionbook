@@ -611,12 +611,20 @@ function ResultsTab({ onOpen }) {
   const [codePanelTab, setCodePanelTab] = React.useState('prompt');
   const [baseScaffold, setBaseScaffold] = React.useState(null);
   const [openChapters, setOpenChapters] = React.useState(new Set());
+  const [filterChapter, setFilterChapter] = React.useState('');
+  const [filterFigure, setFilterFigure] = React.useState('');
 
-  // Reset open chapters to first-only whenever selection changes
+  // Reset open chapters whenever selection changes
   React.useEffect(() => {
     const keys = Object.keys(byChapter);
     setOpenChapters(new Set(keys));
   }, [selected]);
+
+  // Reset chapter/figure filters when selection or active tab changes
+  React.useEffect(() => {
+    setFilterChapter('');
+    setFilterFigure('');
+  }, [selected, activeTab]);
 
   React.useEffect(() => {
     fetch('/api/base-scaffold').then(r => r.json()).then(d => setBaseScaffold(d.content)).catch(() => {});
@@ -646,22 +654,25 @@ function ResultsTab({ onOpen }) {
 
   // Items for current selection
   const selectedItems = React.useMemo(() => {
-    if (!selected) return [];
+    if (!selected?.experiment) return [];
     if (activeTab === 'api') {
-      const recs = apiTree[selected.experiment]?.[selected.model] || [];
-      return recs.map(r => ({
-        key: `api/${r.id}`, type: 'api', id: r.id,
-        figure: r.filename ? r.filename.replace(/\.[^.]+$/, '') : r.id,
-        chapter: r.chapter || 'other',
-        base64thumb: r.base64thumb, mediaType: r.mediaType || 'image/png',
-        timestamp: r.timestamp, evaluation: r.evaluation,
-        experiment: selected.experiment, model: selected.model,
-        imagePath: null, htmlPath: null,
-      }));
+      const expModels = apiTree[selected.experiment] || {};
+      const modelKeys = selected.model ? [selected.model] : Object.keys(expModels);
+      return modelKeys.flatMap(modelName =>
+        (expModels[modelName] || []).map(r => ({
+          key: `api/${r.id}`, type: 'api', id: r.id,
+          figure: r.filename ? r.filename.replace(/\.[^.]+$/, '') : r.id,
+          chapter: r.chapter || 'other',
+          base64thumb: r.base64thumb, mediaType: r.mediaType || 'image/png',
+          timestamp: r.timestamp, evaluation: r.evaluation,
+          experiment: selected.experiment, model: modelName,
+          imagePath: null, htmlPath: null,
+        }))
+      );
     }
     const exp = expTree.find(e => e.experiment === selected.experiment);
     if (!exp) return [];
-    const models = exp.models.filter(m => m.model === selected.model);
+    const models = selected.model ? exp.models.filter(m => m.model === selected.model) : exp.models;
     const items = [];
     for (const m of models) {
       for (const fig of m.figures) {
@@ -753,10 +764,77 @@ function ResultsTab({ onOpen }) {
     return exp?.prompt || null;
   }, [selected, activeTab, expTree]);
 
+  // Experiment / model lists for filter dropdowns
+  const allExperiments = React.useMemo(() => {
+    if (activeTab === 'api') return Object.keys(apiTree).sort();
+    return expTree.map(e => e.experiment).sort();
+  }, [activeTab, apiTree, expTree]);
+
+  const allModels = React.useMemo(() => {
+    if (activeTab === 'api') {
+      return selected?.experiment
+        ? Object.keys(apiTree[selected.experiment] || {}).sort()
+        : [...new Set(Object.values(apiTree).flatMap(m => Object.keys(m)))].sort();
+    }
+    const exp = selected?.experiment ? expTree.find(e => e.experiment === selected.experiment) : null;
+    return exp
+      ? exp.models.map(m => m.model).sort()
+      : [...new Set(expTree.flatMap(e => e.models.map(m => m.model)))].sort();
+  }, [activeTab, apiTree, expTree, selected]);
+
+  // All figure names in current selection for dropdown / autocomplete
+  const allFigures = React.useMemo(() => {
+    // scope to selected chapter when one is active
+    const source = filterChapter
+      ? (byChapter[filterChapter] || [])
+      : selectedItems;
+    return [...new Set(source.map(i => i.figure))].sort((a, b) => a.localeCompare(b));
+  }, [selectedItems, byChapter, filterChapter]);
+
+  // Apply chapter + figure-name filters on top of the current selection
+  const filteredByChapter = React.useMemo(() => {
+    const q = filterFigure.trim().toLowerCase();
+    const result = {};
+    for (const [ch, items] of Object.entries(byChapter)) {
+      if (filterChapter && ch !== filterChapter) continue;
+      const filtered = q ? items.filter(i => i.figure.toLowerCase().includes(q)) : items;
+      if (filtered.length) result[ch] = filtered;
+    }
+    return result;
+  }, [byChapter, filterChapter, filterFigure]);
+
+  const handleFilterExp = React.useCallback((expName) => {
+    if (!expName) { setSelected(null); return; }
+    setSelected({ experiment: expName, model: null });
+  }, []);
+
+  const handleFilterModel = React.useCallback((modelName) => {
+    if (!modelName) {
+      // 'All' selected — keep experiment but clear model
+      if (selected?.experiment) { setSelected({ experiment: selected.experiment, model: null }); }
+      return;
+    }
+    if (selected?.experiment) {
+      setSelected({ experiment: selected.experiment, model: modelName });
+    } else {
+      if (activeTab === 'api') {
+        for (const [exp, models] of Object.entries(apiTree)) {
+          if (models[modelName]) { setSelected({ experiment: exp, model: modelName }); return; }
+        }
+      } else {
+        for (const exp of expTree) {
+          if (exp.models.find(m => m.model === modelName)) {
+            setSelected({ experiment: exp.experiment, model: modelName }); return;
+          }
+        }
+      }
+    }
+  }, [activeTab, apiTree, expTree, selected]);
+
   if (loading) return <div style={styles.empty}>Loading results…</div>;
   if (error) return <div style={styles.empty}>{error}</div>;
 
-  const selKey = selected ? `${selected.experiment}::${selected.model}` : null;
+  const selKey = selected ? `${selected.experiment}::${selected.model ?? ''}` : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
@@ -777,6 +855,59 @@ function ResultsTab({ onOpen }) {
             })()}
           </button>
         ))}
+      </div>
+
+      {/* Filter nav bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#f4f5f9', borderBottom: '1px solid #e0e2eb', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.07em', marginRight: 4 }}>Filter</span>
+        <span style={{ fontSize: 11, color: '#aaa' }}>Experiment</span>
+        <select style={styles.resultFilterSelect} value={selected?.experiment || ''} onChange={e => handleFilterExp(e.target.value)}>
+          <option value=''>All</option>
+          {allExperiments.map(exp => <option key={exp} value={exp}>{exp}</option>)}
+        </select>
+        <span style={{ color: '#ddd', margin: '0 2px' }}>·</span>
+        <span style={{ fontSize: 11, color: '#aaa' }}>Model</span>
+        <select style={styles.resultFilterSelect} value={selected?.model || ''} onChange={e => handleFilterModel(e.target.value)}>
+          <option value=''>All</option>
+          {allModels.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+        <span style={{ color: '#ddd', margin: '0 2px' }}>·</span>
+        <span style={{ fontSize: 11, color: '#aaa' }}>Chapter</span>
+        <select style={styles.resultFilterSelect} value={filterChapter} onChange={e => { setFilterChapter(e.target.value); setFilterFigure(''); }}>
+          <option value=''>All</option>
+          {Object.keys(byChapter).sort().map(ch => <option key={ch} value={ch}>{ch}</option>)}
+        </select>
+        <span style={{ color: '#ddd', margin: '0 2px' }}>·</span>
+        <span style={{ fontSize: 11, color: '#aaa' }}>Figure</span>
+        <select
+          style={{ ...styles.resultFilterSelect, maxWidth: 180 }}
+          value={allFigures.includes(filterFigure) ? filterFigure : ''}
+          onChange={e => setFilterFigure(e.target.value)}
+        >
+          <option value=''>All</option>
+          {allFigures.map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
+        <input
+          list='fig-names-list'
+          style={{ ...styles.resultFilterSelect, width: 128, padding: '3px 8px', outline: 'none', fontFamily: 'inherit' }}
+          placeholder='🔍 search…'
+          value={filterFigure}
+          onChange={e => setFilterFigure(e.target.value)}
+        />
+        <datalist id='fig-names-list'>
+          {allFigures.map(f => <option key={f} value={f} />)}
+        </datalist>
+        {(selected || filterChapter || filterFigure) && (
+          <button
+            style={{ fontSize: 11, color: '#aaa', background: 'none', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', padding: '2px 8px', marginLeft: 4 }}
+            onClick={() => { setSelected(null); setFilterChapter(''); setFilterFigure(''); }}
+          >✕ clear</button>
+        )}
+        {selected && (
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: '#aaa' }}>
+            {Object.values(filteredByChapter).reduce((s, a) => s + a.length, 0)} figure{Object.values(filteredByChapter).reduce((s, a) => s + a.length, 0) !== 1 ? 's' : ''}
+          </span>
+        )}
       </div>
 
       {/* Tree + figures panel */}
@@ -828,9 +959,9 @@ function ResultsTab({ onOpen }) {
         {/* Right: prompt + chapter-grouped figure cards */}
         <div style={styles.expContent}>
           {!selected ? (
-            <div style={styles.empty}>Select a model on the left</div>
-          ) : !Object.keys(byChapter).length ? (
-            <div style={styles.empty}>No figures found</div>
+            <div style={styles.empty}>Select a model or experiment using the filter bar above</div>
+          ) : !Object.keys(filteredByChapter).length ? (
+            <div style={styles.empty}>{filterFigure ? `No figures matching "${filterFigure}"` : 'No figures found'}</div>
           ) : (
             <>
               {/* Breadcrumb */}
@@ -845,7 +976,7 @@ function ResultsTab({ onOpen }) {
                   {selected.experiment}
                 </span>
                 <span style={{ color: '#ccc' }}>›</span>
-                <span style={{ color: '#333', fontWeight: 600 }}>{selected.model}</span>
+                <span style={{ color: '#333', fontWeight: 600 }}>{selected.model || 'All models'}</span>
               </div>
               {selectedPrompt && (
                 <details style={{ marginBottom: 8 }}>
@@ -859,7 +990,7 @@ function ResultsTab({ onOpen }) {
                   <pre style={styles.expPromptBox}>{baseScaffold}</pre>
                 </details>
               )}
-              {Object.entries(byChapter).map(([chapter, items]) => {
+              {Object.entries(filteredByChapter).map(([chapter, items]) => {
                 const isOpen = openChapters.has(chapter);
                 return (
                 <details key={chapter} style={{ marginBottom: 16 }} open={isOpen}
@@ -897,6 +1028,7 @@ function ResultsTab({ onOpen }) {
                           </div>
                           <div style={styles.cardInfo}>
                             <p style={styles.cardFilename}>{item.figure}</p>
+                            {!selected.model && <p style={{ fontSize: 10, color: '#999', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.model}</p>}
                             {item.timestamp && <p style={{ ...styles.cardTs, marginBottom: 3 }}>{new Date(item.timestamp).toLocaleDateString()}</p>}
                             {ev ? (
                               <>
