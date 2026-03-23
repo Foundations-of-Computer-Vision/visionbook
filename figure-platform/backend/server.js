@@ -1,11 +1,13 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const OpenAI = require('openai').default;
 const puppeteer = require('puppeteer');
 const { buildEvalPrompt, finaliseEval } = require('./critic');
+const { planForFigure, planChapter, listChapters, list3dCandidates, inferChapterFromFilename } = require('./planner');
 
 // ── Screenshot helper ────────────────────────────────────────────────────────────
 let _browser = null;
@@ -44,9 +46,13 @@ const PORT = 3001;
 const EXPERIMENTS_DIR    = path.join(__dirname, '..', '..', 'prompt_experiments');
 const FIGURES_DIR        = path.join(__dirname, '..', '..', 'figures');
 
-// ── API generation config (update when prompt or scaffold changes) ─────────────
-const CURRENT_EXPERIMENT = 'base_scene_robust';  // experiment label for all API-generated figures
-const CURRENT_MODEL      = 'gpt-4o';             // model used by the generator
+// ── API generation config ──────────────────────────────────────────────────────
+// CURRENT_EXPERIMENT is derived automatically from a hash of the system prompt +
+// scaffold.  Whenever you edit the prompt or base_scene_robust.html, the next
+// server restart creates a brand-new experiment bucket in the dashboard.
+const EXPERIMENT_BASE   = 'base_scene_robust';   // human-readable prefix
+const CURRENT_MODEL     = 'gpt-5.4';             // model used by the generator
+// CURRENT_EXPERIMENT is set below, after the system prompt is built.
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({ origin: 'http://localhost:3000' }));
@@ -147,6 +153,11 @@ STEP 5 · CODE STYLE
 }
 const SYSTEM_PROMPT = buildSystemPrompt(BASE_SCAFFOLD);
 
+// ── Derive experiment label from prompt content ──────────────────────────────
+const PROMPT_HASH = crypto.createHash('sha256').update(SYSTEM_PROMPT).digest('hex').slice(0, 8);
+const CURRENT_EXPERIMENT = `${EXPERIMENT_BASE}_${PROMPT_HASH}`;
+console.log(`Experiment: ${CURRENT_EXPERIMENT}  (model: ${CURRENT_MODEL})`);
+
 // ── Helper: strip accidental markdown fences and extract the HTML ────────────
 function stripFences(text) {
   // If the model wrapped it in ```html ... ```, extract just the inside
@@ -165,18 +176,94 @@ function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+// ── GET /api/chapters — list chapters with 3D candidate counts ────────────────
+app.get('/api/chapters', (req, res) => {
+  try {
+    const chapters = listChapters();
+    return res.json(chapters);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/chapter-candidates/:chapter — list 3D candidate images in a chapter ─
+app.get('/api/chapter-candidates/:chapter', (req, res) => {
+  try {
+    const candidates = list3dCandidates(req.params.chapter);
+    // Return filename + base64 thumbnail for each
+    const result = candidates.map(c => {
+      const base64 = fs.readFileSync(c.fullPath).toString('base64');
+      const ext = path.extname(c.filename).toLowerCase();
+      const mediaType = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+      return { filename: c.filename, stem: c.stem, base64, mediaType };
+    });
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/plan — plan for a single figure (fast, returns before generation) ──
+app.post('/api/plan', async (req, res) => {
+  const { filename, chapterHint } = req.body;
+  if (!filename) return res.status(400).json({ error: 'filename is required.' });
+
+  const stem = filename.replace(/\.[^.]+$/, '');
+  const chapter = chapterHint || inferChapterFromFilename(filename) || inferChapter(stem);
+
+  try {
+    const plan = await planForFigure(stem, chapter);
+    return res.json(plan);
+  } catch (err) {
+    console.error('Plan error:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'Planning failed.' });
+  }
+});
+
+// ── POST /api/plan-chapter — plan all 3D candidates in a chapter ─────────────
+app.post('/api/plan-chapter', async (req, res) => {
+  const { chapter } = req.body;
+  if (!chapter) return res.status(400).json({ error: 'chapter is required.' });
+
+  try {
+    const plans = await planChapter(chapter);
+    return res.json(plans);
+  } catch (err) {
+    console.error('Plan-chapter error:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'Chapter planning failed.' });
+  }
+});
+
+// ── Retry helper for transient OpenAI connection errors ───────────────────────
+async function withRetry(fn, { retries = 2, baseDelay = 2000 } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isRetryable = /connection error|ECONNRESET|ETIMEDOUT|socket hang up/i.test(err?.message || '');
+      if (isRetryable && attempt < retries) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        console.warn(`Retryable error (attempt ${attempt + 1}/${retries}): ${err.message}. Retrying in ${delay}ms…`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 // ── POST /api/generate ────────────────────────────────────────────────────────
 app.post('/api/generate', async (req, res) => {
-  const { base64, mediaType, filename } = req.body;
+  const { base64, mediaType, filename, plan } = req.body;
 
   if (!base64 || !mediaType || !filename) {
     return res.status(400).json({ error: 'base64, mediaType, and filename are required.' });
   }
 
   try {
-    const response = await getOpenAI().chat.completions.create({
-      model: 'gpt-4o',
-      max_tokens: 16384,
+    const response = await withRetry(() => getOpenAI().chat.completions.create({
+      model: CURRENT_MODEL,
+      max_completion_tokens: 16384,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         {
@@ -188,12 +275,14 @@ app.post('/api/generate', async (req, res) => {
             },
             {
               type: 'text',
-              text: 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.',
+              text: plan
+                ? `CONTEXT FROM TEXTBOOK:\n${(plan.contextChunk || '').slice(0, 3000)}\n\nINTERACTION PLAN:\n${JSON.stringify(plan.interactionPlan || {}, null, 2)}\n\nFollow the interaction plan above. Output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.`
+                : 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.',
             },
           ],
         },
       ],
-    });
+    }));
 
     let html = response.choices[0].message.content || '';
     html = stripFences(html);
@@ -226,6 +315,7 @@ app.post('/api/generate', async (req, res) => {
       source: 'api',
       model: CURRENT_MODEL,
       experiment: CURRENT_EXPERIMENT,
+      promptHash: PROMPT_HASH,
     };
     const recordPath = path.join(RESULTS_DIR, `${figureId}.json`);
     fs.writeFileSync(recordPath, JSON.stringify(record, null, 2));
@@ -293,8 +383,8 @@ app.get('/api/history', (req, res) => {
           const { id, filename, base64thumb, timestamp, source, evaluation } = parsed;
           const stem = filename ? filename.replace(/\.[^.]+$/, '') : '';
           const chapter = inferChapter(stem);
-          const model = parsed.model || CURRENT_MODEL;
-          const experiment = parsed.experiment || CURRENT_EXPERIMENT;
+          const model = parsed.model || 'gpt-4o';
+          const experiment = parsed.experiment || 'base_scene_robust';
           return { id, filename, base64thumb, timestamp, source: source || 'api', model, experiment, evaluation: evaluation || null, chapter };
         } catch {
           return null;

@@ -33,18 +33,42 @@ export default function App() {
   const [error, setError] = useState('');
   const [evaluation, setEvaluation] = useState(null);
   const [evaluating, setEvaluating] = useState(false);
+  const [plan, setPlan] = useState(null);        // planner output for current figure
+  const [planning, setPlanning] = useState(false); // true while planner is running
 
   // Called by Uploader when a file is selected
   const handleImageSelected = useCallback((imgData) => {
     setImage(imgData);
+    setPlan(null);
     setError('');
   }, []);
 
-  // Called by Uploader's Generate button
+  // Single Generate button: plan first (fast), then generate (slow) — fully automated
   const handleGenerate = useCallback(async () => {
     if (!image) return;
-    setLoading(true);
     setError('');
+
+    // Step 1: Plan (fast ~2-3s)
+    setPlanning(true);
+    setPlan(null);
+    let currentPlan = null;
+    try {
+      const planRes = await fetch('/api/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: image.filename }),
+      });
+      const planData = await planRes.json();
+      if (planRes.ok) {
+        currentPlan = planData;
+        setPlan(planData);
+      }
+      // If planning fails, we still continue to generate without a plan
+    } catch (_) { /* planner failure is non-fatal */ }
+    setPlanning(false);
+
+    // Step 2: Generate (slow ~30-60s)
+    setLoading(true);
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -53,9 +77,14 @@ export default function App() {
           base64: image.base64,
           mediaType: image.mediaType,
           filename: image.filename,
+          plan: currentPlan || undefined,
         }),
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch (_) {
+        throw new Error(text.slice(0, 200) || 'Server returned non-JSON response');
+      }
       if (!res.ok) throw new Error(data.error || 'Generation failed.');
       setGeneratedHtml(data.html);
       setEvaluation(data.evaluation || null);
@@ -184,6 +213,8 @@ export default function App() {
             onImageSelected={handleImageSelected}
             onGenerate={handleGenerate}
             loading={loading}
+            planning={planning}
+            plan={plan}
             error={error}
             systemPrompt={SYSTEM_PROMPT}
           />
@@ -211,9 +242,56 @@ export default function App() {
 }
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, loading, error, systemPrompt }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, plan, error, systemPrompt }) {
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
+  const [chapters, setChapters] = useState([]);
+  const [selectedChapter, setSelectedChapter] = useState('');
+  const [chapterCandidates, setChapterCandidates] = useState([]);
+  const [loadingChapter, setLoadingChapter] = useState(false);
+  const [chapterPlans, setChapterPlans] = useState(null);
+  const [planningChapter, setPlanningChapter] = useState(false);
+
+  // Chapter batch pipeline state
+  const [chapterRunning, setChapterRunning] = useState(false);     // true while batch is active
+  const [chapterProgress, setChapterProgress] = useState(null);    // { completed, total, active: [{figureStem, phase, plan}] }
+  const [chapterResults, setChapterResults] = useState([]);        // accumulated { figureStem, status:'ok'|'error', figureId?, error? }
+  const chapterAbortRef = React.useRef(false);
+
+  // Inline viewer for completed figures (doesn't leave this tab)
+  const [previewHtml, setPreviewHtml] = useState(null);
+  const [previewName, setPreviewName] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const handlePreview = async (figureId, name) => {
+    setPreviewLoading(true);
+    setPreviewName(name);
+    try {
+      const res = await fetch(`/api/result/${figureId}`);
+      const data = await res.json();
+      if (res.ok && data.html) {
+        setPreviewHtml(data.html);
+      }
+    } catch (_) {}
+    setPreviewLoading(false);
+  };
+
+  // Load chapter list on mount
+  React.useEffect(() => {
+    fetch('/api/chapters').then(r => r.json()).then(setChapters).catch(() => {});
+  }, []);
+
+  // When a chapter is selected, load its 3D candidates
+  React.useEffect(() => {
+    if (!selectedChapter) { setChapterCandidates([]); setChapterPlans(null); return; }
+    setLoadingChapter(true);
+    setChapterPlans(null);
+    fetch(`/api/chapter-candidates/${encodeURIComponent(selectedChapter)}`)
+      .then(r => r.json())
+      .then(data => { setChapterCandidates(data); setLoadingChapter(false); })
+      .catch(() => setLoadingChapter(false));
+  }, [selectedChapter]);
 
   const processFile = (file) => {
     if (!file || !file.type.startsWith('image/')) return;
@@ -237,53 +315,364 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, error, syst
     processFile(e.dataTransfer.files[0]);
   };
 
+  // Fully automated chapter pipeline with parallel generation (concurrency = 8)
+  const CONCURRENCY = 8;
+
+  const handleRunChapter = async () => {
+    if (!selectedChapter || chapterCandidates.length === 0) return;
+    setChapterRunning(true);
+    setChapterResults([]);
+    setChapterPlans(null);
+    chapterAbortRef.current = false;
+
+    const total = chapterCandidates.length;
+    const results = [];           // shared results array
+    const activeMap = new Map();   // stem → { figureStem, phase, plan }
+
+    const updateProgress = () => {
+      setChapterProgress({ completed: results.length, total, active: [...activeMap.values()] });
+    };
+
+    // Process a single candidate (plan → generate)
+    const processFigure = async (candidate) => {
+      if (chapterAbortRef.current) return;
+      activeMap.set(candidate.stem, { figureStem: candidate.stem, phase: 'planning', plan: null });
+      updateProgress();
+
+      // Phase 1: Plan
+      let figurePlan = null;
+      try {
+        const planRes = await fetch('/api/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: candidate.filename, chapterHint: selectedChapter }),
+        });
+        if (planRes.ok) figurePlan = await planRes.json();
+      } catch (_) {}
+
+      if (chapterAbortRef.current) { activeMap.delete(candidate.stem); return; }
+
+      activeMap.set(candidate.stem, { figureStem: candidate.stem, phase: 'generating', plan: figurePlan });
+      updateProgress();
+
+      // Phase 2: Generate
+      try {
+        const genRes = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            base64: candidate.base64,
+            mediaType: candidate.mediaType,
+            filename: candidate.filename,
+            plan: figurePlan || undefined,
+          }),
+        });
+        const genText = await genRes.text();
+        let genData;
+        try { genData = JSON.parse(genText); } catch (_) {
+          throw new Error(genText.slice(0, 200) || 'Server returned non-JSON response');
+        }
+        if (!genRes.ok) throw new Error(genData.error || 'Generation failed');
+        results.push({ figureStem: candidate.stem, status: 'ok', figureId: genData.figureId });
+      } catch (err) {
+        results.push({ figureStem: candidate.stem, status: 'error', error: err.message });
+      }
+
+      activeMap.delete(candidate.stem);
+      setChapterResults([...results]);
+      updateProgress();
+    };
+
+    // Run with limited concurrency — use a queue to avoid race conditions
+    const queue = [...chapterCandidates];
+    const runWorker = async () => {
+      while (queue.length > 0 && !chapterAbortRef.current) {
+        const candidate = queue.shift();
+        if (candidate) await processFigure(candidate);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, total) }, () => runWorker()));
+
+    setChapterProgress(null);
+    setChapterRunning(false);
+  };
+
+  const handleAbortChapter = () => { chapterAbortRef.current = true; };
+
+  // Select a chapter candidate to load it into the figure drop zone (still works for individual)
+  const handleSelectCandidate = (candidate) => {
+    if (chapterRunning) return; // don't interrupt batch
+    onImageSelected({
+      base64: candidate.base64,
+      mediaType: candidate.mediaType,
+      filename: candidate.filename,
+      previewUrl: `data:${candidate.mediaType};base64,${candidate.base64}`,
+    });
+    setMode('figure');
+  };
+
   return (
     <div style={styles.genWrap}>
-      {/* Drop zone */}
-      <div
-        style={{ ...styles.dropZone, ...(dragging ? styles.dropZoneActive : {}) }}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        onClick={() => document.getElementById('fileInput').click()}
-      >
-        {image ? (
-          <img src={image.previewUrl} alt="preview" style={styles.preview} />
-        ) : (
-          <div style={styles.dropHint}>
-            <p>Drag &amp; drop a PNG/JPG here, or click to select</p>
+      {/* Mode toggle */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <button
+          style={{ ...styles.modeBtn, ...(mode === 'figure' ? styles.modeBtnActive : {}) }}
+          onClick={() => setMode('figure')}
+        >Drop a Figure</button>
+        <button
+          style={{ ...styles.modeBtn, ...(mode === 'chapter' ? styles.modeBtnActive : {}) }}
+          onClick={() => setMode('chapter')}
+        >Select Chapter</button>
+      </div>
+
+      {mode === 'figure' ? (
+        <>
+          {/* Drop zone */}
+          <div
+            style={{ ...styles.dropZone, ...(dragging ? styles.dropZoneActive : {}) }}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            onClick={() => document.getElementById('fileInput').click()}
+          >
+            {image ? (
+              <img src={image.previewUrl} alt="preview" style={styles.preview} />
+            ) : (
+              <div style={styles.dropHint}>
+                <p>Drag &amp; drop a PNG/JPG here, or click to select</p>
+              </div>
+            )}
+            <input
+              id="fileInput"
+              type="file"
+              accept="image/png,image/jpeg"
+              style={{ display: 'none' }}
+              onChange={(e) => processFile(e.target.files[0])}
+            />
           </div>
-        )}
-        <input
-          id="fileInput"
-          type="file"
-          accept="image/png,image/jpeg"
-          style={{ display: 'none' }}
-          onChange={(e) => processFile(e.target.files[0])}
-        />
-      </div>
 
-      {image && <p style={styles.filename}>{image.filename}</p>}
+          {image && <p style={styles.filename}>{image.filename}</p>}
 
-      {/* Collapsible system prompt */}
-      <div style={styles.promptSection}>
-        <button style={styles.promptToggle} onClick={() => setPromptOpen((v) => !v)}>
-          {promptOpen ? '▾' : '▸'} System Prompt (read-only)
-        </button>
-        {promptOpen && (
-          <pre style={styles.promptBox}>{systemPrompt}</pre>
-        )}
-      </div>
+          {/* Plan preview panel — shown automatically once planning completes */}
+          {(planning || plan) && (
+            <div style={styles.planPanel}>
+              {planning && !plan && (
+                <p style={{ fontSize: 12, color: '#4a90d9', margin: 0 }}>⏳ Planning interactions…</p>
+              )}
+              {plan && (
+                <>
+                  <div style={styles.planHeader}>
+                    <span style={styles.planTitle}>📋 Interaction Plan</span>
+                    {plan.chapterName && <span style={styles.planChapter}>Chapter: {plan.chapterName}</span>}
+                  </div>
+                  {plan.interactionPlan?.concept && (
+                    <p style={styles.planConcept}>{plan.interactionPlan.concept}</p>
+                  )}
+                  {plan.interactionPlan?.elements?.length > 0 && (
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={styles.planSubhead}>Elements:</span>
+                      <span style={styles.planList}>{plan.interactionPlan.elements.join(', ')}</span>
+                    </div>
+                  )}
+                  {plan.interactionPlan?.interactions?.length > 0 && (
+                    <div style={{ marginBottom: 6 }}>
+                      <span style={styles.planSubhead}>Interactions:</span>
+                      {plan.interactionPlan.interactions.map((inter, i) => (
+                        <div key={i} style={styles.planInteraction}>
+                          <span style={styles.planInterType}>{inter.type}</span>
+                          <span style={styles.planInterLabel}>{inter.label}</span>
+                          <span style={styles.planInterTeaches}>— {inter.teaches}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {plan.contextChunk && (
+                    <details style={{ marginTop: 4 }}>
+                      <summary style={{ fontSize: 11, color: '#888', cursor: 'pointer' }}>Context chunk</summary>
+                      <pre style={styles.planContext}>{plan.contextChunk.slice(0, 2000)}</pre>
+                    </details>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
-      {error && <p style={styles.errorMsg}>{error}</p>}
+          {/* Collapsible system prompt */}
+          <div style={styles.promptSection}>
+            <button style={styles.promptToggle} onClick={() => setPromptOpen((v) => !v)}>
+              {promptOpen ? '▾' : '▸'} System Prompt (read-only)
+            </button>
+            {promptOpen && (
+              <pre style={styles.promptBox}>{systemPrompt}</pre>
+            )}
+          </div>
 
-      <button
-        style={{ ...styles.generateBtn, ...(loading || !image ? styles.generateBtnDisabled : {}) }}
-        onClick={onGenerate}
-        disabled={loading || !image}
-      >
-        {loading ? 'Generating — this may take 30-60s…' : 'Generate 3D Figure'}
-      </button>
+          {error && <p style={styles.errorMsg}>{error}</p>}
+
+          <button
+            style={{ ...styles.generateBtn, ...(loading || planning || !image ? styles.generateBtnDisabled : {}) }}
+            onClick={onGenerate}
+            disabled={loading || planning || !image}
+          >
+            {planning ? 'Planning…' : loading ? 'Generating — this may take 30-60s…' : 'Generate 3D Figure'}
+          </button>
+        </>
+      ) : (
+        /* Chapter mode */
+        <div style={styles.chapterMode}>
+          <label style={styles.chapterLabel}>Select a chapter:</label>
+          <select
+            style={styles.chapterSelect}
+            value={selectedChapter}
+            onChange={e => setSelectedChapter(e.target.value)}
+          >
+            <option value="">— choose —</option>
+            {chapters.map(ch => (
+              <option key={ch.name} value={ch.name} disabled={ch.candidateCount === 0} style={ch.candidateCount === 0 ? { color: '#bbb' } : {}}>
+                {ch.name} ({ch.candidateCount} candidate{ch.candidateCount !== 1 ? 's' : ''})
+              </option>
+            ))}
+          </select>
+
+          {loadingChapter && <p style={{ fontSize: 12, color: '#888' }}>Loading candidates…</p>}
+
+          {selectedChapter && chapterCandidates.length > 0 && (
+            <>
+              {/* Candidate thumbnail grid — clickable to go to single-figure mode */}
+              <div style={styles.candidateGrid}>
+                {chapterCandidates.map((c, idx) => {
+                  const done = chapterResults.find(r => r.figureStem === c.stem);
+                  const isCurrent = chapterProgress?.active?.some(a => a.figureStem === c.stem);
+                  const borderColor = done ? (done.status === 'ok' ? '#4caf50' : '#e74c3c') : isCurrent ? '#4a90d9' : 'transparent';
+                  return (
+                    <div key={c.stem} style={{ ...styles.candidateCard, border: `2px solid ${borderColor}`, opacity: chapterRunning && !isCurrent && !done ? 0.4 : 1, position: 'relative' }}>
+                      <img src={`data:${c.mediaType};base64,${c.base64}`} alt={c.stem} style={styles.candidateThumb}
+                        onClick={() => handleSelectCandidate(c)} />
+                      <p style={styles.candidateName}>
+                        {done ? (done.status === 'ok' ? '✓ ' : '✗ ') : isCurrent ? '⏳ ' : ''}
+                        {c.stem}
+                      </p>
+                      {done && done.status === 'ok' && done.figureId && (
+                        <button
+                          style={{ position: 'absolute', top: 4, right: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={(e) => { e.stopPropagation(); handlePreview(done.figureId, c.stem); }}
+                        >👁 View</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Generate All / Stop button */}
+              {!chapterRunning ? (
+                <button
+                  style={{ ...styles.generateBtn, marginTop: 12 }}
+                  onClick={handleRunChapter}
+                >
+                  Generate All {chapterCandidates.length} Figures
+                </button>
+              ) : (
+                <button
+                  style={{ ...styles.generateBtn, marginTop: 12, background: '#e74c3c', borderColor: '#e74c3c' }}
+                  onClick={handleAbortChapter}
+                >
+                  Stop After Current Figures
+                </button>
+              )}
+
+              {/* Live progress: current figure's plan + context while generating */}
+              {chapterProgress && (
+                <div style={{ ...styles.planPanel, marginTop: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#333' }}>
+                      {chapterProgress.active?.length || 0} active ({chapterProgress.completed} / {chapterProgress.total} done)
+                    </span>
+                    <span style={{ fontSize: 11, color: '#888' }}>
+                      Concurrency: {CONCURRENCY}
+                    </span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div style={{ height: 4, background: '#eee', borderRadius: 2, marginBottom: 10, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: '#4caf50', borderRadius: 2, transition: 'width 0.3s', width: `${(chapterProgress.completed / chapterProgress.total) * 100}%` }} />
+                  </div>
+
+                  {/* Show each active figure */}
+                  {chapterProgress.active?.map(a => (
+                    <div key={a.figureStem} style={{ marginBottom: 10, padding: '6px 8px', background: '#f8faff', borderRadius: 6, border: '1px solid #e0e8f0' }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#333', marginBottom: 4 }}>
+                        {a.phase === 'planning' ? '⏳' : '🔄'} {a.figureStem} — {a.phase}
+                      </div>
+                      {a.plan?.interactionPlan?.concept && (
+                        <p style={{ ...styles.planConcept, margin: '2px 0' }}>{a.plan.interactionPlan.concept}</p>
+                      )}
+                      {a.plan?.interactionPlan?.elements?.length > 0 && (
+                        <span style={{ fontSize: 11, color: '#666' }}>{a.plan.interactionPlan.elements.join(', ')}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Completed results summary — shown during AND after generation */}
+              {chapterResults.length > 0 && (
+                <div style={{ ...styles.chapterPlansWrap, marginTop: 12 }}>
+                  <h4 style={{ margin: '0 0 8px', fontSize: 13, color: '#333' }}>
+                    Results: {chapterResults.filter(r => r.status === 'ok').length}/{chapterResults.length} {chapterRunning ? 'so far' : 'succeeded'}
+                  </h4>
+                  {chapterResults.map((r, i) => (
+                    <div key={r.figureStem} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12, borderBottom: '1px solid #f0f0f0' }}>
+                      <span style={{ color: r.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>
+                        {r.status === 'ok' ? '✓' : '✗'}
+                      </span>
+                      <span style={{ flex: 1 }}>{r.figureStem}</span>
+                      {r.status === 'ok' && r.figureId && (
+                        <button
+                          style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={() => handlePreview(r.figureId, r.figureStem)}
+                        >👁 View</button>
+                      )}
+                      {r.error && <span style={{ color: '#e74c3c', fontSize: 11 }}>{r.error}</span>}
+                    </div>
+                  ))}
+                  {!chapterRunning && <p style={{ fontSize: 11, color: '#888', marginTop: 8 }}>Also available in the Results tab.</p>}
+                </div>
+              )}
+            </>
+          )}
+
+          {selectedChapter && chapterCandidates.length === 0 && !loadingChapter && (
+            <p style={{ fontSize: 12, color: '#aaa', marginTop: 12 }}>No 3D candidates found for this chapter.</p>
+          )}
+        </div>
+      )}
+
+      {/* Inline preview modal — overlays on top without leaving Generator tab */}
+      {(previewHtml || previewLoading) && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => { setPreviewHtml(null); setPreviewName(''); }}>
+          <div style={{ width: '90vw', height: '85vh', background: '#fff', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 40px rgba(0,0,0,0.3)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #eee', background: '#fafafa' }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#333' }}>Preview: {previewName}</span>
+              <button
+                style={{ fontSize: 18, background: 'none', border: 'none', cursor: 'pointer', color: '#888', padding: '0 4px' }}
+                onClick={() => { setPreviewHtml(null); setPreviewName(''); }}
+              >✕</button>
+            </div>
+            {previewLoading && !previewHtml ? (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>Loading…</div>
+            ) : (
+              <iframe
+                title="preview"
+                srcDoc={previewHtml}
+                style={{ flex: 1, border: 'none', width: '100%' }}
+                sandbox="allow-scripts allow-same-origin"
+              />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -613,6 +1002,9 @@ function ResultsTab({ onOpen }) {
   const [openChapters, setOpenChapters] = React.useState(new Set());
   const [filterChapter, setFilterChapter] = React.useState('');
   const [filterFigure, setFilterFigure] = React.useState('');
+  const [collapsedGroups, setCollapsedGroups] = React.useState(new Set());
+  const [hoveredGroup, setHoveredGroup] = React.useState(null);
+  const hoverTimerRef = React.useRef(null);
 
   // Reset open chapters whenever selection changes
   React.useEffect(() => {
@@ -655,10 +1047,11 @@ function ResultsTab({ onOpen }) {
   // Items for current selection
   const selectedItems = React.useMemo(() => {
     if (!selected?.experiment) return [];
+    let items;
     if (activeTab === 'api') {
       const expModels = apiTree[selected.experiment] || {};
       const modelKeys = selected.model ? [selected.model] : Object.keys(expModels);
-      return modelKeys.flatMap(modelName =>
+      items = modelKeys.flatMap(modelName =>
         (expModels[modelName] || []).map(r => ({
           key: `api/${r.id}`, type: 'api', id: r.id,
           figure: r.filename ? r.filename.replace(/\.[^.]+$/, '') : r.id,
@@ -669,20 +1062,34 @@ function ResultsTab({ onOpen }) {
           imagePath: null, htmlPath: null,
         }))
       );
+    } else {
+      const exp = expTree.find(e => e.experiment === selected.experiment);
+      if (!exp) return [];
+      const models = selected.model ? exp.models.filter(m => m.model === selected.model) : exp.models;
+      items = [];
+      for (const m of models) {
+        for (const fig of m.figures) {
+          items.push({
+            key: `${exp.experiment}/${m.model}/${fig.name}`, type: 'experiment',
+            figure: fig.name, chapter: fig.chapter || 'other',
+            experiment: exp.experiment, model: m.model,
+            imagePath: fig.imagePath, htmlPath: fig.htmlPath,
+            timestamp: null, evaluation: fig.evaluation,
+          });
+        }
+      }
     }
-    const exp = expTree.find(e => e.experiment === selected.experiment);
-    if (!exp) return [];
-    const models = selected.model ? exp.models.filter(m => m.model === selected.model) : exp.models;
-    const items = [];
-    for (const m of models) {
-      for (const fig of m.figures) {
-        items.push({
-          key: `${exp.experiment}/${m.model}/${fig.name}`, type: 'experiment',
-          figure: fig.name, chapter: fig.chapter || 'other',
-          experiment: exp.experiment, model: m.model,
-          imagePath: fig.imagePath, htmlPath: fig.htmlPath,
-          timestamp: null, evaluation: fig.evaluation,
-        });
+    // Assign run indices for duplicate figure+model combos
+    const runMap = {};
+    for (const it of items) {
+      const k = `${it.model}/${it.figure}`;
+      if (!runMap[k]) runMap[k] = [];
+      runMap[k].push(it);
+    }
+    for (const group of Object.values(runMap)) {
+      if (group.length > 1) {
+        group.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+        group.forEach((it, i) => { it.runIndex = i + 1; it.totalRuns = group.length; });
       }
     }
     return items;
@@ -698,7 +1105,7 @@ function ResultsTab({ onOpen }) {
     }
     return Object.fromEntries(
       Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
-        .map(([ch, its]) => [ch, its.sort((a, b) => a.figure.localeCompare(b.figure))])
+        .map(([ch, its]) => [ch, its.sort((a, b) => a.figure.localeCompare(b.figure) || (a.runIndex || 0) - (b.runIndex || 0))])
     );
   }, [selectedItems]);
 
@@ -914,46 +1321,69 @@ function ResultsTab({ onOpen }) {
       <div style={{ ...styles.expWrap, flex: 1, borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
         {/* Left tree */}
         <div style={styles.expTree}>
-          {activeTab === 'api'
-            ? Object.entries(apiTree).map(([expName, models]) => (
-                <div key={expName}>
-                  <div style={styles.expTreeGroup}>{expName}</div>
-                  {Object.entries(models).map(([modelName, recs]) => {
-                    const evalCount = recs.filter(r => r.evaluation).length;
-                    const nodeKey = `${expName}::${modelName}`;
+          {(() => {
+            const entries = activeTab === 'api'
+              ? Object.entries(apiTree).map(([expName, models]) => ({
+                  group: expName,
+                  items: Object.entries(models).map(([modelName, recs]) => ({
+                    modelName, evalCount: recs.filter(r => r.evaluation).length, total: recs.length,
+                    nodeKey: `${expName}::${modelName}`,
+                    onSelect: () => setSelected({ experiment: expName, model: modelName }),
+                  })),
+                }))
+              : expTree.map(exp => ({
+                  group: exp.experiment,
+                  items: exp.models.map(m => ({
+                    modelName: m.model, evalCount: m.figures.filter(f => f.evaluation).length, total: m.figures.length,
+                    nodeKey: `${exp.experiment}::${m.model}`,
+                    onSelect: () => setSelected({ experiment: exp.experiment, model: m.model }),
+                  })),
+                }));
+
+            return entries.map(({ group, items }) => {
+              const isCollapsed = collapsedGroups.has(group);
+              const isOpen = !isCollapsed || hoveredGroup === group;
+              return (
+                <div key={group}
+                  onMouseEnter={() => {
+                    if (isCollapsed) hoverTimerRef.current = setTimeout(() => setHoveredGroup(group), 250);
+                  }}
+                  onMouseLeave={() => {
+                    clearTimeout(hoverTimerRef.current);
+                    setHoveredGroup(null);
+                  }}
+                >
+                  <div
+                    style={{ ...styles.expTreeGroup, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, userSelect: 'none' }}
+                    onClick={() => setCollapsedGroups(prev => {
+                      const next = new Set(prev);
+                      next.has(group) ? next.delete(group) : next.add(group);
+                      return next;
+                    })}
+                  >
+                    <span style={{ fontSize: 8, color: '#888' }}>{isOpen ? '▾' : '▸'}</span>
+                    {group}
+                    <span style={{ fontSize: 9, color: '#aaa', fontWeight: 400, marginLeft: 'auto' }}>{items.length}</span>
+                  </div>
+                  {isOpen && items.map(({ modelName, evalCount, total, nodeKey, onSelect }) => {
                     const isActive = selKey === nodeKey;
                     return (
                       <div key={modelName}
-                        style={{ ...styles.expTreeItem, ...(isActive ? styles.expTreeItemActive : {}) }}
-                        onClick={() => setSelected({ experiment: expName, model: modelName })}
+                        style={isActive
+                          ? { ...styles.expTreeItem, background: '#f0f0f0', borderLeftColor: '#111', color: '#111', fontWeight: 600 }
+                          : { ...styles.expTreeItem, background: 'transparent', borderLeftColor: 'transparent', color: '#444', fontWeight: 400 }
+                        }
+                        onClick={onSelect}
                       >
                         <span style={{ flex: 1, fontSize: 11 }}>{modelName}</span>
-                        <span style={{ fontSize: 10, color: '#aaa' }}>{evalCount}/{recs.length}</span>
+                        <span style={{ fontSize: 10, color: '#aaa' }}>{evalCount}/{total}</span>
                       </div>
                     );
                   })}
                 </div>
-              ))
-            : expTree.map(exp => (
-                <div key={exp.experiment}>
-                  <div style={styles.expTreeGroup}>{exp.experiment}</div>
-                  {exp.models.map(m => {
-                    const evalCount = m.figures.filter(f => f.evaluation).length;
-                    const nodeKey = `${exp.experiment}::${m.model}`;
-                    const isActive = selKey === nodeKey;
-                    return (
-                      <div key={m.model}
-                        style={{ ...styles.expTreeItem, ...(isActive ? styles.expTreeItemActive : {}) }}
-                        onClick={() => setSelected({ experiment: exp.experiment, model: m.model })}
-                      >
-                        <span style={{ flex: 1, fontSize: 11 }}>{m.model}</span>
-                        <span style={{ fontSize: 10, color: '#aaa' }}>{evalCount}/{m.figures.length}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))
-          }
+              );
+            });
+          })()}
         </div>
 
         {/* Right: prompt + chapter-grouped figure cards */}
@@ -1027,7 +1457,7 @@ function ResultsTab({ onOpen }) {
                             }
                           </div>
                           <div style={styles.cardInfo}>
-                            <p style={styles.cardFilename}>{item.figure}</p>
+                            <p style={styles.cardFilename}>{item.figure}{item.totalRuns > 1 && <span style={{ marginLeft: 5, fontSize: 9, background: '#e3e8f0', color: '#556', borderRadius: 6, padding: '1px 5px', fontWeight: 500 }}>run {item.runIndex}</span>}</p>
                             {!selected.model && <p style={{ fontSize: 10, color: '#999', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.model}</p>}
                             {item.timestamp && <p style={{ ...styles.cardTs, marginBottom: 3 }}>{new Date(item.timestamp).toLocaleDateString()}</p>}
                             {ev ? (
@@ -1417,4 +1847,36 @@ const styles = {
   expCardBody: { padding: '8px 10px' },
   expCardName: { fontSize: 11, fontWeight: 600, color: '#222', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   expCardChapter: { fontSize: 10, color: '#aaa', margin: 0 },
+
+  // Planner styles
+  planBtn: { padding: '9px 0', fontSize: 13, fontWeight: 600, borderRadius: 8, border: '2px solid #4a90d9', background: '#fff', color: '#4a90d9', cursor: 'pointer', width: '100%', transition: 'opacity .2s' },
+  planBtnDisabled: { opacity: 0.4, cursor: 'not-allowed' },
+  planPanel: { width: '100%', background: '#f8faff', border: '1px solid #d0ddf0', borderRadius: 8, padding: '12px 14px' },
+  planHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  planTitle: { fontSize: 13, fontWeight: 700, color: '#333' },
+  planChapter: { fontSize: 11, color: '#4a90d9', fontWeight: 600 },
+  planConcept: { fontSize: 12, color: '#555', fontStyle: 'italic', margin: '0 0 8px', lineHeight: 1.4 },
+  planSubhead: { fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginRight: 6 },
+  planList: { fontSize: 12, color: '#444' },
+  planInteraction: { display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 3, flexWrap: 'wrap' },
+  planInterType: { fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 3, background: '#e3ecf7', color: '#2a5a94' },
+  planInterLabel: { fontSize: 12, color: '#333', fontWeight: 500 },
+  planInterTeaches: { fontSize: 11, color: '#888' },
+  planContext: { fontSize: 10, color: '#888', background: '#fff', border: '1px solid #e8e8e8', borderRadius: 4, padding: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflowY: 'auto', marginTop: 4 },
+
+  // Mode toggle
+  modeBtn: { padding: '6px 16px', borderRadius: 6, border: '1px solid #ddd', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 13, fontWeight: 500 },
+  modeBtnActive: { background: '#111', borderColor: '#111', color: '#fff' },
+
+  // Chapter mode
+  chapterMode: { width: '100%' },
+  chapterLabel: { fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6, display: 'block' },
+  chapterSelect: { width: '100%', fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', background: '#fff', color: '#333', cursor: 'pointer' },
+  candidateGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, marginTop: 12 },
+  candidateCard: { border: '1px solid #e0e0e0', borderRadius: 6, overflow: 'hidden', cursor: 'pointer', background: '#fff', transition: 'box-shadow .15s' },
+  candidateThumb: { width: '100%', height: 80, objectFit: 'contain', background: '#fafafa' },
+  candidateName: { fontSize: 10, color: '#555', padding: '4px 6px', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  chapterPlansWrap: { marginTop: 14, padding: '12px 14px', background: '#f8faff', border: '1px solid #d0ddf0', borderRadius: 8 },
+  chapterPlanItem: { marginBottom: 4, borderBottom: '1px solid #e8ecf4' },
+  chapterPlanSummary: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', cursor: 'pointer', fontSize: 12, fontWeight: 500, color: '#333' },
 };

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * figure-agent — generator → evaluator loop
+ * figure-agent — planner → generator → evaluator loop
  *
  * Processes one image or a whole directory, saving results to backend/results/
  * so the web platform picks them up automatically.
@@ -9,6 +9,7 @@
  *   node agent.js --image ../../figures/imaging/pinhole.png
  *   node agent.js --dir   ../../figures/homography  --ext png,jpg
  *   node agent.js --image ../../figures/imaging/pinhole.png --rounds 3 --threshold 3.5
+ *   node agent.js --image pinhole.png --chapter imaging
  *
  * Options:
  *   --image <path>       single image to process
@@ -21,14 +22,20 @@
  *   --experiment <label> experiment label written to result (default: agent-v1)
  *   --screenshot         take a Puppeteer screenshot after generation (default: true)
  *   --no-screenshot      skip screenshots (faster)
+ *   --no-plan            skip the planner stage (generate from image alone)
+ *   --chapter <name>     hint the chapter name for planner context extraction
  *   --dry-run            print what would be processed without calling the API
  */
 
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+const crypto  = require('crypto');
 const fs      = require('fs');
 const path    = require('path');
 const OpenAI  = require('openai').default;
 const puppeteer = require('puppeteer');
+
+const { buildEvalPrompt, finaliseEval } = require('./critic');
+const { planForFigure, inferChapterFromFilename } = require('./planner');
 
 // ── Parse CLI args ─────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -43,10 +50,12 @@ const DIR_PATH     = flag('--dir');
 const EXTS         = (flag('--ext') || 'png,jpg,jpeg').split(',').map(e => e.toLowerCase().replace(/^\./, ''));
 const MAX_ROUNDS   = parseInt(flag('--rounds')    || '1',   10);
 const THRESHOLD    = parseFloat(flag('--threshold') || '4.0');
-const GEN_MODEL    = flag('--model')       || 'gpt-4o';
+const GEN_MODEL    = flag('--model')       || 'gpt-5.4';
 const EVAL_MODEL   = flag('--eval-model')  || 'gpt-5.4';
-const EXPERIMENT   = flag('--experiment')  || 'agent-v1';
+const EXPERIMENT_OVERRIDE = flag('--experiment');  // manual override, else auto-derived from prompt hash
 const DO_SCREENSHOT = !hasFlag('--no-screenshot');
+const SKIP_PLAN    = hasFlag('--no-plan');
+const CHAPTER_HINT = flag('--chapter');
 const DRY_RUN      = hasFlag('--dry-run');
 
 if (!IMAGE_PATH && !DIR_PATH) {
@@ -168,6 +177,10 @@ STEP 5 · CODE STYLE
 }
 const SYSTEM_PROMPT = buildSystemPrompt(BASE_SCAFFOLD);
 
+// ── Derive experiment label from prompt hash (matches server.js logic) ────────
+const PROMPT_HASH = crypto.createHash('sha256').update(SYSTEM_PROMPT).digest('hex').slice(0, 8);
+const EXPERIMENT  = EXPERIMENT_OVERRIDE || `base_scene_robust_${PROMPT_HASH}`;
+
 // ── Refinement prompt (used in round 2+) ─────────────────────────────────────
 function buildRefinementPrompt(scaffold, prevHtml, evaluation) {
   const issues = [
@@ -200,8 +213,6 @@ ${prevHtml}
 Fix all identified failure modes and improve every score. Maintain or improve what already works well.`;
 }
 
-// ── buildEvalPrompt + finaliseEval imported from critic.js ───────────────────
-
 // ── Strip markdown fences ─────────────────────────────────────────────────────
 function stripFences(text) {
   const fenced = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
@@ -231,15 +242,43 @@ async function processImage(imagePath) {
   const mediaType = mediaTypeMap[ext] || 'image/png';
   const imageBase64 = fs.readFileSync(imagePath).toString('base64');
 
+  // ── PLANNER (optional) ──────────────────────────────────────────────────
+  let plan = null;
+  if (!SKIP_PLAN) {
+    const stem = filename.replace(/\.[^.]+$/, '');
+    const chapter = CHAPTER_HINT || inferChapterFromFilename(filename);
+    console.log(`  [planner] figure="${stem}" chapter=${chapter || '(unknown)'}`);
+    try {
+      plan = await planForFigure(stem, chapter);
+      if (plan.interactionPlan) {
+        console.log(`  ✓ Plan: ${plan.interactionPlan.concept || 'ok'} — ${(plan.interactionPlan.interactions || []).length} interactions`);
+      } else {
+        console.log('  ⚠ Planner returned no interaction plan (proceeding without)');
+      }
+    } catch (err) {
+      console.warn(`  ⚠ Planner failed: ${err.message} (proceeding without plan)`);
+    }
+  }
+
   let html = null;
   let evaluation = null;
   let round = 0;
+
+  // Build plan-injection text for the generator
+  let planInjection = '';
+  if (plan && plan.contextChunk) {
+    planInjection += `\n\nTEXTBOOK CONTEXT (from "${plan.chapterName || 'unknown'}" chapter):\n${plan.contextChunk}`;
+  }
+  if (plan && plan.interactionPlan) {
+    planInjection += `\n\nINTERACTION PLAN (follow this closely):\n${JSON.stringify(plan.interactionPlan, null, 2)}`;
+  }
 
   while (round < MAX_ROUNDS) {
     round++;
     console.log(`  [round ${round}/${MAX_ROUNDS}] generating...`);
 
     // ── GENERATOR ────────────────────────────────────────────────────────────
+    const baseUserText = 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.';
     const genMessages = round === 1
       ? [
           { role: 'system', content: SYSTEM_PROMPT },
@@ -247,7 +286,7 @@ async function processImage(imagePath) {
             role: 'user',
             content: [
               { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
-              { type: 'text', text: 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.' },
+              { type: 'text', text: baseUserText + planInjection },
             ],
           },
         ]
@@ -257,14 +296,14 @@ async function processImage(imagePath) {
             role: 'user',
             content: [
               { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
-              { type: 'text', text: 'Here is the same original figure. Apply the critic feedback and output the improved complete HTML file. No explanation, no markdown, no fences.' },
+              { type: 'text', text: 'Here is the same original figure. Apply the critic feedback and output the improved complete HTML file. No explanation, no markdown, no fences.' + planInjection },
             ],
           },
         ];
 
     const genResp = await getOpenAI().chat.completions.create({
       model: GEN_MODEL,
-      max_tokens: 16384,
+      max_completion_tokens: 16384,
       messages: genMessages,
     });
 
@@ -341,8 +380,10 @@ async function processImage(imagePath) {
     model:       GEN_MODEL,
     eval_model:  EVAL_MODEL,
     experiment:  EXPERIMENT,
+    promptHash:  PROMPT_HASH,
     rounds:      round,
     evaluation:  evaluation || null,
+    plan:        plan || null,
   };
 
   const outPath = path.join(RESULTS_DIR, `${figureId}.json`);
@@ -378,6 +419,7 @@ if (IMAGE_PATH) {
   console.log(`figure-agent`);
   console.log(`  generator: ${GEN_MODEL}  |  evaluator: ${EVAL_MODEL}`);
   console.log(`  experiment: ${EXPERIMENT}  |  rounds: ${MAX_ROUNDS}  |  threshold: ${THRESHOLD}`);
+  console.log(`  planner: ${SKIP_PLAN ? 'OFF' : 'ON'}${CHAPTER_HINT ? ` (chapter: ${CHAPTER_HINT})` : ''}`);
   console.log(`  images: ${imagePaths.length}`);
   if (DRY_RUN) console.log('  mode: DRY RUN');
 
