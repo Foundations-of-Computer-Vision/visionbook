@@ -1,34 +1,20 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 
-const SYSTEM_PROMPT = `Convert this 2D textbook figure into an interactive 3D visualization that clearly teaches the concept shown.
-Return ONLY a single self-contained HTML file that runs in a modern browser and uses Three.js (ES modules) with OrbitControls.
-
-Core requirements:
-1. Faithful 3D Geometry
-- Recreate the key geometric elements in 3D (not a textured copy of the image).
-- Preserve the relationships implied by the figure (e.g., intersections, parallelism, coplanarity, alignment, proportions).
-- Match the relative sizes, orientations, and colors as closely as reasonably possible.
-
-2. Educational Interactivity
-- Add 2-6 meaningful interactive elements (buttons, toggles, step-through controls, draggable handles, or animation).
-- The interaction must demonstrate the main conceptual idea of the figure.
-- Include a Reset to textbook view control.
-- Include a short guided demo or step-through sequence that illustrates the concept.
-
-3. Concept Clarity
-- Add labels corresponding to the original figure.
-- Include brief code comments explaining:
-  * how each 2D element maps to a 3D object
-  * what each interaction is meant to teach
-
-Prefer geometric clarity and conceptual correctness over visual realism.
-Output only the complete HTML file without truncation. No markdown, no code fences, no explanation. Start directly with <!DOCTYPE html>`;
+const FALLBACK_PROMPT = '(Loading system prompt from server…)';
 
 export default function App() {
   const [tab, setTab] = useState('generator');
   const [image, setImage] = useState(null); // { base64, mediaType, filename, previewUrl }
   const [generatedHtml, setGeneratedHtml] = useState('');
-  const [currentRecord, setCurrentRecord] = useState(null); // full record from history
+  const [systemPrompt, setSystemPrompt] = useState(FALLBACK_PROMPT);
+
+  // Fetch the real system prompt from the backend on mount
+  useEffect(() => {
+    fetch('/api/prompt')
+      .then(r => r.json())
+      .then(d => { if (d.prompt) setSystemPrompt(d.prompt); })
+      .catch(() => {});
+  }, []);  const [currentRecord, setCurrentRecord] = useState(null); // full record from history
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [evaluation, setEvaluation] = useState(null);
@@ -216,7 +202,7 @@ export default function App() {
             planning={planning}
             plan={plan}
             error={error}
-            systemPrompt={SYSTEM_PROMPT}
+            systemPrompt={systemPrompt}
           />
         )}
         {tab === 'viewer' && (
@@ -1005,6 +991,12 @@ function ResultsTab({ onOpen }) {
   const [collapsedGroups, setCollapsedGroups] = React.useState(new Set());
   const [hoveredGroup, setHoveredGroup] = React.useState(null);
   const hoverTimerRef = React.useRef(null);
+  const [serverPrompt, setServerPrompt] = React.useState('');
+
+  // Fetch the real system prompt for the API tab display
+  React.useEffect(() => {
+    fetch('/api/prompt').then(r => r.json()).then(d => { if (d.prompt) setServerPrompt(d.prompt); }).catch(() => {});
+  }, []);
 
   // Reset open chapters whenever selection changes
   React.useEffect(() => {
@@ -1027,7 +1019,27 @@ function ResultsTab({ onOpen }) {
       fetch('/api/history').then(r => r.json()),
       fetch('/api/experiments').then(r => r.json()),
     ])
-      .then(([api, exp]) => { setApiRecords(api); setExpTree(exp); setLoading(false); })
+      .then(([api, exp]) => {
+        // Normalize: strip trailing hash so prompt iterations merge into one experiment
+        const stripHash = n => n.replace(/_[0-9a-f]{6,8}$/i, '');
+        api.forEach(r => { r.experiment = stripHash(r.experiment || 'base_scene_robust'); });
+        // Merge agent-tree entries sharing the same base experiment name
+        const merged = {};
+        for (const e of exp) {
+          const base = stripHash(e.experiment);
+          if (!merged[base]) merged[base] = { experiment: base, models: {} };
+          for (const m of e.models) {
+            if (!merged[base].models[m.model]) merged[base].models[m.model] = [];
+            merged[base].models[m.model].push(...m.figures);
+          }
+        }
+        setApiRecords(api);
+        setExpTree(Object.values(merged).map(e => ({
+          experiment: e.experiment,
+          models: Object.entries(e.models).map(([model, figs]) => ({ model, figures: figs })),
+        })));
+        setLoading(false);
+      })
       .catch(err => { setError(err.message); setLoading(false); });
   }, []);
 
@@ -1079,17 +1091,16 @@ function ResultsTab({ onOpen }) {
         }
       }
     }
-    // Assign run indices for duplicate figure+model combos
-    const runMap = {};
+    // Assign per-figure generation index (g1, g2, …) when same figure name appears multiple times
+    const figMap = {};
     for (const it of items) {
-      const k = `${it.model}/${it.figure}`;
-      if (!runMap[k]) runMap[k] = [];
-      runMap[k].push(it);
+      if (!figMap[it.figure]) figMap[it.figure] = [];
+      figMap[it.figure].push(it);
     }
-    for (const group of Object.values(runMap)) {
+    for (const group of Object.values(figMap)) {
       if (group.length > 1) {
         group.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
-        group.forEach((it, i) => { it.runIndex = i + 1; it.totalRuns = group.length; });
+        group.forEach((it, i) => { it.genIndex = i + 1; it.genTotal = group.length; });
       }
     }
     return items;
@@ -1105,7 +1116,7 @@ function ResultsTab({ onOpen }) {
     }
     return Object.fromEntries(
       Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
-        .map(([ch, its]) => [ch, its.sort((a, b) => a.figure.localeCompare(b.figure) || (a.runIndex || 0) - (b.runIndex || 0))])
+        .map(([ch, its]) => [ch, its.sort((a, b) => a.figure.localeCompare(b.figure) || (a.genIndex || 0) - (b.genIndex || 0))])
     );
   }, [selectedItems]);
 
@@ -1166,10 +1177,10 @@ function ResultsTab({ onOpen }) {
   // Prompt to show when a model row is selected
   const selectedPrompt = React.useMemo(() => {
     if (!selected) return null;
-    if (activeTab === 'api') return SYSTEM_PROMPT;
+    if (activeTab === 'api') return serverPrompt;
     const exp = expTree.find(e => e.experiment === selected.experiment);
     return exp?.prompt || null;
-  }, [selected, activeTab, expTree]);
+  }, [selected, activeTab, expTree, serverPrompt]);
 
   // Experiment / model lists for filter dropdowns
   const allExperiments = React.useMemo(() => {
@@ -1457,7 +1468,7 @@ function ResultsTab({ onOpen }) {
                             }
                           </div>
                           <div style={styles.cardInfo}>
-                            <p style={styles.cardFilename}>{item.figure}{item.totalRuns > 1 && <span style={{ marginLeft: 5, fontSize: 9, background: '#e3e8f0', color: '#556', borderRadius: 6, padding: '1px 5px', fontWeight: 500 }}>run {item.runIndex}</span>}</p>
+                            <p style={styles.cardFilename}>{item.figure}{item.genTotal > 1 && <span style={{ marginLeft: 5, fontSize: 9, background: '#e3e8f0', color: '#556', borderRadius: 6, padding: '1px 5px', fontWeight: 500 }}>g{item.genIndex}</span>}</p>
                             {!selected.model && <p style={{ fontSize: 10, color: '#999', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.model}</p>}
                             {item.timestamp && <p style={{ ...styles.cardTs, marginBottom: 3 }}>{new Date(item.timestamp).toLocaleDateString()}</p>}
                             {ev ? (

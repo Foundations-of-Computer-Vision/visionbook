@@ -143,11 +143,7 @@ function list3dCandidates(chapterName) {
 
 const PLAN_SYSTEM_PROMPT = `You are an expert at planning interactive 3D visualizations for textbook figures.
 
-Given:
-1. A textbook excerpt describing the figure's context and concept
-2. The figure filename
-
-Output a concise interaction plan in JSON:
+Given a textbook excerpt and figure filename, output a concise interaction plan in JSON:
 {
   "concept": "one-sentence description of the core concept being illustrated",
   "elements": ["list of geometric elements to recreate in 3D"],
@@ -161,11 +157,12 @@ Output a concise interaction plan in JSON:
 Rules:
 - Plan 2-5 meaningful interactions that teach the concept
 - Each interaction must have a clear pedagogical purpose
-- Keep the plan concise — under 300 tokens total
+- Keep the plan concise — under 400 tokens total
 - Output ONLY valid JSON, no markdown, no explanation`;
 
 /**
  * Call the LLM to generate a quick interaction plan for one figure.
+ * Text-only (no vision) — the generator sees the image instead.
  * Returns the parsed plan object.
  */
 async function generateInteractionPlan(contextChunk, figureStem) {
@@ -188,7 +185,7 @@ async function generateInteractionPlan(contextChunk, figureStem) {
   try {
     return JSON.parse(content);
   } catch {
-    return { concept: 'Could not parse plan', elements: [], interactions: [], raw: content.slice(0, 500) };
+    return { concept: 'Could not parse plan', elements: [], interactions: [], labels: [], raw: content.slice(0, 500) };
   }
 }
 
@@ -209,7 +206,7 @@ async function planForFigure(figureStem, chapterName) {
   if (qmdContent) {
     contextChunk = extractFigureContext(qmdContent, figureStem);
   } else {
-    contextChunk = `Figure: ${figureStem}. No chapter text found — plan from the image alone.`;
+    contextChunk = `Figure: ${figureStem}. No chapter text found — plan from filename alone.`;
   }
 
   const interactionPlan = await generateInteractionPlan(contextChunk, figureStem);

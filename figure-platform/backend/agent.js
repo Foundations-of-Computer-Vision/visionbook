@@ -157,12 +157,62 @@ STEP 2 · PLAN GEOMETRY — map each 2D element to a Three.js primitive:
   Set d and camera.position so the whole scene is comfortably framed.
   Match colours from the original figure. Keep background white (#ffffff).
 
-STEP 3 · LABELS
-  Add floating HTML labels using absolutely-positioned <div> elements.
-  Project 3D positions to screen with vector.project(camera) in the animate loop.
-  Use font-size 13px for main labels, 11px for minor annotations.
-  Support HTML for maths: 'x<sub>1</sub>', '&lambda;', '<i>f</i>'.
-  Offset labels slightly from their anchor to avoid overlapping geometry.
+STEP 3 · LABELS — THIS IS CRITICAL, follow exactly:
+
+  3a. LABEL AUDIT — before writing any code:
+      • List EVERY text label visible in the original figure: axis names, point
+        names, variable names, coordinate labels, titles, annotations, dimensions.
+      • Verify each axis label matches the correct geometric direction — if the
+        figure shows "x₁" pointing right, your label must also point right.
+      • If the figure uses subscripted names (x₁, x₂, x₃) instead of (x, y, z),
+        reproduce the EXACT names from the figure.
+      • Missing or mislabeled text is a critical failure.
+
+  3b. REQUIRED CSS — add this block inside <style>:
+      .label {
+        position: absolute;
+        font-family: sans-serif;
+        font-size: 20px;
+        font-weight: bold;
+        color: #000;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+        white-space: nowrap;
+        z-index: 1;
+      }
+      .label-minor {
+        font-size: 14px;
+        font-weight: normal;
+      }
+
+  3c. REQUIRED JS HELPER — use this exact pattern:
+      const labels = [];
+      function addLabel(html, pos, minor) {
+        const div = document.createElement('div');
+        div.className = 'label' + (minor ? ' label-minor' : '');
+        div.innerHTML = html;
+        document.body.appendChild(div);
+        labels.push({ div, pos: pos.clone() });
+      }
+
+  3d. REQUIRED UPDATE LOOP — call updateLabels() inside animate():
+      function updateLabels() {
+        const v = new THREE.Vector3();
+        labels.forEach(({ div, pos }) => {
+          v.copy(pos).project(camera);
+          div.style.left = (( v.x * 0.5 + 0.5) * window.innerWidth)  + 'px';
+          div.style.top  = ((-v.y * 0.5 + 0.5) * window.innerHeight) + 'px';
+        });
+      }
+
+  3e. LABEL CONTENT RULES:
+      • Use HTML entities for maths: 'x<sub>1</sub>', '&theta;', '&lambda;',
+        '<i>f</i>', '&pi;', 'R<sup>2</sup>', '&#x2192;' (arrow).
+      • Offset label positions 0.15–0.25 units away from their anchor point
+        so text does not overlap geometry.
+      • Use addLabel(text, pos, true) for secondary/minor annotations.
+      • Every axis arrow MUST have a label at its tip.
+      • Every named point, vector, plane, or region in the figure MUST have a label.
 
 STEP 4 · INTERACTIVITY — add 2–5 controls in a fixed UI panel (position:absolute, top:10px, left:10px):
   • Step-through buttons — animate a process stage by stage
@@ -251,7 +301,8 @@ async function processImage(imagePath) {
     try {
       plan = await planForFigure(stem, chapter);
       if (plan.interactionPlan) {
-        console.log(`  ✓ Plan: ${plan.interactionPlan.concept || 'ok'} — ${(plan.interactionPlan.interactions || []).length} interactions`);
+        const labelCount = (plan.interactionPlan.labels || []).length;
+        console.log(`  ✓ Plan: ${plan.interactionPlan.concept || 'ok'} — ${(plan.interactionPlan.interactions || []).length} interactions, ${labelCount} labels`);
       } else {
         console.log('  ⚠ Planner returned no interaction plan (proceeding without)');
       }
@@ -279,6 +330,8 @@ async function processImage(imagePath) {
 
     // ── GENERATOR ────────────────────────────────────────────────────────────
     const baseUserText = 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.';
+    // Generator always sees the image — it needs visual detail to recreate geometry.
+    // Planner provides text-based context + interactions alongside.
     const genMessages = round === 1
       ? [
           { role: 'system', content: SYSTEM_PROMPT },
