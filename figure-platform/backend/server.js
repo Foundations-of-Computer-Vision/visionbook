@@ -4,10 +4,10 @@ const cors = require('cors');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const OpenAI = require('openai').default;
 const puppeteer = require('puppeteer');
 const { buildEvalPrompt, finaliseEval } = require('./critic');
 const { planForFigure, planChapter, listChapters, list3dCandidates, inferChapterFromFilename } = require('./planner');
+const { generateWithModel, getAvailableModels, getOpenAI } = require('./models');
 
 // ── Screenshot helper ────────────────────────────────────────────────────────────
 let _browser = null;
@@ -58,18 +58,7 @@ const CURRENT_MODEL     = 'gpt-5.4';             // model used by the generator
 app.use(cors({ origin: 'http://localhost:3000' }));
 app.use(express.json({ limit: '20mb' }));
 
-// ── OpenAI client (lazy – created on first request so missing key won't crash startup) ──
-let _openai = null;
-function getOpenAI() {
-  if (!_openai) {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key || key === 'your_openai_api_key_here') {
-      throw new Error('OPENAI_API_KEY is not set. Add it to backend/.env');
-    }
-    _openai = new OpenAI({ apiKey: key });
-  }
-  return _openai;
-}
+// ── OpenAI client (imported from models.js for evaluator / planner) ──
 
 // ── Base scaffold ─────────────────────────────────────────────────────────────
 // The model extends this file instead of writing from scratch.
@@ -99,6 +88,12 @@ OUTPUT RULES — non-negotiable:
 • It MUST start with exactly: <!DOCTYPE html>
 • It MUST end with exactly: </html>
 • Do NOT truncate. Output every line.
+• Return ONLY a single self-contained HTML file that runs in a modern browser
+  and uses Three.js (ES modules) with OrbitControls.
+• Add a <script type="importmap"> to resolve 'three' and 'three/addons/' to CDN
+  URLs. Use bare specifiers in all imports, e.g.:
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 ────────────────────────────────────────────────────────────────────────────────
 BASE SCAFFOLD — copy this file in full, then add your code inside the existing
@@ -231,6 +226,11 @@ app.get('/api/prompt', (req, res) => {
   res.json({ prompt: SYSTEM_PROMPT, experiment: CURRENT_EXPERIMENT, model: CURRENT_MODEL });
 });
 
+// ── GET /api/models — list available generator models for the UI ──────────────
+app.get('/api/models', (req, res) => {
+  res.json(getAvailableModels());
+});
+
 // ── GET /api/chapters — list chapters with 3D candidate counts ────────────────
 app.get('/api/chapters', (req, res) => {
   try {
@@ -321,40 +321,38 @@ function buildPlanInjection(plan) {
 
 // ── POST /api/generate ────────────────────────────────────────────────────────
 app.post('/api/generate', async (req, res) => {
-  const { base64, mediaType, filename, plan } = req.body;
+  const { base64, mediaType, filename, plan, model: requestedModel } = req.body;
 
   if (!base64 || !mediaType || !filename) {
     return res.status(400).json({ error: 'base64, mediaType, and filename are required.' });
   }
 
+  // Use the model requested by the frontend, or fall back to the server default
+  const modelId = requestedModel || CURRENT_MODEL;
+  console.log(`[generate] requested="${requestedModel}" → using="${modelId}" | file=${filename}`);
+
   try {
     // Generator always sees the image — it needs visual detail (geometry, colors,
     // proportions, label positions) to recreate the figure. The planner only
     // provides text-based context + interaction plan alongside.
-    const response = await withRetry(() => getOpenAI().chat.completions.create({
-      model: CURRENT_MODEL,
-      max_completion_tokens: 16384,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image_url',
-              image_url: { url: `data:${mediaType};base64,${base64}` },
-            },
-            {
-              type: 'text',
-              text: plan
-                ? buildPlanInjection(plan)
-                : 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.',
-            },
-          ],
-        },
-      ],
-    }));
+    const userContent = [
+      {
+        type: 'image_url',
+        image_url: { url: `data:${mediaType};base64,${base64}` },
+      },
+      {
+        type: 'text',
+        text: plan
+          ? buildPlanInjection(plan)
+          : 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.',
+      },
+    ];
 
-    let html = response.choices[0].message.content || '';
+    let html = await withRetry(() => generateWithModel(modelId, {
+      systemPrompt: SYSTEM_PROMPT,
+      userContent,
+      maxTokens: 16384,
+    }));
     html = stripFences(html);
 
     // If the model still refused to output HTML, surface a clear error
@@ -383,7 +381,7 @@ app.post('/api/generate', async (req, res) => {
       html,
       timestamp,
       source: 'api',
-      model: CURRENT_MODEL,
+      model: modelId,
       experiment: CURRENT_EXPERIMENT,
       promptHash: PROMPT_HASH,
     };
@@ -401,8 +399,8 @@ app.post('/api/generate', async (req, res) => {
 
     return res.json({ html, figureId, timestamp, evaluation });
   } catch (err) {
-    console.error('OpenAI error:', err?.message || err);
-    return res.status(500).json({ error: err?.message || 'Unknown error from OpenAI.' });
+    console.error(`Generation error (${modelId}):`, err?.message || err);
+    return res.status(500).json({ error: err?.message || `Unknown error from model ${modelId}.` });
   }
 });
 

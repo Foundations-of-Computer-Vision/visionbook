@@ -8,12 +8,25 @@ export default function App() {
   const [generatedHtml, setGeneratedHtml] = useState('');
   const [systemPrompt, setSystemPrompt] = useState(FALLBACK_PROMPT);
 
-  // Fetch the real system prompt from the backend on mount
+  // Model selection (generator only)
+  const [models, setModels] = useState([]);       // available models from backend
+  const [selectedModel, setSelectedModel] = useState(''); // '' = server default
+
+  // Fetch the real system prompt + available models from the backend on mount
   useEffect(() => {
     fetch('/api/prompt')
       .then(r => r.json())
       .then(d => { if (d.prompt) setSystemPrompt(d.prompt); })
       .catch(() => {});
+    fetch('/api/models')
+      .then(r => r.json())
+      .then(list => {
+        setModels(list);
+        // Default to the first model in the list (server default)
+        if (list.length > 0) setSelectedModel(prev => prev || list[0].id);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);  const [currentRecord, setCurrentRecord] = useState(null); // full record from history
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -64,6 +77,7 @@ export default function App() {
           mediaType: image.mediaType,
           filename: image.filename,
           plan: currentPlan || undefined,
+          model: selectedModel || undefined,
         }),
       });
       const text = await res.text();
@@ -89,9 +103,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [image]);
-
-  // Called from History when a card is clicked
+  }, [image, selectedModel]);
   const handleLoadFromHistory = useCallback((record) => {
     setCurrentRecord(record);
     setGeneratedHtml(record.html);
@@ -203,6 +215,9 @@ export default function App() {
             plan={plan}
             error={error}
             systemPrompt={systemPrompt}
+            models={models}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
           />
         )}
         {tab === 'viewer' && (
@@ -228,7 +243,7 @@ export default function App() {
 }
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, plan, error, systemPrompt }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, plan, error, systemPrompt, models, selectedModel, onModelChange }) {
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
@@ -351,6 +366,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, p
             mediaType: candidate.mediaType,
             filename: candidate.filename,
             plan: figurePlan || undefined,
+            model: selectedModel || undefined,
           }),
         });
         const genText = await genRes.text();
@@ -495,6 +511,25 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, p
 
           {error && <p style={styles.errorMsg}>{error}</p>}
 
+          {/* Model selector */}
+          {models.length > 0 && (
+            <div style={styles.modelSelector}>
+              <label style={styles.modelLabel}>Generator model:</label>
+              <select
+                style={styles.modelSelect}
+                value={selectedModel}
+                onChange={e => onModelChange(e.target.value)}
+                disabled={loading || planning}
+              >
+                {models.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}  ({m.provider})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             style={{ ...styles.generateBtn, ...(loading || planning || !image ? styles.generateBtnDisabled : {}) }}
             onClick={onGenerate}
@@ -524,6 +559,25 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, p
 
           {selectedChapter && chapterCandidates.length > 0 && (
             <>
+              {/* Model selector (chapter mode) — above the grid so it's always visible */}
+              {models.length > 0 && (
+                <div style={{ ...styles.modelSelector, marginBottom: 10 }}>
+                  <label style={styles.modelLabel}>Generator model:</label>
+                  <select
+                    style={styles.modelSelect}
+                    value={selectedModel}
+                    onChange={e => onModelChange(e.target.value)}
+                    disabled={chapterRunning}
+                  >
+                    {models.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}  ({m.provider})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Candidate thumbnail grid — clickable to go to single-figure mode */}
               <div style={styles.candidateGrid}>
                 {chapterCandidates.map((c, idx) => {
@@ -1791,6 +1845,9 @@ const styles = {
   promptToggle: { background: 'none', border: '1px solid #ddd', color: '#666', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontSize: 12 },
   promptBox: { marginTop: 6, padding: 12, background: '#fafafa', borderRadius: 6, border: '1px solid #e0e0e0', fontSize: 11, color: '#888', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 280, overflowY: 'auto' },
   errorMsg: { color: '#c00', fontSize: 13, margin: 0 },
+  modelSelector: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 },
+  modelLabel: { fontSize: 13, fontWeight: 600, color: '#333', whiteSpace: 'nowrap' },
+  modelSelect: { flex: 1, fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '7px 12px', background: '#fff', color: '#333', cursor: 'pointer' },
   generateBtn: { padding: '11px 0', fontSize: 14, fontWeight: 600, borderRadius: 8, border: 'none', background: '#111', color: '#fff', cursor: 'pointer', width: '100%', transition: 'opacity .2s' },
   generateBtnDisabled: { opacity: 0.35, cursor: 'not-allowed' },
 
