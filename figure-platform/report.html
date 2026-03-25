@@ -87,7 +87,9 @@
     .section{page-break-inside:avoid}
     .cover{page-break-after:always}
   }
+  .chart-fig-cap{font-size:8pt;text-transform:uppercase;letter-spacing:.07em;color:#666;font-weight:700;margin-bottom:8px}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 <body><div class="page">
 
@@ -95,7 +97,7 @@
   <div class="cover-title">Interactive 3D Figures<br>Progress Report</div>
   <div class="cover-subtitle">Agentic LLM pipeline for generating interactive 3D visualizations from 2D textbook figures</div>
   <div class="cover-meta">
-    <span><strong>Date</strong>March 17, 2026</span>
+    <span><strong>Date</strong>March 25, 2026</span>
     <span><strong>Study period</strong>February 9 – March 9, 2026</span>
     <span><strong>Status</strong>Active — data collection phase</span>
     <span><strong>Document type</strong>Internal progress report</span>
@@ -219,7 +221,7 @@ automatically. This shift is intended to enable evaluation at the scale of the f
     <span class="stat-sub">5 weeks of study</span>
   </div>
   <div class="stat-cell">
-    <span class="stat-num">5</span>
+    <span class="stat-num">55</span>
     <span class="stat-label">AI critic scores</span>
     <span class="stat-sub">automated pipeline</span>
   </div>
@@ -227,7 +229,7 @@ automatically. This shift is intended to enable evaluation at the scale of the f
 
 <p>The evaluation study ran from February 9 to March 9, 2026 across 12 models and 4 prompt variants.
 All 153 human evaluations were conducted on 9 figures drawn from two chapters of the corpus
-(homographies and imaging). The 5 AI critic scores provide an automated baseline against the same figure set.
+(homographies and imaging). The 55 AI critic scores provide an automated baseline against the same figure set.
 Corpus coverage currently stands at 0.4% of the 2,377-figure corpus.</p>
 
 <h2>4. Human Evaluation — Model Comparison</h2>
@@ -497,441 +499,104 @@ Corpus coverage currently stands at 0.4% of the 2,377-figure corpus.</p>
 </table>
 
 <h2>8. AI Critic Evaluation (Automated Pipeline)</h2>
-<p style="margin-bottom:12px">Results scored by the automated critic module via <code>critic.js</code> — no human involvement. Group average: 1.92/5.</p>
-<table style="font-size:9pt;table-layout:fixed;width:100%">
+<p style="margin-bottom:14px">Scores from <code>critic.js</code> — no human involvement. 55 runs across 3 models. Group average: <strong>3.02/5</strong>.</p>
+<div class="chart-fig-cap">Score by metric &amp; model</div>
+<div style="height:220px;position:relative;margin-bottom:20px"><canvas id="chartAICritic"></canvas></div>
+<script>
+(function(){
+  new Chart(document.getElementById('chartAICritic'),{
+    type:'bar',
+    data:{labels:["gpt-5.4", "claude-opus-4.6", "gpt-4o"],datasets:[{"label":"Geometry","data":[3.32, 2.17, 2.0],"backgroundColor":"#1f4e8c","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Interact.","data":[4.21, 3.83, 1.0],"backgroundColor":"#c0392b","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Faithfulness","data":[2.89, 2.0, 2.0],"backgroundColor":"#27ae60","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Labels","data":[2.76, 2.67, 2.6],"backgroundColor":"#d35400","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Concept","data":[3.34, 2.25, 2.0],"backgroundColor":"#8e44ad","borderWidth":0,"borderRadius":0,"barThickness":11}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'top',labels:{font:{size:8.5},color:'#222',boxWidth:10,padding:10}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y?.toFixed(2)}`}}
+      },
+      scales:{
+        x:{ticks:{font:{size:9,family:'"Source Code Pro",monospace'},color:'#111'},grid:{display:false}},
+        y:{min:0,max:5,ticks:{font:{size:8.5},color:'#555',stepSize:1},grid:{color:'rgba(0,0,0,0.07)'},
+           title:{display:true,text:'Score (1–5)',font:{size:8},color:'#666'}}
+      }
+    }
+  });
+})();
+</script>
+<table style="font-size:9pt;margin-bottom:16px">
   <thead><tr>
-    <th style="padding:5px 8px">Figure</th><th style="padding:5px 8px">Generator model</th><th style="text-align:right;padding:5px 8px">Overall</th>
-    <th style="text-align:right;padding:5px 8px">Geom.</th>
-    <th style="text-align:right;padding:5px 8px">Interact.</th>
-    <th style="text-align:right;padding:5px 8px">Faith.</th>
-    <th style="text-align:right;padding:5px 8px">Labels</th>
-    <th style="text-align:right;padding:5px 8px">Concept</th>
-    <th style="padding:5px 8px">Failure modes</th>
-  </tr></thead>
-  <tbody><tr style="vertical-align:top">
-          <td style="font-size:9pt;font-weight:600;padding:4px 8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="pinhole.png">pinhole.png</td>
-          <td style="padding:4px 8px"><span class="model-name">gpt-4o</span></td>
-          <td style="text-align:center;padding:4px 8px"><span class="score score-lo">2.20</span></td>
-          <td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">1.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-hi">4.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td>
-          <td style="font-size:8pt;max-width:260px;white-space:normal;line-height:1.6;padding:4px 8px"><span class="tag">Depth-Wrong</span> <span class="tag">Wrong-Primitives</span> <span class="tag">Interaction-Missing</span> <span class="tag">Camera-Wrong</span> <span class="tag">Scale-Wrong</span> <span class="tag">Color-Wrong</span> <span class="tag">Hallucination</span> <span class="tag">Concept-Misunderstood</span></td>
-        </tr><tr style="vertical-align:top">
-          <td style="font-size:9pt;font-weight:600;padding:4px 8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="brdf.png">brdf.png</td>
-          <td style="padding:4px 8px"><span class="model-name">gpt-4o</span></td>
-          <td style="text-align:center;padding:4px 8px"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">1.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-mid">3.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td>
-          <td style="font-size:8pt;max-width:260px;white-space:normal;line-height:1.6;padding:4px 8px"><span class="tag">Depth-Wrong</span> <span class="tag">Wrong-Primitives</span> <span class="tag">Interaction-Missing</span> <span class="tag">Camera-Wrong</span> <span class="tag">Color-Wrong</span> <span class="tag">Hallucination</span> <span class="tag">Concept-Misunderstood</span></td>
-        </tr><tr style="vertical-align:top">
-          <td style="font-size:9pt;font-weight:600;padding:4px 8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="homography_plane_geometry2.png">homography_plane_geometry2.png</td>
-          <td style="padding:4px 8px"><span class="model-name">gpt-4o</span></td>
-          <td style="text-align:center;padding:4px 8px"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">1.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td>
-          <td style="font-size:8pt;max-width:260px;white-space:normal;line-height:1.6;padding:4px 8px"><span class="tag">Depth-Wrong</span> <span class="tag">Wrong-Primitives</span> <span class="tag">Interaction-Missing</span> <span class="tag">Camera-Wrong</span> <span class="tag">Scale-Wrong</span> <span class="tag">Color-Wrong</span> <span class="tag">Hallucination</span> <span class="tag">Concept-Misunderstood</span></td>
-        </tr><tr style="vertical-align:top">
-          <td style="font-size:9pt;font-weight:600;padding:4px 8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="orthogonal_projection.png">orthogonal_projection.png</td>
-          <td style="padding:4px 8px"><span class="model-name">gpt-4o</span></td>
-          <td style="text-align:center;padding:4px 8px"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">1.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td>
-          <td style="font-size:8pt;max-width:260px;white-space:normal;line-height:1.6;padding:4px 8px"><span class="tag">Depth-Wrong</span> <span class="tag">Missing-Labels</span> <span class="tag">Wrong-Primitives</span> <span class="tag">Interaction-Missing</span> <span class="tag">Camera-Wrong</span> <span class="tag">Scale-Wrong</span> <span class="tag">Color-Wrong</span> <span class="tag">Concept-Misunderstood</span></td>
-        </tr><tr style="vertical-align:top">
-          <td style="font-size:9pt;font-weight:600;padding:4px 8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="pinhole_geometry2.png">pinhole_geometry2.png</td>
-          <td style="padding:4px 8px"><span class="model-name">gpt-4o</span></td>
-          <td style="text-align:center;padding:4px 8px"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">1.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:4px 8px"><span class="score score-lo">2.00</span></td>
-          <td style="font-size:8pt;max-width:260px;white-space:normal;line-height:1.6;padding:4px 8px"><span class="tag">Missing-Labels</span> <span class="tag">Wrong-Primitives</span> <span class="tag">Interaction-Missing</span> <span class="tag">Camera-Wrong</span> <span class="tag">Scale-Wrong</span> <span class="tag">Concept-Misunderstood</span></td>
-        </tr></tbody>
-</table>
-<div class="callout warn"><p>AI critic scores cluster at 1.8–2.2/5 for the gpt-4o baseline — broadly consistent with human evaluation of the same model (1.16/5 human average). The automated critic scores slightly higher, suggesting it may underpenalise subtle geometric and faithfulness errors that human raters detect.</p></div>
-
-<h2>9. Human vs. AI Critic Comparison</h2>
-<p style="margin-bottom:12px">4 figures evaluated by both human raters and the automated critic. AI critic records are gpt-4o baseline runs with no prompt metadata.</p>
-<table>
-  <thead><tr>
-    <th>Figure</th><th>Model</th><th>Prompt</th>
-    <th style="text-align:right">Human score</th>
-    <th style="text-align:right">AI critic</th>
-    <th style="text-align:right">Difference</th>
+    <th>Model</th><th style="text-align:right">n</th><th style="text-align:right">Overall</th>
+    <th>Weakest metric</th><th>Top failure</th>
   </tr></thead>
   <tbody><tr>
-          <td><span class="model-name">brdf</span></td>
+          <td><span class="model-name">gpt-5.4</span></td>
+          <td style="text-align:right">38</td>
+          <td style="text-align:right"><span class="score score-mid">3.31</span></td>
+          <td style="text-align:right;color:#8b1a1a;font-size:8.5pt">label quality</td>
+          <td style="font-size:8.5pt"><span class="tag">Hallucination</span> ×29</td>
+        </tr><tr>
           <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">one_line</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.40</span></td>
+          <td style="text-align:right">12</td>
+          <td style="text-align:right"><span class="score score-lo">2.58</span></td>
+          <td style="text-align:right;color:#8b1a1a;font-size:8.5pt">faithfulness</td>
+          <td style="font-size:8.5pt"><span class="tag">Scale-Wrong</span> ×12</td>
         </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">one_line</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">one_line</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">pinhole_geometry2</span></td>
-          <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">one_line</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.20</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">one_line</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.60</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">one_line</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">one_line</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-0.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">pinhole_geometry2</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">one_line</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">gpt-4.1-with-base-code</span></td>
-          <td><span class="prompt-name">one_line</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">gpt-4.1-with-base-code</span></td>
-          <td><span class="prompt-name">one_line</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-0.60</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">gpt-4.1-with-base-code</span></td>
-          <td><span class="prompt-name">one_line</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right">—</td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">with_reqs</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">with_reqs</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.20</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">with_reqs</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-0.60</span></td>
-        </tr><tr>
-          <td><span class="model-name">pinhole_geometry2</span></td>
-          <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">with_reqs</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">with_reqs</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.00</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">with_reqs</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.20</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">with_reqs</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.20</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">pinhole_geometry2</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">with_reqs</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.80</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.00</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">gpt-5.1-codex-with-base-code</span></td>
-          <td><span class="prompt-name">with_reqs</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.60</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.60</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.60</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.20</span></td>
-        </tr><tr>
-          <td><span class="model-name">pinhole_geometry2</span></td>
-          <td><span class="model-name">claude-opus-4.6</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.20</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">claude-opus-4.6-with-base-code</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.20</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.20</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">claude-opus-4.6-with-base-code</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.20</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">claude-opus-4.6-with-base-code</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">pinhole_geometry2</span></td>
-          <td><span class="model-name">claude-opus-4.6-with-base-code</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.20</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.80</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-3.00</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">gemini-3.1-pro-with-base-code</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.20</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.20</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">gemini-3.1-pro-with-base-code</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.20</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">gemini-3.1-pro-with-base-code</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.60</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">gpt-5.1-codex-with-base-code</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.20</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.20</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">gpt-5.1-codex-with-base-code</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.20</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">gpt-5.1-codex-with-base-code</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">pinhole_geometry2</span></td>
-          <td><span class="model-name">gpt-5.1-codex-with-base-code</span></td>
-          <td><span class="prompt-name">with_qmd</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.80</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.00</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.20</span></td>
-        </tr><tr>
-          <td><span class="model-name">pinhole_geometry2</span></td>
-          <td><span class="model-name">gemini-3.1-pro</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.20</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">gpt-5.1-codex</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">gpt-5.1-codex</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.60</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">gpt-5.1-codex</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.20</span></td>
-        </tr><tr>
-          <td><span class="model-name">pinhole_geometry2</span></td>
-          <td><span class="model-name">gpt-5.1-codex</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.20</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
-          <td><span class="model-name">gpt-5.3-codex</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.00</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">gpt-5.3-codex</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.60</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-1.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">gpt-5.3-codex</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-hi">4.20</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.40</span></td>
-        </tr><tr>
-          <td><span class="model-name">pinhole_geometry2</span></td>
-          <td><span class="model-name">gpt-5.3-codex</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.80</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-hi">-2.00</span></td>
-        </tr><tr>
-          <td><span class="model-name">brdf</span></td>
           <td><span class="model-name">gpt-4o</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">2.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">+1.00</span></td>
-        </tr><tr>
-          <td><span class="model-name">homography_plane_geometry2</span></td>
-          <td><span class="model-name">gpt-4o</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-lo">+0.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">orthogonal_projection</span></td>
-          <td><span class="model-name">gpt-4o</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.00</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-lo">+0.80</span></td>
-        </tr><tr>
-          <td><span class="model-name">pinhole_geometry2</span></td>
-          <td><span class="model-name">gpt-4o</span></td>
-          <td><span class="prompt-name">limit_qmd</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.40</span></td>
-          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
-          <td style="text-align:right"><span class="score score-lo">+0.40</span></td>
+          <td style="text-align:right">5</td>
+          <td style="text-align:right"><span class="score score-lo">1.92</span></td>
+          <td style="text-align:right;color:#8b1a1a;font-size:8.5pt">interactivity</td>
+          <td style="font-size:8.5pt"><span class="tag">Wrong-Primitives</span> ×5</td>
         </tr></tbody>
 </table>
-<div class="callout good"><p>AI critic scores average -1.73 lower than human scores — the automated critic is conservative relative to human raters.</p></div>
+<div class="callout warn"><p>gpt-4o baseline clusters at 1.8–2.2/5, consistent with human evaluation (1.16/5 human avg). The automated critic scores slightly higher, suggesting it underpenalises subtle geometric and faithfulness errors.</p></div>
+
+<h2>9. Human vs. AI Critic Comparison</h2>
+<div class="grid2" style="align-items:start;gap:32px">
+  <div>
+    <table style="font-size:9.5pt">
+      <thead><tr>
+        <th>Figure</th>
+        <th style="text-align:right">Human avg</th>
+        <th style="text-align:right">AI critic</th>
+        <th style="text-align:right">Diff</th>
+      </tr></thead>
+      <tbody><tr>
+          <td><span class="model-name">brdf</span></td>
+          <td style="text-align:right"><span class="score score-mid">3.39</span></td>
+          <td style="text-align:right"><span class="score score-mid">3.80</span></td>
+          <td style="text-align:right"><span class="score score-lo">+0.41</span></td>
+        </tr><tr>
+          <td><span class="model-name">example_homography</span></td>
+          <td style="text-align:right"><span class="score score-mid">3.80</span></td>
+          <td style="text-align:right"><span class="score score-mid">3.40</span></td>
+          <td style="text-align:right"><span class="score score-hi">-0.40</span></td>
+        </tr><tr>
+          <td><span class="model-name">homography_plane_geometry2</span></td>
+          <td style="text-align:right"><span class="score score-mid">3.73</span></td>
+          <td style="text-align:right"><span class="score score-mid">3.40</span></td>
+          <td style="text-align:right"><span class="score score-hi">-0.33</span></td>
+        </tr><tr>
+          <td><span class="model-name">orthogonal_projection</span></td>
+          <td style="text-align:right"><span class="score score-mid">3.50</span></td>
+          <td style="text-align:right"><span class="score score-mid">3.40</span></td>
+          <td style="text-align:right"><span class="score score-na">-0.10</span></td>
+        </tr><tr>
+          <td><span class="model-name">pinhole_geometry2</span></td>
+          <td style="text-align:right"><span class="score score-mid">3.76</span></td>
+          <td style="text-align:right"><span class="score score-lo">1.80</span></td>
+          <td style="text-align:right"><span class="score score-hi">-1.96</span></td>
+        </tr><tr>
+          <td><span class="model-name">pinhole_names2</span></td>
+          <td style="text-align:right"><span class="score score-mid">3.71</span></td>
+          <td style="text-align:right"><span class="score score-mid">3.80</span></td>
+          <td style="text-align:right"><span class="score score-na">+0.09</span></td>
+        </tr></tbody>
+    </table>
+  </div>
+  <div style="padding-top:4px">
+    <p style="font-size:9.5pt;margin-bottom:10px">6 figures scored by both human raters and the automated critic (gpt-4o baseline, no prompt metadata).</p>
+    <p style="font-size:9.5pt">AI critic scores average <strong>-0.32</strong> lower than human — conservative relative to human raters.</p>
+  </div>
+</div>
 
 <h2>10. Key Findings and Recommendations</h2>
 
@@ -970,8 +635,52 @@ Corpus coverage currently stands at 0.4% of the 2,377-figure corpus.</p>
   <li><strong>Rendering reliability.</strong> Instrument the pipeline to automatically log, classify, and retry rendering failures.</li>
 </ol>
 
+<h2>11. Visual Summary</h2>
+<p style="margin-bottom:18px">Model ranking and primary failure modes at a glance. Tables in §4 and §6 contain full detail.</p>
+<div class="grid2">
+  <div>
+    <div class="chart-fig-cap">Fig. 1 &mdash; Overall score by model (1&ndash;5)</div>
+    <div style="height:240px;position:relative"><canvas id="chartModelScores"></canvas></div>
+  </div>
+  <div>
+    <div class="chart-fig-cap">Fig. 2 &mdash; Top failure modes by frequency</div>
+    <div style="height:240px;position:relative"><canvas id="chartFailureModes"></canvas></div>
+  </div>
+</div>
+<script>
+(function(){
+  const yAx = {ticks:{font:{size:8.5,family:'"Source Code Pro",monospace'},color:'#222'},grid:{display:false}};
+  new Chart(document.getElementById('chartModelScores'),{
+    type:'bar',
+    data:{labels:["gpt-4o", "gpt-5.2-codex-with-base-code", "gpt-4.1-with-base-code", "claude-opus-4.6", "gemini-3.1-pro", "gpt-5.1-codex", "gpt-5.1-codex-with-base-code", "gpt-5.3-codex"],datasets:[{data:[1.16, 2.6, 2.65, 3.71, 3.76, 3.78, 3.8, 3.96],backgroundColor:'#2c4a7c',borderWidth:0,borderRadius:2,barThickness:14}]},
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.parsed.x.toFixed(2)} / 5`}}},
+      scales:{
+        x:{min:0,max:5,ticks:{font:{size:9},color:'#555'},grid:{color:'rgba(0,0,0,0.06)'},
+           title:{display:true,text:'Avg. score (1–5)',font:{size:8},color:'#666'}},
+        y:yAx
+      }
+    }
+  });
+  new Chart(document.getElementById('chartFailureModes'),{
+    type:'bar',
+    data:{labels:["Bad-3D", "Interaction-OOB", "Hallucination", "Concept-Misunderstanding", "Bad-Labels", "Original-Mismatch", "Missing-Labels", "Initial-View-Wrong"],datasets:[{data:[36, 37, 39, 43, 45, 45, 46, 51],backgroundColor:'#7c2c2c',borderWidth:0,borderRadius:2,barThickness:14}]},
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.parsed.x} occurrences`}}},
+      scales:{
+        x:{ticks:{font:{size:9},color:'#555'},grid:{color:'rgba(0,0,0,0.06)'},
+           title:{display:true,text:'Occurrences',font:{size:8},color:'#666'}},
+        y:yAx
+      }
+    }
+  });
+})();
+</script>
+
 <div class="doc-footer">
   <span>Interactive 3D Figures Project &mdash; Internal Progress Report</span>
-  <span>Generated March 17, 2026 at 10:30</span>
+  <span>Generated March 25, 2026 at 15:09</span>
 </div>
 </div></body></html>

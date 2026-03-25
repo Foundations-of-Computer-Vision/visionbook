@@ -251,8 +251,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, p
   const [selectedChapter, setSelectedChapter] = useState('');
   const [chapterCandidates, setChapterCandidates] = useState([]);
   const [loadingChapter, setLoadingChapter] = useState(false);
-  const [chapterPlans, setChapterPlans] = useState(null);
-  const [planningChapter, setPlanningChapter] = useState(false);
 
   // Chapter batch pipeline state
   const [chapterRunning, setChapterRunning] = useState(false);     // true while batch is active
@@ -285,9 +283,8 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, p
 
   // When a chapter is selected, load its 3D candidates
   React.useEffect(() => {
-    if (!selectedChapter) { setChapterCandidates([]); setChapterPlans(null); return; }
+    if (!selectedChapter) { setChapterCandidates([]); return; }
     setLoadingChapter(true);
-    setChapterPlans(null);
     fetch(`/api/chapter-candidates/${encodeURIComponent(selectedChapter)}`)
       .then(r => r.json())
       .then(data => { setChapterCandidates(data); setLoadingChapter(false); })
@@ -323,7 +320,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, p
     if (!selectedChapter || chapterCandidates.length === 0) return;
     setChapterRunning(true);
     setChapterResults([]);
-    setChapterPlans(null);
     chapterAbortRef.current = false;
 
     const total = chapterCandidates.length;
@@ -467,31 +463,37 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, p
                     <span style={styles.planTitle}>📋 Interaction Plan</span>
                     {plan.chapterName && <span style={styles.planChapter}>Chapter: {plan.chapterName}</span>}
                   </div>
-                  {plan.interactionPlan?.concept && (
-                    <p style={styles.planConcept}>{plan.interactionPlan.concept}</p>
-                  )}
-                  {plan.interactionPlan?.elements?.length > 0 && (
-                    <div style={{ marginBottom: 6 }}>
-                      <span style={styles.planSubhead}>Elements:</span>
-                      <span style={styles.planList}>{plan.interactionPlan.elements.join(', ')}</span>
-                    </div>
-                  )}
-                  {plan.interactionPlan?.interactions?.length > 0 && (
-                    <div style={{ marginBottom: 6 }}>
-                      <span style={styles.planSubhead}>Interactions:</span>
-                      {plan.interactionPlan.interactions.map((inter, i) => (
-                        <div key={i} style={styles.planInteraction}>
-                          <span style={styles.planInterType}>{inter.type}</span>
-                          <span style={styles.planInterLabel}>{inter.label}</span>
-                          <span style={styles.planInterTeaches}>— {inter.teaches}</span>
+                  {plan.interactionPlan ? (
+                    <>
+                      {plan.interactionPlan.concept && (
+                        <p style={styles.planConcept}>{plan.interactionPlan.concept}</p>
+                      )}
+                      {plan.interactionPlan.elements?.length > 0 && (
+                        <div style={{ marginBottom: 6 }}>
+                          <span style={styles.planSubhead}>Elements:</span>
+                          <span style={styles.planList}>{plan.interactionPlan.elements.join(', ')}</span>
                         </div>
-                      ))}
-                    </div>
+                      )}
+                      {plan.interactionPlan.interactions?.length > 0 && (
+                        <div style={{ marginBottom: 6 }}>
+                          <span style={styles.planSubhead}>Interactions:</span>
+                          {plan.interactionPlan.interactions.map((inter, i) => (
+                            <div key={i} style={styles.planInteraction}>
+                              <span style={styles.planInterType}>{inter.type}</span>
+                              <span style={styles.planInterLabel}>{inter.label}</span>
+                              <span style={styles.planInterTeaches}>— {inter.teaches}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p style={{ fontSize: 12, color: '#c60', margin: '4px 0' }}>⚠ No interaction plan returned — generating from image only.</p>
                   )}
                   {plan.contextChunk && (
-                    <details style={{ marginTop: 4 }}>
-                      <summary style={{ fontSize: 11, color: '#888', cursor: 'pointer' }}>Context chunk</summary>
-                      <pre style={styles.planContext}>{plan.contextChunk.slice(0, 2000)}</pre>
+                    <details style={{ marginTop: 8 }}>
+                      <summary style={{ fontSize: 11, color: '#aaa', cursor: 'pointer', userSelect: 'none' }}>Show textbook context</summary>
+                      <pre style={styles.planContext}>{plan.contextChunk.slice(0, 1500)}</pre>
                     </details>
                   )}
                 </>
@@ -639,15 +641,33 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, p
 
                   {/* Show each active figure */}
                   {chapterProgress.active?.map(a => (
-                    <div key={a.figureStem} style={{ marginBottom: 10, padding: '6px 8px', background: '#f8faff', borderRadius: 6, border: '1px solid #e0e8f0' }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#333', marginBottom: 4 }}>
-                        {a.phase === 'planning' ? '⏳' : '🔄'} {a.figureStem} — {a.phase}
+                    <div key={a.figureStem} style={{ marginBottom: 10, padding: '8px 10px', background: '#f8faff', borderRadius: 6, border: '1px solid #e0e8f0' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>
+                          {a.phase === 'planning' ? '⏳' : '🔄'} {a.figureStem} — {a.phase}
+                        </span>
+                        {a.plan?.chapterName && <span style={styles.planChapter}>Chapter: {a.plan.chapterName}</span>}
                       </div>
                       {a.plan?.interactionPlan?.concept && (
-                        <p style={{ ...styles.planConcept, margin: '2px 0' }}>{a.plan.interactionPlan.concept}</p>
+                        <p style={styles.planConcept}>{a.plan.interactionPlan.concept}</p>
                       )}
                       {a.plan?.interactionPlan?.elements?.length > 0 && (
-                        <span style={{ fontSize: 11, color: '#666' }}>{a.plan.interactionPlan.elements.join(', ')}</span>
+                        <div style={{ marginBottom: 6 }}>
+                          <span style={styles.planSubhead}>Elements:</span>
+                          <span style={styles.planList}>{a.plan.interactionPlan.elements.join(', ')}</span>
+                        </div>
+                      )}
+                      {a.plan?.interactionPlan?.interactions?.length > 0 && (
+                        <div style={{ marginBottom: 4 }}>
+                          <span style={styles.planSubhead}>Interactions:</span>
+                          {a.plan.interactionPlan.interactions.map((inter, i) => (
+                            <div key={i} style={styles.planInteraction}>
+                              <span style={styles.planInterType}>{inter.type}</span>
+                              <span style={styles.planInterLabel}>{inter.label}</span>
+                              <span style={styles.planInterTeaches}>— {inter.teaches}</span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
                   ))}
@@ -880,84 +900,6 @@ function EvaluationPanel({ evaluation, evaluating, onEvaluate, canEvaluate }) {
   );
 }
 
-// ── History Tab ───────────────────────────────────────────────────────────────
-function HistoryTab({ onLoad, onDelete }) {
-  const [records, setRecords] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState('');
-
-  React.useEffect(() => {
-    fetch('/api/history')
-      .then((r) => r.json())
-      .then((data) => { setRecords(data); setLoading(false); })
-      .catch((err) => { setError(err.message); setLoading(false); });
-  }, []);
-
-  const handleCardClick = async (id) => {
-    try {
-      const res = await fetch(`/api/result/${id}`);
-      const record = await res.json();
-      onLoad(record);
-    } catch (err) {
-      alert('Failed to load result: ' + err.message);
-    }
-  };
-
-  const handleDelete = async (e, id) => {
-    e.stopPropagation(); // prevent card click / load
-    if (!window.confirm('Delete this figure?')) return;
-    await onDelete(id);
-    setRecords((prev) => prev.filter((r) => r.id !== id));
-  };
-
-  if (loading) return <div style={styles.empty}>Loading history…</div>;
-  if (error) return <div style={styles.empty}>{error}</div>;
-  if (!records.length) return <div style={styles.empty}>No figures generated yet.</div>;
-
-  return (
-    <div style={styles.historyGrid}>
-      {records.map((r) => (
-        <div key={r.id} style={styles.card} onClick={() => handleCardClick(r.id)}>
-          <div style={{ position: 'relative' }}>
-            <img
-              src={`data:image/png;base64,${r.base64thumb}`}
-              alt={r.filename}
-              style={styles.cardThumb}
-            />
-            <button
-              style={styles.cardDeleteBtn}
-              onClick={(e) => handleDelete(e, r.id)}
-              title="Delete"
-            >
-              ✕
-            </button>
-          </div>
-          <div style={styles.cardInfo}>
-            <p style={styles.cardFilename}>{r.filename}</p>
-            <p style={styles.cardTs}>{new Date(r.timestamp).toLocaleString()}</p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
-              <span style={{ ...styles.sourceBadge, ...(r.source === 'chat' ? styles.sourceBadgeChat : styles.sourceBadgeApi) }}>
-                {r.source === 'chat' ? 'Chat' : 'API'}
-              </span>
-              {r.evaluation ? (
-                <span style={{
-                  ...styles.sourceBadge,
-                  background: r.evaluation.overall_average >= 4 ? '#e8f5e9' : r.evaluation.overall_average >= 3 ? '#fff3e0' : '#ffebee',
-                  color: r.evaluation.overall_average >= 4 ? '#2e7d32' : r.evaluation.overall_average >= 3 ? '#e65100' : '#c00',
-                }}>
-                  {r.evaluation.overall_average}/5
-                </span>
-              ) : (
-                <span style={{ ...styles.sourceBadge, background: '#f5f5f5', color: '#bbb' }}>not evaluated</span>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── LazyThumb — fetches experiment screenshot on first render ─────────────────
 function LazyThumb({ htmlPath, style }) {
   const [src, setSrc] = React.useState(null);
@@ -1037,7 +979,6 @@ function ResultsTab({ onOpen }) {
   const [selected, setSelected] = React.useState(null);
   const [evaluatingKey, setEvaluatingKey] = React.useState(null);
   const [evaluatingAll, setEvaluatingAll] = React.useState(null); // chapter being batch-evaluated
-  const [codePanelTab, setCodePanelTab] = React.useState('prompt');
   const [baseScaffold, setBaseScaffold] = React.useState(null);
   const [openChapters, setOpenChapters] = React.useState(new Set());
   const [filterChapter, setFilterChapter] = React.useState('');
@@ -1051,12 +992,6 @@ function ResultsTab({ onOpen }) {
   React.useEffect(() => {
     fetch('/api/prompt').then(r => r.json()).then(d => { if (d.prompt) setServerPrompt(d.prompt); }).catch(() => {});
   }, []);
-
-  // Reset open chapters whenever selection changes
-  React.useEffect(() => {
-    const keys = Object.keys(byChapter);
-    setOpenChapters(new Set(keys));
-  }, [selected]);
 
   // Reset chapter/figure filters when selection or active tab changes
   React.useEffect(() => {
@@ -1173,6 +1108,23 @@ function ResultsTab({ onOpen }) {
         .map(([ch, its]) => [ch, its.sort((a, b) => a.figure.localeCompare(b.figure) || (a.genIndex || 0) - (b.genIndex || 0))])
     );
   }, [selectedItems]);
+
+  // Reset open chapters whenever selection changes
+  React.useEffect(() => {
+    const keys = Object.keys(byChapter);
+    setOpenChapters(new Set(keys));
+  }, [selected, byChapter]);
+
+  const handleDeleteCard = async (e, item) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this figure?')) return;
+    try {
+      if (item.type === 'api') {
+        await fetch(`/api/result/${item.id}`, { method: 'DELETE' });
+        setApiRecords(prev => prev.filter(r => r.id !== item.id));
+      }
+    } catch (err) { console.error('Delete failed:', err); }
+  };
 
   const handleEvalCard = async (e, item) => {
     e.stopPropagation();
@@ -1512,7 +1464,6 @@ function ResultsTab({ onOpen }) {
                   <div style={{ ...styles.historyGrid, marginTop: 10 }}>
                     {items.map(item => {
                       const ev = item.evaluation;
-                      const isEval = evaluatingKey === item.key;
                       return (
                         <div key={item.key} style={styles.card} onClick={() => onOpen(item)}>
                           <div style={{ position: 'relative' }}>
@@ -1520,6 +1471,13 @@ function ResultsTab({ onOpen }) {
                               ? <LazyApiThumb id={item.id} base64thumb={item.base64thumb} mediaType={item.mediaType} style={styles.cardThumb} />
                               : <LazyThumb htmlPath={item.htmlPath} style={styles.cardThumb} />
                             }
+                            {item.type === 'api' && (
+                              <button
+                                style={styles.cardDeleteBtn}
+                                onClick={e => handleDeleteCard(e, item)}
+                                title="Delete"
+                              >✕</button>
+                            )}
                           </div>
                           <div style={styles.cardInfo}>
                             <p style={styles.cardFilename}>{item.figure}{item.genTotal > 1 && <span style={{ marginLeft: 5, fontSize: 9, background: '#e3e8f0', color: '#556', borderRadius: 6, padding: '1px 5px', fontWeight: 500 }}>g{item.genIndex}</span>}</p>
@@ -1870,7 +1828,7 @@ const styles = {
   cardInfo: { padding: '8px 10px' },
   cardFilename: { fontSize: 12, fontWeight: 600, margin: '0 0 3px', color: '#222', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   cardTs: { fontSize: 10, color: '#aaa', margin: 0 },
-  cardDeleteBtn: { position: 'absolute', top: 5, right: 5, width: 22, height: 22, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.4)', color: '#fff', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  cardDeleteBtn: { position: 'absolute', top: 4, right: 6, background: 'none', border: 'none', color: '#999', fontSize: 13, cursor: 'pointer', padding: 0, lineHeight: 1 },
 
   empty: { textAlign: 'center', color: '#aaa', marginTop: 80, fontSize: 15 },
   sourceBadge: { display: 'inline-block', fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 8 },
@@ -1930,7 +1888,7 @@ const styles = {
   planInterType: { fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 3, background: '#e3ecf7', color: '#2a5a94' },
   planInterLabel: { fontSize: 12, color: '#333', fontWeight: 500 },
   planInterTeaches: { fontSize: 11, color: '#888' },
-  planContext: { fontSize: 10, color: '#888', background: '#fff', border: '1px solid #e8e8e8', borderRadius: 4, padding: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 200, overflowY: 'auto', marginTop: 4 },
+  planContext: { fontSize: 10, color: '#999', background: '#fff', border: '1px solid #e8e8e8', borderRadius: 4, padding: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 150, overflowY: 'auto', marginTop: 4 },
 
   // Mode toggle
   modeBtn: { padding: '6px 16px', borderRadius: 6, border: '1px solid #ddd', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 13, fontWeight: 500 },

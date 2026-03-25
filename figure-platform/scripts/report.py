@@ -25,6 +25,9 @@ FIGURES_DIR = os.path.join(BASE, '..', 'figures')
 METRICS = ['Geometry Accuracy', 'Interactivity & Usability', 'Faithfulness', 'Label Quality', 'Concept Accuracy']
 METRIC_SHORT = ['Geom', 'Interact', 'Faith', 'Labels', 'Concept']
 
+# Define CHART_JS at the top level for global access
+CHART_JS = "https://cdn.jsdelivr.net/npm/chart.js"
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def safe_avg(lst):
     vals = [v for v in lst if isinstance(v, (int, float))]
@@ -244,7 +247,9 @@ def html_header():
     .section{page-break-inside:avoid}
     .cover{page-break-after:always}
   }
+  .chart-fig-cap{font-size:8pt;text-transform:uppercase;letter-spacing:.07em;color:#666;font-weight:700;margin-bottom:8px}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 </head>
 <body><div class="page">
 '''
@@ -673,35 +678,83 @@ def section_ai_critic(ai_results):
     if not ai_results:
       return '<h2>8. AI Critic Evaluation</h2><p>No AI critic results found in results/ directory.</p>'
 
-    rows = ''
-    for r in sorted(ai_results, key=lambda x: -(x['overall'] or 0)):
-        metrics = [r.get('geometry'), r.get('interactivity'), r.get('faithfulness'), r.get('label_quality'), r.get('concept_accuracy')]
-        fail_tags = ' '.join(f'<span class="tag">{f}</span>' for f in (r.get('failures') or []))
-        rows += f'''<tr style="vertical-align:top">
-          <td style="font-size:9pt;font-weight:600;padding:4px 8px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{r['filename']}">{r["filename"]}</td>
-          <td style="padding:4px 8px"><span class="model-name">{r["model"]}</span></td>
-          <td style="text-align:center;padding:4px 8px">{render_score_badge(r["overall"])}</td>
-          {render_metric_cells(metrics, padding='4px 8px')}
-          <td style="font-size:8pt;max-width:260px;white-space:normal;line-height:1.6;padding:4px 8px">{fail_tags}</td>
-        </tr>'''
+    # Aggregate by model
+    from collections import defaultdict as _dd
+    model_buckets = _dd(lambda: {'overall':[], 'geometry':[], 'interactivity':[], 'faithfulness':[], 'label_quality':[], 'concept_accuracy':[], 'fails': []})
+    for r in ai_results:
+        m = r['model']
+        for k in ['overall','geometry','interactivity','faithfulness','label_quality','concept_accuracy']:
+            v = r.get(k)
+            if isinstance(v, (int, float)):
+                model_buckets[m][k].append(v)
+        model_buckets[m]['fails'].extend(r.get('failures') or [])
+
+    metric_keys  = ['geometry','interactivity','faithfulness','label_quality','concept_accuracy']
+    metric_names = ['Geometry','Interact.','Faithfulness','Labels','Concept']
+    models_sorted = sorted(model_buckets.keys(), key=lambda m: -safe_avg(model_buckets[m]['overall']))
 
     ai_avg = safe_avg([r['overall'] for r in ai_results if r['overall']])
+
+    # Build summary table rows
+    summary_rows = ''
+    for m in models_sorted:
+        b = model_buckets[m]
+        n = len(b['overall'])
+        ovr = safe_avg(b['overall'])
+        worst_metric = min(metric_keys, key=lambda k: safe_avg(b[k]) or 99)
+        top_fail = Counter(b['fails']).most_common(1)
+        top_fail_str = f'<span class="tag">{top_fail[0][0]}</span> ×{top_fail[0][1]}' if top_fail else '—'
+        summary_rows += f'''<tr>
+          <td><span class="model-name">{m}</span></td>
+          <td style="text-align:right">{n}</td>
+          <td style="text-align:right">{render_score_badge(ovr)}</td>
+          <td style="text-align:right;color:#8b1a1a;font-size:8.5pt">{worst_metric.replace("_"," ")}</td>
+          <td style="font-size:8.5pt">{top_fail_str}</td>
+        </tr>'''
+
+    # Build chart data: grouped bars — one group per model, bars = metrics
+    colors = ['#1f4e8c','#c0392b','#27ae60','#d35400','#8e44ad']
+    datasets = []
+    for i, (mk, mn) in enumerate(zip(metric_keys, metric_names)):
+        vals = json.dumps([round(safe_avg(model_buckets[m][mk]) or 0, 2) for m in models_sorted])
+        datasets.append(f'{{"label":"{mn}","data":{vals},"backgroundColor":"{colors[i]}","borderWidth":0,"borderRadius":0,"barThickness":11}}')
+    chart_labels = json.dumps(models_sorted)
+    datasets_js  = '[' + ','.join(datasets) + ']'
+    chart_h = 220
+
     return f'''
 <h2>8. AI Critic Evaluation (Automated Pipeline)</h2>
-<p style="margin-bottom:12px">Results scored by the automated critic module via <code>critic.js</code> — no human involvement. Group average: {ai_avg:.2f}/5.</p>
-<table style="font-size:9pt;table-layout:fixed;width:100%">
+<p style="margin-bottom:14px">Scores from <code>critic.js</code> — no human involvement. {len(ai_results)} runs across {len(model_buckets)} models. Group average: <strong>{ai_avg:.2f}/5</strong>.</p>
+<div class="chart-fig-cap">Score by metric &amp; model</div>
+<div style="height:{chart_h}px;position:relative;margin-bottom:20px"><canvas id="chartAICritic"></canvas></div>
+<script>
+(function(){{
+  new Chart(document.getElementById('chartAICritic'),{{
+    type:'bar',
+    data:{{labels:{chart_labels},datasets:{datasets_js}}},
+    options:{{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{{
+        legend:{{position:'top',labels:{{font:{{size:8.5}},color:'#222',boxWidth:10,padding:10}}}},
+        tooltip:{{callbacks:{{label:c=>` ${{c.dataset.label}}: ${{c.parsed.y?.toFixed(2)}}`}}}}
+      }},
+      scales:{{
+        x:{{ticks:{{font:{{size:9,family:'"Source Code Pro",monospace'}},color:'#111'}},grid:{{display:false}}}},
+        y:{{min:0,max:5,ticks:{{font:{{size:8.5}},color:'#555',stepSize:1}},grid:{{color:'rgba(0,0,0,0.07)'}},
+           title:{{display:true,text:'Score (1–5)',font:{{size:8}},color:'#666'}}}}
+      }}
+    }}
+  }});
+}})();
+</script>
+<table style="font-size:9pt;margin-bottom:16px">
   <thead><tr>
-    <th style="padding:5px 8px">Figure</th><th style="padding:5px 8px">Generator model</th><th style="text-align:right;padding:5px 8px">Overall</th>
-    <th style="text-align:right;padding:5px 8px">Geom.</th>
-    <th style="text-align:right;padding:5px 8px">Interact.</th>
-    <th style="text-align:right;padding:5px 8px">Faith.</th>
-    <th style="text-align:right;padding:5px 8px">Labels</th>
-    <th style="text-align:right;padding:5px 8px">Concept</th>
-    <th style="padding:5px 8px">Failure modes</th>
+    <th>Model</th><th style="text-align:right">n</th><th style="text-align:right">Overall</th>
+    <th>Weakest metric</th><th>Top failure</th>
   </tr></thead>
-  <tbody>{rows}</tbody>
+  <tbody>{summary_rows}</tbody>
 </table>
-<div class="callout warn"><p>AI critic scores cluster at 1.8–2.2/5 for the gpt-4o baseline — broadly consistent with human evaluation of the same model (1.16/5 human average). The automated critic scores slightly higher, suggesting it may underpenalise subtle geometric and faithfulness errors that human raters detect.</p></div>
+<div class="callout warn"><p>gpt-4o baseline clusters at 1.8–2.2/5, consistent with human evaluation (1.16/5 human avg). The automated critic scores slightly higher, suggesting it underpenalises subtle geometric and faithfulness errors.</p></div>
 '''
 
 def section_comparison(data, ai_results):
@@ -737,28 +790,61 @@ def section_comparison(data, ai_results):
         </tr>'''
 
     mean_diff = safe_avg([d for d in diffs if d is not None])
-    bias_note = ''
     if mean_diff is not None:
         if mean_diff > 0.3:
-            bias_note = f'<div class="callout warn"><p>AI critic scores average +{mean_diff:.2f} higher than human scores on the same figures, indicating the automated critic is systematically lenient. The AI critic does not penalise subtle conceptual errors the way human evaluators do.</p></div>'
+            bias_note = f'AI critic scores average <strong>+{mean_diff:.2f}</strong> higher than human — systematically lenient on subtle geometric and faithfulness errors.'
         elif mean_diff < -0.3:
-            bias_note = f'<div class="callout good"><p>AI critic scores average {mean_diff:.2f} lower than human scores — the automated critic is conservative relative to human raters.</p></div>'
+            bias_note = f'AI critic scores average <strong>{mean_diff:.2f}</strong> lower than human — conservative relative to human raters.'
         else:
-            bias_note = f'<div class="callout good"><p>AI and human scores are closely aligned (mean difference: {mean_diff:+.2f}), suggesting the automated critic pipeline is well-calibrated for this evaluation regime.</p></div>'
+            bias_note = f'AI and human scores closely aligned (mean diff: <strong>{mean_diff:+.2f}</strong>) — critic pipeline well-calibrated for this regime.'
+    else:
+        bias_note = ''
+
+    n_figs = len(set(d["figure"].split("/")[-1] for d, _ in overlaps))
+
+    # Build a compact per-figure table (unique figures, avg human vs avg AI)
+    from collections import defaultdict as _dd2
+    fig_h = _dd2(list)
+    fig_a = _dd2(list)
+    for human_d, ai_r in overlaps:
+        key = human_d["figure"].split("/")[-1]
+        if human_d["overall"]: fig_h[key].append(human_d["overall"])
+        if ai_r["overall"]:    fig_a[key].append(ai_r["overall"])
+
+    trows = ''
+    for fig in sorted(fig_h):
+        h_avg = safe_avg(fig_h[fig])
+        a_avg = safe_avg(fig_a[fig])
+        diff  = round(a_avg - h_avg, 2) if (h_avg and a_avg) else None
+        diff_str = (f'<span class="score score-lo">+{diff:.2f}</span>' if diff and diff > 0.1
+                    else f'<span class="score score-hi">{diff:.2f}</span>' if diff and diff < -0.1
+                    else f'<span class="score score-na">{diff:+.2f}</span>' if diff is not None else '—')
+        trows += f'''<tr>
+          <td><span class="model-name">{fig}</span></td>
+          <td style="text-align:right">{render_score_badge(h_avg)}</td>
+          <td style="text-align:right">{render_score_badge(a_avg)}</td>
+          <td style="text-align:right">{diff_str}</td>
+        </tr>'''
 
     return f'''
 <h2>9. Human vs. AI Critic Comparison</h2>
-<p style="margin-bottom:12px">{len(set(d["figure"].split("/")[-1] for d, _ in overlaps))} figures evaluated by both human raters and the automated critic. AI critic records are gpt-4o baseline runs with no prompt metadata.</p>
-<table>
-  <thead><tr>
-    <th>Figure</th><th>Model</th><th>Prompt</th>
-    <th style="text-align:right">Human score</th>
-    <th style="text-align:right">AI critic</th>
-    <th style="text-align:right">Difference</th>
-  </tr></thead>
-  <tbody>{rows}</tbody>
-</table>
-{bias_note}
+<div class="grid2" style="align-items:start;gap:32px">
+  <div>
+    <table style="font-size:9.5pt">
+      <thead><tr>
+        <th>Figure</th>
+        <th style="text-align:right">Human avg</th>
+        <th style="text-align:right">AI critic</th>
+        <th style="text-align:right">Diff</th>
+      </tr></thead>
+      <tbody>{trows}</tbody>
+    </table>
+  </div>
+  <div style="padding-top:4px">
+    <p style="font-size:9.5pt;margin-bottom:10px">{n_figs} figures scored by both human raters and the automated critic (gpt-4o baseline, no prompt metadata).</p>
+    <p style="font-size:9.5pt">{bias_note}</p>
+  </div>
+</div>
 '''
 
 def section_findings():
@@ -801,6 +887,74 @@ def section_findings():
 </ol>
 '''
 
+# ── Generate Charts ────────────────────────────────────────────────────────
+def generate_charts(data, model_table, prompt_table):
+    from collections import Counter as _Ctr
+
+    # Chart 1: model scores sorted ascending (best appears at top of horizontal bar)
+    sorted_m = sorted(model_table, key=lambda x: x['overall'])
+    mc_labels = json.dumps([m['model'] for m in sorted_m])
+    mc_data   = json.dumps([round(m['overall'], 2) for m in sorted_m])
+    mc_h      = max(200, len(sorted_m) * 30)
+
+    # Chart 2: top failure modes
+    fail_ctr = _Ctr()
+    for d in data:
+        for f in d['failures']:
+            if f: fail_ctr[f] += 1
+    top8 = fail_ctr.most_common(8)
+    fm_labels = json.dumps([f[0] for f in reversed(top8)])
+    fm_data   = json.dumps([f[1] for f in reversed(top8)])
+    fm_h      = max(200, len(top8) * 30)
+
+    chart_h = max(mc_h, fm_h)
+
+    return f'''
+<h2>11. Visual Summary</h2>
+<p style="margin-bottom:18px">Model ranking and primary failure modes at a glance. Tables in §4 and §6 contain full detail.</p>
+<div class="grid2">
+  <div>
+    <div class="chart-fig-cap">Fig. 1 &mdash; Overall score by model (1&ndash;5)</div>
+    <div style="height:{chart_h}px;position:relative"><canvas id="chartModelScores"></canvas></div>
+  </div>
+  <div>
+    <div class="chart-fig-cap">Fig. 2 &mdash; Top failure modes by frequency</div>
+    <div style="height:{chart_h}px;position:relative"><canvas id="chartFailureModes"></canvas></div>
+  </div>
+</div>
+<script>
+(function(){{
+  const yAx = {{ticks:{{font:{{size:8.5,family:'"Source Code Pro",monospace'}},color:'#222'}},grid:{{display:false}}}};
+  new Chart(document.getElementById('chartModelScores'),{{
+    type:'bar',
+    data:{{labels:{mc_labels},datasets:[{{data:{mc_data},backgroundColor:'#2c4a7c',borderWidth:0,borderRadius:2,barThickness:14}}]}},
+    options:{{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{{legend:{{display:false}},tooltip:{{callbacks:{{label:c=>` ${{c.parsed.x.toFixed(2)}} / 5`}}}}}},
+      scales:{{
+        x:{{min:0,max:5,ticks:{{font:{{size:9}},color:'#555'}},grid:{{color:'rgba(0,0,0,0.06)'}},
+           title:{{display:true,text:'Avg. score (1–5)',font:{{size:8}},color:'#666'}}}},
+        y:yAx
+      }}
+    }}
+  }});
+  new Chart(document.getElementById('chartFailureModes'),{{
+    type:'bar',
+    data:{{labels:{fm_labels},datasets:[{{data:{fm_data},backgroundColor:'#7c2c2c',borderWidth:0,borderRadius:2,barThickness:14}}]}},
+    options:{{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{{legend:{{display:false}},tooltip:{{callbacks:{{label:c=>` ${{c.parsed.x}} occurrences`}}}}}},
+      scales:{{
+        x:{{ticks:{{font:{{size:9}},color:'#555'}},grid:{{color:'rgba(0,0,0,0.06)'}},
+           title:{{display:true,text:'Occurrences',font:{{size:8}},color:'#666'}}}},
+        y:yAx
+      }}
+    }}
+  }});
+}})();
+</script>
+'''
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
@@ -832,6 +986,7 @@ def main():
         section_ai_critic(ai_results) +
         section_comparison(data, ai_results) +
         section_findings() +
+        generate_charts(data, model_table, prompt_table) +
         html_footer()
     )
 

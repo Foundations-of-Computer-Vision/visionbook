@@ -88,27 +88,34 @@ OUTPUT RULES — non-negotiable:
 • It MUST start with exactly: <!DOCTYPE html>
 • It MUST end with exactly: </html>
 • Do NOT truncate. Output every line.
-• Return ONLY a single self-contained HTML file that runs in a modern browser
-  and uses Three.js (ES modules) with OrbitControls.
-• Add a <script type="importmap"> to resolve 'three' and 'three/addons/' to CDN
-  URLs. Use bare specifiers in all imports, e.g.:
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+• Copy the BASE SCAFFOLD below in full, then add your code where indicated.
+• The scaffold already includes the importmap and imports for Three.js + OrbitControls.
+  Do NOT add duplicate <script type="importmap"> or duplicate import statements.
+  If you need additional Three.js addons, import them from 'three/addons/…'.
 
 ────────────────────────────────────────────────────────────────────────────────
-BASE SCAFFOLD — copy this file in full, then add your code inside the existing
-<script type="module"> block, after the animate() call and resize handler.
-Do NOT modify anything already in the scaffold.
+BASE SCAFFOLD — copy this file VERBATIM, then insert your code at the marked
+location: "// ADD YOUR SCENE OBJECTS, GEOMETRY, LABELS, AND INTERACTION LOGIC BELOW HERE"
+Do NOT modify, remove, or re-declare anything already in the scaffold.
 ────────────────────────────────────────────────────────────────────────────────
 ${scaffold}
 ────────────────────────────────────────────────────────────────────────────────
 
-What the scaffold already provides (do NOT re-implement):
-• THREE + OrbitControls via https://esm.sh/three
+What the scaffold already provides (do NOT re-declare or re-implement):
+• THREE + OrbitControls imports via importmap
+• WebGLRenderer on <canvas id="c">
 • Orthographic camera — tune: d (view half-size), camera.position, camera.zoom
 • Damped OrbitControls render loop
-• window resize handler keeping camera + renderer in sync
-• White background, full-page #container div
+• animate() function with requestAnimationFrame + _syncLabels()
+• addLabel(html, position, options?) helper → pushes to _labels[]
+• _syncLabels() called each frame inside animate()
+• ResizeObserver resize handler keeping camera + renderer in sync
+• White background, full-page <canvas id="c">
+
+⚠ CRITICAL — DO NOT redefine any of these identifiers:
+  addLabel, _labels, _syncLabels, animate, renderer, scene, camera, controls, d, aspect
+  Redefining them causes a SyntaxError or silently breaks the scene.
+  Just CALL them and ADD new objects to scene.
 
 YOUR TASK — extend the scaffold for the uploaded figure:
 
@@ -139,58 +146,42 @@ STEP 3 · LABELS — THIS IS CRITICAL, follow exactly:
         reproduce the EXACT names from the figure.
       • Missing or mislabeled text is a critical failure.
 
-  3b. REQUIRED CSS — add this block inside <style>:
-      .label {
-        position: absolute;
-        font-family: sans-serif;
-        font-size: 20px;
-        font-weight: bold;
-        color: #000;
-        pointer-events: none;
-        transform: translate(-50%, -50%);
-        white-space: nowrap;
-        z-index: 1;
-      }
-      .label-minor {
-        font-size: 14px;
-        font-weight: normal;
-      }
+  3b. USE THE SCAFFOLD'S LABEL SYSTEM — do NOT create your own.
+      The scaffold already provides addLabel() and _syncLabels(). Call the
+      scaffold's addLabel exactly like this:
 
-  3c. REQUIRED JS HELPER — use this exact pattern:
-      const labels = [];
-      function addLabel(html, pos, minor) {
-        const div = document.createElement('div');
-        div.className = 'label' + (minor ? ' label-minor' : '');
-        div.innerHTML = html;
-        document.body.appendChild(div);
-        labels.push({ div, pos: pos.clone() });
-      }
+        addLabel('x<sub>1</sub>', new THREE.Vector3(5, 0, 0), { bold: true });
+        addLabel('origin',        new THREE.Vector3(0, 0, 0), { fontSize: '11px', color: '#888' });
 
-  3d. REQUIRED UPDATE LOOP — call updateLabels() inside animate():
-      function updateLabels() {
-        const v = new THREE.Vector3();
-        labels.forEach(({ div, pos }) => {
-          v.copy(pos).project(camera);
-          div.style.left = (( v.x * 0.5 + 0.5) * window.innerWidth)  + 'px';
-          div.style.top  = ((-v.y * 0.5 + 0.5) * window.innerHeight) + 'px';
-        });
-      }
+      Signature:  addLabel(htmlString, THREE.Vector3, options?)
+        options.color      – css color   (default '#111')
+        options.fontSize   – css string  (default '13px')
+        options.bold       – boolean     (default false)
+        options.offset     – [dx,dy] px  (default [0,0])
+        options.background – css string  (default 'none')
 
-  3e. LABEL CONTENT RULES:
+      ⚠ DO NOT redefine addLabel, _syncLabels, _labels, updateLabels, or animate.
+        They already exist in the scaffold. Redefining them causes fatal JS errors.
+        Just CALL addLabel() in your code below the scaffold marker comment.
+
+  3c. LABEL CONTENT RULES:
       • Use HTML entities for maths: 'x<sub>1</sub>', '&theta;', '&lambda;',
         '<i>f</i>', '&pi;', 'R<sup>2</sup>', '&#x2192;' (arrow).
       • Offset label positions 0.15–0.25 units away from their anchor point
         so text does not overlap geometry.
-      • Use addLabel(text, pos, true) for secondary/minor annotations.
       • Every axis arrow MUST have a label at its tip.
       • Every named point, vector, plane, or region in the figure MUST have a label.
 
-STEP 4 · INTERACTIVITY — add 2–5 controls in a fixed UI panel (position:absolute, top:10px, left:10px):
+STEP 4 · INTERACTIVITY — add 2–5 controls in the #ui div (which already exists):
   • Step-through buttons — animate a process stage by stage
   • Parameter sliders    — let the user vary a quantity and see the effect
   • Toggle buttons       — show/hide elements
   • Animate button       — run a looping demonstration
-  • Always include a Reset View button that restores the original camera position
+  • The Reset View button already exists — do NOT create a second one.
+  • Do NOT redefine animate(). To add per-frame logic, use a separate
+    function and call it from a setInterval or from the controls 'change'
+    event, or just modify objects inline — the scaffold's animate loop
+    continuously re-renders.
 
 STEP 5 · CODE STYLE
   • Add brief JS comments explaining what each block of code teaches.
@@ -214,6 +205,73 @@ function stripFences(text) {
     .replace(/^```\s*/i, '')
     .replace(/```\s*$/i, '')
     .trim();
+}
+
+// ── Post-process: fix common model mistakes that cause blank scenes ──────────
+function fixGeneratedHtml(html) {
+  let fixed = html;
+  let fixes = [];
+
+  // 1. Remove duplicate addLabel redeclarations (model re-implements scaffold's addLabel)
+  //    The scaffold's addLabel is the FIRST one; remove any subsequent re-declarations.
+  const addLabelDupes = [...fixed.matchAll(/^[ \t]*(function addLabel\b[^{]*\{)/gm)];
+  if (addLabelDupes.length > 1) {
+    // Keep the first (scaffold), remove subsequent ones with their body
+    for (let i = addLabelDupes.length - 1; i >= 1; i--) {
+      const start = addLabelDupes[i].index;
+      // Find matching closing brace
+      let depth = 0, end = start;
+      for (let j = fixed.indexOf('{', start); j < fixed.length; j++) {
+        if (fixed[j] === '{') depth++;
+        if (fixed[j] === '}') { depth--; if (depth === 0) { end = j + 1; break; } }
+      }
+      fixed = fixed.slice(0, start) + '// [auto-removed duplicate addLabel]\n' + fixed.slice(end);
+      fixes.push('removed duplicate addLabel at char ' + start);
+    }
+  }
+
+  // 2. Remove duplicate animate() redeclarations
+  const animDupes = [...fixed.matchAll(/^[ \t]*(function animate\b[^{]*\{)/gm)];
+  if (animDupes.length > 1) {
+    for (let i = animDupes.length - 1; i >= 1; i--) {
+      const start = animDupes[i].index;
+      let depth = 0, end = start;
+      for (let j = fixed.indexOf('{', start); j < fixed.length; j++) {
+        if (fixed[j] === '{') depth++;
+        if (fixed[j] === '}') { depth--; if (depth === 0) { end = j + 1; break; } }
+      }
+      fixed = fixed.slice(0, start) + '// [auto-removed duplicate animate]\n' + fixed.slice(end);
+      fixes.push('removed duplicate animate at char ' + start);
+    }
+  }
+
+  // 3. Remove duplicate updateLabels() that the model creates alongside _syncLabels
+  const updateLabelsDupes = [...fixed.matchAll(/^[ \t]*(function updateLabels\b[^{]*\{)/gm)];
+  if (updateLabelsDupes.length > 0) {
+    for (let i = updateLabelsDupes.length - 1; i >= 0; i--) {
+      const start = updateLabelsDupes[i].index;
+      let depth = 0, end = start;
+      for (let j = fixed.indexOf('{', start); j < fixed.length; j++) {
+        if (fixed[j] === '{') depth++;
+        if (fixed[j] === '}') { depth--; if (depth === 0) { end = j + 1; break; } }
+      }
+      fixed = fixed.slice(0, start) + '// [auto-removed conflicting updateLabels]\n' + fixed.slice(end);
+      fixes.push('removed conflicting updateLabels');
+    }
+  }
+
+  // 4. Fix model's label calls that use old 2-arg style: addLabel(html, pos, true)
+  //    Convert to scaffold API: addLabel(html, pos, { fontSize: '11px' })
+  fixed = fixed.replace(/addLabel\(([^,]+),\s*([^,]+),\s*true\s*\)/g,
+    "addLabel($1, $2, { fontSize: '11px' })");
+
+  // 5. If model created its own `const labels = [];`, remove it (scaffold uses _labels)
+  fixed = fixed.replace(/^[ \t]*const labels\s*=\s*\[\s*\]\s*;?\s*$/gm, '// [auto-removed: scaffold uses _labels]');
+
+  if (fixes.length) {
+    console.log('[fixGeneratedHtml]', fixes.join('; '));
+  }
+  return fixed;
 }
 
 // ── Helper: generate a simple unique id ───────────────────────────────────────
@@ -354,6 +412,7 @@ app.post('/api/generate', async (req, res) => {
       maxTokens: 16384,
     }));
     html = stripFences(html);
+    html = fixGeneratedHtml(html);
 
     // If the model still refused to output HTML, surface a clear error
     if (!html.trimStart().startsWith('<')) {
@@ -828,6 +887,14 @@ app.post('/api/experiments/evaluate', async (req, res) => {
     return res.status(500).json({ error: err?.message || 'Unknown error.' });
   }
 });
+
+// ── Serve React build in production ───────────────────────────────────────────
+const frontendBuild = path.join(__dirname, '..', 'frontend', 'build');
+if (fs.existsSync(frontendBuild)) {
+  app.use(express.static(frontendBuild));
+  app.get('*', (req, res) => res.sendFile(path.join(frontendBuild, 'index.html')));
+  console.log('Serving React build from', frontendBuild);
+}
 
 // ── Start server ──────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
