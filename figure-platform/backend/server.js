@@ -347,13 +347,13 @@ app.post('/api/plan-chapter', async (req, res) => {
   }
 });
 
-// ── Retry helper for transient OpenAI connection errors ───────────────────────
+// ── Retry helper for transient provider/network errors ───────────────────────
 async function withRetry(fn, { retries = 2, baseDelay = 2000 } = {}) {
   for (let attempt = 0; ; attempt++) {
     try {
       return await fn();
     } catch (err) {
-      const isRetryable = /connection error|ECONNRESET|ETIMEDOUT|socket hang up/i.test(err?.message || '');
+      const isRetryable = /fetch failed|connection error|ECONNRESET|ETIMEDOUT|socket hang up|EAI_AGAIN|ENOTFOUND|429|503/i.test(err?.message || '');
       if (isRetryable && attempt < retries) {
         const delay = baseDelay * Math.pow(2, attempt);
         console.warn(`Retryable error (attempt ${attempt + 1}/${retries}): ${err.message}. Retrying in ${delay}ms…`);
@@ -387,6 +387,9 @@ app.post('/api/generate', async (req, res) => {
 
   // Use the model requested by the frontend, or fall back to the server default
   const modelId = requestedModel || CURRENT_MODEL;
+  if (!requestedModel) {
+    console.warn(`[generate] no model provided by client; falling back to default "${CURRENT_MODEL}"`);
+  }
   console.log(`[generate] requested="${requestedModel}" → using="${modelId}" | file=${filename}`);
 
   try {
@@ -456,7 +459,7 @@ app.post('/api/generate', async (req, res) => {
       console.warn('Auto-eval failed (result saved without scores):', evalErr.message);
     }
 
-    return res.json({ html, figureId, timestamp, evaluation });
+    return res.json({ html, figureId, timestamp, model: modelId, evaluation });
   } catch (err) {
     console.error(`Generation error (${modelId}):`, err?.message || err);
     return res.status(500).json({ error: err?.message || `Unknown error from model ${modelId}.` });

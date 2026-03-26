@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 
 const FALLBACK_PROMPT = '(Loading system prompt from server…)';
+const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
 
 export default function App() {
   const [tab, setTab] = useState('generator');
@@ -14,20 +15,29 @@ export default function App() {
 
   // Fetch the real system prompt + available models from the backend on mount
   useEffect(() => {
-    fetch('/api/prompt')
-      .then(r => r.json())
-      .then(d => { if (d.prompt) setSystemPrompt(d.prompt); })
-      .catch(() => {});
-    fetch('/api/models')
-      .then(r => r.json())
-      .then(list => {
-        setModels(list);
-        // Default to the first model in the list (server default)
-        if (list.length > 0) setSelectedModel(prev => prev || list[0].id);
-      })
-      .catch(() => {});
+    Promise.all([
+      fetch('/api/prompt').then(r => r.json()).catch(() => ({})),
+      fetch('/api/models').then(r => r.json()).catch(() => ([])),
+    ]).then(([promptData, list]) => {
+      if (promptData.prompt) setSystemPrompt(promptData.prompt);
+      setModels(list);
+
+      if (list.length === 0) return;
+
+      const storedModel = window.localStorage.getItem(MODEL_STORAGE_KEY);
+      const preferredModel = [storedModel, promptData.model, list[0]?.id]
+        .find(modelId => modelId && list.some(m => m.id === modelId));
+
+      if (preferredModel) setSelectedModel(preferredModel);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);  const [currentRecord, setCurrentRecord] = useState(null); // full record from history
+  }, []);
+
+  const [currentRecord, setCurrentRecord] = useState(null); // full record from history
+  useEffect(() => {
+    if (selectedModel) window.localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
+  }, [selectedModel]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [evaluation, setEvaluation] = useState(null);
@@ -45,6 +55,10 @@ export default function App() {
   // Single Generate button: plan first (fast), then generate (slow) — fully automated
   const handleGenerate = useCallback(async () => {
     if (!image) return;
+    if (!selectedModel) {
+      setError('Choose a generator model first.');
+      return;
+    }
     setError('');
 
     // Step 1: Plan (fast ~2-3s)
@@ -95,6 +109,7 @@ export default function App() {
         base64thumb: image.base64,
         mediaType: image.mediaType,
         timestamp: data.timestamp,
+        model: data.model,
         evaluation: data.evaluation || null,
       });
       setTab('viewer');
@@ -210,6 +225,7 @@ export default function App() {
             image={image}
             onImageSelected={handleImageSelected}
             onGenerate={handleGenerate}
+            onError={setError}
             loading={loading}
             planning={planning}
             plan={plan}
@@ -243,7 +259,7 @@ export default function App() {
 }
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, plan, error, systemPrompt, models, selectedModel, onModelChange }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, selectedModel, onModelChange }) {
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
@@ -318,6 +334,10 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, p
 
   const handleRunChapter = async () => {
     if (!selectedChapter || chapterCandidates.length === 0) return;
+    if (!selectedModel) {
+      onError?.('Choose a generator model first.');
+      return;
+    }
     setChapterRunning(true);
     setChapterResults([]);
     chapterAbortRef.current = false;
@@ -533,9 +553,9 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, p
           )}
 
           <button
-            style={{ ...styles.generateBtn, ...(loading || planning || !image ? styles.generateBtnDisabled : {}) }}
+            style={{ ...styles.generateBtn, ...(loading || planning || !image || !selectedModel ? styles.generateBtnDisabled : {}) }}
             onClick={onGenerate}
-            disabled={loading || planning || !image}
+            disabled={loading || planning || !image || !selectedModel}
           >
             {planning ? 'Planning…' : loading ? 'Generating — this may take 30-60s…' : 'Generate 3D Figure'}
           </button>
@@ -608,8 +628,9 @@ function GeneratorTab({ image, onImageSelected, onGenerate, loading, planning, p
               {/* Generate All / Stop button */}
               {!chapterRunning ? (
                 <button
-                  style={{ ...styles.generateBtn, marginTop: 12 }}
+                  style={{ ...styles.generateBtn, marginTop: 12, ...(!selectedModel ? styles.generateBtnDisabled : {}) }}
                   onClick={handleRunChapter}
+                  disabled={!selectedModel}
                 >
                   Generate All {chapterCandidates.length} Figures
                 </button>

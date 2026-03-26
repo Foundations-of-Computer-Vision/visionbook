@@ -37,6 +37,10 @@ function getOpenAI() {
 }
 
 const PLANNER_MODEL = 'gpt-5.4';
+// gpt-5.4 is a reasoning model — it spends hidden "thinking" tokens before
+// producing output. max_completion_tokens covers BOTH thinking + output, so
+// 400 is never enough. Use 4000 to give ~2-3k for reasoning + ~1k for output.
+const PLANNER_MAX_TOKENS = 4000;
 
 // ── Context extraction ─────────────────────────────────────────────────────────
 
@@ -168,7 +172,7 @@ Rules:
 async function generateInteractionPlan(contextChunk, figureStem) {
   const response = await getOpenAI().chat.completions.create({
     model: PLANNER_MODEL,
-    max_completion_tokens: 400,
+    max_completion_tokens: PLANNER_MAX_TOKENS,
     messages: [
       { role: 'system', content: PLAN_SYSTEM_PROMPT },
       {
