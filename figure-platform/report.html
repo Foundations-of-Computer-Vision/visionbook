@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Interactive 3D Figures — Progress Report</title>
+<title>FiguresLLM — Progress Report</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Source+Code+Pro:wght@400;600&display=swap');
   *{box-sizing:border-box;margin:0;padding:0}
@@ -94,10 +94,10 @@
 <body><div class="page">
 
 <div class="cover">
-  <div class="cover-title">Interactive 3D Figures<br>Progress Report</div>
+  <div class="cover-title">FiguresLLM<br>Progress Report</div>
   <div class="cover-subtitle">Agentic LLM pipeline for generating interactive 3D visualizations from 2D textbook figures</div>
   <div class="cover-meta">
-    <span><strong>Date</strong>March 25, 2026</span>
+    <span><strong>Date</strong>March 26, 2026</span>
     <span><strong>Study period</strong>February 9 – March 9, 2026</span>
     <span><strong>Status</strong>Active — data collection phase</span>
     <span><strong>Document type</strong>Internal progress report</span>
@@ -149,21 +149,25 @@ dominate:</p>
 <h2>2. Pipeline Architecture and Current Stage</h2>
 
 <h3>Current pipeline (implemented)</h3>
-<p>The system currently implements a three-stage agentic loop:</p>
+<p>The system implements a four-stage agentic loop:</p>
 
 <div style="margin:16px 0 20px;padding:16px 20px;border:1px solid #ccc">
   <div style="display:flex;align-items:flex-start;gap:0;font-size:9.5pt">
     <div style="flex:1;padding-right:16px;border-right:1px solid #ddd">
-      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">1 &mdash; Generator</div>
-      <p style="margin:0">An LLM receives the source figure image plus a structured prompt (optionally including chapter QMD source and a Three.js base scaffold). Outputs a complete, self-contained HTML file with embedded Three.js scene.</p>
+      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">1 &mdash; Planner</div>
+      <p style="margin:0">Reads the chapter QMD and figure image. Produces a structured spec: what to make interactive, required labels, camera intent.</p>
     </div>
     <div style="flex:1;padding:0 16px;border-right:1px solid #ddd">
-      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">2 &mdash; Critic</div>
-      <p style="margin:0">A separate LLM instance evaluates the output against five quality metrics and a structured failure-mode taxonomy (10+ categories). Returns a JSON critique with scores and specific defect descriptions.</p>
+      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">2 &mdash; Generator</div>
+      <p style="margin:0">Receives the figure image, Planner spec, and optional Three.js scaffold. Outputs a self-contained HTML/Three.js scene.</p>
+    </div>
+    <div style="flex:1;padding:0 16px;border-right:1px solid #ddd">
+      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">3 &mdash; Critic</div>
+      <p style="margin:0">Scores the output on five metrics against a 10+ category failure taxonomy. Returns a structured JSON critique.</p>
     </div>
     <div style="flex:1;padding-left:16px">
-      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">3 &mdash; Refinement loop</div>
-      <p style="margin:0">The critic feedback is injected into the next generation prompt. The loop repeats until a quality threshold is reached or a maximum round count is exceeded. Human evaluators periodically score final outputs.</p>
+      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">4 &mdash; Refinement</div>
+      <p style="margin:0">Critic feedback is fed back into the next generation prompt. Repeats until a score threshold or round limit is reached.</p>
     </div>
   </div>
 </div>
@@ -173,7 +177,7 @@ dominate:</p>
 models and prompts were selected and run by hand, outputs were scored by a single human evaluator per session, and
 results were logged in a tracking spreadsheet. This approach yielded the 153-row dataset analysed below.</p>
 <p>The project is now transitioning toward <strong>fully automated batch evaluation</strong> via the <span class="model-name">agent.js</span>
-CLI, which orchestrates the Generator–Critic loop without human intervention and logs structured JSON results
+CLI, which orchestrates the full loop without human intervention and logs structured JSON results
 automatically. This shift is intended to enable evaluation at the scale of the full 2,377-figure corpus.</p>
 
 <div class="callout note">
@@ -183,122 +187,81 @@ automatically. This shift is intended to enable evaluation at the scale of the f
   background batch job.</p>
 </div>
 
-<h3>Future pipeline extensions (planned)</h3>
-<p>Two extensions are under consideration to address the core failure modes identified in this study:</p>
-<ul style="margin:8px 0 12px 20px;line-height:1.9">
-  <li><strong>Interaction Planner agent.</strong> A dedicated upstream stage that parses the chapter source (QMD/LaTeX)
-  and the figure&#39;s pedagogical context to determine <em>what</em> should be interactive, <em>what parameters</em> the
-  user should be able to control, and which labels and annotations are factually required. This agent would produce a
-  structured specification that the Generator follows, reducing concept hallucination and label errors. A verification
-  pass would check for factual inconsistencies before passing the spec to the Generator.</li>
-  <li><strong>Interaction quality oracle.</strong> A specialised critic module focused solely on interaction design:
-  whether controls are within bounds, whether the interaction reveals the intended concept, and whether the initial
-  camera view is pedagogically correct. This addresses the two highest-frequency failure modes (Initial-View-Wrong
-  and Missing/Bad Labels).</li>
-</ul>
-
-<h2>3. Study at a Glance</h2>
-
-<div class="stats-strip">
-  <div class="stat-cell">
-    <span class="stat-num">2,377</span>
-    <span class="stat-label">Source figures</span>
-    <span class="stat-sub">54 chapters</span>
-  </div>
-  <div class="stat-cell">
-    <span class="stat-num">153</span>
-    <span class="stat-label">Human evaluations</span>
-    <span class="stat-sub">124 scored · 29 render fail</span>
-  </div>
-  <div class="stat-cell">
-    <span class="stat-num">12</span>
-    <span class="stat-label">Models tested</span>
-    <span class="stat-sub">4 prompt variants</span>
-  </div>
-  <div class="stat-cell">
-    <span class="stat-num">9</span>
-    <span class="stat-label">Figures evaluated</span>
-    <span class="stat-sub">5 weeks of study</span>
-  </div>
-  <div class="stat-cell">
-    <span class="stat-num">55</span>
-    <span class="stat-label">AI critic scores</span>
-    <span class="stat-sub">automated pipeline</span>
-  </div>
-</div>
-
-<p>The evaluation study ran from February 9 to March 9, 2026 across 12 models and 4 prompt variants.
-All 153 human evaluations were conducted on 9 figures drawn from two chapters of the corpus
-(homographies and imaging). The 55 AI critic scores provide an automated baseline against the same figure set.
-Corpus coverage currently stands at 0.4% of the 2,377-figure corpus.</p>
-
 <h2>4. Human Evaluation — Model Comparison</h2>
-<p style="margin-bottom:12px">Scores are human ratings on a 1–5 scale. Prompt filter: <span class="prompt-name">limit_qmd, one_line, with_reqs</span>. Models ranked by overall average across all five quality dimensions.</p>
-<table>
+<p style="margin-bottom:14px">Human ratings (1–5 scale). Prompt filter: <span class="prompt-name">limit_qmd, one_line, with_reqs</span>. Ranked by overall average.</p>
+<div class="chart-fig-cap">Score by metric &amp; model</div>
+<div style="height:220px;position:relative;margin-bottom:20px"><canvas id="chartHumanModel"></canvas></div>
+<script>
+(function(){
+  new Chart(document.getElementById('chartHumanModel'),{
+    type:'bar',
+    data:{labels:["gpt-5.3-codex", "gpt-5.1-codex-with-base-code", "gpt-5.1-codex", "gemini-3.1-pro", "claude-opus-4.6", "gpt-4.1-with-base-code", "gpt-5.2-codex-with-base-code", "gpt-4o"],datasets:[{"label":"Geometry","data":[4.22, 4.75, 4.56, 4.27, 4.56, 2.62, 2.0, 1.33],"backgroundColor":"rgba(52,100,180,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Interact.","data":[4.11, 3.5, 3.89, 4.0, 3.78, 3.25, 3.0, 1.11],"backgroundColor":"rgba(190,60,60,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Faithfulness","data":[4.0, 4.0, 3.89, 3.96, 3.0, 3.38, 4.0, 1.22],"backgroundColor":"rgba(46,150,100,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Labels","data":[3.22, 3.0, 3.0, 3.15, 3.78, 1.88, 1.5, 1.11],"backgroundColor":"rgba(200,110,30,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Concept","data":[4.22, 3.75, 3.56, 3.42, 3.44, 2.12, 2.5, 1.0],"backgroundColor":"rgba(120,70,170,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'top',labels:{font:{size:8.5},color:'#222',boxWidth:10,padding:10}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y?.toFixed(2)}`}}
+      },
+      scales:{
+        x:{ticks:{font:{size:9,family:'"Source Code Pro",monospace'},color:'#111'},grid:{display:false}},
+        y:{min:0,max:5,ticks:{font:{size:8.5},color:'#555',stepSize:1},grid:{color:'rgba(0,0,0,0.07)'},
+           title:{display:true,text:'Score (1–5)',font:{size:8},color:'#666'}}
+      }
+    }
+  });
+})();
+</script>
+<table style="font-size:9pt;margin-bottom:16px">
   <thead><tr>
-    <th>#</th><th>Model</th><th style="text-align:right">Overall</th>
-    <th style="text-align:right">Geom.</th>
-    <th style="text-align:right">Interact.</th>
-    <th style="text-align:right">Faith.</th>
-    <th style="text-align:right">Labels</th>
-    <th style="text-align:right">Concept</th>
-    <th style="text-align:right">Rend. fail</th>
-    <th>Primary failures</th>
+    <th>Model</th><th style="text-align:right">n</th><th style="text-align:right">Overall</th>
+    <th style="text-align:right">Rend. fail</th><th>Primary failures</th>
   </tr></thead>
   <tbody><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">1</td>
           <td><span class="model-name">gpt-5.3-codex</span></td>
+          <td style="text-align:right">9</td>
           <td style="text-align:right"><span class="score score-mid">3.96</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.22</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.11</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.00</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.22</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.22</span></td>
           <td style="text-align:right">0%</td>
           <td style="font-size:8.5pt"><span class="tag">Bad-Labels</span>, <span class="tag">Initial-View-Wrong</span>, <span class="tag">Bad-3D</span></td>
         </tr><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">2</td>
           <td><span class="model-name">gpt-5.1-codex-with-base-code</span></td>
+          <td style="text-align:right">18</td>
           <td style="text-align:right"><span class="score score-mid">3.80</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.75</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.50</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.00</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.00</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.75</span></td>
           <td style="text-align:right"><span class="score score-lo">33%</span></td>
           <td style="font-size:8.5pt"><span class="tag">Rendering-Failure</span>, <span class="tag">Bad-Labels</span>, <span class="tag">Hallucination</span></td>
         </tr><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">3</td>
           <td><span class="model-name">gpt-5.1-codex</span></td>
+          <td style="text-align:right">20</td>
           <td style="text-align:right"><span class="score score-mid">3.78</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.56</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.89</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.89</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.00</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.56</span></td>
           <td style="text-align:right"><span class="score score-lo">55%</span></td>
           <td style="font-size:8.5pt"><span class="tag">Bad-Labels</span>, <span class="tag">Initial-View-Wrong</span>, <span class="tag">Concept-Misunderstanding</span></td>
         </tr><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">4</td>
           <td><span class="model-name">gemini-3.1-pro</span></td>
+          <td style="text-align:right">36</td>
           <td style="text-align:right"><span class="score score-mid">3.76</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.27</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.00</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.96</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.15</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.42</span></td>
           <td style="text-align:right">8%</td>
           <td style="font-size:8.5pt"><span class="tag">Initial-View-Wrong</span>, <span class="tag">Interaction-OOB</span>, <span class="tag">Bad-Labels</span></td>
         </tr><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">5</td>
           <td><span class="model-name">claude-opus-4.6</span></td>
+          <td style="text-align:right">27</td>
           <td style="text-align:right"><span class="score score-mid">3.71</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.56</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.78</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.00</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.78</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.44</span></td>
           <td style="text-align:right">4%</td>
           <td style="font-size:8.5pt"><span class="tag">Hallucination</span>, <span class="tag">Initial-View-Wrong</span>, <span class="tag">Interaction-OOB</span></td>
         </tr><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">6</td>
           <td><span class="model-name">gpt-4.1-with-base-code</span></td>
+          <td style="text-align:right">9</td>
           <td style="text-align:right"><span class="score score-lo">2.65</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-lo">2.62</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.25</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.38</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-lo">1.88</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-lo">2.12</span></td>
           <td style="text-align:right"><span class="score score-lo">11%</span></td>
           <td style="font-size:8.5pt"><span class="tag">Concept-Misunderstanding</span>, <span class="tag">Missing-Labels</span>, <span class="tag">Bad-3D</span></td>
         </tr><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">7</td>
           <td><span class="model-name">gpt-5.2-codex-with-base-code</span></td>
+          <td style="text-align:right">2</td>
           <td style="text-align:right"><span class="score score-lo">2.60</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-lo">2.00</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.00</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.00</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-lo">1.50</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-lo">2.50</span></td>
           <td style="text-align:right">0%</td>
           <td style="font-size:8.5pt"><span class="tag">Bad-3D</span>, <span class="tag">Interaction-Missing</span>, <span class="tag">Bad-Labels</span></td>
         </tr><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">8</td>
           <td><span class="model-name">gpt-4o</span></td>
+          <td style="text-align:right">9</td>
           <td style="text-align:right"><span class="score score-lo">1.16</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-lo">1.33</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-lo">1.11</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-lo">1.22</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-lo">1.11</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-lo">1.00</span></td>
           <td style="text-align:right">0%</td>
           <td style="font-size:8.5pt"><span class="tag">Bad-3D</span>, <span class="tag">Initial-View-Wrong</span>, <span class="tag">Concept-Misunderstanding</span></td>
         </tr></tbody>
@@ -307,50 +270,55 @@ Corpus coverage currently stands at 0.4% of the 2,377-figure corpus.</p>
 <div class="callout warn"><p><strong>Baseline.</strong> <span class="model-name">gpt-4o</span> scores 1.16/5 — the gap between the baseline and best model (2.80 points) illustrates the gains from newer model families and prompt engineering.</p></div>
 
 <h2>5. Human Evaluation — Prompt Comparison</h2>
-<p style="margin-bottom:12px">Scores averaged across all models and figures. Model filter: all models.</p>
-<table>
+<p style="margin-bottom:14px">Scores averaged across all models and figures. Model filter: <span class="model-name">gemini-3.1-pro, claude-opus-4.6, gpt-4.1-with-base-code, gpt-4.1, gpt-5.2-codex, gpt-5.2-codex-with-base-code, gpt-5.1-codex, gpt-5.1-codex-with-base-code, claude-opus-4.6-with-base-code, gemini-3.1-pro-with-base-code, gpt-5.3-codex, gpt-4o</span>.</p>
+<div class="chart-fig-cap">Score by metric &amp; prompt variant</div>
+<div style="height:220px;position:relative;margin-bottom:20px"><canvas id="chartHumanPrompt"></canvas></div>
+<script>
+(function(){
+  new Chart(document.getElementById('chartHumanPrompt'),{
+    type:'bar',
+    data:{labels:["with_qmd", "with_reqs", "one_line", "limit_qmd"],datasets:[{"label":"Geometry","data":[4.46, 4.32, 3.81, 3.61],"backgroundColor":"rgba(52,100,180,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Interact.","data":[3.59, 3.73, 3.63, 3.33],"backgroundColor":"rgba(190,60,60,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Faithfulness","data":[3.67, 3.73, 3.44, 3.19],"backgroundColor":"rgba(46,150,100,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Labels","data":[3.56, 3.73, 2.74, 2.5],"backgroundColor":"rgba(200,110,30,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Concept","data":[4.44, 3.64, 2.85, 3.06],"backgroundColor":"rgba(120,70,170,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'top',labels:{font:{size:8.5},color:'#222',boxWidth:10,padding:10}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y?.toFixed(2)}`}}
+      },
+      scales:{
+        x:{ticks:{font:{size:9,family:'"Source Code Pro",monospace'},color:'#111'},grid:{display:false}},
+        y:{min:0,max:5,ticks:{font:{size:8.5},color:'#555',stepSize:1},grid:{color:'rgba(0,0,0,0.07)'},
+           title:{display:true,text:'Score (1–5)',font:{size:8},color:'#666'}}
+      }
+    }
+  });
+})();
+</script>
+<table style="font-size:9pt;margin-bottom:16px">
   <thead><tr>
-    <th>#</th><th>Prompt variant</th><th style="text-align:right">Overall</th>
-    <th style="text-align:right">Geom.</th>
-    <th style="text-align:right">Interact.</th>
-    <th style="text-align:right">Faith.</th>
-    <th style="text-align:right">Labels</th>
-    <th style="text-align:right">Concept</th>
-    <th>Primary failures</th>
+    <th>Prompt variant</th><th style="text-align:right">Overall</th><th>Primary failures</th>
   </tr></thead>
   <tbody><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">1</td>
           <td><span class="prompt-name">with_qmd</span></td>
           <td style="text-align:right"><span class="score score-mid">3.94</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.46</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.59</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.67</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.56</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.44</span></td>
           <td style="font-size:8.5pt"><span class="tag">Original-Mismatch</span>, <span class="tag">Interaction-OOB</span>, <span class="tag">Bad-Labels</span></td>
         </tr><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">2</td>
           <td><span class="prompt-name">with_reqs</span></td>
           <td style="text-align:right"><span class="score score-mid">3.83</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-hi">4.32</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.73</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.73</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.73</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.64</span></td>
           <td style="font-size:8.5pt"><span class="tag">Initial-View-Wrong</span>, <span class="tag">Hallucination</span>, <span class="tag">Interaction-OOB</span></td>
         </tr><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">3</td>
           <td><span class="prompt-name">one_line</span></td>
           <td style="text-align:right"><span class="score score-mid">3.30</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.81</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.63</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.44</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-lo">2.74</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-lo">2.85</span></td>
           <td style="font-size:8.5pt"><span class="tag">Missing-Labels</span>, <span class="tag">Concept-Misunderstanding</span>, <span class="tag">Hallucination</span></td>
         </tr><tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">4</td>
           <td><span class="prompt-name">limit_qmd</span></td>
           <td style="text-align:right"><span class="score score-mid">3.14</span></td>
-          <td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.61</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.33</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.19</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-lo">2.50</span></td><td style="text-align:right;padding:6px 10px"><span class="score score-mid">3.06</span></td>
           <td style="font-size:8.5pt"><span class="tag">Initial-View-Wrong</span>, <span class="tag">Bad-Labels</span>, <span class="tag">Concept-Misunderstanding</span></td>
         </tr></tbody>
 </table>
-
-<h3>Prompt descriptions</h3>
 <table style="margin-bottom:20px">
   <thead><tr><th>Variant</th><th>Description</th></tr></thead>
   <tbody><tr><td><span class="prompt-name">with_qmd</span></td><td style="font-size:12px;color:#555">Full prompt + QMD source chapter context</td></tr><tr><td><span class="prompt-name">with_reqs</span></td><td style="font-size:12px;color:#555">Full prompt + explicit requirements list</td></tr><tr><td><span class="prompt-name">one_line</span></td><td style="font-size:12px;color:#555">Single-line minimal prompt</td></tr><tr><td><span class="prompt-name">limit_qmd</span></td><td style="font-size:12px;color:#555">QMD context with length-limited prompt</td></tr></tbody>
 </table>
-
 <div class="callout good"><p><strong>with_qmd achieves the highest concept accuracy (4.44)</strong> — supplying the source chapter text as context helps the model understand the pedagogical intent of each figure, leading to more accurate conceptual representations.</p></div>
 <div class="callout warn"><p><strong>limit_qmd underperforms despite including chapter context</strong> — truncating the QMD source to fit a length limit removes critical information. Providing the full chapter text is preferable to a truncated version.</p></div>
 
@@ -499,14 +467,14 @@ Corpus coverage currently stands at 0.4% of the 2,377-figure corpus.</p>
 </table>
 
 <h2>8. AI Critic Evaluation (Automated Pipeline)</h2>
-<p style="margin-bottom:14px">Scores from <code>critic.js</code> — no human involvement. 55 runs across 3 models. Group average: <strong>3.02/5</strong>.</p>
+<p style="margin-bottom:14px">Scores from <code>critic.js</code> — no human involvement. 106 runs across 7 models. Group average: <strong>2.78/5</strong>.</p>
 <div class="chart-fig-cap">Score by metric &amp; model</div>
 <div style="height:220px;position:relative;margin-bottom:20px"><canvas id="chartAICritic"></canvas></div>
 <script>
 (function(){
   new Chart(document.getElementById('chartAICritic'),{
     type:'bar',
-    data:{labels:["gpt-5.4", "claude-opus-4.6", "gpt-4o"],datasets:[{"label":"Geometry","data":[3.32, 2.17, 2.0],"backgroundColor":"#1f4e8c","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Interact.","data":[4.21, 3.83, 1.0],"backgroundColor":"#c0392b","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Faithfulness","data":[2.89, 2.0, 2.0],"backgroundColor":"#27ae60","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Labels","data":[2.76, 2.67, 2.6],"backgroundColor":"#d35400","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Concept","data":[3.34, 2.25, 2.0],"backgroundColor":"#8e44ad","borderWidth":0,"borderRadius":0,"barThickness":11}]},
+    data:{labels:["gemini-3.1-pro", "gpt-5.4", "gemini-2.5-pro", "gemini-2.5-flash", "claude-opus-4.6", "claude-sonnet-4", "gpt-4o"],datasets:[{"label":"Geometry","data":[3.0, 3.14, 3.0, 2.43, 2.03, 2.2, 2.0],"backgroundColor":"rgba(52,100,180,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Interact.","data":[4.0, 4.16, 4.0, 3.57, 3.86, 3.9, 1.0],"backgroundColor":"rgba(190,60,60,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Faithfulness","data":[3.0, 2.67, 2.2, 2.0, 1.83, 1.9, 2.0],"backgroundColor":"rgba(46,150,100,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Labels","data":[4.0, 2.63, 3.0, 1.86, 2.21, 1.6, 2.6],"backgroundColor":"rgba(200,110,30,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11},{"label":"Concept","data":[4.0, 3.14, 3.4, 2.71, 2.14, 2.2, 2.0],"backgroundColor":"rgba(120,70,170,0.78)","borderWidth":0,"borderRadius":0,"barThickness":11}]},
     options:{
       responsive:true,maintainAspectRatio:false,
       plugins:{
@@ -528,17 +496,41 @@ Corpus coverage currently stands at 0.4% of the 2,377-figure corpus.</p>
     <th>Weakest metric</th><th>Top failure</th>
   </tr></thead>
   <tbody><tr>
+          <td><span class="model-name">gemini-3.1-pro</span></td>
+          <td style="text-align:right">1</td>
+          <td style="text-align:right"><span class="score score-mid">3.60</span></td>
+          <td style="text-align:right;color:#8b1a1a;font-size:8.5pt">geometry</td>
+          <td style="font-size:8.5pt"><span class="tag">Scale-Wrong</span> ×1</td>
+        </tr><tr>
           <td><span class="model-name">gpt-5.4</span></td>
-          <td style="text-align:right">38</td>
-          <td style="text-align:right"><span class="score score-mid">3.31</span></td>
+          <td style="text-align:right">49</td>
+          <td style="text-align:right"><span class="score score-mid">3.15</span></td>
           <td style="text-align:right;color:#8b1a1a;font-size:8.5pt">label quality</td>
-          <td style="font-size:8.5pt"><span class="tag">Hallucination</span> ×29</td>
+          <td style="font-size:8.5pt"><span class="tag">Hallucination</span> ×39</td>
+        </tr><tr>
+          <td><span class="model-name">gemini-2.5-pro</span></td>
+          <td style="text-align:right">5</td>
+          <td style="text-align:right"><span class="score score-mid">3.12</span></td>
+          <td style="text-align:right;color:#8b1a1a;font-size:8.5pt">faithfulness</td>
+          <td style="font-size:8.5pt"><span class="tag">Color-Wrong</span> ×5</td>
+        </tr><tr>
+          <td><span class="model-name">gemini-2.5-flash</span></td>
+          <td style="text-align:right">7</td>
+          <td style="text-align:right"><span class="score score-lo">2.51</span></td>
+          <td style="text-align:right;color:#8b1a1a;font-size:8.5pt">label quality</td>
+          <td style="font-size:8.5pt"><span class="tag">Camera-Wrong</span> ×6</td>
         </tr><tr>
           <td><span class="model-name">claude-opus-4.6</span></td>
-          <td style="text-align:right">12</td>
-          <td style="text-align:right"><span class="score score-lo">2.58</span></td>
+          <td style="text-align:right">29</td>
+          <td style="text-align:right"><span class="score score-lo">2.41</span></td>
           <td style="text-align:right;color:#8b1a1a;font-size:8.5pt">faithfulness</td>
-          <td style="font-size:8.5pt"><span class="tag">Scale-Wrong</span> ×12</td>
+          <td style="font-size:8.5pt"><span class="tag">Scale-Wrong</span> ×24</td>
+        </tr><tr>
+          <td><span class="model-name">claude-sonnet-4</span></td>
+          <td style="text-align:right">10</td>
+          <td style="text-align:right"><span class="score score-lo">2.36</span></td>
+          <td style="text-align:right;color:#8b1a1a;font-size:8.5pt">label quality</td>
+          <td style="font-size:8.5pt"><span class="tag">Hallucination</span> ×10</td>
         </tr><tr>
           <td><span class="model-name">gpt-4o</span></td>
           <td style="text-align:right">5</td>
@@ -567,13 +559,13 @@ Corpus coverage currently stands at 0.4% of the 2,377-figure corpus.</p>
         </tr><tr>
           <td><span class="model-name">example_homography</span></td>
           <td style="text-align:right"><span class="score score-mid">3.80</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.40</span></td>
-          <td style="text-align:right"><span class="score score-hi">-0.40</span></td>
+          <td style="text-align:right"><span class="score score-lo">2.60</span></td>
+          <td style="text-align:right"><span class="score score-hi">-1.20</span></td>
         </tr><tr>
           <td><span class="model-name">homography_plane_geometry2</span></td>
           <td style="text-align:right"><span class="score score-mid">3.73</span></td>
-          <td style="text-align:right"><span class="score score-mid">3.40</span></td>
-          <td style="text-align:right"><span class="score score-hi">-0.33</span></td>
+          <td style="text-align:right"><span class="score score-lo">2.80</span></td>
+          <td style="text-align:right"><span class="score score-hi">-0.93</span></td>
         </tr><tr>
           <td><span class="model-name">orthogonal_projection</span></td>
           <td style="text-align:right"><span class="score score-mid">3.50</span></td>
@@ -594,7 +586,7 @@ Corpus coverage currently stands at 0.4% of the 2,377-figure corpus.</p>
   </div>
   <div style="padding-top:4px">
     <p style="font-size:9.5pt;margin-bottom:10px">6 figures scored by both human raters and the automated critic (gpt-4o baseline, no prompt metadata).</p>
-    <p style="font-size:9.5pt">AI critic scores average <strong>-0.32</strong> lower than human — conservative relative to human raters.</p>
+    <p style="font-size:9.5pt">AI critic scores average <strong>-0.56</strong> lower than human — conservative relative to human raters.</p>
   </div>
 </div>
 
@@ -624,15 +616,15 @@ Corpus coverage currently stands at 0.4% of the 2,377-figure corpus.</p>
   </div>
 </div>
 
-<h3>Recommended next steps</h3>
+<h3>Next steps</h3>
 <ol style="margin-left:20px;line-height:1.9;font-size:10pt">
+  <li><strong>Rendering reliability.</strong> Instrument the pipeline to auto-classify and retry failures; target &lt;5% fail rate before scaling.</li>
+  <li><strong>Label quality intervention.</strong> Targeted prompt engineering for annotation accuracy — currently the weakest metric across all models.</li>
   <li><strong>Scale evaluation.</strong> Run the agent loop on 50+ figures across 5+ chapters; measure score distribution at corpus scale.</li>
-  <li><strong>Agent loop ablation.</strong> Compare round-1 vs. round-2 vs. round-3 outputs to quantify the gains from iterative refinement.</li>
-  <li><strong>Label quality intervention.</strong> Apply targeted prompt engineering focused on annotation accuracy, then re-evaluate.</li>
-  <li><strong>Inter-annotator agreement.</strong> Have two or more evaluators score the same outputs to validate rubric reliability and compute Cohenâs Îº.</li>
-  <li><strong>AI critic calibration.</strong> Expand the human/AI overlap set to compute Pearson correlation per metric and establish correction factors.</li>
-  <li><strong>Chapter coverage map.</strong> Track which of the 54 chapters have been converted and at what quality level, targeting systematic coverage.</li>
-  <li><strong>Rendering reliability.</strong> Instrument the pipeline to automatically log, classify, and retry rendering failures.</li>
+  <li><strong>Agent loop ablation.</strong> Compare round-1 vs. round-2 vs. round-3 outputs to quantify iterative refinement gains.</li>
+  <li><strong>AI critic calibration.</strong> Expand the human/AI overlap set; compute per-metric Pearson correlation and establish correction factors.</li>
+  <li><strong>Inter-annotator agreement.</strong> Two or more evaluators score the same outputs to validate rubric reliability (Cohen’s κ).</li>
+  <li><strong>Chapter coverage map.</strong> Systematically track which of the 54 chapters have been converted and at what quality level.</li>
 </ol>
 
 <h2>11. Visual Summary</h2>
@@ -680,7 +672,7 @@ Corpus coverage currently stands at 0.4% of the 2,377-figure corpus.</p>
 </script>
 
 <div class="doc-footer">
-  <span>Interactive 3D Figures Project &mdash; Internal Progress Report</span>
-  <span>Generated March 25, 2026 at 15:09</span>
+  <span>FiguresLLM &mdash; Internal Progress Report</span>
+  <span>Generated March 26, 2026 at 11:58</span>
 </div>
 </div></body></html>

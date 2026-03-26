@@ -3,6 +3,46 @@ import React, { useState, useCallback, useEffect } from 'react';
 const FALLBACK_PROMPT = '(Loading system prompt from server…)';
 const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
 
+function apiFetch(input, init = {}) {
+  return fetch(input, {
+    ...init,
+    headers: {
+      'ngrok-skip-browser-warning': 'true',
+      ...(init.headers || {}),
+    },
+  });
+}
+
+async function runGenerationJob(payload, { pollMs = 2000, maxPolls = 600 } = {}) {
+  const createRes = await apiFetch('/api/generate-async', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const createData = await createRes.json();
+  if (!createRes.ok) throw new Error(createData.error || 'Failed to start generation.');
+
+  let transientPollFailures = 0;
+  for (let pollCount = 0; pollCount < maxPolls; pollCount += 1) {
+    await new Promise(resolve => setTimeout(resolve, pollMs));
+    try {
+      const statusRes = await apiFetch(`/api/generate-status/${encodeURIComponent(createData.jobId)}`);
+      const statusData = await statusRes.json();
+      if (!statusRes.ok) throw new Error(statusData.error || 'Failed to check generation status.');
+      transientPollFailures = 0;
+      if (statusData.status === 'done') return statusData.result;
+      if (statusData.status === 'error') throw new Error(statusData.error || 'Generation failed.');
+    } catch (err) {
+      transientPollFailures += 1;
+      if (transientPollFailures >= 5) {
+        throw new Error(err.message || 'Connection error while checking generation status.');
+      }
+    }
+  }
+
+  throw new Error('Generation timed out while waiting for completion.');
+}
+
 export default function App() {
   const [tab, setTab] = useState('generator');
   const [image, setImage] = useState(null); // { base64, mediaType, filename, previewUrl }
@@ -16,8 +56,8 @@ export default function App() {
   // Fetch the real system prompt + available models from the backend on mount
   useEffect(() => {
     Promise.all([
-      fetch('/api/prompt').then(r => r.json()).catch(() => ({})),
-      fetch('/api/models').then(r => r.json()).catch(() => ([])),
+      apiFetch('/api/prompt').then(r => r.json()).catch(() => ({})),
+      apiFetch('/api/models').then(r => r.json()).catch(() => ([])),
     ]).then(([promptData, list]) => {
       if (promptData.prompt) setSystemPrompt(promptData.prompt);
       setModels(list);
@@ -66,7 +106,7 @@ export default function App() {
     setPlan(null);
     let currentPlan = null;
     try {
-      const planRes = await fetch('/api/plan', {
+      const planRes = await apiFetch('/api/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: image.filename }),
@@ -83,23 +123,13 @@ export default function App() {
     // Step 2: Generate (slow ~30-60s)
     setLoading(true);
     try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          base64: image.base64,
-          mediaType: image.mediaType,
-          filename: image.filename,
-          plan: currentPlan || undefined,
-          model: selectedModel || undefined,
-        }),
+      const data = await runGenerationJob({
+        base64: image.base64,
+        mediaType: image.mediaType,
+        filename: image.filename,
+        plan: currentPlan || undefined,
+        model: selectedModel || undefined,
       });
-      const text = await res.text();
-      let data;
-      try { data = JSON.parse(text); } catch (_) {
-        throw new Error(text.slice(0, 200) || 'Server returned non-JSON response');
-      }
-      if (!res.ok) throw new Error(data.error || 'Generation failed.');
       setGeneratedHtml(data.html);
       setEvaluation(data.evaluation || null);
       setCurrentRecord({
@@ -129,7 +159,7 @@ export default function App() {
   // Delete a saved result by id
   const handleDelete = useCallback(async (id) => {
     try {
-      await fetch(`/api/result/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/result/${id}`, { method: 'DELETE' });
     } catch (err) {
       console.error('Delete failed:', err);
     }
@@ -149,17 +179,17 @@ export default function App() {
   const handleOpenResult = useCallback(async (item) => {
     if (item.type === 'api') {
       try {
-        const res = await fetch(`/api/result/${item.id}`);
+        const res = await apiFetch(`/api/result/${item.id}`);
         const record = await res.json();
         handleLoadFromHistory(record);
       } catch (err) { alert('Failed to load: ' + err.message); }
     } else {
       try {
-        const htmlRes = await fetch('/api/experiments/html?path=' + encodeURIComponent(item.htmlPath));
+        const htmlRes = await apiFetch('/api/experiments/html?path=' + encodeURIComponent(item.htmlPath));
         const html = await htmlRes.text();
         let base64thumb = null;
         if (item.imagePath) {
-          const imgRes = await fetch('/api/experiments/image?path=' + encodeURIComponent(item.imagePath));
+          const imgRes = await apiFetch('/api/experiments/image?path=' + encodeURIComponent(item.imagePath));
           if (imgRes.ok) base64thumb = await imgRes.text();
         }
         const expSource = [item.experiment, item.model].filter(Boolean).join(' / ');
@@ -178,14 +208,14 @@ export default function App() {
     try {
       let data;
       if (currentRecord.htmlPath) {
-        const res = await fetch('/api/experiments/evaluate', {
+        const res = await apiFetch('/api/experiments/evaluate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ htmlPath: currentRecord.htmlPath, imagePath: currentRecord.imagePath }),
         });
         data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Evaluation failed.');
       } else if (currentRecord.id) {
-        const res = await fetch('/api/evaluate', {
+        const res = await apiFetch('/api/evaluate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: currentRecord.id }),
         });
@@ -207,13 +237,13 @@ export default function App() {
       <header style={styles.header}>
         <span style={styles.logo}>3D Figure Generator</span>
         <nav style={styles.nav}>
-          {['generator', 'viewer', 'results', 'dashboard'].map((t) => (
+          {['generator', 'viewer', 'results', 'dashboard', 'preview'].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               style={{ ...styles.navBtn, ...(tab === t ? styles.navBtnActive : {}) }}
             >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
+              {({'preview': 'Chapter Preview'}[t] || (t.charAt(0).toUpperCase() + t.slice(1)))}
             </button>
           ))}
         </nav>
@@ -253,6 +283,9 @@ export default function App() {
         {tab === 'dashboard' && (
           <DashboardTab />
         )}
+        {tab === 'preview' && (
+          <ChapterPreviewTab />
+        )}
       </main>
     </div>
   );
@@ -274,6 +307,11 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
   const [chapterResults, setChapterResults] = useState([]);        // accumulated { figureStem, status:'ok'|'error', figureId?, error? }
   const chapterAbortRef = React.useRef(false);
 
+  // Deferred batch evaluation state
+  const [batchEvalRunning, setBatchEvalRunning] = useState(false);
+  const [batchEvalProgress, setBatchEvalProgress] = useState(null); // { completed, total, current }
+  const [batchEvalResults, setBatchEvalResults] = useState({});     // { [figureId]: { status, evaluation?, error? } }
+
   // Inline viewer for completed figures (doesn't leave this tab)
   const [previewHtml, setPreviewHtml] = useState(null);
   const [previewName, setPreviewName] = useState('');
@@ -283,7 +321,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
     setPreviewLoading(true);
     setPreviewName(name);
     try {
-      const res = await fetch(`/api/result/${figureId}`);
+      const res = await apiFetch(`/api/result/${figureId}`);
       const data = await res.json();
       if (res.ok && data.html) {
         setPreviewHtml(data.html);
@@ -294,14 +332,14 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 
   // Load chapter list on mount
   React.useEffect(() => {
-    fetch('/api/chapters').then(r => r.json()).then(setChapters).catch(() => {});
+    apiFetch('/api/chapters').then(r => r.json()).then(setChapters).catch(() => {});
   }, []);
 
   // When a chapter is selected, load its 3D candidates
   React.useEffect(() => {
     if (!selectedChapter) { setChapterCandidates([]); return; }
     setLoadingChapter(true);
-    fetch(`/api/chapter-candidates/${encodeURIComponent(selectedChapter)}`)
+    apiFetch(`/api/chapter-candidates/${encodeURIComponent(selectedChapter)}`)
       .then(r => r.json())
       .then(data => { setChapterCandidates(data); setLoadingChapter(false); })
       .catch(() => setLoadingChapter(false));
@@ -328,9 +366,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
     setDragging(false);
     processFile(e.dataTransfer.files[0]);
   };
-
-  // Fully automated chapter pipeline with parallel generation (concurrency = 8)
-  const CONCURRENCY = 8;
 
   const handleRunChapter = async () => {
     if (!selectedChapter || chapterCandidates.length === 0) return;
@@ -359,7 +394,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       // Phase 1: Plan
       let figurePlan = null;
       try {
-        const planRes = await fetch('/api/plan', {
+        const planRes = await apiFetch('/api/plan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: candidate.filename, chapterHint: selectedChapter }),
@@ -372,9 +407,9 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       activeMap.set(candidate.stem, { figureStem: candidate.stem, phase: 'generating', plan: figurePlan });
       updateProgress();
 
-      // Phase 2: Generate
+      // Phase 2: Generate (direct call — no polling overhead)
       try {
-        const genRes = await fetch('/api/generate', {
+        const genRes = await apiFetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -383,14 +418,11 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             filename: candidate.filename,
             plan: figurePlan || undefined,
             model: selectedModel || undefined,
+            evaluate: false,
           }),
         });
-        const genText = await genRes.text();
-        let genData;
-        try { genData = JSON.parse(genText); } catch (_) {
-          throw new Error(genText.slice(0, 200) || 'Server returned non-JSON response');
-        }
-        if (!genRes.ok) throw new Error(genData.error || 'Generation failed');
+        const genData = await genRes.json();
+        if (!genRes.ok) throw new Error(genData.error || 'Generation failed.');
         results.push({ figureStem: candidate.stem, status: 'ok', figureId: genData.figureId });
       } catch (err) {
         results.push({ figureStem: candidate.stem, status: 'error', error: err.message });
@@ -409,13 +441,67 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
         if (candidate) await processFigure(candidate);
       }
     };
+    const CONCURRENCY = 8;
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, total) }, () => runWorker()));
 
     setChapterProgress(null);
     setChapterRunning(false);
+
+    // Auto-evaluate all successful figures
+    if (results.some(r => r.status === 'ok')) {
+      runBatchEvaluation(results);
+    }
   };
 
   const handleAbortChapter = () => { chapterAbortRef.current = true; };
+
+  // Deferred batch evaluation: evaluate all successful figures after generation completes
+  const runBatchEvaluation = async (finalResults) => {
+    const successIds = (finalResults || chapterResults).filter(r => r.status === 'ok' && r.figureId).map(r => ({ figureId: r.figureId, figureStem: r.figureStem }));
+    if (successIds.length === 0) return;
+    setBatchEvalRunning(true);
+    setBatchEvalProgress({ completed: 0, total: successIds.length, current: successIds[0].figureStem });
+    setBatchEvalResults({});
+
+    try {
+      const res = await apiFetch('/api/evaluate-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: successIds.map(s => s.figureId) }),
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let completed = 0;
+      const evalMap = {};
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete line
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line);
+            completed += 1;
+            const match = successIds.find(s => s.figureId === parsed.id);
+            evalMap[parsed.id] = parsed;
+            setBatchEvalResults({ ...evalMap });
+            const nextStem = completed < successIds.length ? successIds[completed].figureStem : null;
+            setBatchEvalProgress({ completed, total: successIds.length, current: nextStem });
+          } catch (_) {}
+        }
+      }
+    } catch (err) {
+      console.error('Batch evaluation error:', err);
+    }
+
+    setBatchEvalRunning(false);
+    setBatchEvalProgress(null);
+  };
 
   // Select a chapter candidate to load it into the figure drop zone (still works for individual)
   const handleSelectCandidate = (candidate) => {
@@ -651,7 +737,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                       {chapterProgress.active?.length || 0} active ({chapterProgress.completed} / {chapterProgress.total} done)
                     </span>
                     <span style={{ fontSize: 11, color: '#888' }}>
-                      Concurrency: {CONCURRENCY}
+                      Concurrency: 8
                     </span>
                   </div>
 
@@ -716,6 +802,43 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                       {r.error && <span style={{ color: '#e74c3c', fontSize: 11 }}>{r.error}</span>}
                     </div>
                   ))}
+                  {/* Auto-evaluation progress — shown while evaluating */}
+                  {batchEvalRunning && (
+                    <div style={{ marginTop: 10, padding: '8px 0' }}>
+                      <div style={{ fontSize: 12, color: '#6c5ce7', fontWeight: 600, marginBottom: 4 }}>
+                        🧪 Evaluating… {batchEvalProgress?.completed || 0}/{batchEvalProgress?.total || '?'}
+                        {batchEvalProgress?.current && <span style={{ fontWeight: 400, color: '#888' }}> — {batchEvalProgress.current}</span>}
+                      </div>
+                      <div style={{ height: 4, background: '#eee', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', background: '#6c5ce7', borderRadius: 2, transition: 'width 0.3s', width: `${((batchEvalProgress?.completed || 0) / (batchEvalProgress?.total || 1)) * 100}%` }} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show eval scores inline */}
+                  {Object.keys(batchEvalResults).length > 0 && (
+                    <div style={{ marginTop: 8, padding: '6px 0', borderTop: '1px solid #e0e0e0' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#6c5ce7' }}>Evaluation Scores:</span>
+                      {chapterResults.filter(r => r.status === 'ok' && batchEvalResults[r.figureId]).map(r => {
+                        const ev = batchEvalResults[r.figureId];
+                        return (
+                          <div key={r.figureId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 11, color: '#555' }}>
+                            <span style={{ color: ev.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>
+                              {ev.status === 'ok' ? '✓' : '✗'}
+                            </span>
+                            <span style={{ flex: 1 }}>{r.figureStem}</span>
+                            {ev.evaluation?.overall_average != null && (
+                              <span style={{ fontWeight: 700, color: ev.evaluation.overall_average >= 7 ? '#4caf50' : ev.evaluation.overall_average >= 5 ? '#f39c12' : '#e74c3c' }}>
+                                {ev.evaluation.overall_average.toFixed(1)}/10
+                              </span>
+                            )}
+                            {ev.error && <span style={{ color: '#e74c3c' }}>{ev.error}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {!chapterRunning && <p style={{ fontSize: 11, color: '#888', marginTop: 8 }}>Also available in the Results tab.</p>}
                 </div>
               )}
@@ -929,7 +1052,7 @@ function LazyThumb({ htmlPath, style }) {
   React.useEffect(() => {
     if (!htmlPath) { setLoading(false); return; }
     let cancelled = false;
-    fetch('/api/experiments/thumb?path=' + encodeURIComponent(htmlPath))
+    apiFetch('/api/experiments/thumb?path=' + encodeURIComponent(htmlPath))
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`);
@@ -951,7 +1074,7 @@ function LazyApiThumb({ id, base64thumb, mediaType, style }) {
   React.useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    fetch('/api/thumb/' + encodeURIComponent(id))
+    apiFetch('/api/thumb/' + encodeURIComponent(id))
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`); })
       .catch(() => {});
@@ -987,6 +1110,11 @@ function CardFailureModes({ modes }) {
   );
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+function humanTitle(stem) {
+  return stem.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 // ── Results Tab ───────────────────────────────────────────────────────────────
 // Two sub-tabs: API (manually generated) | Agent (prompt_experiments/ runs)
 // Within each: experiment → model → chapters → figure cards
@@ -1007,11 +1135,12 @@ function ResultsTab({ onOpen }) {
   const [collapsedGroups, setCollapsedGroups] = React.useState(new Set());
   const [hoveredGroup, setHoveredGroup] = React.useState(null);
   const hoverTimerRef = React.useRef(null);
+  const [sidebarGroupBy, setSidebarGroupBy] = React.useState('experiment'); // 'experiment' | 'chapter'
   const [serverPrompt, setServerPrompt] = React.useState('');
 
   // Fetch the real system prompt for the API tab display
   React.useEffect(() => {
-    fetch('/api/prompt').then(r => r.json()).then(d => { if (d.prompt) setServerPrompt(d.prompt); }).catch(() => {});
+    apiFetch('/api/prompt').then(r => r.json()).then(d => { if (d.prompt) setServerPrompt(d.prompt); }).catch(() => {});
   }, []);
 
   // Reset chapter/figure filters when selection or active tab changes
@@ -1021,13 +1150,13 @@ function ResultsTab({ onOpen }) {
   }, [selected, activeTab]);
 
   React.useEffect(() => {
-    fetch('/api/base-scaffold').then(r => r.json()).then(d => setBaseScaffold(d.content)).catch(() => {});
+    apiFetch('/api/base-scaffold').then(r => r.json()).then(d => setBaseScaffold(d.content)).catch(() => {});
   }, []);
 
   React.useEffect(() => {
     Promise.all([
-      fetch('/api/history').then(r => r.json()),
-      fetch('/api/experiments').then(r => r.json()),
+      apiFetch('/api/history').then(r => r.json()),
+      apiFetch('/api/experiments').then(r => r.json()),
     ])
       .then(([api, exp]) => {
         // Normalize: strip trailing hash so prompt iterations merge into one experiment
@@ -1068,7 +1197,43 @@ function ResultsTab({ onOpen }) {
 
   // Items for current selection
   const selectedItems = React.useMemo(() => {
-    if (!selected?.experiment) return [];
+    if (!selected?.experiment) {
+      // In chapter-sidebar mode with no experiment selected, return ALL items flat
+      if (sidebarGroupBy !== 'chapter') return [];
+      const all = [];
+      if (activeTab === 'api') {
+        for (const [expName, expModels] of Object.entries(apiTree)) {
+          for (const [modelName, recs] of Object.entries(expModels)) {
+            for (const r of recs) {
+              all.push({
+                key: `api/${r.id}`, type: 'api', id: r.id,
+                figure: r.filename ? r.filename.replace(/\.[^.]+$/, '') : r.id,
+                chapter: r.chapter || 'other',
+                base64thumb: r.base64thumb, mediaType: r.mediaType || 'image/png',
+                timestamp: r.timestamp, evaluation: r.evaluation,
+                experiment: expName, model: modelName,
+                imagePath: null, htmlPath: null,
+              });
+            }
+          }
+        }
+      } else {
+        for (const exp of expTree) {
+          for (const m of exp.models) {
+            for (const fig of m.figures) {
+              all.push({
+                key: `${exp.experiment}/${m.model}/${fig.name}`, type: 'experiment',
+                figure: fig.name, chapter: fig.chapter || 'other',
+                experiment: exp.experiment, model: m.model,
+                imagePath: fig.imagePath, htmlPath: fig.htmlPath,
+                timestamp: null, evaluation: fig.evaluation,
+              });
+            }
+          }
+        }
+      }
+      return all;
+    }
     let items;
     if (activeTab === 'api') {
       const expModels = apiTree[selected.experiment] || {};
@@ -1114,7 +1279,7 @@ function ResultsTab({ onOpen }) {
       }
     }
     return items;
-  }, [selected, activeTab, apiTree, expTree]);
+  }, [selected, sidebarGroupBy, activeTab, apiTree, expTree]);
 
   // Group selected items by chapter
   const byChapter = React.useMemo(() => {
@@ -1141,7 +1306,7 @@ function ResultsTab({ onOpen }) {
     if (!window.confirm('Delete this figure?')) return;
     try {
       if (item.type === 'api') {
-        await fetch(`/api/result/${item.id}`, { method: 'DELETE' });
+        await apiFetch(`/api/result/${item.id}`, { method: 'DELETE' });
         setApiRecords(prev => prev.filter(r => r.id !== item.id));
       }
     } catch (err) { console.error('Delete failed:', err); }
@@ -1153,12 +1318,12 @@ function ResultsTab({ onOpen }) {
     try {
       let data;
       if (item.type === 'api') {
-        const res = await fetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) });
+        const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) });
         data = await res.json();
         if (!res.ok) throw new Error(data.error);
         setApiRecords(prev => prev.map(r => r.id === item.id ? { ...r, evaluation: data } : r));
       } else {
-        const res = await fetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath }) });
+        const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath }) });
         data = await res.json();
         if (!res.ok) throw new Error(data.error);
         const [expName, modelName, figName] = item.key.split('/');
@@ -1180,12 +1345,12 @@ function ResultsTab({ onOpen }) {
       try {
         let data;
         if (item.type === 'api') {
-          const res = await fetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) });
+          const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) });
           data = await res.json();
           if (!res.ok) throw new Error(data.error);
           setApiRecords(prev => prev.map(r => r.id === item.id ? { ...r, evaluation: data } : r));
         } else {
-          const res = await fetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath }) });
+          const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath }) });
           data = await res.json();
           if (!res.ok) throw new Error(data.error);
           const [expName, modelName, figName] = item.key.split('/');
@@ -1247,6 +1412,22 @@ function ResultsTab({ onOpen }) {
     }
     return result;
   }, [byChapter, filterChapter, filterFigure]);
+
+  // Group items by model (used in chapter-sidebar mode)
+  const filteredByModel = React.useMemo(() => {
+    if (sidebarGroupBy !== 'chapter' || !filterChapter) return {};
+    const allItems = Object.values(filteredByChapter).flat();
+    const groups = {};
+    for (const item of allItems) {
+      const m = item.model || 'unknown';
+      if (!groups[m]) groups[m] = [];
+      groups[m].push(item);
+    }
+    return Object.fromEntries(
+      Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
+        .map(([m, its]) => [m, its.sort((a, b) => a.figure.localeCompare(b.figure))])
+    );
+  }, [sidebarGroupBy, filterChapter, filteredByChapter]);
 
   const handleFilterExp = React.useCallback((expName) => {
     if (!expName) { setSelected(null); return; }
@@ -1348,7 +1529,7 @@ function ResultsTab({ onOpen }) {
             onClick={() => { setSelected(null); setFilterChapter(''); setFilterFigure(''); }}
           >✕ clear</button>
         )}
-        {selected && (
+        {(selected || (sidebarGroupBy === 'chapter' && filterChapter)) && (
           <span style={{ marginLeft: 'auto', fontSize: 11, color: '#aaa' }}>
             {Object.values(filteredByChapter).reduce((s, a) => s + a.length, 0)} figure{Object.values(filteredByChapter).reduce((s, a) => s + a.length, 0) !== 1 ? 's' : ''}
           </span>
@@ -1359,92 +1540,145 @@ function ResultsTab({ onOpen }) {
       <div style={{ ...styles.expWrap, flex: 1, borderTop: 'none', borderRadius: '0 0 10px 10px' }}>
         {/* Left tree */}
         <div style={styles.expTree}>
-          {(() => {
-            const entries = activeTab === 'api'
-              ? Object.entries(apiTree).map(([expName, models]) => ({
-                  group: expName,
-                  items: Object.entries(models).map(([modelName, recs]) => ({
-                    modelName, evalCount: recs.filter(r => r.evaluation).length, total: recs.length,
-                    nodeKey: `${expName}::${modelName}`,
-                    onSelect: () => setSelected({ experiment: expName, model: modelName }),
-                  })),
-                }))
-              : expTree.map(exp => ({
-                  group: exp.experiment,
-                  items: exp.models.map(m => ({
-                    modelName: m.model, evalCount: m.figures.filter(f => f.evaluation).length, total: m.figures.length,
-                    nodeKey: `${exp.experiment}::${m.model}`,
-                    onSelect: () => setSelected({ experiment: exp.experiment, model: m.model }),
-                  })),
-                }));
-
-            return entries.map(({ group, items }) => {
-              const isCollapsed = collapsedGroups.has(group);
-              const isOpen = !isCollapsed || hoveredGroup === group;
-              return (
-                <div key={group}
-                  onMouseEnter={() => {
-                    if (isCollapsed) hoverTimerRef.current = setTimeout(() => setHoveredGroup(group), 250);
-                  }}
-                  onMouseLeave={() => {
-                    clearTimeout(hoverTimerRef.current);
-                    setHoveredGroup(null);
-                  }}
-                >
-                  <div
-                    style={{ ...styles.expTreeGroup, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, userSelect: 'none' }}
-                    onClick={() => setCollapsedGroups(prev => {
-                      const next = new Set(prev);
-                      next.has(group) ? next.delete(group) : next.add(group);
-                      return next;
-                    })}
+          {/* Group-by toggle */}
+          <div style={{ display: 'flex', borderBottom: '1px solid #e8e8e8', flexShrink: 0 }}>
+            {[['experiment', 'Experiments'], ['chapter', 'Chapters']].map(([val, label]) => (
+              <button key={val}
+                style={{ flex: 1, fontSize: 11, padding: '8px 4px', border: 'none', borderBottom: sidebarGroupBy === val ? '2px solid #5878a0' : '2px solid transparent',
+                  cursor: 'pointer', fontWeight: sidebarGroupBy === val ? 600 : 400,
+                  background: 'transparent',
+                  color: sidebarGroupBy === val ? '#5878a0' : '#999',
+                  marginBottom: -1 }}
+                onClick={() => { setSidebarGroupBy(val); setSelected(null); setFilterChapter(''); }}
+              >{label}</button>
+            ))}
+          </div>
+          {sidebarGroupBy === 'chapter' ? (
+            /* Chapter list */
+            (() => {
+              const chapterCounts = {};
+              const evalCounts = {};
+              for (const item of selectedItems) {
+                const ch = item.chapter || 'other';
+                chapterCounts[ch] = (chapterCounts[ch] || 0) + 1;
+                if (item.evaluation) evalCounts[ch] = (evalCounts[ch] || 0) + 1;
+              }
+              return Object.entries(chapterCounts).sort(([a], [b]) => a.localeCompare(b)).map(([ch, count]) => {
+                const isActive = filterChapter === ch;
+                return (
+                  <div key={ch}
+                    style={{ ...styles.expTreeItem, paddingLeft: 12,
+                      background: isActive ? '#f0f0f0' : 'transparent',
+                      borderLeftColor: isActive ? '#111' : 'transparent',
+                      color: isActive ? '#111' : '#444',
+                      fontWeight: isActive ? 600 : 400 }}
+                    onClick={() => { setFilterChapter(ch); setSelected(null); }}
                   >
-                    <span style={{ fontSize: 8, color: '#888' }}>{isOpen ? '▾' : '▸'}</span>
-                    {group}
-                    <span style={{ fontSize: 9, color: '#aaa', fontWeight: 400, marginLeft: 'auto' }}>{items.length}</span>
+                    <span style={{ flex: 1, fontSize: 11 }}>{ch}</span>
+                    <span style={{ fontSize: 10, color: '#aaa' }}>{evalCounts[ch] || 0}/{count}</span>
                   </div>
-                  {isOpen && items.map(({ modelName, evalCount, total, nodeKey, onSelect }) => {
-                    const isActive = selKey === nodeKey;
-                    return (
-                      <div key={modelName}
-                        style={isActive
-                          ? { ...styles.expTreeItem, background: '#f0f0f0', borderLeftColor: '#111', color: '#111', fontWeight: 600 }
-                          : { ...styles.expTreeItem, background: 'transparent', borderLeftColor: 'transparent', color: '#444', fontWeight: 400 }
-                        }
-                        onClick={onSelect}
-                      >
-                        <span style={{ flex: 1, fontSize: 11 }}>{modelName}</span>
-                        <span style={{ fontSize: 10, color: '#aaa' }}>{evalCount}/{total}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            });
-          })()}
+                );
+              });
+            })()
+          ) : (
+            /* Experiment → model tree */
+            (() => {
+              const entries = activeTab === 'api'
+                ? Object.entries(apiTree).map(([expName, models]) => ({
+                    group: expName,
+                    items: Object.entries(models).map(([modelName, recs]) => ({
+                      modelName, evalCount: recs.filter(r => r.evaluation).length, total: recs.length,
+                      nodeKey: `${expName}::${modelName}`,
+                      onSelect: () => setSelected({ experiment: expName, model: modelName }),
+                    })),
+                  }))
+                : expTree.map(exp => ({
+                    group: exp.experiment,
+                    items: exp.models.map(m => ({
+                      modelName: m.model, evalCount: m.figures.filter(f => f.evaluation).length, total: m.figures.length,
+                      nodeKey: `${exp.experiment}::${m.model}`,
+                      onSelect: () => setSelected({ experiment: exp.experiment, model: m.model }),
+                    })),
+                  }));
+              return entries.map(({ group, items }) => {
+                const isCollapsed = collapsedGroups.has(group);
+                const isOpen = !isCollapsed || hoveredGroup === group;
+                return (
+                  <div key={group}
+                    onMouseEnter={() => {
+                      if (isCollapsed) hoverTimerRef.current = setTimeout(() => setHoveredGroup(group), 250);
+                    }}
+                    onMouseLeave={() => {
+                      clearTimeout(hoverTimerRef.current);
+                      setHoveredGroup(null);
+                    }}
+                  >
+                    <div
+                      style={{ ...styles.expTreeGroup, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, userSelect: 'none' }}
+                      onClick={() => setCollapsedGroups(prev => {
+                        const next = new Set(prev);
+                        next.has(group) ? next.delete(group) : next.add(group);
+                        return next;
+                      })}
+                    >
+                      <span style={{ fontSize: 8, color: '#888' }}>{isOpen ? '▾' : '▸'}</span>
+                      {group}
+                      <span style={{ fontSize: 9, color: '#aaa', fontWeight: 400, marginLeft: 'auto' }}>{items.length}</span>
+                    </div>
+                    {isOpen && items.map(({ modelName, evalCount, total, nodeKey, onSelect }) => {
+                      const isActive = selKey === nodeKey;
+                      return (
+                        <div key={modelName}
+                          style={isActive
+                            ? { ...styles.expTreeItem, background: '#f0f0f0', borderLeftColor: '#111', color: '#111', fontWeight: 600 }
+                            : { ...styles.expTreeItem, background: 'transparent', borderLeftColor: 'transparent', color: '#444', fontWeight: 400 }
+                          }
+                          onClick={onSelect}
+                        >
+                          <span style={{ flex: 1, fontSize: 11 }}>{modelName}</span>
+                          <span style={{ fontSize: 10, color: '#aaa' }}>{evalCount}/{total}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              });
+            })()
+          )}
         </div>
 
         {/* Right: prompt + chapter-grouped figure cards */}
         <div style={styles.expContent}>
-          {!selected ? (
-            <div style={styles.empty}>Select a model or experiment using the filter bar above</div>
+          {(!selected && !(sidebarGroupBy === 'chapter' && filterChapter)) ? (
+            <div style={styles.empty}>{sidebarGroupBy === 'chapter' ? 'Select a chapter from the sidebar' : 'Select a model or experiment using the filter bar above'}</div>
           ) : !Object.keys(filteredByChapter).length ? (
             <div style={styles.empty}>{filterFigure ? `No figures matching "${filterFigure}"` : 'No figures found'}</div>
           ) : (
             <>
               {/* Breadcrumb */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 12, fontSize: 12, color: '#888' }}>
-                <span
-                  style={{ cursor: 'pointer', color: '#5878a0', fontWeight: 600 }}
-                  onClick={() => setSelected(null)}
-                >{activeTab === 'api' ? 'Agent' : 'Copilot'}</span>
-                <span style={{ color: '#ccc' }}>›</span>
-                <span style={{ fontWeight: 600, color: '#5878a0', cursor: 'pointer' }}
-                  onClick={() => setSelected(s => ({ ...s, _reset: true }))}>
-                  {selected.experiment}
-                </span>
-                <span style={{ color: '#ccc' }}>›</span>
-                <span style={{ color: '#333', fontWeight: 600 }}>{selected.model || 'All models'}</span>
+                {sidebarGroupBy === 'chapter' && !selected ? (
+                  <>
+                    <span style={{ cursor: 'pointer', color: '#5878a0', fontWeight: 600 }}
+                      onClick={() => setFilterChapter('')}>All experiments</span>
+                    <span style={{ color: '#ccc' }}>›</span>
+                    <span style={{ color: '#333', fontWeight: 600 }}>{filterChapter}</span>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      style={{ cursor: 'pointer', color: '#5878a0', fontWeight: 600 }}
+                      onClick={() => setSelected(null)}
+                    >{activeTab === 'api' ? 'Agent' : 'Copilot'}</span>
+                    <span style={{ color: '#ccc' }}>›</span>
+                    <span style={{ fontWeight: 600, color: '#5878a0', cursor: 'pointer' }}
+                      onClick={() => setSelected(s => ({ ...s, _reset: true }))}>
+                      {selected?.experiment}
+                    </span>
+                    <span style={{ color: '#ccc' }}>›</span>
+                    <span style={{ color: '#333', fontWeight: 600 }}>{selected?.model || 'All models'}</span>
+                  </>
+                )}
               </div>
               {selectedPrompt && (
                 <details style={{ marginBottom: 8 }}>
@@ -1458,76 +1692,86 @@ function ResultsTab({ onOpen }) {
                   <pre style={styles.expPromptBox}>{baseScaffold}</pre>
                 </details>
               )}
-              {Object.entries(filteredByChapter).map(([chapter, items]) => {
-                const isOpen = openChapters.has(chapter);
-                return (
-                <details key={chapter} style={{ marginBottom: 16 }} open={isOpen}
-                  onToggle={e => {
-                    const open = e.currentTarget.open;
-                    setOpenChapters(prev => { const s = new Set(prev); open ? s.add(chapter) : s.delete(chapter); return s; });
-                  }}
-                >
-                  <summary style={{ ...styles.resultChapterHeader, cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none' }}>
-                    <span style={{ fontSize: 9, color: '#bbb', display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>{chapter}
-                    <span style={{ fontWeight: 400, color: '#bbb', textTransform: 'none', letterSpacing: 0 }}>({items.length})</span>
-                    {items.some(i => !i.evaluation) && (
-                      <button
-                        style={{ marginLeft: 'auto', fontSize: 10, padding: '1px 8px', borderRadius: 4, border: '1px solid #d0d8e8', background: '#f2f6fb', color: '#5878a0', cursor: 'pointer', fontWeight: 600 }}
-                        onClick={e => handleEvalAll(e, chapter, items)}
-                        disabled={evaluatingAll === chapter}
-                      >
-                        {evaluatingAll === chapter
-                          ? `Evaluating… (${items.filter(i => i.evaluation).length}/${items.length})`
-                          : `Evaluate all (${items.filter(i => !i.evaluation).length} pending)`}
-                      </button>
-                    )}
-                  </summary>
-                  <div style={{ ...styles.historyGrid, marginTop: 10 }}>
-                    {items.map(item => {
-                      const ev = item.evaluation;
-                      return (
-                        <div key={item.key} style={styles.card} onClick={() => onOpen(item)}>
-                          <div style={{ position: 'relative' }}>
-                            {item.type === 'api'
-                              ? <LazyApiThumb id={item.id} base64thumb={item.base64thumb} mediaType={item.mediaType} style={styles.cardThumb} />
-                              : <LazyThumb htmlPath={item.htmlPath} style={styles.cardThumb} />
-                            }
-                            {item.type === 'api' && (
-                              <button
-                                style={styles.cardDeleteBtn}
-                                onClick={e => handleDeleteCard(e, item)}
-                                title="Delete"
-                              >✕</button>
-                            )}
+              {(() => {
+                const isModelView = sidebarGroupBy === 'chapter' && !selected;
+                const displayGroups = isModelView ? filteredByModel : filteredByChapter;
+                return Object.entries(displayGroups).map(([groupKey, items]) => {
+                  const isOpen = isModelView
+                    ? !collapsedGroups.has(groupKey)
+                    : openChapters.has(groupKey);
+                  return (
+                  <details key={groupKey} style={{ marginBottom: 16 }} open={isOpen}
+                    onToggle={e => {
+                      const open = e.currentTarget.open;
+                      if (isModelView) {
+                        setCollapsedGroups(prev => { const n = new Set(prev); open ? n.delete(groupKey) : n.add(groupKey); return n; });
+                      } else {
+                        setOpenChapters(prev => { const s = new Set(prev); open ? s.add(groupKey) : s.delete(groupKey); return s; });
+                      }
+                    }}
+                  >
+                    <summary style={{ ...styles.resultChapterHeader, cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none' }}>
+                      <span style={{ fontSize: 9, color: '#bbb', display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>{groupKey}
+                      <span style={{ fontWeight: 400, color: '#bbb', textTransform: 'none', letterSpacing: 0 }}>({items.length})</span>
+                      {items.some(i => !i.evaluation) && (
+                        <button
+                          style={{ marginLeft: 'auto', fontSize: 10, padding: '1px 8px', borderRadius: 4, border: '1px solid #d0d8e8', background: '#f2f6fb', color: '#5878a0', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={e => handleEvalAll(e, groupKey, items)}
+                          disabled={evaluatingAll === groupKey}
+                        >
+                          {evaluatingAll === groupKey
+                            ? `Evaluating… (${items.filter(i => i.evaluation).length}/${items.length})`
+                            : `Evaluate all (${items.filter(i => !i.evaluation).length} pending)`}
+                        </button>
+                      )}
+                    </summary>
+                    <div style={{ ...styles.historyGrid, marginTop: 10 }}>
+                      {items.map(item => {
+                        const ev = item.evaluation;
+                        return (
+                          <div key={item.key} style={styles.card} onClick={() => onOpen(item)}>
+                            <div style={{ position: 'relative' }}>
+                              {item.type === 'api'
+                                ? <LazyApiThumb id={item.id} base64thumb={item.base64thumb} mediaType={item.mediaType} style={styles.cardThumb} />
+                                : <LazyThumb htmlPath={item.htmlPath} style={styles.cardThumb} />
+                              }
+                              {item.type === 'api' && (
+                                <button
+                                  style={styles.cardDeleteBtn}
+                                  onClick={e => handleDeleteCard(e, item)}
+                                  title="Delete"
+                                >✕</button>
+                              )}
+                            </div>
+                            <div style={styles.cardInfo}>
+                              <p style={styles.cardFilename}>{item.figure}{item.genTotal > 1 && <span style={{ marginLeft: 5, fontSize: 9, background: '#e3e8f0', color: '#556', borderRadius: 6, padding: '1px 5px', fontWeight: 500 }}>g{item.genIndex}</span>}</p>
+                              {!isModelView && !selected?.model && <p style={{ fontSize: 10, color: '#999', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.model}</p>}
+                              {item.timestamp && <p style={{ ...styles.cardTs, marginBottom: 3 }}>{new Date(item.timestamp).toLocaleDateString()}</p>}
+                              {ev ? (
+                                <>
+                                  <span style={{ ...styles.sourceBadge, background: ev.overall_average >= 4 ? '#e8f5e9' : ev.overall_average >= 3 ? '#fff3e0' : '#ffebee', color: sc(ev.overall_average) }}>{ev.overall_average}/5</span>
+                                  {ev.failure_modes?.length > 0 && (
+                                    <CardFailureModes modes={ev.failure_modes} />
+                                  )}
+                                </>
+                              ) : (
+                                <button
+                                  style={{ ...styles.evalBtn, padding: '3px 0', fontSize: 10, marginTop: 4 }}
+                                  onClick={e => handleEvalCard(e, item)}
+                                  disabled={evaluatingKey === item.key}
+                                >
+                                  {evaluatingKey === item.key ? '…' : 'Evaluate'}
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <div style={styles.cardInfo}>
-                            <p style={styles.cardFilename}>{item.figure}{item.genTotal > 1 && <span style={{ marginLeft: 5, fontSize: 9, background: '#e3e8f0', color: '#556', borderRadius: 6, padding: '1px 5px', fontWeight: 500 }}>g{item.genIndex}</span>}</p>
-                            {!selected.model && <p style={{ fontSize: 10, color: '#999', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.model}</p>}
-                            {item.timestamp && <p style={{ ...styles.cardTs, marginBottom: 3 }}>{new Date(item.timestamp).toLocaleDateString()}</p>}
-                            {ev ? (
-                              <>
-                                <span style={{ ...styles.sourceBadge, background: ev.overall_average >= 4 ? '#e8f5e9' : ev.overall_average >= 3 ? '#fff3e0' : '#ffebee', color: sc(ev.overall_average) }}>{ev.overall_average}/5</span>
-                                {ev.failure_modes?.length > 0 && (
-                                  <CardFailureModes modes={ev.failure_modes} />
-                                )}
-                              </>
-                            ) : (
-                              <button
-                                style={{ ...styles.evalBtn, padding: '3px 0', fontSize: 10, marginTop: 4 }}
-                                onClick={e => handleEvalCard(e, item)}
-                                disabled={evaluatingKey === item.key}
-                              >
-                                {evaluatingKey === item.key ? '…' : 'Evaluate'}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </details>
-                );
-              })}
+                        );
+                      })}
+                    </div>
+                  </details>
+                  );
+                });
+              })()}
             </>
           )}
         </div>
@@ -1745,8 +1989,8 @@ function DashboardTab() {
 
   React.useEffect(() => {
     Promise.all([
-      fetch('/api/history').then(r => r.json()),
-      fetch('/api/experiments').then(r => r.json()),
+      apiFetch('/api/history').then(r => r.json()),
+      apiFetch('/api/experiments').then(r => r.json()),
     ])
       .then(([api, exp]) => { setApiRecords(api); setExpTree(exp); setLoading(false); })
       .catch(() => setLoading(false));
@@ -1793,6 +2037,120 @@ function DashboardTab() {
 
       <SourceSection title="Agent" color="agent" records={agentRecords} groupKey={groupKey} />
       <SourceSection title="Copilot" color="copilot" records={copilotRecords} groupKey={groupKey} />
+    </div>
+  );
+}
+
+// ── Chapter Preview Tab ──────────────────────────────────────────────────────
+function ChapterPreviewTab() {
+  const [bookStructure, setBookStructure] = React.useState([]);
+  const [selectedQmd, setSelectedQmd]     = React.useState(null);
+  const [previewHtml, setPreviewHtml]     = React.useState('');
+  const [previewLoading, setPreviewLoading] = React.useState(false);
+
+  // Load book structure (parts + chapters with matchCounts)
+  React.useEffect(() => {
+    apiFetch('/api/chapter-preview/book-structure')
+      .then(r => r.json())
+      .then(data => {
+        setBookStructure(data);
+        // Auto-select first chapter that has interactive figures
+        for (const entry of data) {
+          if (entry.type === 'chapter' && entry.matchCount > 0) { setSelectedQmd(entry); return; }
+          if (entry.type === 'part') {
+            const first = (entry.chapters || []).find(c => c.matchCount > 0);
+            if (first) { setSelectedQmd(first); return; }
+          }
+        }
+      }).catch(() => {});
+  }, []);
+
+  // Fetch rendered chapter HTML whenever selection changes
+  React.useEffect(() => {
+    if (!selectedQmd) { setPreviewHtml(''); return; }
+    setPreviewLoading(true);
+    apiFetch(`/api/chapter-preview/render?qmd=${encodeURIComponent(selectedQmd.file)}`)
+      .then(r => r.text())
+      .then(html => { setPreviewHtml(html); setPreviewLoading(false); })
+      .catch(() => setPreviewLoading(false));
+  }, [selectedQmd]);
+
+  const chapterBtn = (q, indent) => {
+    const active  = selectedQmd?.file === q.file;
+    const hasHTML = q.matchCount > 0;
+    return (
+      <button
+        key={q.file}
+        disabled={!hasHTML}
+        onClick={() => setSelectedQmd(q)}
+        style={{
+          display: 'block', width: '100%', textAlign: 'left',
+          padding: `4px 18px 4px ${indent}px`,
+          fontSize: 12.5,
+          fontFamily: 'Georgia, serif',
+          border: 'none',
+          cursor: hasHTML ? 'pointer' : 'default',
+          background: 'transparent',
+          color: hasHTML ? '#222' : '#bdbdbd',
+          fontWeight: active ? 600 : 400,
+          lineHeight: 1.35,
+        }}
+      >
+        {q.title || humanTitle(q.stem)}
+        {hasHTML && !active && (
+          <span style={{ float: 'right', fontSize: 9, color: '#6f86b4', background: '#f4f6fb', borderRadius: 3, padding: '1px 4px', marginTop: 1 }}>
+            ✦ {q.matchCount}
+          </span>
+        )}
+      </button>
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
+
+      {/* Left: book-structured chapter list */}
+      <div style={{ width: 270, minWidth: 270, borderRight: '1px solid #e7e7e7', overflowY: 'auto', background: '#fff', padding: '18px 0 40px' }}>
+        <div style={{ padding: '0 18px 16px', fontSize: 15, fontWeight: 500, color: '#222', fontFamily: 'Georgia, serif', lineHeight: 1.15 }}>
+          Foundations of Computer Vision
+        </div>
+        {bookStructure.map((entry, i) => {
+          if (entry.type === 'chapter') return chapterBtn(entry, 16);
+          if (entry.type === 'part') return (
+            <div key={`part-${i}`}>
+              <div style={{
+                padding: '12px 18px 6px', fontSize: 10, fontWeight: 700, color: '#aaa',
+                textTransform: 'uppercase', letterSpacing: '0.07em',
+                borderTop: i > 0 ? '1px solid #ededed' : 'none', marginTop: i > 0 ? 8 : 0,
+              }}>
+                {entry.title || humanTitle(entry.stem)}
+              </div>
+              {(entry.chapters || []).map(q => chapterBtn(q, 26))}
+            </div>
+          );
+          return null;
+        })}
+      </div>
+
+      {/* Right: chapter preview */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {!selectedQmd ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa', fontSize: 14 }}>
+            Select a chapter from the list
+          </div>
+        ) : previewLoading ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#aaa', fontSize: 13 }}>
+            Rendering chapter…
+          </div>
+        ) : (
+          <iframe
+            key={selectedQmd.file}
+            srcdoc={previewHtml}
+            style={{ flex: 1, border: 'none', width: '100%' }}
+            title="Chapter Preview"
+          />
+        )}
+      </div>
     </div>
   );
 }

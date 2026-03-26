@@ -163,7 +163,7 @@ def html_header():
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Interactive 3D Figures — Progress Report</title>
+<title>FiguresLLM — Progress Report</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Source+Code+Pro:wght@400;600&display=swap');
   *{box-sizing:border-box;margin:0;padding:0}
@@ -257,7 +257,7 @@ def html_header():
 def html_footer():
     return f'''
 <div class="doc-footer">
-  <span>Interactive 3D Figures Project &mdash; Internal Progress Report</span>
+  <span>FiguresLLM &mdash; Internal Progress Report</span>
   <span>Generated {datetime.now().strftime("%B %d, %Y at %H:%M")}</span>
 </div>
 </div></body></html>'''
@@ -283,7 +283,7 @@ def render_failure_tags(top_fails):
 def section_title():
     return f'''
 <div class="cover">
-  <div class="cover-title">Interactive 3D Figures<br>Progress Report</div>
+  <div class="cover-title">FiguresLLM<br>Progress Report</div>
   <div class="cover-subtitle">Agentic LLM pipeline for generating interactive 3D visualizations from 2D textbook figures</div>
   <div class="cover-meta">
     <span><strong>Date</strong>{datetime.now().strftime("%B %d, %Y")}</span>
@@ -341,21 +341,25 @@ dominate:</p>
 <h2>2. Pipeline Architecture and Current Stage</h2>
 
 <h3>Current pipeline (implemented)</h3>
-<p>The system currently implements a three-stage agentic loop:</p>
+<p>The system implements a four-stage agentic loop:</p>
 
 <div style="margin:16px 0 20px;padding:16px 20px;border:1px solid #ccc">
   <div style="display:flex;align-items:flex-start;gap:0;font-size:9.5pt">
     <div style="flex:1;padding-right:16px;border-right:1px solid #ddd">
-      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">1 &mdash; Generator</div>
-      <p style="margin:0">An LLM receives the source figure image plus a structured prompt (optionally including chapter QMD source and a Three.js base scaffold). Outputs a complete, self-contained HTML file with embedded Three.js scene.</p>
+      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">1 &mdash; Planner</div>
+      <p style="margin:0">Reads the chapter QMD and figure image. Produces a structured spec: what to make interactive, required labels, camera intent.</p>
     </div>
     <div style="flex:1;padding:0 16px;border-right:1px solid #ddd">
-      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">2 &mdash; Critic</div>
-      <p style="margin:0">A separate LLM instance evaluates the output against five quality metrics and a structured failure-mode taxonomy (10+ categories). Returns a JSON critique with scores and specific defect descriptions.</p>
+      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">2 &mdash; Generator</div>
+      <p style="margin:0">Receives the figure image, Planner spec, and optional Three.js scaffold. Outputs a self-contained HTML/Three.js scene.</p>
+    </div>
+    <div style="flex:1;padding:0 16px;border-right:1px solid #ddd">
+      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">3 &mdash; Critic</div>
+      <p style="margin:0">Scores the output on five metrics against a 10+ category failure taxonomy. Returns a structured JSON critique.</p>
     </div>
     <div style="flex:1;padding-left:16px">
-      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">3 &mdash; Refinement loop</div>
-      <p style="margin:0">The critic feedback is injected into the next generation prompt. The loop repeats until a quality threshold is reached or a maximum round count is exceeded. Human evaluators periodically score final outputs.</p>
+      <div style="font-weight:700;text-transform:uppercase;font-size:8pt;letter-spacing:.07em;color:#555;margin-bottom:6px">4 &mdash; Refinement</div>
+      <p style="margin:0">Critic feedback is fed back into the next generation prompt. Repeats until a score threshold or round limit is reached.</p>
     </div>
   </div>
 </div>
@@ -365,7 +369,7 @@ dominate:</p>
 models and prompts were selected and run by hand, outputs were scored by a single human evaluator per session, and
 results were logged in a tracking spreadsheet. This approach yielded the 153-row dataset analysed below.</p>
 <p>The project is now transitioning toward <strong>fully automated batch evaluation</strong> via the <span class="model-name">agent.js</span>
-CLI, which orchestrates the Generator–Critic loop without human intervention and logs structured JSON results
+CLI, which orchestrates the full loop without human intervention and logs structured JSON results
 automatically. This shift is intended to enable evaluation at the scale of the full 2,377-figure corpus.</p>
 
 <div class="callout note">
@@ -374,20 +378,6 @@ automatically. This shift is intended to enable evaluation at the scale of the f
   12 model variants would require hundreds of hours of manual work. The automated loop reduces this to a
   background batch job.</p>
 </div>
-
-<h3>Future pipeline extensions (planned)</h3>
-<p>Two extensions are under consideration to address the core failure modes identified in this study:</p>
-<ul style="margin:8px 0 12px 20px;line-height:1.9">
-  <li><strong>Interaction Planner agent.</strong> A dedicated upstream stage that parses the chapter source (QMD/LaTeX)
-  and the figure&#39;s pedagogical context to determine <em>what</em> should be interactive, <em>what parameters</em> the
-  user should be able to control, and which labels and annotations are factually required. This agent would produce a
-  structured specification that the Generator follows, reducing concept hallucination and label errors. A verification
-  pass would check for factual inconsistencies before passing the spec to the Generator.</li>
-  <li><strong>Interaction quality oracle.</strong> A specialised critic module focused solely on interaction design:
-  whether controls are within bounds, whether the interaction reveals the intended concept, and whether the initial
-  camera view is pedagogically correct. This addresses the two highest-frequency failure modes (Initial-View-Wrong
-  and Missing/Bad Labels).</li>
-</ul>
 '''
 
 def section_overview(data, ai_results, n_chapters, n_images):
@@ -400,89 +390,77 @@ def section_overview(data, ai_results, n_chapters, n_images):
     n_ai = len(ai_results)
     weeks = sorted(set(d['week'] for d in data if d['week']))
 
-    return f'''
-<h2>3. Study at a Glance</h2>
-
-<div class="stats-strip">
-  <div class="stat-cell">
-    <span class="stat-num">{n_images:,}</span>
-    <span class="stat-label">Source figures</span>
-    <span class="stat-sub">{n_chapters} chapters</span>
-  </div>
-  <div class="stat-cell">
-    <span class="stat-num">{n_human}</span>
-    <span class="stat-label">Human evaluations</span>
-    <span class="stat-sub">{n_scored} scored · {n_rendering_fail} render fail</span>
-  </div>
-  <div class="stat-cell">
-    <span class="stat-num">{n_models}</span>
-    <span class="stat-label">Models tested</span>
-    <span class="stat-sub">{n_prompts} prompt variants</span>
-  </div>
-  <div class="stat-cell">
-    <span class="stat-num">{n_figures_eval}</span>
-    <span class="stat-label">Figures evaluated</span>
-    <span class="stat-sub">{len(weeks)} weeks of study</span>
-  </div>
-  <div class="stat-cell">
-    <span class="stat-num">{n_ai}</span>
-    <span class="stat-label">AI critic scores</span>
-    <span class="stat-sub">automated pipeline</span>
-  </div>
-</div>
-
-<p>The evaluation study ran from February 9 to March 9, 2026 across {n_models} models and {n_prompts} prompt variants.
-All {n_human} human evaluations were conducted on {n_figures_eval} figures drawn from two chapters of the corpus
-(homographies and imaging). The {n_ai} AI critic scores provide an automated baseline against the same figure set.
-Corpus coverage currently stands at {n_figures_eval/n_images*100:.1f}% of the {n_images:,}-figure corpus.</p>
-'''
+    return ''
 
 def section_human_model(model_table, data):
     if not model_table:
-        return '<h2>2. Human Evaluation — Model Comparison</h2><p>No model comparison data available.</p>'
+        return '<h2>4. Human Evaluation — Model Comparison</h2><p>No model comparison data available.</p>'
 
     sorted_models = sorted(model_table, key=lambda x: x['overall'], reverse=True)
     prompt_filter = sorted_models[0].get('prompt_filter','') if sorted_models else ''
 
-    # rendering failure rates from raw data
-    fail_rates = {}
+    # rendering failure rates and counts from raw data
     model_counts = defaultdict(lambda: {'total': 0, 'failed': 0})
     for d in data:
         model_counts[d['model']]['total'] += 1
         if d['rendering_failure']:
             model_counts[d['model']]['failed'] += 1
-    for m, c in model_counts.items():
-        fail_rates[m] = c['failed'] / c['total'] * 100 if c['total'] else 0
 
-    rows = ''
-    for i, m in enumerate(sorted_models):
-        rank = i + 1
-        fr = fail_rates.get(m['model'], 0)
+    metric_names = ['Geometry', 'Interact.', 'Faithfulness', 'Labels', 'Concept']
+    colors       = ['rgba(52,100,180,0.78)','rgba(190,60,60,0.78)','rgba(46,150,100,0.78)','rgba(200,110,30,0.78)','rgba(120,70,170,0.78)']
+    model_labels = json.dumps([m['model'] for m in sorted_models])
+
+    datasets = []
+    for i, mn in enumerate(metric_names):
+        vals = json.dumps([round(m['metrics'][i], 2) if m['metrics'][i] is not None else 0 for m in sorted_models])
+        datasets.append(f'{{"label":"{mn}","data":{vals},"backgroundColor":"{colors[i]}","borderWidth":0,"borderRadius":0,"barThickness":11}}')
+    datasets_js = '[' + ','.join(datasets) + ']'
+
+    summary_rows = ''
+    for m in sorted_models:
+        mc = model_counts.get(m['model'], {'total': 0, 'failed': 0})
+        n = mc['total']
+        fr = mc['failed'] / mc['total'] * 100 if mc['total'] else 0
         fr_str = f'<span class="score score-lo">{fr:.0f}%</span>' if fr > 10 else f'{fr:.0f}%'
-        rows += f'''<tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">{rank}</td>
+        summary_rows += f'''<tr>
           <td><span class="model-name">{m["model"]}</span></td>
+          <td style="text-align:right">{n}</td>
           <td style="text-align:right">{render_score_badge(m["overall"])}</td>
-          {render_metric_cells(m["metrics"])}
           <td style="text-align:right">{fr_str}</td>
           <td style="font-size:8.5pt">{render_failure_tags(m["top_failures"])}</td>
         </tr>'''
 
     return f'''
 <h2>4. Human Evaluation — Model Comparison</h2>
-<p style="margin-bottom:12px">Scores are human ratings on a 1–5 scale. Prompt filter: <span class="prompt-name">{prompt_filter}</span>. Models ranked by overall average across all five quality dimensions.</p>
-<table>
+<p style="margin-bottom:14px">Human ratings (1–5 scale). Prompt filter: <span class="prompt-name">{prompt_filter}</span>. Ranked by overall average.</p>
+<div class="chart-fig-cap">Score by metric &amp; model</div>
+<div style="height:220px;position:relative;margin-bottom:20px"><canvas id="chartHumanModel"></canvas></div>
+<script>
+(function(){{
+  new Chart(document.getElementById('chartHumanModel'),{{
+    type:'bar',
+    data:{{labels:{model_labels},datasets:{datasets_js}}},
+    options:{{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{{
+        legend:{{position:'top',labels:{{font:{{size:8.5}},color:'#222',boxWidth:10,padding:10}}}},
+        tooltip:{{callbacks:{{label:c=>` ${{c.dataset.label}}: ${{c.parsed.y?.toFixed(2)}}`}}}}
+      }},
+      scales:{{
+        x:{{ticks:{{font:{{size:9,family:'"Source Code Pro",monospace'}},color:'#111'}},grid:{{display:false}}}},
+        y:{{min:0,max:5,ticks:{{font:{{size:8.5}},color:'#555',stepSize:1}},grid:{{color:'rgba(0,0,0,0.07)'}},
+           title:{{display:true,text:'Score (1–5)',font:{{size:8}},color:'#666'}}}}
+      }}
+    }}
+  }});
+}})();
+</script>
+<table style="font-size:9pt;margin-bottom:16px">
   <thead><tr>
-    <th>#</th><th>Model</th><th style="text-align:right">Overall</th>
-    <th style="text-align:right">Geom.</th>
-    <th style="text-align:right">Interact.</th>
-    <th style="text-align:right">Faith.</th>
-    <th style="text-align:right">Labels</th>
-    <th style="text-align:right">Concept</th>
-    <th style="text-align:right">Rend. fail</th>
-    <th>Primary failures</th>
+    <th>Model</th><th style="text-align:right">n</th><th style="text-align:right">Overall</th>
+    <th style="text-align:right">Rend. fail</th><th>Primary failures</th>
   </tr></thead>
-  <tbody>{rows}</tbody>
+  <tbody>{summary_rows}</tbody>
 </table>
 <div class="callout good"><p><strong>Best model.</strong> <span class="model-name">{sorted_models[0]["model"]}</span> achieves {sorted_models[0]["overall"]:.2f}/5 overall. Models with the <code>-with-base-code</code> suffix receive a Three.js scaffold as additional input context, consistently improving geometric accuracy and rendering reliability.</p></div>
 <div class="callout warn"><p><strong>Baseline.</strong> <span class="model-name">gpt-4o</span> scores 1.16/5 — the gap between the baseline and best model ({sorted_models[0]["overall"]-1.16:.2f} points) illustrates the gains from newer model families and prompt engineering.</p></div>
@@ -490,18 +468,26 @@ def section_human_model(model_table, data):
 
 def section_human_prompt(prompt_table):
     if not prompt_table:
-        return '<h2>3. Human Evaluation — Prompt Comparison</h2><p>No prompt data.</p>'
+        return '<h2>5. Human Evaluation — Prompt Comparison</h2><p>No prompt data.</p>'
 
     sorted_prompts = sorted(prompt_table, key=lambda x: x['overall'], reverse=True)
     model_filter = sorted_prompts[0].get('model_filter','') if sorted_prompts else ''
 
-    rows = ''
-    for i, p in enumerate(sorted_prompts):
-        rows += f'''<tr>
-          <td style="font-weight:700;color:#999;font-size:9pt">{i+1}</td>
+    metric_names = ['Geometry', 'Interact.', 'Faithfulness', 'Labels', 'Concept']
+    colors       = ['rgba(52,100,180,0.78)','rgba(190,60,60,0.78)','rgba(46,150,100,0.78)','rgba(200,110,30,0.78)','rgba(120,70,170,0.78)']
+    prompt_labels = json.dumps([p['prompt'] for p in sorted_prompts])
+
+    datasets = []
+    for i, mn in enumerate(metric_names):
+        vals = json.dumps([round(p['metrics'][i], 2) if p['metrics'][i] is not None else 0 for p in sorted_prompts])
+        datasets.append(f'{{"label":"{mn}","data":{vals},"backgroundColor":"{colors[i]}","borderWidth":0,"borderRadius":0,"barThickness":11}}')
+    datasets_js = '[' + ','.join(datasets) + ']'
+
+    summary_rows = ''
+    for p in sorted_prompts:
+        summary_rows += f'''<tr>
           <td><span class="prompt-name">{p["prompt"]}</span></td>
           <td style="text-align:right">{render_score_badge(p["overall"])}</td>
-          {render_metric_cells(p["metrics"])}
           <td style="font-size:8.5pt">{render_failure_tags(p["top_failures"])}</td>
         </tr>'''
 
@@ -511,7 +497,6 @@ def section_human_prompt(prompt_table):
         'one_line': 'Single-line minimal prompt',
         'limit_qmd': 'QMD context with length-limited prompt',
     }
-
     desc_rows = ''.join(
         f'<tr><td><span class="prompt-name">{k}</span></td><td style="font-size:12px;color:#555">{v}</td></tr>'
         for k, v in prompt_descriptions.items()
@@ -519,26 +504,39 @@ def section_human_prompt(prompt_table):
 
     return f'''
 <h2>5. Human Evaluation — Prompt Comparison</h2>
-<p style="margin-bottom:12px">Scores averaged across all models and figures. Model filter: all models.</p>
-<table>
+<p style="margin-bottom:14px">Scores averaged across all models and figures. Model filter: <span class="model-name">{model_filter}</span>.</p>
+<div class="chart-fig-cap">Score by metric &amp; prompt variant</div>
+<div style="height:220px;position:relative;margin-bottom:20px"><canvas id="chartHumanPrompt"></canvas></div>
+<script>
+(function(){{
+  new Chart(document.getElementById('chartHumanPrompt'),{{
+    type:'bar',
+    data:{{labels:{prompt_labels},datasets:{datasets_js}}},
+    options:{{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{{
+        legend:{{position:'top',labels:{{font:{{size:8.5}},color:'#222',boxWidth:10,padding:10}}}},
+        tooltip:{{callbacks:{{label:c=>` ${{c.dataset.label}}: ${{c.parsed.y?.toFixed(2)}}`}}}}
+      }},
+      scales:{{
+        x:{{ticks:{{font:{{size:9,family:'"Source Code Pro",monospace'}},color:'#111'}},grid:{{display:false}}}},
+        y:{{min:0,max:5,ticks:{{font:{{size:8.5}},color:'#555',stepSize:1}},grid:{{color:'rgba(0,0,0,0.07)'}},
+           title:{{display:true,text:'Score (1–5)',font:{{size:8}},color:'#666'}}}}
+      }}
+    }}
+  }});
+}})();
+</script>
+<table style="font-size:9pt;margin-bottom:16px">
   <thead><tr>
-    <th>#</th><th>Prompt variant</th><th style="text-align:right">Overall</th>
-    <th style="text-align:right">Geom.</th>
-    <th style="text-align:right">Interact.</th>
-    <th style="text-align:right">Faith.</th>
-    <th style="text-align:right">Labels</th>
-    <th style="text-align:right">Concept</th>
-    <th>Primary failures</th>
+    <th>Prompt variant</th><th style="text-align:right">Overall</th><th>Primary failures</th>
   </tr></thead>
-  <tbody>{rows}</tbody>
+  <tbody>{summary_rows}</tbody>
 </table>
-
-<h3>Prompt descriptions</h3>
 <table style="margin-bottom:20px">
   <thead><tr><th>Variant</th><th>Description</th></tr></thead>
   <tbody>{desc_rows}</tbody>
 </table>
-
 <div class="callout good"><p><strong>with_qmd achieves the highest concept accuracy (4.44)</strong> — supplying the source chapter text as context helps the model understand the pedagogical intent of each figure, leading to more accurate conceptual representations.</p></div>
 <div class="callout warn"><p><strong>limit_qmd underperforms despite including chapter context</strong> — truncating the QMD source to fit a length limit removes critical information. Providing the full chapter text is preferable to a truncated version.</p></div>
 '''
@@ -713,7 +711,7 @@ def section_ai_critic(ai_results):
         </tr>'''
 
     # Build chart data: grouped bars — one group per model, bars = metrics
-    colors = ['#1f4e8c','#c0392b','#27ae60','#d35400','#8e44ad']
+    colors = ['rgba(52,100,180,0.78)','rgba(190,60,60,0.78)','rgba(46,150,100,0.78)','rgba(200,110,30,0.78)','rgba(120,70,170,0.78)']
     datasets = []
     for i, (mk, mn) in enumerate(zip(metric_keys, metric_names)):
         vals = json.dumps([round(safe_avg(model_buckets[m][mk]) or 0, 2) for m in models_sorted])
@@ -875,15 +873,15 @@ def section_findings():
   </div>
 </div>
 
-<h3>Recommended next steps</h3>
+<h3>Next steps</h3>
 <ol style="margin-left:20px;line-height:1.9;font-size:10pt">
+  <li><strong>Rendering reliability.</strong> Instrument the pipeline to auto-classify and retry failures; target &lt;5% fail rate before scaling.</li>
+  <li><strong>Label quality intervention.</strong> Targeted prompt engineering for annotation accuracy — currently the weakest metric across all models.</li>
   <li><strong>Scale evaluation.</strong> Run the agent loop on 50+ figures across 5+ chapters; measure score distribution at corpus scale.</li>
-  <li><strong>Agent loop ablation.</strong> Compare round-1 vs. round-2 vs. round-3 outputs to quantify the gains from iterative refinement.</li>
-  <li><strong>Label quality intervention.</strong> Apply targeted prompt engineering focused on annotation accuracy, then re-evaluate.</li>
-  <li><strong>Inter-annotator agreement.</strong> Have two or more evaluators score the same outputs to validate rubric reliability and compute Cohen\xe2\x80\x99s \xce\xba.</li>
-  <li><strong>AI critic calibration.</strong> Expand the human/AI overlap set to compute Pearson correlation per metric and establish correction factors.</li>
-  <li><strong>Chapter coverage map.</strong> Track which of the 54 chapters have been converted and at what quality level, targeting systematic coverage.</li>
-  <li><strong>Rendering reliability.</strong> Instrument the pipeline to automatically log, classify, and retry rendering failures.</li>
+  <li><strong>Agent loop ablation.</strong> Compare round-1 vs. round-2 vs. round-3 outputs to quantify iterative refinement gains.</li>
+  <li><strong>AI critic calibration.</strong> Expand the human/AI overlap set; compute per-metric Pearson correlation and establish correction factors.</li>
+  <li><strong>Inter-annotator agreement.</strong> Two or more evaluators score the same outputs to validate rubric reliability (Cohen\u2019s \u03ba).</li>
+  <li><strong>Chapter coverage map.</strong> Systematically track which of the 54 chapters have been converted and at what quality level.</li>
 </ol>
 '''
 

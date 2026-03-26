@@ -41,6 +41,7 @@ async function screenshotHtml(html, waitMs = 2800) {
 
 const app = express();
 const PORT = 3001;
+const generationJobs = new Map();
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 const EXPERIMENTS_DIR    = path.join(__dirname, '..', '..', 'prompt_experiments');
@@ -348,7 +349,7 @@ app.post('/api/plan-chapter', async (req, res) => {
 });
 
 // ── Retry helper for transient provider/network errors ───────────────────────
-async function withRetry(fn, { retries = 2, baseDelay = 2000 } = {}) {
+async function withRetry(fn, { retries = 4, baseDelay = 2500 } = {}) {
   for (let attempt = 0; ; attempt++) {
     try {
       return await fn();
@@ -377,93 +378,133 @@ function buildPlanInjection(plan) {
   return parts.join('\n\n');
 }
 
-// ── POST /api/generate ────────────────────────────────────────────────────────
-app.post('/api/generate', async (req, res) => {
-  const { base64, mediaType, filename, plan, model: requestedModel } = req.body;
-
+async function generateFigure({ base64, mediaType, filename, plan, model: requestedModel, evaluate = true }) {
   if (!base64 || !mediaType || !filename) {
-    return res.status(400).json({ error: 'base64, mediaType, and filename are required.' });
+    const err = new Error('base64, mediaType, and filename are required.');
+    err.statusCode = 400;
+    throw err;
   }
 
-  // Use the model requested by the frontend, or fall back to the server default
   const modelId = requestedModel || CURRENT_MODEL;
   if (!requestedModel) {
     console.warn(`[generate] no model provided by client; falling back to default "${CURRENT_MODEL}"`);
   }
   console.log(`[generate] requested="${requestedModel}" → using="${modelId}" | file=${filename}`);
 
-  try {
-    // Generator always sees the image — it needs visual detail (geometry, colors,
-    // proportions, label positions) to recreate the figure. The planner only
-    // provides text-based context + interaction plan alongside.
-    const userContent = [
-      {
-        type: 'image_url',
-        image_url: { url: `data:${mediaType};base64,${base64}` },
-      },
-      {
-        type: 'text',
-        text: plan
-          ? buildPlanInjection(plan)
-          : 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.',
-      },
-    ];
+  const userContent = [
+    {
+      type: 'image_url',
+      image_url: { url: `data:${mediaType};base64,${base64}` },
+    },
+    {
+      type: 'text',
+      text: plan
+        ? buildPlanInjection(plan)
+        : 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.',
+    },
+  ];
 
-    let html = await withRetry(() => generateWithModel(modelId, {
-      systemPrompt: SYSTEM_PROMPT,
-      userContent,
-      maxTokens: 16384,
-    }));
-    html = stripFences(html);
-    html = fixGeneratedHtml(html);
+  let html = await withRetry(() => generateWithModel(modelId, {
+    systemPrompt: SYSTEM_PROMPT,
+    userContent,
+    maxTokens: 16384,
+  }));
+  html = stripFences(html);
+  html = fixGeneratedHtml(html);
 
-    // If the model still refused to output HTML, surface a clear error
-    if (!html.trimStart().startsWith('<')) {
-      console.error('Model did not return HTML. Raw response:\n', html.slice(0, 500));
-      return res.status(502).json({
-        error: 'The model did not return a valid HTML file. Please try again.',
-        raw: html.slice(0, 500),
-      });
-    }
+  if (!html.trimStart().startsWith('<')) {
+    console.error('Model did not return HTML. Raw response:\n', html.slice(0, 500));
+    const err = new Error('The model did not return a valid HTML file. Please try again.');
+    err.statusCode = 502;
+    err.raw = html.slice(0, 500);
+    throw err;
+  }
 
-    const figureId = makeId();
-    const timestamp = new Date().toISOString();
+  const figureId = makeId();
+  const timestamp = new Date().toISOString();
+  const shot = await screenshotHtml(html);
 
-    // Capture a screenshot of the generated figure as the thumbnail
-    const shot = await screenshotHtml(html);
+  const record = {
+    id: figureId,
+    filename,
+    base64thumb: shot ? shot.data : base64,
+    mediaType: shot ? shot.mediaType : (mediaType || 'image/png'),
+    source_base64: base64,
+    source_media_type: mediaType,
+    html,
+    timestamp,
+    source: 'api',
+    model: modelId,
+    experiment: CURRENT_EXPERIMENT,
+    promptHash: PROMPT_HASH,
+  };
+  const recordPath = path.join(RESULTS_DIR, `${figureId}.json`);
+  fs.writeFileSync(recordPath, JSON.stringify(record, null, 2));
 
-    // Save result to disk
-    const record = {
-      id: figureId,
-      filename,
-      base64thumb: shot ? shot.data : base64,        // thumbnail shown in UI (Puppeteer screenshot)
-      mediaType: shot ? shot.mediaType : (mediaType || 'image/png'),
-      source_base64: base64,                         // original input image — used by evaluator
-      source_media_type: mediaType,
-      html,
-      timestamp,
-      source: 'api',
-      model: modelId,
-      experiment: CURRENT_EXPERIMENT,
-      promptHash: PROMPT_HASH,
-    };
-    const recordPath = path.join(RESULTS_DIR, `${figureId}.json`);
-    fs.writeFileSync(recordPath, JSON.stringify(record, null, 2));
-
-    // Auto-evaluate immediately after generation
-    let evaluation = null;
+  let evaluation = null;
+  if (evaluate !== false) {
     try {
       evaluation = await runEvaluation(record, recordPath);
       console.log(`Auto-eval for ${figureId}: overall=${evaluation.overall_average}`);
     } catch (evalErr) {
       console.warn('Auto-eval failed (result saved without scores):', evalErr.message);
     }
-
-    return res.json({ html, figureId, timestamp, model: modelId, evaluation });
-  } catch (err) {
-    console.error(`Generation error (${modelId}):`, err?.message || err);
-    return res.status(500).json({ error: err?.message || `Unknown error from model ${modelId}.` });
   }
+
+  return { html, figureId, timestamp, model: modelId, evaluation };
+}
+
+function updateGenerationJob(jobId, patch) {
+  const current = generationJobs.get(jobId);
+  if (!current) return;
+  generationJobs.set(jobId, {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+// ── POST /api/generate ────────────────────────────────────────────────────────
+app.post('/api/generate', async (req, res) => {
+  try {
+    const result = await generateFigure(req.body);
+    return res.json(result);
+  } catch (err) {
+    const modelId = req.body?.model || CURRENT_MODEL;
+    console.error(`Generation error (${modelId}):`, err?.message || err);
+    return res.status(err.statusCode || 500).json({ error: err?.message || `Unknown error from model ${modelId}.`, ...(err.raw ? { raw: err.raw } : {}) });
+  }
+});
+
+app.post('/api/generate-async', (req, res) => {
+  const jobId = makeId();
+  generationJobs.set(jobId, {
+    id: jobId,
+    status: 'running',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  // Run immediately — no queue, full parallelism
+  generateFigure(req.body)
+    .then((result) => {
+      updateGenerationJob(jobId, { status: 'done', result });
+    })
+    .catch((err) => {
+      updateGenerationJob(jobId, {
+        status: 'error',
+        error: err?.message || 'Generation failed.',
+        ...(err?.raw ? { raw: err.raw } : {}),
+      });
+    });
+
+  return res.status(202).json({ jobId });
+});
+
+app.get('/api/generate-status/:id', (req, res) => {
+  const job = generationJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Generation job not found.' });
+  return res.json(job);
 });
 
 // ── Chapter inference ───────────────────────────────────────────────────────
@@ -597,8 +638,8 @@ async function runEvaluation(record, filePath) {
   ];
 
   const response = await getOpenAI().chat.completions.create({
-    model: 'gpt-5.4',
-    max_completion_tokens: 512,
+    model: 'gpt-4o',
+    max_tokens: 512,
     messages: [
       { role: 'system', content: buildEvalPrompt() },
       { role: 'user', content: userContent },
@@ -643,6 +684,43 @@ app.post('/api/evaluate', async (req, res) => {
     console.error('Evaluation error:', err?.message || err);
     return res.status(500).json({ error: err?.message || 'Unknown error during evaluation.' });
   }
+});
+
+// ── POST /api/evaluate-batch ──────────────────────────────────────────────────
+// Accepts { ids: string[] } and evaluates them one-by-one (no concurrency).
+// Returns results as they complete via streaming JSON lines.
+app.post('/api/evaluate-batch', async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids (array) is required.' });
+  }
+
+  // Stream results line-by-line so the frontend can show progress
+  res.setHeader('Content-Type', 'application/x-ndjson');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  for (const id of ids) {
+    const filePath = path.join(RESULTS_DIR, `${id}.json`);
+    if (!fs.existsSync(filePath)) {
+      res.write(JSON.stringify({ id, status: 'error', error: 'Result not found.' }) + '\n');
+      continue;
+    }
+
+    let record;
+    try { record = JSON.parse(fs.readFileSync(filePath, 'utf-8')); }
+    catch { res.write(JSON.stringify({ id, status: 'error', error: 'Failed to read result.' }) + '\n'); continue; }
+
+    try {
+      const evaluation = await runEvaluation(record, filePath);
+      res.write(JSON.stringify({ id, status: 'ok', evaluation }) + '\n');
+    } catch (err) {
+      console.error(`Batch eval error for ${id}:`, err?.message || err);
+      res.write(JSON.stringify({ id, status: 'error', error: err?.message || 'Evaluation failed.' }) + '\n');
+    }
+  }
+
+  res.end();
 });
 
 // ── DELETE /api/result/:id ────────────────────────────────────────────────────
@@ -858,8 +936,8 @@ app.post('/api/experiments/evaluate', async (req, res) => {
     ];
 
     const response = await getOpenAI().chat.completions.create({
-      model: 'gpt-5.4',
-      max_completion_tokens: 512,
+      model: 'gpt-4o',
+      max_tokens: 512,
       messages: [
         { role: 'system', content: evalSystemPrompt },
         { role: 'user', content: userContent },
@@ -888,6 +966,179 @@ app.post('/api/experiments/evaluate', async (req, res) => {
     return res.json(evaluation);
   } catch (err) {
     return res.status(500).json({ error: err?.message || 'Unknown error.' });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Chapter Preview & Editor routes
+// ══════════════════════════════════════════════════════════════════════════════
+const {
+  listQmdFiles, listBookStructure, buildChapterHtml, getSubstitutionMap,
+  saveOverride, analyzeChapterFigure, QMD_DIR,
+} = require('./chapter_editor');
+const { generateWithModel: genModel } = require('./models');
+
+// ── GET /api/chapter-preview/qmds — list available qmd files ─────────────────
+app.get('/api/chapter-preview/qmds', (req, res) => {
+  try {
+    return res.json(listQmdFiles());
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/chapter-preview/book-structure — full parts+chapters tree ─────────
+app.get('/api/chapter-preview/book-structure', (req, res) => {
+  try {
+    return res.json(listBookStructure());
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/chapter-preview/substitutions — what figures can be swapped ──────
+app.get('/api/chapter-preview/substitutions', (req, res) => {
+  const { qmd } = req.query;
+  if (!qmd) return res.status(400).json({ error: 'qmd param required' });
+  const qmdPath = path.resolve(path.join(QMD_DIR, qmd));
+  if (!qmdPath.startsWith(QMD_DIR) || !fs.existsSync(qmdPath))
+    return res.status(404).json({ error: 'QMD file not found' });
+  try {
+    return res.json(getSubstitutionMap(qmdPath));
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/chapter-preview/render — return augmented chapter HTML ───────────
+// Query: qmd=<filename>, selections=<JSON { figStem: { experiment, model } }>
+app.get('/api/chapter-preview/render', (req, res) => {
+  const { qmd, selections } = req.query;
+  if (!qmd) return res.status(400).json({ error: 'qmd param required' });
+  const qmdPath = path.resolve(path.join(QMD_DIR, qmd));
+  if (!qmdPath.startsWith(QMD_DIR) || !fs.existsSync(qmdPath))
+    return res.status(404).json({ error: 'QMD file not found' });
+  try {
+    const figSelections = selections ? JSON.parse(selections) : {};
+    const { html, substituted } = buildChapterHtml(qmdPath, figSelections);
+    res.setHeader('Content-Type', 'text/html');
+    res.send(html);
+  } catch (err) {
+    return res.status(500).send(`<pre>Error: ${err.message}</pre>`);
+  }
+});
+
+// ── GET /api/chapter-preview/figure-html — serve a generated figure HTML ──────
+// (used by the iframes inside the chapter preview; proxied so CORS works)
+app.get('/api/chapter-preview/figure-html', (req, res) => {
+  const p = path.resolve(req.query.path || '');
+  if (!p.startsWith(path.resolve(EXPERIMENTS_DIR)) || !fs.existsSync(p))
+    return res.status(404).send('Not found');
+  res.setHeader('Content-Type', 'text/html');
+  res.send(fs.readFileSync(p, 'utf-8'));
+});
+
+// ── POST /api/chapter-preview/save-override — save a wrapper edit ─────────────
+// Body: { chapter, experiment, model, figStem, wrapperHtml }
+app.post('/api/chapter-preview/save-override', (req, res) => {
+  const { chapter, figStem, wrapperHtml } = req.body;
+  if (!chapter || !figStem || !wrapperHtml)
+    return res.status(400).json({ error: 'Missing required fields: chapter, figStem, wrapperHtml' });
+  try {
+    saveOverride(chapter, figStem, wrapperHtml);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/chapter-preview/analyze-figure — VLM reasoning about a figure ──
+// Body: { qmd, figStem, question?, resultId?, modelId? }
+// Sends the figure thumbnail + surrounding chapter text to GPT-4o and returns
+// a reasoned analysis of quality, zoom, correctness, and improvement suggestions.
+app.post('/api/chapter-preview/analyze-figure', async (req, res) => {
+  const { qmd, figStem, question, resultId, modelId } = req.body;
+  if (!qmd || !figStem)
+    return res.status(400).json({ error: 'qmd and figStem are required' });
+  const qmdPath = path.resolve(path.join(QMD_DIR, qmd));
+  if (!qmdPath.startsWith(QMD_DIR) || !fs.existsSync(qmdPath))
+    return res.status(404).json({ error: 'QMD file not found' });
+  try {
+    const result = await analyzeChapterFigure(qmdPath, figStem, { resultId, question, modelId });
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/chapter-preview/ai-edit — LLM chapter editor ───────────────────
+// Takes a screenshot of the current render + the wrapper HTML for one figure,
+// asks the LLM to improve the embed (zoom, height, hide UI panels, etc.),
+// returns the revised wrapper HTML. Does NOT auto-save (UI confirms first).
+app.post('/api/chapter-preview/ai-edit', async (req, res) => {
+  const { figStem, currentWrapperHtml, htmlPath, width, screenshotBase64, modelId, notes } = req.body;
+  if (!figStem || !htmlPath) return res.status(400).json({ error: 'figStem and htmlPath required' });
+
+  // Read the figure HTML so the LLM can inspect it
+  const absHtml = path.resolve(htmlPath);
+  if (!fs.existsSync(absHtml)) return res.status(404).json({ error: 'Figure HTML not found' });
+  const figHtml = fs.readFileSync(absHtml, 'utf-8');
+
+  const wrapper = currentWrapperHtml || defaultWrapper(htmlPath, width || '100%');
+
+  const systemPrompt = `You are a chapter integration editor for an interactive textbook.
+Your job is to produce a revised HTML wrapper <div> that embeds an interactive figure (served as an iframe)
+so it looks polished inside a chapter page.
+
+You can modify:
+- The iframe height (default 480px)
+- The div margin, border, border-radius, background
+- Add a transform:scale() on the iframe to zoom in/out if the figure has too much empty space
+  (use: iframe { transform: scale(0.85); transform-origin: top left; width: calc(100%/0.85); height: calc(560px/0.85); })
+- Hide distracting UI panels by injecting a <style> block into the iframe via srcdoc or postMessage
+  (preferred: wrap the iframe src in a data URI that loads it and overrides CSS)
+
+IMPORTANT RULES:
+- The iframe src attribute MUST remain exactly: /api/chapter-preview/figure-html?path=<original-encoded-path>
+  Do NOT change the src path.
+- Output ONLY the replacement wrapper HTML snippet (the outer <div> and everything inside, including the caption <p> if present).
+- Do NOT include <!DOCTYPE>, <html>, <head>, or <body> tags.
+- Do NOT include any explanation — just the HTML.`;
+
+  const userContent = [
+    ...(screenshotBase64 ? [{
+      type: 'image_url',
+      image_url: { url: `data:image/jpeg;base64,${screenshotBase64}` },
+    }] : []),
+    {
+      type: 'text',
+      text: `Figure name: ${figStem}
+Desired width in chapter: ${width || '100%'}
+${notes ? `Editor notes: ${notes}\n` : ''}
+Current wrapper HTML:
+\`\`\`html
+${wrapper}
+\`\`\`
+
+Figure source HTML (first 6000 chars):
+\`\`\`html
+${figHtml.slice(0, 6000)}
+\`\`\`
+
+Please produce an improved wrapper that makes this figure look great in the chapter context.`,
+    },
+  ];
+
+  try {
+    const llmModel = modelId || 'gpt-4o';
+    const result = await genModel(llmModel, {
+      systemPrompt,
+      userContent,
+      maxTokens: 1200,
+    });
+    return res.json({ wrapperHtml: result.trim() });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 
