@@ -35,7 +35,8 @@ const OpenAI = require('openai').default;
 const puppeteer = require('puppeteer');
 
 const { evaluateHtmlWithCritic } = require('./critic');
-const { planForFigure, inferChapterFromFilename } = require('./planner');
+const { planForFigure } = require('./planner');
+const { inferChapterFromFilename } = require('./chapter-discovery');
 
 // ── Parse CLI args ─────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);

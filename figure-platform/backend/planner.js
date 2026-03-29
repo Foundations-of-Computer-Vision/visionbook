@@ -17,11 +17,11 @@
 const fs = require('fs');
 const path = require('path');
 const { generateWithModel } = require('./models');
+const { inferChapterFromFilename, list3dCandidates } = require('./chapter-discovery');
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
 const ROOT_DIR = path.join(__dirname, '..', '..');
 const QMD_DIR = ROOT_DIR;                                     // .qmd files live at repo root
-const CHAPTER_FIGURES_DIR = path.join(__dirname, '..', 'chapter-figures');
 
 const PLANNER_MODEL = 'gpt-4o';
 // gpt-4o is fast and non-reasoning — no hidden thinking tokens.
@@ -113,20 +113,7 @@ function loadChapterText(chapterName) {
   return fs.readFileSync(qmdPath, 'utf-8');
 }
 
-// ── List 3D candidate images for a chapter ──────────────────────────────────
-function list3dCandidates(chapterName) {
-  const dir = path.join(CHAPTER_FIGURES_DIR, chapterName, 'candidates_3d');
-  if (!fs.existsSync(dir)) return [];
-  const exts = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
-  return fs.readdirSync(dir)
-    .filter(f => exts.has(path.extname(f).toLowerCase()))
-    .map(f => ({
-      filename: f,
-      stem: f.replace(/\.[^.]+$/, ''),
-      fullPath: path.join(dir, f),
-    }))
-    .sort((a, b) => a.stem.localeCompare(b.stem));
-}
+
 
 // ── LLM interaction planner (fast, small-token call) ────────────────────────
 
@@ -185,8 +172,10 @@ async function generateInteractionPlan(contextChunk, figureStem) {
  * @returns {{ figureStem, chapterName, contextChunk, interactionPlan }}
  */
 async function planForFigure(figureStem, chapterName) {
+  const resolvedChapter = chapterName || inferChapterFromFilename(figureStem);
+
   // Try to load chapter text
-  const qmdContent = chapterName ? loadChapterText(chapterName) : null;
+  const qmdContent = resolvedChapter ? loadChapterText(resolvedChapter) : null;
   let contextChunk = '';
 
   if (qmdContent) {
@@ -199,7 +188,7 @@ async function planForFigure(figureStem, chapterName) {
 
   return {
     figureStem,
-    chapterName: chapterName || null,
+    chapterName: resolvedChapter || null,
     contextChunk,
     interactionPlan,
   };
@@ -242,55 +231,7 @@ async function planChapter(chapterName) {
   return plans;
 }
 
-/**
- * List all chapters with their 3D candidate counts.
- */
-function listChapters() {
-  if (!fs.existsSync(CHAPTER_FIGURES_DIR)) return [];
-  return fs.readdirSync(CHAPTER_FIGURES_DIR)
-    .filter(d => {
-      try { return fs.statSync(path.join(CHAPTER_FIGURES_DIR, d)).isDirectory(); } catch { return false; }
-    })
-    .map(d => {
-      const candidates = list3dCandidates(d);
-      return { name: d, candidateCount: candidates.length };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/**
- * Infer the chapter name from a figure filename using chapter-figures/ folder structure.
- */
-function inferChapterFromFilename(filename) {
-  const stem = filename.replace(/\.[^.]+$/, '').toLowerCase();
-  if (!fs.existsSync(CHAPTER_FIGURES_DIR)) return null;
-
-  const chapters = fs.readdirSync(CHAPTER_FIGURES_DIR).filter(d => {
-    try { return fs.statSync(path.join(CHAPTER_FIGURES_DIR, d)).isDirectory(); } catch { return false; }
-  });
-
-  // Check candidates_3d folders for exact match
-  for (const ch of chapters) {
-    const dir = path.join(CHAPTER_FIGURES_DIR, ch, 'candidates_3d');
-    if (!fs.existsSync(dir)) continue;
-    for (const f of fs.readdirSync(dir)) {
-      if (f.replace(/\.[^.]+$/, '').toLowerCase() === stem) return ch;
-    }
-  }
-
-  // Substring match on chapter name
-  const byLen = [...chapters].sort((a, b) => b.length - a.length);
-  for (const ch of byLen) {
-    if (stem.includes(ch.toLowerCase())) return ch;
-  }
-
-  return null;
-}
-
 module.exports = {
   planForFigure,
   planChapter,
-  listChapters,
-  list3dCandidates,
-  inferChapterFromFilename,
 };

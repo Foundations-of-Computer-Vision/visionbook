@@ -6,7 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 const { evaluateHtmlWithCritic } = require('./critic');
-const { planForFigure, planChapter, listChapters, list3dCandidates, inferChapterFromFilename } = require('./planner');
+const { planForFigure, planChapter } = require('./planner');
+const { listChapters, list3dCandidates } = require('./chapter-discovery');
 const { generateWithModel, getAvailableModels } = require('./models');
 
 // ── Screenshot helper ────────────────────────────────────────────────────────────
@@ -323,7 +324,7 @@ app.post('/api/plan', async (req, res) => {
   if (!filename) return res.status(400).json({ error: 'filename is required.' });
 
   const stem = filename.replace(/\.[^.]+$/, '');
-  const chapter = chapterHint || inferChapterFromFilename(filename) || inferChapter(stem);
+  const chapter = chapterHint || null;
 
   try {
     const plan = await planForFigure(stem, chapter);
