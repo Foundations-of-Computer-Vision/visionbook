@@ -619,15 +619,9 @@ app.post('/api/save', (req, res) => {
 // Edit critic.js to change failure modes, score rubrics, or derived metrics.
 
 // ── Shared evaluation runner ─────────────────────────────────────────────────
-// Calls the evaluator model, finalises scores, persists to the record file,
-// and returns the evaluation object. Throws on error.
-async function runEvaluation(record, filePath) {
-  const { html, source_base64, source_media_type, base64thumb } = record;
-  if (!html) throw new Error('No HTML found for this result.');
-
-  // Always evaluate against the original source image, not the generated screenshot
-  const evalImage = source_base64 || base64thumb;
-  const evalMediaType = source_media_type || 'image/png';
+// Shared evaluator call: runs model + parses JSON + finalises rubric scores.
+async function evaluateHtmlWithPrompt({ html, evalImage, evalMediaType = 'image/png' }) {
+  if (!html) throw new Error('No HTML found for evaluation.');
 
   const userContent = [
     ...(evalImage
@@ -652,7 +646,24 @@ async function runEvaluation(record, filePath) {
   try { evaluation = JSON.parse(content); }
   catch { throw new Error('Evaluator did not return valid JSON: ' + content.slice(0, 200)); }
 
-  evaluation = finaliseEval(evaluation);
+  return finaliseEval(evaluation);
+}
+
+// Calls the shared evaluator, persists to the record file,
+// and returns the evaluation object. Throws on error.
+async function runEvaluation(record, filePath) {
+  const { html, source_base64, source_media_type, base64thumb } = record;
+  if (!html) throw new Error('No HTML found for this result.');
+
+  // Always evaluate against the original source image, not the generated screenshot
+  const evalImage = source_base64 || base64thumb;
+  const evalMediaType = source_media_type || 'image/png';
+
+  const evaluation = await evaluateHtmlWithPrompt({
+    html,
+    evalImage,
+    evalMediaType,
+  });
 
   // Persist back to disk
   record.evaluation = evaluation;
@@ -923,33 +934,12 @@ app.post('/api/experiments/evaluate', async (req, res) => {
     if (fs.existsSync(absImg)) base64thumb = fs.readFileSync(absImg).toString('base64');
   }
 
-  // Reuse same evaluation prompt from /api/evaluate
-  const evalSystemPrompt = buildEvalPrompt();
-
   try {
-    const userContent = [
-      ...(base64thumb ? [{ type: 'image_url', image_url: { url: `data:image/png;base64,${base64thumb}` } }] : []),
-      { type: 'text', text: `Here is the generated HTML code to evaluate:\n\n${html}\n\nOutput ONLY the JSON evaluation object.` },
-    ];
-
-    let content = await generateWithModel('gpt-4o', {
-      systemPrompt: evalSystemPrompt,
-      userContent,
-      maxTokens: 512,
+    const evaluation = await evaluateHtmlWithPrompt({
+      html,
+      evalImage: base64thumb,
+      evalMediaType: 'image/png',
     });
-    const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fenced) content = fenced[1].trim();
-    content = content.trim();
-
-    let evaluation;
-    try { evaluation = JSON.parse(content); }
-    catch { return res.status(502).json({ error: 'Model did not return valid JSON.', raw: content.slice(0, 300) }); }
-
-    const scoreKeys = ['geometry_accuracy', 'interactivity_usability', 'faithfulness', 'label_quality', 'concept_accuracy'];
-    for (const key of scoreKeys) evaluation[key] = Math.min(5, Math.max(1, Math.round(Number(evaluation[key]) || 3)));
-
-    evaluation.visual_aesthetics = Math.round(((evaluation.geometry_accuracy + evaluation.faithfulness + evaluation.label_quality) / 3) * 10) / 10;
-    evaluation.overall_average = Math.round(((evaluation.geometry_accuracy + evaluation.interactivity_usability + evaluation.faithfulness + evaluation.label_quality + evaluation.concept_accuracy) / 5) * 10) / 10;
 
     // Cache alongside the HTML file
     const evalPath = absHtml.replace(/\.html$/, '.eval.json');
