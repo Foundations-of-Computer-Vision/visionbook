@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
-const { buildEvalPrompt, finaliseEval } = require('./critic');
+const { evaluateHtmlWithCritic } = require('./critic');
 const { planForFigure, planChapter, listChapters, list3dCandidates, inferChapterFromFilename } = require('./planner');
 const { generateWithModel, getAvailableModels } = require('./models');
 
@@ -615,40 +615,6 @@ app.post('/api/save', (req, res) => {
   return res.json({ id, timestamp });
 });
 
-// ── buildEvalPrompt + finaliseEval live in critic.js ─────────────────────────
-// Edit critic.js to change failure modes, score rubrics, or derived metrics.
-
-// ── Shared evaluation runner ─────────────────────────────────────────────────
-// Shared evaluator call: runs model + parses JSON + finalises rubric scores.
-async function evaluateHtmlWithPrompt({ html, evalImage, evalMediaType = 'image/png' }) {
-  if (!html) throw new Error('No HTML found for evaluation.');
-
-  const userContent = [
-    ...(evalImage
-      ? [{ type: 'image_url', image_url: { url: `data:${evalMediaType};base64,${evalImage}` } }]
-      : []),
-    {
-      type: 'text',
-      text: `Here is the generated HTML code to evaluate:\n\n${html}\n\nOutput ONLY the JSON evaluation object.`,
-    },
-  ];
-
-  let content = await generateWithModel('gpt-4o', {
-    systemPrompt: buildEvalPrompt(),
-    userContent,
-    maxTokens: 512,
-  });
-  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) content = fenced[1].trim();
-  content = content.trim();
-
-  let evaluation;
-  try { evaluation = JSON.parse(content); }
-  catch { throw new Error('Evaluator did not return valid JSON: ' + content.slice(0, 200)); }
-
-  return finaliseEval(evaluation);
-}
-
 // Calls the shared evaluator, persists to the record file,
 // and returns the evaluation object. Throws on error.
 async function runEvaluation(record, filePath) {
@@ -659,7 +625,7 @@ async function runEvaluation(record, filePath) {
   const evalImage = source_base64 || base64thumb;
   const evalMediaType = source_media_type || 'image/png';
 
-  const evaluation = await evaluateHtmlWithPrompt({
+  const evaluation = await evaluateHtmlWithCritic({
     html,
     evalImage,
     evalMediaType,
@@ -935,7 +901,7 @@ app.post('/api/experiments/evaluate', async (req, res) => {
   }
 
   try {
-    const evaluation = await evaluateHtmlWithPrompt({
+    const evaluation = await evaluateHtmlWithCritic({
       html,
       evalImage: base64thumb,
       evalMediaType: 'image/png',

@@ -28,13 +28,13 @@
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-const crypto  = require('crypto');
-const fs      = require('fs');
-const path    = require('path');
-const OpenAI  = require('openai').default;
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const OpenAI = require('openai').default;
 const puppeteer = require('puppeteer');
 
-const { buildEvalPrompt, finaliseEval } = require('./critic');
+const { evaluateHtmlWithCritic } = require('./critic');
 const { planForFigure, inferChapterFromFilename } = require('./planner');
 
 // ── Parse CLI args ─────────────────────────────────────────────────────────────
@@ -45,18 +45,18 @@ function flag(name) {
 }
 function hasFlag(name) { return args.includes(name); }
 
-const IMAGE_PATH   = flag('--image');
-const DIR_PATH     = flag('--dir');
-const EXTS         = (flag('--ext') || 'png,jpg,jpeg').split(',').map(e => e.toLowerCase().replace(/^\./, ''));
-const MAX_ROUNDS   = parseInt(flag('--rounds')    || '1',   10);
-const THRESHOLD    = parseFloat(flag('--threshold') || '4.0');
-const GEN_MODEL    = flag('--model')       || 'gpt-5.4';
-const EVAL_MODEL   = flag('--eval-model')  || 'gpt-5.4';
+const IMAGE_PATH = flag('--image');
+const DIR_PATH = flag('--dir');
+const EXTS = (flag('--ext') || 'png,jpg,jpeg').split(',').map(e => e.toLowerCase().replace(/^\./, ''));
+const MAX_ROUNDS = parseInt(flag('--rounds') || '1', 10);
+const THRESHOLD = parseFloat(flag('--threshold') || '4.0');
+const GEN_MODEL = flag('--model') || 'gpt-5.4';
+const EVAL_MODEL = flag('--eval-model') || 'gpt-5.4';
 const EXPERIMENT_OVERRIDE = flag('--experiment');  // manual override, else auto-derived from prompt hash
 const DO_SCREENSHOT = !hasFlag('--no-screenshot');
-const SKIP_PLAN    = hasFlag('--no-plan');
+const SKIP_PLAN = hasFlag('--no-plan');
 const CHAPTER_HINT = flag('--chapter');
-const DRY_RUN      = hasFlag('--dry-run');
+const DRY_RUN = hasFlag('--dry-run');
 
 if (!IMAGE_PATH && !DIR_PATH) {
   console.error('Usage: node agent.js --image <path>  OR  --dir <path>');
@@ -110,7 +110,7 @@ async function screenshotHtml(html, waitMs = 2800) {
     console.warn('  Screenshot failed:', err.message);
     return null;
   } finally {
-    if (page) await page.close().catch(() => {});
+    if (page) await page.close().catch(() => { });
   }
 }
 
@@ -229,7 +229,7 @@ const SYSTEM_PROMPT = buildSystemPrompt(BASE_SCAFFOLD);
 
 // ── Derive experiment label from prompt hash (matches server.js logic) ────────
 const PROMPT_HASH = crypto.createHash('sha256').update(SYSTEM_PROMPT).digest('hex').slice(0, 8);
-const EXPERIMENT  = EXPERIMENT_OVERRIDE || `base_scene_robust_${PROMPT_HASH}`;
+const EXPERIMENT = EXPERIMENT_OVERRIDE || `base_scene_robust_${PROMPT_HASH}`;
 
 // ── Refinement prompt (used in round 2+) ─────────────────────────────────────
 function buildRefinementPrompt(scaffold, prevHtml, evaluation) {
@@ -334,25 +334,25 @@ async function processImage(imagePath) {
     // Planner provides text-based context + interactions alongside.
     const genMessages = round === 1
       ? [
-          { role: 'system', content: SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: [
-              { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
-              { type: 'text', text: baseUserText + planInjection },
-            ],
-          },
-        ]
+        { role: 'system', content: SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
+            { type: 'text', text: baseUserText + planInjection },
+          ],
+        },
+      ]
       : [
-          { role: 'system', content: buildRefinementPrompt(BASE_SCAFFOLD, html, evaluation) },
-          {
-            role: 'user',
-            content: [
-              { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
-              { type: 'text', text: 'Here is the same original figure. Apply the critic feedback and output the improved complete HTML file. No explanation, no markdown, no fences.' + planInjection },
-            ],
-          },
-        ];
+        { role: 'system', content: buildRefinementPrompt(BASE_SCAFFOLD, html, evaluation) },
+        {
+          role: 'user',
+          content: [
+            { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
+            { type: 'text', text: 'Here is the same original figure. Apply the critic feedback and output the improved complete HTML file. No explanation, no markdown, no fences.' + planInjection },
+          ],
+        },
+      ];
 
     const genResp = await getOpenAI().chat.completions.create({
       model: GEN_MODEL,
@@ -371,30 +371,16 @@ async function processImage(imagePath) {
 
     // ── EVALUATOR ─────────────────────────────────────────────────────────────
     console.log(`  [round ${round}/${MAX_ROUNDS}] evaluating...`);
-    const evalResp = await getOpenAI().chat.completions.create({
-      model: EVAL_MODEL,
-      max_completion_tokens: 512,
-      messages: [
-        { role: 'system', content: buildEvalPrompt() },
-        {
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
-            { type: 'text', text: `Here is the generated HTML code to evaluate:\n\n${html}\n\nOutput ONLY the JSON evaluation object.` },
-          ],
-        },
-      ],
-    });
-
-    let evalContent = evalResp.choices[0].message.content || '';
-    const fenced = evalContent.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fenced) evalContent = fenced[1].trim();
-    evalContent = evalContent.trim();
-
     try {
-      evaluation = finaliseEval(JSON.parse(evalContent));
-    } catch {
-      console.warn(`  ✗ Evaluator returned invalid JSON (round ${round}). Skipping eval.`);
+      evaluation = await evaluateHtmlWithCritic({
+        html,
+        evalImage: imageBase64,
+        evalMediaType: mediaType,
+        model: EVAL_MODEL,
+        maxTokens: 512,
+      });
+    } catch (err) {
+      console.warn(`  ✗ Evaluator failed (round ${round}): ${err.message}. Skipping eval.`);
       evaluation = null;
       break;
     }
@@ -423,20 +409,20 @@ async function processImage(imagePath) {
   // ── SAVE RESULT ─────────────────────────────────────────────────────────────
   const figureId = makeId();
   const record = {
-    id:          figureId,
+    id: figureId,
     filename,
     base64thumb: thumb ? thumb.data : imageBase64,
-    mediaType:   thumb ? thumb.mediaType : mediaType,
+    mediaType: thumb ? thumb.mediaType : mediaType,
     html,
-    timestamp:   new Date().toISOString(),
-    source:      'agent',
-    model:       GEN_MODEL,
-    eval_model:  EVAL_MODEL,
-    experiment:  EXPERIMENT,
-    promptHash:  PROMPT_HASH,
-    rounds:      round,
-    evaluation:  evaluation || null,
-    plan:        plan || null,
+    timestamp: new Date().toISOString(),
+    source: 'agent',
+    model: GEN_MODEL,
+    eval_model: EVAL_MODEL,
+    experiment: EXPERIMENT,
+    promptHash: PROMPT_HASH,
+    rounds: round,
+    evaluation: evaluation || null,
+    plan: plan || null,
   };
 
   const outPath = path.join(RESULTS_DIR, `${figureId}.json`);
@@ -484,7 +470,7 @@ if (IMAGE_PATH) {
     }
   }
 
-  if (_browser) await _browser.close().catch(() => {});
+  if (_browser) await _browser.close().catch(() => { });
   console.log(`\n✓ Done — ${imagePaths.length} image(s) processed`);
   process.exit(0);
 })();

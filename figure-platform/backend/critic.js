@@ -5,18 +5,35 @@
  * Edit this file to change what the critic looks for, how it scores, or what it outputs.
  */
 
+const OpenAI = require('openai').default;
+
+let _openai = null;
+function getOpenAI() {
+  if (!_openai) {
+    const key = process.env.OPENAI_API_KEY;
+    if (!key || key === 'your_openai_api_key_here') {
+      throw new Error('OPENAI_API_KEY not set in backend/.env');
+    }
+    _openai = new OpenAI({ apiKey: key });
+  }
+  return _openai;
+}
+
+const CRITIC_DEFAULT_MODEL = 'gpt-4o';
+const CRITIC_MAX_TOKENS = 512;
+
 // ── 10 canonical failure modes ─────────────────────────────────────────────────
 const FAILURE_MODES = [
-  { id: 'Depth-Wrong',          desc: '3D depth/perspective interpretation is incorrect' },
-  { id: 'Missing-Labels',       desc: 'important text annotations are absent' },
-  { id: 'Wrong-Primitives',     desc: 'incorrect geometric shapes used for the concept' },
-  { id: 'Interaction-Broken',   desc: 'interactive controls are present but non-functional' },
-  { id: 'Interaction-Missing',  desc: 'no meaningful interactions beyond basic OrbitControls rotation' },
-  { id: 'Camera-Wrong',         desc: 'poor initial viewpoint; key content not visible' },
-  { id: 'Scale-Wrong',          desc: 'element proportions are noticeably off' },
-  { id: 'Color-Wrong',          desc: "colors don't match the original figure" },
-  { id: 'Hallucination',        desc: 'elements present that do not appear in the original' },
-  { id: 'Concept-Misunderstood',desc: 'the core concept being illustrated is misrepresented' },
+  { id: 'Depth-Wrong', desc: '3D depth/perspective interpretation is incorrect' },
+  { id: 'Missing-Labels', desc: 'important text annotations are absent' },
+  { id: 'Wrong-Primitives', desc: 'incorrect geometric shapes used for the concept' },
+  { id: 'Interaction-Broken', desc: 'interactive controls are present but non-functional' },
+  { id: 'Interaction-Missing', desc: 'no meaningful interactions beyond basic OrbitControls rotation' },
+  { id: 'Camera-Wrong', desc: 'poor initial viewpoint; key content not visible' },
+  { id: 'Scale-Wrong', desc: 'element proportions are noticeably off' },
+  { id: 'Color-Wrong', desc: "colors don't match the original figure" },
+  { id: 'Hallucination', desc: 'elements present that do not appear in the original' },
+  { id: 'Concept-Misunderstood', desc: 'the core concept being illustrated is misrepresented' },
 ];
 
 // ── 5 primary scored metrics (each 1–5) ────────────────────────────────────────
@@ -128,4 +145,67 @@ function finaliseEval(evaluation) {
   return evaluation;
 }
 
-module.exports = { FAILURE_MODES, SCORE_METRICS, buildEvalPrompt, finaliseEval };
+/**
+ * Run evaluator model and return finalised rubric scores.
+ *
+ * @param {{
+ *   html: string,
+ *   evalImage?: string,
+ *   evalMediaType?: string,
+ *   model?: string,
+ *   maxTokens?: number,
+ * }} opts
+ */
+async function evaluateHtmlWithCritic(opts) {
+  const {
+    html,
+    evalImage,
+    evalMediaType = 'image/png',
+    model = CRITIC_DEFAULT_MODEL,
+    maxTokens = CRITIC_MAX_TOKENS,
+  } = opts || {};
+
+  if (!html) throw new Error('No HTML found for evaluation.');
+
+  const userContent = [
+    ...(evalImage
+      ? [{ type: 'image_url', image_url: { url: `data:${evalMediaType};base64,${evalImage}` } }]
+      : []),
+    {
+      type: 'text',
+      text: `Here is the generated HTML code to evaluate:\n\n${html}\n\nOutput ONLY the JSON evaluation object.`,
+    },
+  ];
+
+  const response = await getOpenAI().chat.completions.create({
+    model,
+    max_completion_tokens: maxTokens,
+    messages: [
+      { role: 'system', content: buildEvalPrompt() },
+      { role: 'user', content: userContent },
+    ],
+  });
+
+  let content = response.choices[0]?.message?.content || '';
+  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) content = fenced[1].trim();
+  content = content.trim();
+
+  let evaluation;
+  try {
+    evaluation = JSON.parse(content);
+  } catch {
+    throw new Error('Evaluator did not return valid JSON: ' + content.slice(0, 200));
+  }
+
+  return finaliseEval(evaluation);
+}
+
+module.exports = {
+  FAILURE_MODES,
+  SCORE_METRICS,
+  buildEvalPrompt,
+  finaliseEval,
+  evaluateHtmlWithCritic,
+  CRITIC_DEFAULT_MODEL,
+};
