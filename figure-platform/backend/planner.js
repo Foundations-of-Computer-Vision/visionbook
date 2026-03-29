@@ -14,27 +14,14 @@
  * Used by both server.js (web) and agent.js (CLI).
  */
 
-const fs   = require('fs');
+const fs = require('fs');
 const path = require('path');
-const OpenAI = require('openai').default;
+const { generateWithModel } = require('./models');
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
-const ROOT_DIR             = path.join(__dirname, '..', '..');
-const QMD_DIR              = ROOT_DIR;                                     // .qmd files live at repo root
-const CHAPTER_FIGURES_DIR  = path.join(__dirname, '..', 'chapter-figures');
-
-// ── OpenAI (shared instance) ──────────────────────────────────────────────────
-let _openai = null;
-function getOpenAI() {
-  if (!_openai) {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key || key === 'your_openai_api_key_here') {
-      throw new Error('OPENAI_API_KEY not set in backend/.env');
-    }
-    _openai = new OpenAI({ apiKey: key });
-  }
-  return _openai;
-}
+const ROOT_DIR = path.join(__dirname, '..', '..');
+const QMD_DIR = ROOT_DIR;                                     // .qmd files live at repo root
+const CHAPTER_FIGURES_DIR = path.join(__dirname, '..', 'chapter-figures');
 
 const PLANNER_MODEL = 'gpt-4o';
 // gpt-4o is fast and non-reasoning — no hidden thinking tokens.
@@ -87,7 +74,7 @@ function extractFigureContext(qmdContent, figureStem) {
     // Match figure image paths like figures/imaging/brdf.png or @fig-lightSpray references
     if (line.includes(stemLower) || line.includes(`/${stemLower}.`) || line.includes(`/${stemLower})`)) {
       const start = Math.max(0, i - contextRadius);
-      const end   = Math.min(lines.length - 1, i + contextRadius);
+      const end = Math.min(lines.length - 1, i + contextRadius);
       for (let j = start; j <= end; j++) collected.add(j);
     }
   }
@@ -101,7 +88,7 @@ function extractFigureContext(qmdContent, figureStem) {
   const sortedIndices = [...collected].sort((a, b) => a - b);
   const chunks = [];
   let chunkStart = sortedIndices[0];
-  let chunkEnd   = sortedIndices[0];
+  let chunkEnd = sortedIndices[0];
 
   for (let k = 1; k < sortedIndices.length; k++) {
     if (sortedIndices[k] <= chunkEnd + 3) {
@@ -109,7 +96,7 @@ function extractFigureContext(qmdContent, figureStem) {
     } else {
       chunks.push(lines.slice(chunkStart, chunkEnd + 1).join('\n'));
       chunkStart = sortedIndices[k];
-      chunkEnd   = sortedIndices[k];
+      chunkEnd = sortedIndices[k];
     }
   }
   chunks.push(lines.slice(chunkStart, chunkEnd + 1).join('\n'));
@@ -168,19 +155,16 @@ Rules:
  * Returns the parsed plan object.
  */
 async function generateInteractionPlan(contextChunk, figureStem) {
-  const response = await getOpenAI().chat.completions.create({
-    model: PLANNER_MODEL,
-    max_tokens: PLANNER_MAX_TOKENS,
-    messages: [
-      { role: 'system', content: PLAN_SYSTEM_PROMPT },
+  let content = await generateWithModel(PLANNER_MODEL, {
+    systemPrompt: PLAN_SYSTEM_PROMPT,
+    userContent: [
       {
-        role: 'user',
-        content: `Figure: ${figureStem}\n\nTextbook context:\n${contextChunk.slice(0, 3000)}`,
+        type: 'text',
+        text: `Figure: ${figureStem}\n\nTextbook context:\n${contextChunk.slice(0, 3000)}`,
       },
     ],
+    maxTokens: PLANNER_MAX_TOKENS,
   });
-
-  let content = response.choices[0]?.message?.content || '{}';
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) content = fenced[1].trim();
 
@@ -309,7 +293,4 @@ module.exports = {
   listChapters,
   list3dCandidates,
   inferChapterFromFilename,
-  extractFigureContext,
-  loadChapterText,
-  findQmdFile,
 };

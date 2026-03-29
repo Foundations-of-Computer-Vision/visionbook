@@ -5,19 +5,7 @@
  * Edit this file to change what the critic looks for, how it scores, or what it outputs.
  */
 
-const OpenAI = require('openai').default;
-
-let _openai = null;
-function getOpenAI() {
-  if (!_openai) {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key || key === 'your_openai_api_key_here') {
-      throw new Error('OPENAI_API_KEY not set in backend/.env');
-    }
-    _openai = new OpenAI({ apiKey: key });
-  }
-  return _openai;
-}
+const { generateWithModel } = require('./models');
 
 const CRITIC_DEFAULT_MODEL = 'gpt-4o';
 const CRITIC_MAX_TOKENS = 512;
@@ -177,16 +165,11 @@ async function evaluateHtmlWithCritic(opts) {
     },
   ];
 
-  const response = await getOpenAI().chat.completions.create({
-    model,
-    max_completion_tokens: maxTokens,
-    messages: [
-      { role: 'system', content: buildEvalPrompt() },
-      { role: 'user', content: userContent },
-    ],
+  let content = await generateWithModel(model, {
+    systemPrompt: buildEvalPrompt(),
+    userContent,
+    maxTokens,
   });
-
-  let content = response.choices[0]?.message?.content || '';
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) content = fenced[1].trim();
   content = content.trim();
@@ -202,10 +185,5 @@ async function evaluateHtmlWithCritic(opts) {
 }
 
 module.exports = {
-  FAILURE_MODES,
-  SCORE_METRICS,
-  buildEvalPrompt,
-  finaliseEval,
   evaluateHtmlWithCritic,
-  CRITIC_DEFAULT_MODEL,
 };
