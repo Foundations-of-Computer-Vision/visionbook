@@ -32,7 +32,7 @@ try {
   globalThis.fetch = (url, opts = {}) => {
     const urlStr = typeof url === 'string' ? url : (url instanceof URL ? url.href : String(url));
     if (urlStr.includes('generativelanguage.googleapis.com') ||
-        urlStr.includes('aiplatform.googleapis.com')) {
+      urlStr.includes('aiplatform.googleapis.com')) {
       return undici.fetch(url, { ...opts, dispatcher: _geminiDispatcher });
     }
     return _origFetch(url, opts);
@@ -56,7 +56,7 @@ const GEMINI_MIN_REQUEST_INTERVAL_MS = 1200;
 
 function enqueueGemini(task) {
   const run = _geminiQueue.then(task, task);
-  _geminiQueue = run.catch(() => {});
+  _geminiQueue = run.catch(() => { });
   return run;
 }
 
@@ -129,18 +129,18 @@ async function getGemini() {
 //   label     — human-readable name shown in the UI
 const MODEL_REGISTRY = {
   // OpenAI
-  'gpt-5.4':            { provider: 'openai',    apiModel: 'gpt-5.4',                      label: 'GPT-5.4' },
-  'gpt-4o':             { provider: 'openai',    apiModel: 'gpt-4o',                       label: 'GPT-4o' },
-  'o4-mini':            { provider: 'openai',    apiModel: 'o4-mini',                      label: 'o4-mini' },
+  'gpt-5.4': { provider: 'openai', apiModel: 'gpt-5.4', label: 'GPT-5.4' },
+  'gpt-4o': { provider: 'openai', apiModel: 'gpt-4o', label: 'GPT-4o' },
+  'o4-mini': { provider: 'openai', apiModel: 'o4-mini', label: 'o4-mini' },
 
   // Anthropic (Claude)
-  'claude-opus-4.6':    { provider: 'anthropic', apiModel: 'claude-opus-4-20250514',       label: 'Claude Opus 4.6' },
-  'claude-sonnet-4':    { provider: 'anthropic', apiModel: 'claude-sonnet-4-20250514',     label: 'Claude Sonnet 4' },
+  'claude-opus-4.6': { provider: 'anthropic', apiModel: 'claude-opus-4-20250514', label: 'Claude Opus 4.6' },
+  'claude-sonnet-4': { provider: 'anthropic', apiModel: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
 
   // Google (Gemini)
-  'gemini-3.1-pro':     { provider: 'google',    apiModel: 'gemini-3.1-pro-preview',       label: 'Gemini 3.1 Pro' },
-  'gemini-2.5-pro':     { provider: 'google',    apiModel: 'gemini-2.5-pro',               label: 'Gemini 2.5 Pro' },
-  'gemini-2.5-flash':   { provider: 'google',    apiModel: 'gemini-2.5-flash',             label: 'Gemini 2.5 Flash' },
+  'gemini-3.1-pro': { provider: 'google', apiModel: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+  'gemini-2.5-pro': { provider: 'google', apiModel: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  'gemini-2.5-flash': { provider: 'google', apiModel: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
 };
 
 // The list the frontend will render in its dropdown
@@ -288,4 +288,4 @@ async function generateWithModel(modelId, { systemPrompt, userContent, maxTokens
   }
 }
 
-module.exports = { generateWithModel, getAvailableModels, MODEL_REGISTRY, getOpenAI };
+module.exports = { generateWithModel, getAvailableModels, MODEL_REGISTRY };

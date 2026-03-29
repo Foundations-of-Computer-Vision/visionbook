@@ -7,7 +7,7 @@ const path = require('path');
 const puppeteer = require('puppeteer');
 const { buildEvalPrompt, finaliseEval } = require('./critic');
 const { planForFigure, planChapter, listChapters, list3dCandidates, inferChapterFromFilename } = require('./planner');
-const { generateWithModel, getAvailableModels, getOpenAI } = require('./models');
+const { generateWithModel, getAvailableModels } = require('./models');
 
 // ── Screenshot helper ────────────────────────────────────────────────────────────
 let _browser = null;
@@ -35,7 +35,7 @@ async function screenshotHtml(html, waitMs = 2800) {
     console.error('Screenshot failed:', err.message);
     return null;
   } finally {
-    if (page) await page.close().catch(() => {});
+    if (page) await page.close().catch(() => { });
   }
 }
 
@@ -44,15 +44,15 @@ const PORT = 3001;
 const generationJobs = new Map();
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
-const EXPERIMENTS_DIR    = path.join(__dirname, '..', '..', 'prompt_experiments');
-const FIGURES_DIR        = path.join(__dirname, '..', '..', 'figures');
+const EXPERIMENTS_DIR = path.join(__dirname, '..', '..', 'prompt_experiments');
+const FIGURES_DIR = path.join(__dirname, '..', '..', 'figures');
 
 // ── API generation config ──────────────────────────────────────────────────────
 // CURRENT_EXPERIMENT is derived automatically from a hash of the system prompt +
 // scaffold.  Whenever you edit the prompt or base_scene_robust.html, the next
 // server restart creates a brand-new experiment bucket in the dashboard.
-const EXPERIMENT_BASE   = 'base_scene_robust';   // human-readable prefix
-const CURRENT_MODEL     = 'gpt-5.4';             // model used by the generator
+const EXPERIMENT_BASE = 'base_scene_robust';   // human-readable prefix
+const CURRENT_MODEL = 'gpt-5.4';             // model used by the generator
 // CURRENT_EXPERIMENT is set below, after the system prompt is built.
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -517,14 +517,16 @@ function inferChapter(stem) {
   // Hardcoded hints for figures whose source image isn't in figures/ by exact name
   const KNOWN = {
     pinhole: 'imaging',
-    brdf:    'imaging',
+    brdf: 'imaging',
   };
   if (KNOWN[stem.toLowerCase()]) return KNOWN[stem.toLowerCase()];
 
   let chapters;
-  try { chapters = fs.readdirSync(FIGURES_DIR).filter(d => {
-    try { return fs.statSync(path.join(FIGURES_DIR, d)).isDirectory(); } catch { return false; }
-  }); } catch { return null; }
+  try {
+    chapters = fs.readdirSync(FIGURES_DIR).filter(d => {
+      try { return fs.statSync(path.join(FIGURES_DIR, d)).isDirectory(); } catch { return false; }
+    });
+  } catch { return null; }
 
   // 1. Exact file lookup
   for (const ch of chapters) {
@@ -624,7 +626,7 @@ async function runEvaluation(record, filePath) {
   if (!html) throw new Error('No HTML found for this result.');
 
   // Always evaluate against the original source image, not the generated screenshot
-  const evalImage     = source_base64 || base64thumb;
+  const evalImage = source_base64 || base64thumb;
   const evalMediaType = source_media_type || 'image/png';
 
   const userContent = [
@@ -637,16 +639,11 @@ async function runEvaluation(record, filePath) {
     },
   ];
 
-  const response = await getOpenAI().chat.completions.create({
-    model: 'gpt-4o',
-    max_tokens: 512,
-    messages: [
-      { role: 'system', content: buildEvalPrompt() },
-      { role: 'user', content: userContent },
-    ],
+  let content = await generateWithModel('gpt-4o', {
+    systemPrompt: buildEvalPrompt(),
+    userContent,
+    maxTokens: 512,
   });
-
-  let content = response.choices[0].message.content || '';
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) content = fenced[1].trim();
   content = content.trim();
@@ -935,16 +932,11 @@ app.post('/api/experiments/evaluate', async (req, res) => {
       { type: 'text', text: `Here is the generated HTML code to evaluate:\n\n${html}\n\nOutput ONLY the JSON evaluation object.` },
     ];
 
-    const response = await getOpenAI().chat.completions.create({
-      model: 'gpt-4o',
-      max_tokens: 512,
-      messages: [
-        { role: 'system', content: evalSystemPrompt },
-        { role: 'user', content: userContent },
-      ],
+    let content = await generateWithModel('gpt-4o', {
+      systemPrompt: evalSystemPrompt,
+      userContent,
+      maxTokens: 512,
     });
-
-    let content = response.choices[0].message.content || '';
     const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
     if (fenced) content = fenced[1].trim();
     content = content.trim();
