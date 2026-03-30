@@ -31,7 +31,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer');
+const { screenshotHtml, closeScreenshotBrowser, loadBaseScaffold } = require('./runtime-helpers');
 
 const { evaluateHtmlWithCritic } = require('./critic');
 const {
@@ -72,40 +72,15 @@ if (!IMAGE_PATH && !DIR_PATH) {
 const RESULTS_DIR = path.join(__dirname, 'results');
 if (!fs.existsSync(RESULTS_DIR)) fs.mkdirSync(RESULTS_DIR, { recursive: true });
 
-const BASE_SCAFFOLD_PATH = path.join(__dirname, 'base_scene_robust.html');
-if (!fs.existsSync(BASE_SCAFFOLD_PATH)) {
-  console.error('ERROR: base_scene_robust.html not found in backend/.');
+let BASE_SCAFFOLD_PATH;
+let BASE_SCAFFOLD;
+try {
+  const loaded = loadBaseScaffold(__dirname);
+  BASE_SCAFFOLD_PATH = loaded.scaffoldPath;
+  BASE_SCAFFOLD = loaded.scaffold;
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
-}
-const BASE_SCAFFOLD = fs.readFileSync(BASE_SCAFFOLD_PATH, 'utf-8');
-
-// ── Puppeteer ──────────────────────────────────────────────────────────────────
-let _browser = null;
-async function getBrowser() {
-  if (!_browser || !_browser.connected) {
-    _browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    });
-  }
-  return _browser;
-}
-async function screenshotHtml(html, waitMs = 2800) {
-  let page;
-  try {
-    const browser = await getBrowser();
-    page = await browser.newPage();
-    await page.setViewport({ width: 900, height: 600 });
-    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await new Promise(r => setTimeout(r, waitMs));
-    const shot = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 82 });
-    return { data: shot, mediaType: 'image/jpeg' };
-  } catch (err) {
-    console.warn('  Screenshot failed:', err.message);
-    return null;
-  } finally {
-    if (page) await page.close().catch(() => { });
-  }
 }
 
 const SYSTEM_PROMPT = buildGenerationSystemPrompt(BASE_SCAFFOLD);
@@ -308,7 +283,7 @@ if (IMAGE_PATH) {
     }
   }
 
-  if (_browser) await _browser.close().catch(() => { });
+  await closeScreenshotBrowser();
   console.log(`\n✓ Done — ${imagePaths.length} image(s) processed`);
   process.exit(0);
 })();

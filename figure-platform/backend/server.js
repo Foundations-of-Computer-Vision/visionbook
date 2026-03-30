@@ -4,42 +4,12 @@ const cors = require('cors');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer');
+const { screenshotHtml, loadBaseScaffold } = require('./runtime-helpers');
 const { evaluateHtmlWithCritic } = require('./critic');
 const { generateFigureHtml, buildGenerationSystemPrompt } = require('./generation');
 const { planForFigure, planChapter } = require('./planner');
 const { listChapters, list3dCandidates } = require('./chapter-discovery');
 const { getAvailableModels } = require('./models');
-
-// ── Screenshot helper ────────────────────────────────────────────────────────────
-let _browser = null;
-async function getBrowser() {
-  if (!_browser || !_browser.connected) {
-    _browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    });
-  }
-  return _browser;
-}
-
-async function screenshotHtml(html, waitMs = 2800) {
-  let page;
-  try {
-    const browser = await getBrowser();
-    page = await browser.newPage();
-    await page.setViewport({ width: 900, height: 600 });
-    await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 15000 });
-    await new Promise(r => setTimeout(r, waitMs));
-    const shot = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 82 });
-    return { data: shot, mediaType: 'image/jpeg' };
-  } catch (err) {
-    console.error('Screenshot failed:', err.message);
-    return null;
-  } finally {
-    if (page) await page.close().catch(() => { });
-  }
-}
 
 const app = express();
 const PORT = 3001;
@@ -68,12 +38,16 @@ app.use(express.json({ limit: '20mb' }));
 // It provides: renderer, scene, orthographic camera, OrbitControls,
 // floating label system (addLabel), resize handler, Reset View button, CSS.
 // Edit backend/base_scene_robust.html to change the starting point for all generations.
-const BASE_SCAFFOLD_PATH = path.join(__dirname, 'base_scene_robust.html');
-if (!fs.existsSync(BASE_SCAFFOLD_PATH)) {
-  console.error('ERROR: base_scene_robust.html not found in backend/.');
+let BASE_SCAFFOLD_PATH;
+let BASE_SCAFFOLD;
+try {
+  const loaded = loadBaseScaffold(__dirname);
+  BASE_SCAFFOLD_PATH = loaded.scaffoldPath;
+  BASE_SCAFFOLD = loaded.scaffold;
+} catch (err) {
+  console.error(err.message);
   process.exit(1);
 }
-const BASE_SCAFFOLD = fs.readFileSync(BASE_SCAFFOLD_PATH, 'utf-8');
 console.log('Base scaffold loaded:', BASE_SCAFFOLD_PATH);
 
 // ── Results folder ────────────────────────────────────────────────────────────
