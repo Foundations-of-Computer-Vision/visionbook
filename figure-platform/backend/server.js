@@ -9,7 +9,7 @@ const { evaluateHtmlWithCritic } = require('./critic');
 const { generateFigureHtml, buildGenerationSystemPrompt } = require('./generation');
 const { planForFigure, planChapter } = require('./planner');
 const { listChapters, list3dCandidates } = require('./chapter-discovery');
-const { generateWithModel, getAvailableModels } = require('./models');
+const { getAvailableModels } = require('./models');
 
 // ── Screenshot helper ────────────────────────────────────────────────────────────
 let _browser = null;
@@ -625,7 +625,6 @@ function scanExperiments() {
 
           // Find matching source image: check figures/<chapter>/<name>.png|jpg
           let imagePath = null;
-          const chapterToSearch = chapter || figName;
           for (const ext of ['png', 'jpg', 'jpeg', 'PNG', 'JPG']) {
             // Try figures/<chapter>/<name>.<ext>
             if (chapter) {

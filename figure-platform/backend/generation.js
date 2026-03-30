@@ -169,39 +169,6 @@ ${prevHtml}
 
 Fix all identified failure modes and improve every score. Maintain or improve what already works well.`;
 }
-// === Code Divider =============================================================
-
-
-async function generateFigureHtmlWithPrompt({
-    modelId,
-    systemPrompt,
-    mediaType,
-    base64,
-    userText,
-    maxTokens = 16384,
-    applyFixes = true,
-}) {
-    if (!modelId) throw new Error('modelId is required.');
-    if (!systemPrompt) throw new Error('systemPrompt is required.');
-    if (!mediaType || !base64) throw new Error('mediaType and base64 are required.');
-    if (!userText) throw new Error('userText is required.');
-
-    const userContent = [
-        { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}` } },
-        { type: 'text', text: userText },
-    ];
-
-    let html = await generateWithModel(modelId, {
-        systemPrompt,
-        userContent,
-        maxTokens,
-    });
-
-    html = stripFences(html);
-    if (applyFixes) html = fixGeneratedHtml(html);
-    return html;
-}
-
 // Strip accidental markdown fences and extract the HTML body.
 function stripFences(text) {
     const fenced = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
@@ -302,15 +269,25 @@ async function generateFigureHtml({
     maxTokens = 16384,
     applyFixes = true,
 }) {
-    return generateFigureHtmlWithPrompt({
-        modelId,
+    if (!modelId) throw new Error('modelId is required.');
+    if (!scaffold) throw new Error('scaffold is required.');
+    if (!mediaType || !base64) throw new Error('mediaType and base64 are required.');
+    if (!userText) throw new Error('userText is required.');
+
+    const userContent = [
+        { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}` } },
+        { type: 'text', text: userText },
+    ];
+
+    let html = await generateWithModel(modelId, {
         systemPrompt: buildGenerationSystemPrompt(scaffold),
-        mediaType,
-        base64,
-        userText,
+        userContent,
         maxTokens,
-        applyFixes,
     });
+
+    html = stripFences(html);
+    if (applyFixes) html = fixGeneratedHtml(html);
+    return html;
 }
 
 async function generateRefinedFigureHtml({
@@ -324,15 +301,27 @@ async function generateRefinedFigureHtml({
     maxTokens = 16384,
     applyFixes = true,
 }) {
-    return generateFigureHtmlWithPrompt({
-        modelId,
+    if (!modelId) throw new Error('modelId is required.');
+    if (!scaffold) throw new Error('scaffold is required.');
+    if (!prevHtml) throw new Error('prevHtml is required.');
+    if (!evaluation) throw new Error('evaluation is required.');
+    if (!mediaType || !base64) throw new Error('mediaType and base64 are required.');
+    if (!userText) throw new Error('userText is required.');
+
+    const userContent = [
+        { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}` } },
+        { type: 'text', text: userText },
+    ];
+
+    let html = await generateWithModel(modelId, {
         systemPrompt: buildGenerationRefinementPrompt(scaffold, prevHtml, evaluation),
-        mediaType,
-        base64,
-        userText,
+        userContent,
         maxTokens,
-        applyFixes,
     });
+
+    html = stripFences(html);
+    if (applyFixes) html = fixGeneratedHtml(html);
+    return html;
 }
 
 module.exports = {
