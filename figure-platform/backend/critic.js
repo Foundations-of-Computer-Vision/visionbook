@@ -6,6 +6,7 @@
  */
 
 const { generateWithModel } = require('./models');
+const { screenshotHtml } = require('./runtime-helpers');
 
 const CRITIC_DEFAULT_MODEL = 'gpt-4o';
 const CRITIC_MAX_TOKENS = 512;
@@ -101,7 +102,7 @@ function buildEvalPrompt() {
   );
 
   return `You are a strict evaluator of generated interactive Three.js 3D figures against original 2D textbook figure images.
-You will receive the original figure image and the generated HTML/JavaScript code.
+You will receive the original source figure image, the generated HTML/JavaScript code, and a rendered screenshot of the generated HTML (if screenshot capture succeeds). If the screenshot was not received, mention  this in the notes.
 Be critical and honest — err toward lower scores when in doubt. Do not give credit for things that are absent or barely present.
 Output ONLY a valid JSON object — no explanation, no markdown, no fences.
 
@@ -155,9 +156,22 @@ async function evaluateHtmlWithCritic(opts) {
 
   if (!html) throw new Error('No HTML found for evaluation.');
 
+  // Try to render the generated HTML so the critic can see the actual output.
+  // If rendering fails, continue evaluation with available inputs.
+  const rendered = await screenshotHtml(html);
+
   const userContent = [
     ...(evalImage
-      ? [{ type: 'image_url', image_url: { url: `data:${evalMediaType};base64,${evalImage}` } }]
+      ? [
+        { type: 'text', text: 'Reference source figure image:' },
+        { type: 'image_url', image_url: { url: `data:${evalMediaType};base64,${evalImage}` } },
+      ]
+      : []),
+    ...(rendered?.data
+      ? [
+        { type: 'text', text: 'Rendered screenshot of the generated HTML output:' },
+        { type: 'image_url', image_url: { url: `data:${rendered.mediaType || 'image/jpeg'};base64,${rendered.data}` } },
+      ]
       : []),
     {
       type: 'text',
