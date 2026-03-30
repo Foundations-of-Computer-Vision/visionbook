@@ -1,16 +1,44 @@
 'use strict';
 
-const fs   = require('fs');
+const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const yaml = require('js-yaml');
 
-const QMD_DIR       = path.join(__dirname, '..', '..');
-const RESULTS_DIR   = path.join(__dirname, 'results');
+const QMD_DIR = path.join(__dirname, '..', '..');
+const RESULTS_DIR = path.join(__dirname, 'results');
 const OVERRIDES_DIR = path.join(__dirname, 'chapter_editor_overrides');
 const EXPERIMENTS_DIR = path.join(__dirname, '..', '..', 'prompt_experiments');
-const QUARTO_YML    = path.join(QMD_DIR, '_quarto.yml');
-const PANDOC        = '/Applications/quarto/bin/tools/pandoc';
+const QUARTO_YML = path.join(QMD_DIR, '_quarto.yml');
+
+function resolvePandocInvocation() {
+  // Highest priority: explicit override from environment.
+  if (process.env.PANDOC_PATH) {
+    return { command: process.env.PANDOC_PATH, prefixArgs: [] };
+  }
+
+  const candidates = [];
+  if (process.platform === 'darwin') {
+    candidates.push('/Applications/quarto/bin/tools/pandoc');
+  }
+  if (process.platform === 'win32') {
+    if (process.env.LOCALAPPDATA) {
+      candidates.push(path.join(process.env.LOCALAPPDATA, 'Programs', 'Quarto', 'bin', 'tools', 'pandoc.exe'));
+    }
+    if (process.env.ProgramFiles) {
+      candidates.push(path.join(process.env.ProgramFiles, 'Quarto', 'bin', 'tools', 'pandoc.exe'));
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return { command: candidate, prefixArgs: [] };
+    }
+  }
+
+  // Fallback: rely on Quarto in PATH to provide Pandoc.
+  return { command: 'quarto', prefixArgs: ['pandoc'] };
+}
 
 function scoreOf(evaluation) {
   return (evaluation && evaluation.overall_average != null) ? evaluation.overall_average : null;
@@ -69,7 +97,7 @@ function extractQmdTitle(relPath) {
         .replace(/\s+/g, ' ')
         .trim();
     }
-  } catch (_) {}
+  } catch (_) { }
   return path.basename(relPath, '.qmd').replace(/_/g, ' ');
 }
 
@@ -114,7 +142,7 @@ function buildFigureIndex() {
             const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
             let evaluation = null;
             if (fs.existsSync(evalPath)) {
-              try { evaluation = JSON.parse(fs.readFileSync(evalPath, 'utf-8')); } catch (_) {}
+              try { evaluation = JSON.parse(fs.readFileSync(evalPath, 'utf-8')); } catch (_) { }
             }
             pushIndexEntry(index, stem, {
               sourceType: 'copilot',
@@ -180,7 +208,7 @@ function _withCount(ch, figIndex) {
     for (const stem of parseFigureStems(qmdPath)) {
       if (figIndex[stem] && figIndex[stem].length) matchCount++;
     }
-  } catch (e) {}
+  } catch (e) { }
   return { file: ch.file, stem: ch.stem, title: ch.title || extractQmdTitle(ch.file), matchCount };
 }
 
@@ -241,7 +269,7 @@ function saveOverride(chapter, figStem, htmlContent) {
  */
 async function analyzeChapterFigure(qmdPath, figStem, { resultId, question, modelId } = {}) {
   const figIndex = buildFigureIndex();
-  const matches  = figIndex[figStem] || [];
+  const matches = figIndex[figStem] || [];
   if (!matches.length) throw new Error(`No results found for figure: ${figStem}`);
 
   const entry = (resultId ? matches.find(m => m.resultId === resultId) : null) || matches[0];
@@ -257,12 +285,12 @@ async function analyzeChapterFigure(qmdPath, figStem, { resultId, question, mode
   // Extract ±30 lines of chapter text around the figure reference
   const lines = fs.readFileSync(qmdPath, 'utf-8').split('\n');
   const escapedStem = figStem.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const figPattern  = new RegExp(`figures/[^)]*${escapedStem}`, 'i');
-  const figLine     = lines.findIndex(l => figPattern.test(l));
-  const CONTEXT     = 30;
-  const ctxStart    = Math.max(0, (figLine < 0 ? 0  : figLine) - CONTEXT);
-  const ctxEnd      = Math.min(lines.length, (figLine < 0 ? 60 : figLine) + CONTEXT + 1);
-  const context     = lines.slice(ctxStart, ctxEnd).join('\n');
+  const figPattern = new RegExp(`figures/[^)]*${escapedStem}`, 'i');
+  const figLine = lines.findIndex(l => figPattern.test(l));
+  const CONTEXT = 30;
+  const ctxStart = Math.max(0, (figLine < 0 ? 0 : figLine) - CONTEXT);
+  const ctxEnd = Math.min(lines.length, (figLine < 0 ? 60 : figLine) + CONTEXT + 1);
+  const context = lines.slice(ctxStart, ctxEnd).join('\n');
 
   const chapterName = path.basename(qmdPath, '.qmd').replace(/_/g, ' ');
 
@@ -304,24 +332,33 @@ async function analyzeChapterFigure(qmdPath, figStem, { resultId, question, mode
   // Lazy-require models.js to avoid top-level circular dependency issues
   const { generateWithModel } = require('./models');
   const usedModel = modelId || 'gpt-4o';
-  const analysis  = await generateWithModel(usedModel, { systemPrompt, userContent, maxTokens: 1024 });
+  const analysis = await generateWithModel(usedModel, { systemPrompt, userContent, maxTokens: 1024 });
 
   return { analysis, figStem, model: usedModel, resultId: entry.resultId };
 }
 
 function buildChapterHtml(qmdPath, figSelections) {
   const figIndex = buildFigureIndex();
-  const qmdStem  = path.basename(qmdPath, '.qmd');
+  const qmdStem = path.basename(qmdPath, '.qmd');
   const substituted = [];
 
   let bodyHtml;
+  const { command, prefixArgs } = resolvePandocInvocation();
   try {
-    bodyHtml = execSync(
-      '"' + PANDOC + '" --from=markdown+tex_math_dollars+raw_html --to=html5 --mathjax "' + qmdPath + '"',
+    bodyHtml = execFileSync(
+      command,
+      [
+        ...prefixArgs,
+        '--from=markdown+tex_math_dollars+raw_html',
+        '--to=html5',
+        '--mathjax',
+        qmdPath,
+      ],
       { maxBuffer: 20 * 1024 * 1024, encoding: 'utf-8' }
     );
   } catch (err) {
-    throw new Error('Pandoc failed: ' + (err.stderr || err.message || String(err)));
+    const stderr = (err && err.stderr) ? String(err.stderr).trim() : '';
+    throw new Error('Pandoc failed (' + command + '): ' + (stderr || err.message || String(err)));
   }
 
   bodyHtml = bodyHtml.replace(
@@ -367,8 +404,10 @@ function buildChapterHtml(qmdPath, figSelections) {
 
   // Second pass: inline remaining static PNGs as base64 data URIs so they
   // resolve inside a srcdoc iframe (which has no base URL).
-  const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-                 '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp' };
+  const MIME = {
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp'
+  };
   bodyHtml = bodyHtml.replace(
     /<img(\s[^>]*)src="((?:\.\/)?figures\/[^"]+)"([^>]*)\/>/g,
     (match, pre, relPath, post) => {
