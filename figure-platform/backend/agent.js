@@ -31,10 +31,14 @@ require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const OpenAI = require('openai').default;
 const puppeteer = require('puppeteer');
 
 const { evaluateHtmlWithCritic } = require('./critic');
+const {
+  generateFigureHtml,
+  generateRefinedFigureHtml,
+  buildGenerationSystemPrompt,
+} = require('./generation');
 const { planForFigure } = require('./planner');
 const { inferChapterFromFilename } = require('./chapter-discovery');
 
@@ -75,17 +79,6 @@ if (!fs.existsSync(BASE_SCAFFOLD_PATH)) {
 }
 const BASE_SCAFFOLD = fs.readFileSync(BASE_SCAFFOLD_PATH, 'utf-8');
 
-// ── OpenAI ─────────────────────────────────────────────────────────────────────
-let _openai = null;
-function getOpenAI() {
-  if (!_openai) {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key || key === 'your_openai_api_key_here') throw new Error('OPENAI_API_KEY not set in backend/.env');
-    _openai = new OpenAI({ apiKey: key });
-  }
-  return _openai;
-}
-
 // ── Puppeteer ──────────────────────────────────────────────────────────────────
 let _browser = null;
 async function getBrowser() {
@@ -115,161 +108,11 @@ async function screenshotHtml(html, waitMs = 2800) {
   }
 }
 
-// ── System prompt ──────────────────────────────────────────────────────────────
-function buildSystemPrompt(scaffold) {
-  return `You are an expert Three.js developer who converts 2D textbook figures into interactive 3D web visualizations.
-
-OUTPUT RULES — non-negotiable:
-• Your response MUST be ONLY a complete HTML file. No explanation, no markdown, no code fences.
-• It MUST start with exactly: <!DOCTYPE html>
-• It MUST end with exactly: </html>
-• Do NOT truncate. Output every line.
-
-────────────────────────────────────────────────────────────────────────────────
-BASE SCAFFOLD — copy this file in full, then add your code inside the existing
-<script type="module"> block, after the animate() call and resize handler.
-Do NOT modify anything already in the scaffold.
-────────────────────────────────────────────────────────────────────────────────
-${scaffold}
-────────────────────────────────────────────────────────────────────────────────
-
-What the scaffold already provides (do NOT re-implement):
-• THREE + OrbitControls via https://esm.sh/three
-• Orthographic camera — tune: d (view half-size), camera.position, camera.zoom
-• Damped OrbitControls render loop
-• window resize handler keeping camera + renderer in sync
-• White background, full-page #container div
-
-YOUR TASK — extend the scaffold for the uploaded figure:
-
-STEP 1 · ANALYSE THE FIGURE
-  Look carefully at every element: axes, planes, surfaces, points, lines,
-  arrows, curves, labels, colours, and the geometric relationships between them.
-  Identify the core concept being illustrated.
-
-STEP 2 · PLAN GEOMETRY — map each 2D element to a Three.js primitive:
-  axis/arrow    → THREE.ArrowHelper
-  line segment  → THREE.Line with BufferGeometry
-  dashed line   → LineDashedMaterial (call .computeLineDistances())
-  flat plane    → PlaneGeometry + MeshBasicMaterial(transparent, DoubleSide)
-  solid surface → appropriate BufferGeometry + MeshBasicMaterial
-  point / dot   → SphereGeometry, radius 0.04–0.08
-  curve         → CatmullRomCurve3 → TubeGeometry
-  Set d and camera.position so the whole scene is comfortably framed.
-  Match colours from the original figure. Keep background white (#ffffff).
-
-STEP 3 · LABELS — THIS IS CRITICAL, follow exactly:
-
-  3a. LABEL AUDIT — before writing any code:
-      • List EVERY text label visible in the original figure: axis names, point
-        names, variable names, coordinate labels, titles, annotations, dimensions.
-      • Verify each axis label matches the correct geometric direction — if the
-        figure shows "x₁" pointing right, your label must also point right.
-      • If the figure uses subscripted names (x₁, x₂, x₃) instead of (x, y, z),
-        reproduce the EXACT names from the figure.
-      • Missing or mislabeled text is a critical failure.
-
-  3b. REQUIRED CSS — add this block inside <style>:
-      .label {
-        position: absolute;
-        font-family: sans-serif;
-        font-size: 20px;
-        font-weight: bold;
-        color: #000;
-        pointer-events: none;
-        transform: translate(-50%, -50%);
-        white-space: nowrap;
-        z-index: 1;
-      }
-      .label-minor {
-        font-size: 14px;
-        font-weight: normal;
-      }
-
-  3c. REQUIRED JS HELPER — use this exact pattern:
-      const labels = [];
-      function addLabel(html, pos, minor) {
-        const div = document.createElement('div');
-        div.className = 'label' + (minor ? ' label-minor' : '');
-        div.innerHTML = html;
-        document.body.appendChild(div);
-        labels.push({ div, pos: pos.clone() });
-      }
-
-  3d. REQUIRED UPDATE LOOP — call updateLabels() inside animate():
-      function updateLabels() {
-        const v = new THREE.Vector3();
-        labels.forEach(({ div, pos }) => {
-          v.copy(pos).project(camera);
-          div.style.left = (( v.x * 0.5 + 0.5) * window.innerWidth)  + 'px';
-          div.style.top  = ((-v.y * 0.5 + 0.5) * window.innerHeight) + 'px';
-        });
-      }
-
-  3e. LABEL CONTENT RULES:
-      • Use HTML entities for maths: 'x<sub>1</sub>', '&theta;', '&lambda;',
-        '<i>f</i>', '&pi;', 'R<sup>2</sup>', '&#x2192;' (arrow).
-      • Offset label positions 0.15–0.25 units away from their anchor point
-        so text does not overlap geometry.
-      • Use addLabel(text, pos, true) for secondary/minor annotations.
-      • Every axis arrow MUST have a label at its tip.
-      • Every named point, vector, plane, or region in the figure MUST have a label.
-
-STEP 4 · INTERACTIVITY — add 2–5 controls in a fixed UI panel (position:absolute, top:10px, left:10px):
-  • Step-through buttons — animate a process stage by stage
-  • Parameter sliders    — let the user vary a quantity and see the effect
-  • Toggle buttons       — show/hide elements
-  • Animate button       — run a looping demonstration
-  • Always include a Reset View button that restores the original camera position
-
-STEP 5 · CODE STYLE
-  • Add brief JS comments explaining what what each block of code teaches.
-  • Prefer conceptual clarity over visual realism.`;
-}
-const SYSTEM_PROMPT = buildSystemPrompt(BASE_SCAFFOLD);
+const SYSTEM_PROMPT = buildGenerationSystemPrompt(BASE_SCAFFOLD);
 
 // ── Derive experiment label from prompt hash (matches server.js logic) ────────
 const PROMPT_HASH = crypto.createHash('sha256').update(SYSTEM_PROMPT).digest('hex').slice(0, 8);
 const EXPERIMENT = EXPERIMENT_OVERRIDE || `base_scene_robust_${PROMPT_HASH}`;
-
-// ── Refinement prompt (used in round 2+) ─────────────────────────────────────
-function buildRefinementPrompt(scaffold, prevHtml, evaluation) {
-  const issues = [
-    ...(evaluation.failure_modes || []).map(m => `• ${m}`),
-    `• geometry_accuracy: ${evaluation.geometry_accuracy}/5`,
-    `• interactivity_usability: ${evaluation.interactivity_usability}/5`,
-    `• faithfulness: ${evaluation.faithfulness}/5`,
-    `• label_quality: ${evaluation.label_quality}/5`,
-    `• concept_accuracy: ${evaluation.concept_accuracy}/5`,
-    `• notes: ${evaluation.notes || ''}`,
-  ].join('\n');
-
-  return `You are an expert Three.js developer improving a previous attempt based on critic feedback.
-
-OUTPUT RULES — non-negotiable:
-• Your response MUST be ONLY a complete HTML file. No explanation, no markdown, no code fences.
-• It MUST start with exactly: <!DOCTYPE html>
-• It MUST end with exactly: </html>
-• Do NOT truncate. Output every line.
-
-The BASE SCAFFOLD must still be used as the foundation:
-${scaffold}
-
-CRITIC FEEDBACK ON PREVIOUS ATTEMPT:
-${issues}
-
-PREVIOUS HTML (improve this, do not start from scratch unless it is fundamentally broken):
-${prevHtml}
-
-Fix all identified failure modes and improve every score. Maintain or improve what already works well.`;
-}
-
-// ── Strip markdown fences ─────────────────────────────────────────────────────
-function stripFences(text) {
-  const fenced = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
-  if (fenced) return fenced[1].trim();
-  return text.replace(/^```html\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
-}
 
 // ── Unique id ──────────────────────────────────────────────────────────────────
 function makeId() {
@@ -331,37 +174,31 @@ async function processImage(imagePath) {
 
     // ── GENERATOR ────────────────────────────────────────────────────────────
     const baseUserText = 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.';
-    // Generator always sees the image — it needs visual detail to recreate geometry.
-    // Planner provides text-based context + interactions alongside.
-    const genMessages = round === 1
-      ? [
-        { role: 'system', content: SYSTEM_PROMPT },
-        {
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
-            { type: 'text', text: baseUserText + planInjection },
-          ],
-        },
-      ]
-      : [
-        { role: 'system', content: buildRefinementPrompt(BASE_SCAFFOLD, html, evaluation) },
-        {
-          role: 'user',
-          content: [
-            { type: 'image_url', image_url: { url: `data:${mediaType};base64,${imageBase64}` } },
-            { type: 'text', text: 'Here is the same original figure. Apply the critic feedback and output the improved complete HTML file. No explanation, no markdown, no fences.' + planInjection },
-          ],
-        },
-      ];
+    const userText = round === 1
+      ? baseUserText + planInjection
+      : 'Here is the same original figure. Apply the critic feedback and output the improved complete HTML file. No explanation, no markdown, no fences.' + planInjection;
 
-    const genResp = await getOpenAI().chat.completions.create({
-      model: GEN_MODEL,
-      max_completion_tokens: 16384,
-      messages: genMessages,
-    });
-
-    html = stripFences(genResp.choices[0].message.content || '');
+    html = round === 1
+      ? await generateFigureHtml({
+        modelId: GEN_MODEL,
+        scaffold: BASE_SCAFFOLD,
+        mediaType,
+        base64: imageBase64,
+        userText,
+        maxTokens: 16384,
+        applyFixes: true,
+      })
+      : await generateRefinedFigureHtml({
+        modelId: GEN_MODEL,
+        scaffold: BASE_SCAFFOLD,
+        prevHtml: html,
+        evaluation,
+        mediaType,
+        base64: imageBase64,
+        userText,
+        maxTokens: 16384,
+        applyFixes: true,
+      });
 
     if (!html.trimStart().startsWith('<')) {
       console.error(`  ✗ Generator did not return HTML (round ${round}). Aborting.`);

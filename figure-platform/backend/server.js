@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 const { evaluateHtmlWithCritic } = require('./critic');
+const { generateFigureHtml, buildGenerationSystemPrompt } = require('./generation');
 const { planForFigure, planChapter } = require('./planner');
 const { listChapters, list3dCandidates } = require('./chapter-discovery');
 const { generateWithModel, getAvailableModels } = require('./models');
@@ -81,200 +82,12 @@ if (!fs.existsSync(RESULTS_DIR)) {
   fs.mkdirSync(RESULTS_DIR, { recursive: true });
 }
 
-// ── System prompt (built at startup so it embeds the live base scaffold) ──────
-function buildSystemPrompt(scaffold) {
-  return `You are an expert Three.js developer who converts 2D textbook figures into interactive 3D web visualizations.
-
-OUTPUT RULES — non-negotiable:
-• Your response MUST be ONLY a complete HTML file. No explanation, no markdown, no code fences.
-• It MUST start with exactly: <!DOCTYPE html>
-• It MUST end with exactly: </html>
-• Do NOT truncate. Output every line.
-• Copy the BASE SCAFFOLD below in full, then add your code where indicated.
-• The scaffold already includes the importmap and imports for Three.js + OrbitControls.
-  Do NOT add duplicate <script type="importmap"> or duplicate import statements.
-  If you need additional Three.js addons, import them from 'three/addons/…'.
-
-────────────────────────────────────────────────────────────────────────────────
-BASE SCAFFOLD — copy this file VERBATIM, then insert your code at the marked
-location: "// ADD YOUR SCENE OBJECTS, GEOMETRY, LABELS, AND INTERACTION LOGIC BELOW HERE"
-Do NOT modify, remove, or re-declare anything already in the scaffold.
-────────────────────────────────────────────────────────────────────────────────
-${scaffold}
-────────────────────────────────────────────────────────────────────────────────
-
-What the scaffold already provides (do NOT re-declare or re-implement):
-• THREE + OrbitControls imports via importmap
-• WebGLRenderer on <canvas id="c">
-• Orthographic camera — tune: d (view half-size), camera.position, camera.zoom
-• Damped OrbitControls render loop
-• animate() function with requestAnimationFrame + _syncLabels()
-• addLabel(html, position, options?) helper → pushes to _labels[]
-• _syncLabels() called each frame inside animate()
-• ResizeObserver resize handler keeping camera + renderer in sync
-• White background, full-page <canvas id="c">
-
-⚠ CRITICAL — DO NOT redefine any of these identifiers:
-  addLabel, _labels, _syncLabels, animate, renderer, scene, camera, controls, d, aspect
-  Redefining them causes a SyntaxError or silently breaks the scene.
-  Just CALL them and ADD new objects to scene.
-
-YOUR TASK — extend the scaffold for the uploaded figure:
-
-STEP 1 · ANALYSE THE FIGURE
-  Look carefully at every element: axes, planes, surfaces, points, lines,
-  arrows, curves, labels, colours, and the geometric relationships between them.
-  Identify the core concept being illustrated.
-
-STEP 2 · PLAN GEOMETRY — map each 2D element to a Three.js primitive:
-  axis/arrow    → THREE.ArrowHelper
-  line segment  → THREE.Line with BufferGeometry
-  dashed line   → LineDashedMaterial (call .computeLineDistances())
-  flat plane    → PlaneGeometry + MeshBasicMaterial(transparent, DoubleSide)
-  solid surface → appropriate BufferGeometry + MeshBasicMaterial
-  point / dot   → SphereGeometry, radius 0.04–0.08
-  curve         → CatmullRomCurve3 → TubeGeometry
-  Set d and camera.position so the whole scene is comfortably framed.
-  Match colours from the original figure. Keep background white (#ffffff).
-
-STEP 3 · LABELS — THIS IS CRITICAL, follow exactly:
-
-  3a. LABEL AUDIT — before writing any code:
-      • List EVERY text label visible in the original figure: axis names, point
-        names, variable names, coordinate labels, titles, annotations, dimensions.
-      • Verify each axis label matches the correct geometric direction — if the
-        figure shows "x₁" pointing right, your label must also point right.
-      • If the figure uses subscripted names (x₁, x₂, x₃) instead of (x, y, z),
-        reproduce the EXACT names from the figure.
-      • Missing or mislabeled text is a critical failure.
-
-  3b. USE THE SCAFFOLD'S LABEL SYSTEM — do NOT create your own.
-      The scaffold already provides addLabel() and _syncLabels(). Call the
-      scaffold's addLabel exactly like this:
-
-        addLabel('x<sub>1</sub>', new THREE.Vector3(5, 0, 0), { bold: true });
-        addLabel('origin',        new THREE.Vector3(0, 0, 0), { fontSize: '11px', color: '#888' });
-
-      Signature:  addLabel(htmlString, THREE.Vector3, options?)
-        options.color      – css color   (default '#111')
-        options.fontSize   – css string  (default '13px')
-        options.bold       – boolean     (default false)
-        options.offset     – [dx,dy] px  (default [0,0])
-        options.background – css string  (default 'none')
-
-      ⚠ DO NOT redefine addLabel, _syncLabels, _labels, updateLabels, or animate.
-        They already exist in the scaffold. Redefining them causes fatal JS errors.
-        Just CALL addLabel() in your code below the scaffold marker comment.
-
-  3c. LABEL CONTENT RULES:
-      • Use HTML entities for maths: 'x<sub>1</sub>', '&theta;', '&lambda;',
-        '<i>f</i>', '&pi;', 'R<sup>2</sup>', '&#x2192;' (arrow).
-      • Offset label positions 0.15–0.25 units away from their anchor point
-        so text does not overlap geometry.
-      • Every axis arrow MUST have a label at its tip.
-      • Every named point, vector, plane, or region in the figure MUST have a label.
-
-STEP 4 · INTERACTIVITY — add 2–5 controls in the #ui div (which already exists):
-  • Step-through buttons — animate a process stage by stage
-  • Parameter sliders    — let the user vary a quantity and see the effect
-  • Toggle buttons       — show/hide elements
-  • Animate button       — run a looping demonstration
-  • The Reset View button already exists — do NOT create a second one.
-  • Do NOT redefine animate(). To add per-frame logic, use a separate
-    function and call it from a setInterval or from the controls 'change'
-    event, or just modify objects inline — the scaffold's animate loop
-    continuously re-renders.
-
-STEP 5 · CODE STYLE
-  • Add brief JS comments explaining what each block of code teaches.
-  • Prefer conceptual clarity over visual realism.`;
-}
-const SYSTEM_PROMPT = buildSystemPrompt(BASE_SCAFFOLD);
+const SYSTEM_PROMPT = buildGenerationSystemPrompt(BASE_SCAFFOLD);
 
 // ── Derive experiment label from prompt content ──────────────────────────────
 const PROMPT_HASH = crypto.createHash('sha256').update(SYSTEM_PROMPT).digest('hex').slice(0, 8);
 const CURRENT_EXPERIMENT = `${EXPERIMENT_BASE}_${PROMPT_HASH}`;
 console.log(`Experiment: ${CURRENT_EXPERIMENT}  (model: ${CURRENT_MODEL})`);
-
-// ── Helper: strip accidental markdown fences and extract the HTML ────────────
-function stripFences(text) {
-  // If the model wrapped it in ```html ... ```, extract just the inside
-  const fenced = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
-  if (fenced) return fenced[1].trim();
-  // Otherwise strip any leading/trailing fence lines
-  return text
-    .replace(/^```html\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/```\s*$/i, '')
-    .trim();
-}
-
-// ── Post-process: fix common model mistakes that cause blank scenes ──────────
-function fixGeneratedHtml(html) {
-  let fixed = html;
-  let fixes = [];
-
-  // 1. Remove duplicate addLabel redeclarations (model re-implements scaffold's addLabel)
-  //    The scaffold's addLabel is the FIRST one; remove any subsequent re-declarations.
-  const addLabelDupes = [...fixed.matchAll(/^[ \t]*(function addLabel\b[^{]*\{)/gm)];
-  if (addLabelDupes.length > 1) {
-    // Keep the first (scaffold), remove subsequent ones with their body
-    for (let i = addLabelDupes.length - 1; i >= 1; i--) {
-      const start = addLabelDupes[i].index;
-      // Find matching closing brace
-      let depth = 0, end = start;
-      for (let j = fixed.indexOf('{', start); j < fixed.length; j++) {
-        if (fixed[j] === '{') depth++;
-        if (fixed[j] === '}') { depth--; if (depth === 0) { end = j + 1; break; } }
-      }
-      fixed = fixed.slice(0, start) + '// [auto-removed duplicate addLabel]\n' + fixed.slice(end);
-      fixes.push('removed duplicate addLabel at char ' + start);
-    }
-  }
-
-  // 2. Remove duplicate animate() redeclarations
-  const animDupes = [...fixed.matchAll(/^[ \t]*(function animate\b[^{]*\{)/gm)];
-  if (animDupes.length > 1) {
-    for (let i = animDupes.length - 1; i >= 1; i--) {
-      const start = animDupes[i].index;
-      let depth = 0, end = start;
-      for (let j = fixed.indexOf('{', start); j < fixed.length; j++) {
-        if (fixed[j] === '{') depth++;
-        if (fixed[j] === '}') { depth--; if (depth === 0) { end = j + 1; break; } }
-      }
-      fixed = fixed.slice(0, start) + '// [auto-removed duplicate animate]\n' + fixed.slice(end);
-      fixes.push('removed duplicate animate at char ' + start);
-    }
-  }
-
-  // 3. Remove duplicate updateLabels() that the model creates alongside _syncLabels
-  const updateLabelsDupes = [...fixed.matchAll(/^[ \t]*(function updateLabels\b[^{]*\{)/gm)];
-  if (updateLabelsDupes.length > 0) {
-    for (let i = updateLabelsDupes.length - 1; i >= 0; i--) {
-      const start = updateLabelsDupes[i].index;
-      let depth = 0, end = start;
-      for (let j = fixed.indexOf('{', start); j < fixed.length; j++) {
-        if (fixed[j] === '{') depth++;
-        if (fixed[j] === '}') { depth--; if (depth === 0) { end = j + 1; break; } }
-      }
-      fixed = fixed.slice(0, start) + '// [auto-removed conflicting updateLabels]\n' + fixed.slice(end);
-      fixes.push('removed conflicting updateLabels');
-    }
-  }
-
-  // 4. Fix model's label calls that use old 2-arg style: addLabel(html, pos, true)
-  //    Convert to scaffold API: addLabel(html, pos, { fontSize: '11px' })
-  fixed = fixed.replace(/addLabel\(([^,]+),\s*([^,]+),\s*true\s*\)/g,
-    "addLabel($1, $2, { fontSize: '11px' })");
-
-  // 5. If model created its own `const labels = [];`, remove it (scaffold uses _labels)
-  fixed = fixed.replace(/^[ \t]*const labels\s*=\s*\[\s*\]\s*;?\s*$/gm, '// [auto-removed: scaffold uses _labels]');
-
-  if (fixes.length) {
-    console.log('[fixGeneratedHtml]', fixes.join('; '));
-  }
-  return fixed;
-}
 
 // ── Helper: generate a simple unique id ───────────────────────────────────────
 function makeId() {
@@ -392,26 +205,19 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
   }
   console.log(`[generate] requested="${requestedModel}" → using="${modelId}" | file=${filename}`);
 
-  const userContent = [
-    {
-      type: 'image_url',
-      image_url: { url: `data:${mediaType};base64,${base64}` },
-    },
-    {
-      type: 'text',
-      text: plan
-        ? buildPlanInjection(plan)
-        : 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.',
-    },
-  ];
+  const userText = plan
+    ? buildPlanInjection(plan)
+    : 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.';
 
-  let html = await withRetry(() => generateWithModel(modelId, {
-    systemPrompt: SYSTEM_PROMPT,
-    userContent,
+  const html = await withRetry(() => generateFigureHtml({
+    modelId,
+    scaffold: BASE_SCAFFOLD,
+    mediaType,
+    base64,
+    userText,
     maxTokens: 16384,
+    applyFixes: true,
   }));
-  html = stripFences(html);
-  html = fixGeneratedHtml(html);
 
   if (!html.trimStart().startsWith('<')) {
     console.error('Model did not return HTML. Raw response:\n', html.slice(0, 500));
