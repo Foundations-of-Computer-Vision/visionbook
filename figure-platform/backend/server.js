@@ -25,6 +25,7 @@ const FIGURES_DIR = path.join(__dirname, '..', '..', 'figures');
 // server restart creates a brand-new experiment bucket in the dashboard.
 const EXPERIMENT_BASE = 'base_scene_robust';   // human-readable prefix
 const CURRENT_MODEL = 'gpt-5.4';             // model used by the generator
+const CURRENT_CRITIC_MODEL = 'gpt-4o';       // model used by evaluator by default
 // CURRENT_EXPERIMENT is set below, after the system prompt is built.
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -70,7 +71,12 @@ function makeId() {
 
 // ── GET /api/prompt — return the current system prompt for UI display ──────────
 app.get('/api/prompt', (req, res) => {
-  res.json({ prompt: SYSTEM_PROMPT, experiment: CURRENT_EXPERIMENT, model: CURRENT_MODEL });
+  res.json({
+    prompt: SYSTEM_PROMPT,
+    experiment: CURRENT_EXPERIMENT,
+    model: CURRENT_MODEL,
+    criticModel: CURRENT_CRITIC_MODEL,
+  });
 });
 
 // ── GET /api/models — list available generator models for the UI ──────────────
@@ -166,7 +172,7 @@ function buildPlanInjection(plan) {
   return parts.join('\n\n');
 }
 
-async function generateFigure({ base64, mediaType, filename, plan, model: requestedModel, evaluate = true }) {
+async function generateFigure({ base64, mediaType, filename, plan, model: requestedModel, evalModel: requestedEvalModel, evaluate = true }) {
   if (!base64 || !mediaType || !filename) {
     const err = new Error('base64, mediaType, and filename are required.');
     err.statusCode = 400;
@@ -225,7 +231,7 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
   let evaluation = null;
   if (evaluate !== false) {
     try {
-      evaluation = await runEvaluation(record, recordPath);
+      evaluation = await runEvaluation(record, recordPath, requestedEvalModel);
       console.log(`Auto-eval for ${figureId}: overall=${evaluation.overall_average}`);
     } catch (evalErr) {
       console.warn('Auto-eval failed (result saved without scores):', evalErr.message);
@@ -334,12 +340,12 @@ app.get('/api/history', (req, res) => {
         try {
           const raw = fs.readFileSync(path.join(RESULTS_DIR, f), 'utf-8');
           const parsed = JSON.parse(raw);
-          const { id, filename, base64thumb, timestamp, source, evaluation } = parsed;
+          const { id, filename, base64thumb, timestamp, source, evaluation, evaluationModel } = parsed;
           const stem = filename ? filename.replace(/\.[^.]+$/, '') : '';
           const chapter = inferChapter(stem);
           const model = parsed.model || 'gpt-4o';
           const experiment = parsed.experiment || 'base_scene_robust';
-          return { id, filename, base64thumb, timestamp, source: source || 'api', model, experiment, evaluation: evaluation || null, chapter };
+          return { id, filename, base64thumb, timestamp, source: source || 'api', model, experiment, evaluation: evaluation || null, evaluationModel: evaluationModel || null, chapter };
         } catch {
           return null;
         }
@@ -398,22 +404,25 @@ app.post('/api/save', (req, res) => {
 
 // Calls the shared evaluator, persists to the record file,
 // and returns the evaluation object. Throws on error.
-async function runEvaluation(record, filePath) {
+async function runEvaluation(record, filePath, requestedEvalModel) {
   const { html, source_base64, source_media_type, base64thumb } = record;
   if (!html) throw new Error('No HTML found for this result.');
 
   // Always evaluate against the original source image, not the generated screenshot
   const evalImage = source_base64 || base64thumb;
   const evalMediaType = source_media_type || 'image/png';
+  const evalModel = requestedEvalModel || CURRENT_CRITIC_MODEL;
 
   const evaluation = await evaluateHtmlWithCritic({
     html,
     evalImage,
     evalMediaType,
+    model: evalModel,
   });
 
   // Persist back to disk
   record.evaluation = evaluation;
+  record.evaluationModel = evalModel;
   if (filePath) fs.writeFileSync(filePath, JSON.stringify(record, null, 2));
 
   return evaluation;
@@ -422,7 +431,7 @@ async function runEvaluation(record, filePath) {
 // ── POST /api/evaluate ────────────────────────────────────────────────────────
 // Manual re-evaluation endpoint (used for existing results without scores).
 app.post('/api/evaluate', async (req, res) => {
-  const { id } = req.body;
+  const { id, evalModel } = req.body;
   if (!id) return res.status(400).json({ error: 'id is required.' });
 
   const filePath = path.join(RESULTS_DIR, `${id}.json`);
@@ -433,7 +442,7 @@ app.post('/api/evaluate', async (req, res) => {
   catch { return res.status(500).json({ error: 'Failed to read result file.' }); }
 
   try {
-    const evaluation = await runEvaluation(record, filePath);
+    const evaluation = await runEvaluation(record, filePath, evalModel);
     return res.json(evaluation);
   } catch (err) {
     console.error('Evaluation error:', err?.message || err);
@@ -445,7 +454,7 @@ app.post('/api/evaluate', async (req, res) => {
 // Accepts { ids: string[] } and evaluates them one-by-one (no concurrency).
 // Returns results as they complete via streaming JSON lines.
 app.post('/api/evaluate-batch', async (req, res) => {
-  const { ids } = req.body;
+  const { ids, evalModel } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'ids (array) is required.' });
   }
@@ -467,7 +476,7 @@ app.post('/api/evaluate-batch', async (req, res) => {
     catch { res.write(JSON.stringify({ id, status: 'error', error: 'Failed to read result.' }) + '\n'); continue; }
 
     try {
-      const evaluation = await runEvaluation(record, filePath);
+      const evaluation = await runEvaluation(record, filePath, evalModel);
       res.write(JSON.stringify({ id, status: 'ok', evaluation }) + '\n');
     } catch (err) {
       console.error(`Batch eval error for ${id}:`, err?.message || err);
@@ -643,7 +652,24 @@ function scanExperiments() {
 function loadExpEval(htmlPath) {
   const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
   if (!fs.existsSync(evalPath)) return null;
-  try { return JSON.parse(fs.readFileSync(evalPath, 'utf-8')); } catch { return null; }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(evalPath, 'utf-8'));
+    // Backward compatibility: old files stored only the raw evaluation object.
+    if (parsed && parsed.evaluation && typeof parsed.evaluation === 'object') {
+      return {
+        evaluation: parsed.evaluation,
+        evaluationModel: parsed.evaluationModel || null,
+        evaluatedAt: parsed.evaluatedAt || null,
+      };
+    }
+    return {
+      evaluation: parsed,
+      evaluationModel: null,
+      evaluatedAt: null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ── GET /api/experiments ──────────────────────────────────────────────────────
@@ -654,7 +680,10 @@ app.get('/api/experiments', (req, res) => {
     for (const exp of tree) {
       for (const m of exp.models) {
         for (const fig of m.figures) {
-          fig.evaluation = loadExpEval(fig.htmlPath);
+          const evalData = loadExpEval(fig.htmlPath);
+          fig.evaluation = evalData?.evaluation || null;
+          fig.evaluationModel = evalData?.evaluationModel || null;
+          fig.evaluatedAt = evalData?.evaluatedAt || null;
         }
       }
     }
@@ -667,7 +696,7 @@ app.get('/api/experiments', (req, res) => {
 // ── POST /api/experiments/evaluate ───────────────────────────────────────────
 // Evaluate a single experiment figure in-place; cache result as <name>.eval.json
 app.post('/api/experiments/evaluate', async (req, res) => {
-  const { htmlPath, imagePath } = req.body;
+  const { htmlPath, imagePath, evalModel } = req.body;
   if (!htmlPath) return res.status(400).json({ error: 'htmlPath required.' });
 
   const absHtml = path.resolve(htmlPath);
@@ -681,15 +710,21 @@ app.post('/api/experiments/evaluate', async (req, res) => {
   }
 
   try {
+    const usedEvalModel = evalModel || CURRENT_CRITIC_MODEL;
     const evaluation = await evaluateHtmlWithCritic({
       html,
       evalImage: base64thumb,
       evalMediaType: 'image/png',
+      model: usedEvalModel,
     });
 
     // Cache alongside the HTML file
     const evalPath = absHtml.replace(/\.html$/, '.eval.json');
-    fs.writeFileSync(evalPath, JSON.stringify(evaluation, null, 2));
+    fs.writeFileSync(evalPath, JSON.stringify({
+      evaluation,
+      evaluationModel: usedEvalModel,
+      evaluatedAt: new Date().toISOString(),
+    }, null, 2));
 
     return res.json(evaluation);
   } catch (err) {

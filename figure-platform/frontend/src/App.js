@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 
 const FALLBACK_PROMPT = '(Loading system prompt from server…)';
 const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
+const CRITIC_MODEL_STORAGE_KEY = 'figure-platform:selectedCriticModel';
 
 function apiFetch(input, init = {}) {
   return fetch(input, {
@@ -49,9 +50,10 @@ export default function App() {
   const [generatedHtml, setGeneratedHtml] = useState('');
   const [systemPrompt, setSystemPrompt] = useState(FALLBACK_PROMPT);
 
-  // Model selection (generator only)
+  // Model selection
   const [models, setModels] = useState([]);       // available models from backend
   const [selectedModel, setSelectedModel] = useState(''); // '' = server default
+  const [selectedCriticModel, setSelectedCriticModel] = useState('');
 
   // Fetch the real system prompt + available models from the backend on mount
   useEffect(() => {
@@ -69,14 +71,23 @@ export default function App() {
         .find(modelId => modelId && list.some(m => m.id === modelId));
 
       if (preferredModel) setSelectedModel(preferredModel);
+
+      const storedCriticModel = window.localStorage.getItem(CRITIC_MODEL_STORAGE_KEY);
+      const preferredCriticModel = [storedCriticModel, promptData.criticModel, list[0]?.id]
+        .find(modelId => modelId && list.some(m => m.id === modelId));
+
+      if (preferredCriticModel) setSelectedCriticModel(preferredCriticModel);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [currentRecord, setCurrentRecord] = useState(null); // full record from history
   useEffect(() => {
     if (selectedModel) window.localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
   }, [selectedModel]);
+  useEffect(() => {
+    if (selectedCriticModel) window.localStorage.setItem(CRITIC_MODEL_STORAGE_KEY, selectedCriticModel);
+  }, [selectedCriticModel]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -96,7 +107,7 @@ export default function App() {
   const handleGenerate = useCallback(async () => {
     if (!image) return;
     if (!selectedModel) {
-      setError('Choose a generator model first.');
+      setError('Set a default generator model in Settings first.');
       return;
     }
     setError('');
@@ -129,6 +140,7 @@ export default function App() {
         filename: image.filename,
         plan: currentPlan || undefined,
         model: selectedModel || undefined,
+        evalModel: selectedCriticModel || undefined,
       });
       setGeneratedHtml(data.html);
       setEvaluation(data.evaluation || null);
@@ -148,7 +160,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [image, selectedModel]);
+  }, [image, selectedCriticModel, selectedModel]);
   const handleLoadFromHistory = useCallback((record) => {
     setCurrentRecord(record);
     setGeneratedHtml(record.html);
@@ -210,14 +222,21 @@ export default function App() {
       if (currentRecord.htmlPath) {
         const res = await apiFetch('/api/experiments/evaluate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ htmlPath: currentRecord.htmlPath, imagePath: currentRecord.imagePath }),
+          body: JSON.stringify({
+            htmlPath: currentRecord.htmlPath,
+            imagePath: currentRecord.imagePath,
+            evalModel: selectedCriticModel || undefined,
+          }),
         });
         data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Evaluation failed.');
       } else if (currentRecord.id) {
         const res = await apiFetch('/api/evaluate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: currentRecord.id }),
+          body: JSON.stringify({
+            id: currentRecord.id,
+            evalModel: selectedCriticModel || undefined,
+          }),
         });
         data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Evaluation failed.');
@@ -230,20 +249,20 @@ export default function App() {
     } finally {
       setEvaluating(false);
     }
-  }, [currentRecord]);
+  }, [currentRecord, selectedCriticModel]);
 
   return (
     <div style={styles.root}>
       <header style={styles.header}>
         <span style={styles.logo}>3D Figure Generator</span>
         <nav style={styles.nav}>
-          {['generator', 'viewer', 'results', 'dashboard', 'preview'].map((t) => (
+          {['generator', 'viewer', 'results', 'dashboard', 'preview', 'settings'].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               style={{ ...styles.navBtn, ...(tab === t ? styles.navBtnActive : {}) }}
             >
-              {({'preview': 'Chapter Preview'}[t] || (t.charAt(0).toUpperCase() + t.slice(1)))}
+              {({ 'preview': 'Chapter Preview' }[t] || (t.charAt(0).toUpperCase() + t.slice(1)))}
             </button>
           ))}
         </nav>
@@ -261,9 +280,8 @@ export default function App() {
             plan={plan}
             error={error}
             systemPrompt={systemPrompt}
-            models={models}
             selectedModel={selectedModel}
-            onModelChange={setSelectedModel}
+            selectedCriticModel={selectedCriticModel}
           />
         )}
         {tab === 'viewer' && (
@@ -278,7 +296,7 @@ export default function App() {
           />
         )}
         {tab === 'results' && (
-          <ResultsTab onOpen={handleOpenResult} />
+          <ResultsTab onOpen={handleOpenResult} criticModel={selectedCriticModel} />
         )}
         {tab === 'dashboard' && (
           <DashboardTab />
@@ -286,13 +304,22 @@ export default function App() {
         {tab === 'preview' && (
           <ChapterPreviewTab />
         )}
+        {tab === 'settings' && (
+          <SettingsTab
+            models={models}
+            selectedModel={selectedModel}
+            selectedCriticModel={selectedCriticModel}
+            onGeneratorModelChange={setSelectedModel}
+            onCriticModelChange={setSelectedCriticModel}
+          />
+        )}
       </main>
     </div>
   );
 }
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, selectedModel, onModelChange }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, selectedModel, selectedCriticModel }) {
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
@@ -326,13 +353,13 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       if (res.ok && data.html) {
         setPreviewHtml(data.html);
       }
-    } catch (_) {}
+    } catch (_) { }
     setPreviewLoading(false);
   };
 
   // Load chapter list on mount
   React.useEffect(() => {
-    apiFetch('/api/chapters').then(r => r.json()).then(setChapters).catch(() => {});
+    apiFetch('/api/chapters').then(r => r.json()).then(setChapters).catch(() => { });
   }, []);
 
   // When a chapter is selected, load its 3D candidates
@@ -370,7 +397,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
   const handleRunChapter = async () => {
     if (!selectedChapter || chapterCandidates.length === 0) return;
     if (!selectedModel) {
-      onError?.('Choose a generator model first.');
+      onError?.('Set a default generator model in Settings first.');
       return;
     }
     setChapterRunning(true);
@@ -400,7 +427,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
           body: JSON.stringify({ filename: candidate.filename, chapterHint: selectedChapter }),
         });
         if (planRes.ok) figurePlan = await planRes.json();
-      } catch (_) {}
+      } catch (_) { }
 
       if (chapterAbortRef.current) { activeMap.delete(candidate.stem); return; }
 
@@ -467,7 +494,10 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       const res = await apiFetch('/api/evaluate-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: successIds.map(s => s.figureId) }),
+        body: JSON.stringify({
+          ids: successIds.map(s => s.figureId),
+          evalModel: selectedCriticModel || undefined,
+        }),
       });
 
       const reader = res.body.getReader();
@@ -492,7 +522,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             setBatchEvalResults({ ...evalMap });
             const nextStem = completed < successIds.length ? successIds[completed].figureStem : null;
             setBatchEvalProgress({ completed, total: successIds.length, current: nextStem });
-          } catch (_) {}
+          } catch (_) { }
         }
       }
     } catch (err) {
@@ -528,6 +558,9 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
           onClick={() => setMode('chapter')}
         >Select Chapter</button>
       </div>
+      <p style={{ fontSize: 11, color: '#888', margin: '-4px 0 6px' }}>
+        Generator model is managed in the Settings tab.
+      </p>
 
       {mode === 'figure' ? (
         <>
@@ -619,25 +652,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 
           {error && <p style={styles.errorMsg}>{error}</p>}
 
-          {/* Model selector */}
-          {models.length > 0 && (
-            <div style={styles.modelSelector}>
-              <label style={styles.modelLabel}>Generator model:</label>
-              <select
-                style={styles.modelSelect}
-                value={selectedModel}
-                onChange={e => onModelChange(e.target.value)}
-                disabled={loading || planning}
-              >
-                {models.map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}  ({m.provider})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
           <button
             style={{ ...styles.generateBtn, ...(loading || planning || !image || !selectedModel ? styles.generateBtnDisabled : {}) }}
             onClick={onGenerate}
@@ -667,25 +681,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 
           {selectedChapter && chapterCandidates.length > 0 && (
             <>
-              {/* Model selector (chapter mode) — above the grid so it's always visible */}
-              {models.length > 0 && (
-                <div style={{ ...styles.modelSelector, marginBottom: 10 }}>
-                  <label style={styles.modelLabel}>Generator model:</label>
-                  <select
-                    style={styles.modelSelect}
-                    value={selectedModel}
-                    onChange={e => onModelChange(e.target.value)}
-                    disabled={chapterRunning}
-                  >
-                    {models.map(m => (
-                      <option key={m.id} value={m.id}>
-                        {m.label}  ({m.provider})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
               {/* Candidate thumbnail grid — clickable to go to single-figure mode */}
               <div style={styles.candidateGrid}>
                 {chapterCandidates.map((c, idx) => {
@@ -910,9 +905,10 @@ function ViewerTab({ record, html, onNew, onDelete, evaluation, evaluating, onEv
           <p style={styles.viewerTs}>{new Date(record.timestamp).toLocaleString()}</p>
         )}
         {record?.source && (
-          <span style={{ ...styles.sourceBadge,
+          <span style={{
+            ...styles.sourceBadge,
             ...(record.source === 'chat' ? styles.sourceBadgeChat :
-                record.source === 'api' ? styles.sourceBadgeApi :
+              record.source === 'api' ? styles.sourceBadgeApi :
                 { background: '#e8f0ff', color: '#1a3a8a' })
           }}>
             {record.source}
@@ -956,15 +952,15 @@ function ViewerTab({ record, html, onNew, onDelete, evaluation, evaluating, onEv
 // ── Evaluation Panel ─────────────────────────────────────────────────────────
 function EvaluationPanel({ evaluation, evaluating, onEvaluate, canEvaluate }) {
   const [showAllFailures, setShowAllFailures] = React.useState(false);
-  const scoreTextColor = (s) => { const rgb = lerpColor(s); if (!rgb) return '#888'; return `rgb(${Math.round(rgb[0]*0.6)},${Math.round(rgb[1]*0.6)},${Math.round(rgb[2]*0.5)})`; };
-  const scoreBarColor  = (s) => { const rgb = lerpColor(s); if (!rgb) return '#ccc'; return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.8)`; };
+  const scoreTextColor = (s) => { const rgb = lerpColor(s); if (!rgb) return '#888'; return `rgb(${Math.round(rgb[0] * 0.6)},${Math.round(rgb[1] * 0.6)},${Math.round(rgb[2] * 0.5)})`; };
+  const scoreBarColor = (s) => { const rgb = lerpColor(s); if (!rgb) return '#ccc'; return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.8)`; };
   const METRICS = [
-    { key: 'geometry_accuracy',      label: 'Geometry'   },
-    { key: 'interactivity_usability', label: 'Interact.'  },
-    { key: 'faithfulness',           label: 'Faithful'   },
-    { key: 'label_quality',          label: 'Labels'     },
-    { key: 'concept_accuracy',       label: 'Concept'    },
-    { key: 'visual_aesthetics',      label: 'Visual*'    },
+    { key: 'geometry_accuracy', label: 'Geometry' },
+    { key: 'interactivity_usability', label: 'Interact.' },
+    { key: 'faithfulness', label: 'Faithful' },
+    { key: 'label_quality', label: 'Labels' },
+    { key: 'concept_accuracy', label: 'Concept' },
+    { key: 'visual_aesthetics', label: 'Visual*' },
   ];
 
   if (evaluating) {
@@ -1077,7 +1073,7 @@ function LazyApiThumb({ id, base64thumb, mediaType, style }) {
     apiFetch('/api/thumb/' + encodeURIComponent(id))
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`); })
-      .catch(() => {});
+      .catch(() => { });
     return () => { cancelled = true; };
   }, [id]);
   if (!src) return <div style={{ ...style, background: '#f0f0f0' }} />;
@@ -1118,7 +1114,7 @@ function humanTitle(stem) {
 // ── Results Tab ───────────────────────────────────────────────────────────────
 // Two sub-tabs: API (manually generated) | Agent (prompt_experiments/ runs)
 // Within each: experiment → model → chapters → figure cards
-function ResultsTab({ onOpen }) {
+function ResultsTab({ onOpen, criticModel }) {
   const [activeTab, setActiveTab] = React.useState('api');
   const [apiRecords, setApiRecords] = React.useState([]);
   const [expTree, setExpTree] = React.useState([]);
@@ -1140,7 +1136,7 @@ function ResultsTab({ onOpen }) {
 
   // Fetch the real system prompt for the API tab display
   React.useEffect(() => {
-    apiFetch('/api/prompt').then(r => r.json()).then(d => { if (d.prompt) setServerPrompt(d.prompt); }).catch(() => {});
+    apiFetch('/api/prompt').then(r => r.json()).then(d => { if (d.prompt) setServerPrompt(d.prompt); }).catch(() => { });
   }, []);
 
   // Reset chapter/figure filters when selection or active tab changes
@@ -1150,7 +1146,7 @@ function ResultsTab({ onOpen }) {
   }, [selected, activeTab]);
 
   React.useEffect(() => {
-    apiFetch('/api/base-scaffold').then(r => r.json()).then(d => setBaseScaffold(d.content)).catch(() => {});
+    apiFetch('/api/base-scaffold').then(r => r.json()).then(d => setBaseScaffold(d.content)).catch(() => { });
   }, []);
 
   React.useEffect(() => {
@@ -1318,18 +1314,22 @@ function ResultsTab({ onOpen }) {
     try {
       let data;
       if (item.type === 'api') {
-        const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) });
+        const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: criticModel || undefined }) });
         data = await res.json();
         if (!res.ok) throw new Error(data.error);
         setApiRecords(prev => prev.map(r => r.id === item.id ? { ...r, evaluation: data } : r));
       } else {
-        const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath }) });
+        const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: criticModel || undefined }) });
         data = await res.json();
         if (!res.ok) throw new Error(data.error);
         const [expName, modelName, figName] = item.key.split('/');
-        setExpTree(prev => prev.map(exp => exp.experiment !== expName ? exp : { ...exp,
-          models: exp.models.map(m => m.model !== modelName ? m : { ...m,
-            figures: m.figures.map(f => f.name !== figName ? f : { ...f, evaluation: data }) }) }));
+        setExpTree(prev => prev.map(exp => exp.experiment !== expName ? exp : {
+          ...exp,
+          models: exp.models.map(m => m.model !== modelName ? m : {
+            ...m,
+            figures: m.figures.map(f => f.name !== figName ? f : { ...f, evaluation: data })
+          })
+        }));
       }
     } catch (err) { alert('Evaluation failed: ' + err.message); }
     finally { setEvaluatingKey(null); }
@@ -1345,20 +1345,24 @@ function ResultsTab({ onOpen }) {
       try {
         let data;
         if (item.type === 'api') {
-          const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id }) });
+          const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: criticModel || undefined }) });
           data = await res.json();
           if (!res.ok) throw new Error(data.error);
           setApiRecords(prev => prev.map(r => r.id === item.id ? { ...r, evaluation: data } : r));
         } else {
-          const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath }) });
+          const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: criticModel || undefined }) });
           data = await res.json();
           if (!res.ok) throw new Error(data.error);
           const [expName, modelName, figName] = item.key.split('/');
-          setExpTree(prev => prev.map(exp => exp.experiment !== expName ? exp : { ...exp,
-            models: exp.models.map(m => m.model !== modelName ? m : { ...m,
-              figures: m.figures.map(f => f.name !== figName ? f : { ...f, evaluation: data }) }) }));
+          setExpTree(prev => prev.map(exp => exp.experiment !== expName ? exp : {
+            ...exp,
+            models: exp.models.map(m => m.model !== modelName ? m : {
+              ...m,
+              figures: m.figures.map(f => f.name !== figName ? f : { ...f, evaluation: data })
+            })
+          }));
         }
-      } catch {}
+      } catch { }
     }
     setEvaluatingAll(null);
     setEvaluatingKey(null);
@@ -1473,10 +1477,10 @@ function ResultsTab({ onOpen }) {
           >
             {label}
             {key === 'api' && apiRecords.length > 0 &&
-              <span style={styles.subTabCount}>{apiRecords.filter(r=>r.evaluation).length}/{apiRecords.length}</span>}
+              <span style={styles.subTabCount}>{apiRecords.filter(r => r.evaluation).length}/{apiRecords.length}</span>}
             {key === 'agent' && expTree.length > 0 && (() => {
-              const total = expTree.reduce((s,e)=>s+e.models.reduce((ms,m)=>ms+m.figures.length,0),0);
-              const evaled = expTree.reduce((s,e)=>s+e.models.reduce((ms,m)=>ms+m.figures.filter(f=>f.evaluation).length,0),0);
+              const total = expTree.reduce((s, e) => s + e.models.reduce((ms, m) => ms + m.figures.length, 0), 0);
+              const evaled = expTree.reduce((s, e) => s + e.models.reduce((ms, m) => ms + m.figures.filter(f => f.evaluation).length, 0), 0);
               return <span style={styles.subTabCount}>{evaled}/{total}</span>;
             })()}
           </button>
@@ -1544,11 +1548,13 @@ function ResultsTab({ onOpen }) {
           <div style={{ display: 'flex', borderBottom: '1px solid #e8e8e8', flexShrink: 0 }}>
             {[['experiment', 'Experiments'], ['chapter', 'Chapters']].map(([val, label]) => (
               <button key={val}
-                style={{ flex: 1, fontSize: 11, padding: '8px 4px', border: 'none', borderBottom: sidebarGroupBy === val ? '2px solid #5878a0' : '2px solid transparent',
+                style={{
+                  flex: 1, fontSize: 11, padding: '8px 4px', border: 'none', borderBottom: sidebarGroupBy === val ? '2px solid #5878a0' : '2px solid transparent',
                   cursor: 'pointer', fontWeight: sidebarGroupBy === val ? 600 : 400,
                   background: 'transparent',
                   color: sidebarGroupBy === val ? '#5878a0' : '#999',
-                  marginBottom: -1 }}
+                  marginBottom: -1
+                }}
                 onClick={() => { setSidebarGroupBy(val); setSelected(null); setFilterChapter(''); }}
               >{label}</button>
             ))}
@@ -1567,11 +1573,13 @@ function ResultsTab({ onOpen }) {
                 const isActive = filterChapter === ch;
                 return (
                   <div key={ch}
-                    style={{ ...styles.expTreeItem, paddingLeft: 12,
+                    style={{
+                      ...styles.expTreeItem, paddingLeft: 12,
                       background: isActive ? '#f0f0f0' : 'transparent',
                       borderLeftColor: isActive ? '#111' : 'transparent',
                       color: isActive ? '#111' : '#444',
-                      fontWeight: isActive ? 600 : 400 }}
+                      fontWeight: isActive ? 600 : 400
+                    }}
                     onClick={() => { setFilterChapter(ch); setSelected(null); }}
                   >
                     <span style={{ flex: 1, fontSize: 11 }}>{ch}</span>
@@ -1585,21 +1593,21 @@ function ResultsTab({ onOpen }) {
             (() => {
               const entries = activeTab === 'api'
                 ? Object.entries(apiTree).map(([expName, models]) => ({
-                    group: expName,
-                    items: Object.entries(models).map(([modelName, recs]) => ({
-                      modelName, evalCount: recs.filter(r => r.evaluation).length, total: recs.length,
-                      nodeKey: `${expName}::${modelName}`,
-                      onSelect: () => setSelected({ experiment: expName, model: modelName }),
-                    })),
-                  }))
+                  group: expName,
+                  items: Object.entries(models).map(([modelName, recs]) => ({
+                    modelName, evalCount: recs.filter(r => r.evaluation).length, total: recs.length,
+                    nodeKey: `${expName}::${modelName}`,
+                    onSelect: () => setSelected({ experiment: expName, model: modelName }),
+                  })),
+                }))
                 : expTree.map(exp => ({
-                    group: exp.experiment,
-                    items: exp.models.map(m => ({
-                      modelName: m.model, evalCount: m.figures.filter(f => f.evaluation).length, total: m.figures.length,
-                      nodeKey: `${exp.experiment}::${m.model}`,
-                      onSelect: () => setSelected({ experiment: exp.experiment, model: m.model }),
-                    })),
-                  }));
+                  group: exp.experiment,
+                  items: exp.models.map(m => ({
+                    modelName: m.model, evalCount: m.figures.filter(f => f.evaluation).length, total: m.figures.length,
+                    nodeKey: `${exp.experiment}::${m.model}`,
+                    onSelect: () => setSelected({ experiment: exp.experiment, model: m.model }),
+                  })),
+                }));
               return entries.map(({ group, items }) => {
                 const isCollapsed = collapsedGroups.has(group);
                 const isOpen = !isCollapsed || hoveredGroup === group;
@@ -1700,75 +1708,75 @@ function ResultsTab({ onOpen }) {
                     ? !collapsedGroups.has(groupKey)
                     : openChapters.has(groupKey);
                   return (
-                  <details key={groupKey} style={{ marginBottom: 16 }} open={isOpen}
-                    onToggle={e => {
-                      const open = e.currentTarget.open;
-                      if (isModelView) {
-                        setCollapsedGroups(prev => { const n = new Set(prev); open ? n.delete(groupKey) : n.add(groupKey); return n; });
-                      } else {
-                        setOpenChapters(prev => { const s = new Set(prev); open ? s.add(groupKey) : s.delete(groupKey); return s; });
-                      }
-                    }}
-                  >
-                    <summary style={{ ...styles.resultChapterHeader, cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none' }}>
-                      <span style={{ fontSize: 9, color: '#bbb', display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>{groupKey}
-                      <span style={{ fontWeight: 400, color: '#bbb', textTransform: 'none', letterSpacing: 0 }}>({items.length})</span>
-                      {items.some(i => !i.evaluation) && (
-                        <button
-                          style={{ marginLeft: 'auto', fontSize: 10, padding: '1px 8px', borderRadius: 4, border: '1px solid #d0d8e8', background: '#f2f6fb', color: '#5878a0', cursor: 'pointer', fontWeight: 600 }}
-                          onClick={e => handleEvalAll(e, groupKey, items)}
-                          disabled={evaluatingAll === groupKey}
-                        >
-                          {evaluatingAll === groupKey
-                            ? `Evaluating… (${items.filter(i => i.evaluation).length}/${items.length})`
-                            : `Evaluate all (${items.filter(i => !i.evaluation).length} pending)`}
-                        </button>
-                      )}
-                    </summary>
-                    <div style={{ ...styles.historyGrid, marginTop: 10 }}>
-                      {items.map(item => {
-                        const ev = item.evaluation;
-                        return (
-                          <div key={item.key} style={styles.card} onClick={() => onOpen(item)}>
-                            <div style={{ position: 'relative' }}>
-                              {item.type === 'api'
-                                ? <LazyApiThumb id={item.id} base64thumb={item.base64thumb} mediaType={item.mediaType} style={styles.cardThumb} />
-                                : <LazyThumb htmlPath={item.htmlPath} style={styles.cardThumb} />
-                              }
-                              {item.type === 'api' && (
-                                <button
-                                  style={styles.cardDeleteBtn}
-                                  onClick={e => handleDeleteCard(e, item)}
-                                  title="Delete"
-                                >✕</button>
-                              )}
+                    <details key={groupKey} style={{ marginBottom: 16 }} open={isOpen}
+                      onToggle={e => {
+                        const open = e.currentTarget.open;
+                        if (isModelView) {
+                          setCollapsedGroups(prev => { const n = new Set(prev); open ? n.delete(groupKey) : n.add(groupKey); return n; });
+                        } else {
+                          setOpenChapters(prev => { const s = new Set(prev); open ? s.add(groupKey) : s.delete(groupKey); return s; });
+                        }
+                      }}
+                    >
+                      <summary style={{ ...styles.resultChapterHeader, cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none' }}>
+                        <span style={{ fontSize: 9, color: '#bbb', display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>{groupKey}
+                        <span style={{ fontWeight: 400, color: '#bbb', textTransform: 'none', letterSpacing: 0 }}>({items.length})</span>
+                        {items.some(i => !i.evaluation) && (
+                          <button
+                            style={{ marginLeft: 'auto', fontSize: 10, padding: '1px 8px', borderRadius: 4, border: '1px solid #d0d8e8', background: '#f2f6fb', color: '#5878a0', cursor: 'pointer', fontWeight: 600 }}
+                            onClick={e => handleEvalAll(e, groupKey, items)}
+                            disabled={evaluatingAll === groupKey}
+                          >
+                            {evaluatingAll === groupKey
+                              ? `Evaluating… (${items.filter(i => i.evaluation).length}/${items.length})`
+                              : `Evaluate all (${items.filter(i => !i.evaluation).length} pending)`}
+                          </button>
+                        )}
+                      </summary>
+                      <div style={{ ...styles.historyGrid, marginTop: 10 }}>
+                        {items.map(item => {
+                          const ev = item.evaluation;
+                          return (
+                            <div key={item.key} style={styles.card} onClick={() => onOpen(item)}>
+                              <div style={{ position: 'relative' }}>
+                                {item.type === 'api'
+                                  ? <LazyApiThumb id={item.id} base64thumb={item.base64thumb} mediaType={item.mediaType} style={styles.cardThumb} />
+                                  : <LazyThumb htmlPath={item.htmlPath} style={styles.cardThumb} />
+                                }
+                                {item.type === 'api' && (
+                                  <button
+                                    style={styles.cardDeleteBtn}
+                                    onClick={e => handleDeleteCard(e, item)}
+                                    title="Delete"
+                                  >✕</button>
+                                )}
+                              </div>
+                              <div style={styles.cardInfo}>
+                                <p style={styles.cardFilename}>{item.figure}{item.genTotal > 1 && <span style={{ marginLeft: 5, fontSize: 9, background: '#e3e8f0', color: '#556', borderRadius: 6, padding: '1px 5px', fontWeight: 500 }}>g{item.genIndex}</span>}</p>
+                                {!isModelView && !selected?.model && <p style={{ fontSize: 10, color: '#999', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.model}</p>}
+                                {item.timestamp && <p style={{ ...styles.cardTs, marginBottom: 3 }}>{new Date(item.timestamp).toLocaleDateString()}</p>}
+                                {ev ? (
+                                  <>
+                                    <span style={{ ...styles.sourceBadge, background: ev.overall_average >= 4 ? '#e8f5e9' : ev.overall_average >= 3 ? '#fff3e0' : '#ffebee', color: sc(ev.overall_average) }}>{ev.overall_average}/5</span>
+                                    {ev.failure_modes?.length > 0 && (
+                                      <CardFailureModes modes={ev.failure_modes} />
+                                    )}
+                                  </>
+                                ) : (
+                                  <button
+                                    style={{ ...styles.evalBtn, padding: '3px 0', fontSize: 10, marginTop: 4 }}
+                                    onClick={e => handleEvalCard(e, item)}
+                                    disabled={evaluatingKey === item.key}
+                                  >
+                                    {evaluatingKey === item.key ? '…' : 'Evaluate'}
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            <div style={styles.cardInfo}>
-                              <p style={styles.cardFilename}>{item.figure}{item.genTotal > 1 && <span style={{ marginLeft: 5, fontSize: 9, background: '#e3e8f0', color: '#556', borderRadius: 6, padding: '1px 5px', fontWeight: 500 }}>g{item.genIndex}</span>}</p>
-                              {!isModelView && !selected?.model && <p style={{ fontSize: 10, color: '#999', margin: '0 0 2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.model}</p>}
-                              {item.timestamp && <p style={{ ...styles.cardTs, marginBottom: 3 }}>{new Date(item.timestamp).toLocaleDateString()}</p>}
-                              {ev ? (
-                                <>
-                                  <span style={{ ...styles.sourceBadge, background: ev.overall_average >= 4 ? '#e8f5e9' : ev.overall_average >= 3 ? '#fff3e0' : '#ffebee', color: sc(ev.overall_average) }}>{ev.overall_average}/5</span>
-                                  {ev.failure_modes?.length > 0 && (
-                                    <CardFailureModes modes={ev.failure_modes} />
-                                  )}
-                                </>
-                              ) : (
-                                <button
-                                  style={{ ...styles.evalBtn, padding: '3px 0', fontSize: 10, marginTop: 4 }}
-                                  onClick={e => handleEvalCard(e, item)}
-                                  disabled={evaluatingKey === item.key}
-                                >
-                                  {evaluatingKey === item.key ? '…' : 'Evaluate'}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </details>
+                          );
+                        })}
+                      </div>
+                    </details>
                   );
                 });
               })()}
@@ -1806,22 +1814,22 @@ const DASH_METRICS = [
   'label_quality', 'concept_accuracy', 'visual_aesthetics',
 ];
 const DASH_METRIC_SHORT = {
-  geometry_accuracy:       'Geom',
+  geometry_accuracy: 'Geom',
   interactivity_usability: 'Inter',
-  faithfulness:            'Faith',
-  label_quality:           'Labels',
-  concept_accuracy:        'Concept',
-  visual_aesthetics:       'Aesth',
+  faithfulness: 'Faith',
+  label_quality: 'Labels',
+  concept_accuracy: 'Concept',
+  visual_aesthetics: 'Aesth',
 };
 
 // Continuous heatmap: dark red (0) → red (1) → orange (2) → yellow (3) → light green (4) → green (5)
 const COLOR_STOPS = [
-  [0,   [150,  10,  10]],
-  [1,   [220,  50,  50]],
-  [2,   [240, 130,  40]],
-  [3,   [255, 235,  80]],
-  [4,   [180, 215, 130]],
-  [5,   [ 80, 170,  90]],
+  [0, [150, 10, 10]],
+  [1, [220, 50, 50]],
+  [2, [240, 130, 40]],
+  [3, [255, 235, 80]],
+  [4, [180, 215, 130]],
+  [5, [80, 170, 90]],
 ];
 function lerpColor(s) {
   if (s === null) return null;
@@ -1848,7 +1856,7 @@ function scoreFg(s) {
   const rgb = lerpColor(s);
   if (!rgb) return '#bbb';
   // darken for text
-  return `rgb(${Math.round(rgb[0]*0.55)},${Math.round(rgb[1]*0.55)},${Math.round(rgb[2]*0.45)})`;
+  return `rgb(${Math.round(rgb[0] * 0.55)},${Math.round(rgb[1] * 0.55)},${Math.round(rgb[2] * 0.45)})`;
 }
 
 function modelFamily(name) {
@@ -1859,7 +1867,7 @@ function modelFamily(name) {
   return 'Other';
 }
 const FAMILY_COLOR = { Claude: '#ede7f6', Gemini: '#e3f2fd', GPT: '#e8f5e9', Other: '#f0f0f0' };
-const FAMILY_TEXT  = { Claude: '#5e35b1', Gemini: '#1565c0', GPT: '#2e7d32', Other: '#555' };
+const FAMILY_TEXT = { Claude: '#5e35b1', Gemini: '#1565c0', GPT: '#2e7d32', Other: '#555' };
 
 function computeStats(records, groupKey) {
   const byGroup = {};
@@ -1888,8 +1896,10 @@ function DashTable({ stats, groupKey }) {
   if (!stats.length) return <div style={{ color: '#bbb', fontSize: 12, padding: '10px 0' }}>No evaluated figures.</div>;
 
   const NUM = ({ val }) => (
-    <td style={{ textAlign: 'center', padding: '7px 6px', background: scoreBg(val),
-      color: scoreFg(val), fontWeight: 600, fontSize: 12 }}>
+    <td style={{
+      textAlign: 'center', padding: '7px 6px', background: scoreBg(val),
+      color: scoreFg(val), fontWeight: 600, fontSize: 12
+    }}>
       {val !== null ? val.toFixed(1) : <span style={{ color: '#ddd' }}>—</span>}
     </td>
   );
@@ -1898,23 +1908,33 @@ function DashTable({ stats, groupKey }) {
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
       <thead>
         <tr style={{ background: '#f5f5f5' }}>
-          <th style={{ textAlign: 'left', padding: '7px 12px', fontSize: 11, fontWeight: 700, color: '#555',
-            borderBottom: '1px solid #e0e0e0' }}>
+          <th style={{
+            textAlign: 'left', padding: '7px 12px', fontSize: 11, fontWeight: 700, color: '#555',
+            borderBottom: '1px solid #e0e0e0'
+          }}>
             {groupKey === 'model' ? 'Model' : 'Experiment'}
           </th>
-          <th style={{ textAlign: 'center', padding: '7px 6px', fontSize: 11, fontWeight: 700,
-            color: '#555', borderBottom: '1px solid #e0e0e0', width: 28 }}>N</th>
-          <th style={{ textAlign: 'center', padding: '7px 8px', fontSize: 11, fontWeight: 700,
+          <th style={{
+            textAlign: 'center', padding: '7px 6px', fontSize: 11, fontWeight: 700,
+            color: '#555', borderBottom: '1px solid #e0e0e0', width: 28
+          }}>N</th>
+          <th style={{
+            textAlign: 'center', padding: '7px 8px', fontSize: 11, fontWeight: 700,
             color: '#333', borderBottom: '1px solid #e0e0e0', background: '#ececec', width: 60,
-            borderLeft: '2px solid #999', borderRight: '2px solid #999' }}>Overall</th>
+            borderLeft: '2px solid #999', borderRight: '2px solid #999'
+          }}>Overall</th>
           {DASH_METRICS.map(k => (
-            <th key={k} style={{ textAlign: 'center', padding: '7px 6px', fontSize: 10, fontWeight: 700,
-              color: '#777', borderBottom: '1px solid #e0e0e0', width: 48 }}>
+            <th key={k} style={{
+              textAlign: 'center', padding: '7px 6px', fontSize: 10, fontWeight: 700,
+              color: '#777', borderBottom: '1px solid #e0e0e0', width: 48
+            }}>
               {DASH_METRIC_SHORT[k]}
             </th>
           ))}
-          <th style={{ textAlign: 'left', padding: '7px 10px', fontSize: 10, fontWeight: 700,
-            color: '#777', borderBottom: '1px solid #e0e0e0' }}>Top Failures</th>
+          <th style={{
+            textAlign: 'left', padding: '7px 10px', fontSize: 10, fontWeight: 700,
+            color: '#777', borderBottom: '1px solid #e0e0e0'
+          }}>Top Failures</th>
         </tr>
       </thead>
       <tbody>
@@ -1922,32 +1942,40 @@ function DashTable({ stats, groupKey }) {
           <tr key={key} style={{ borderBottom: '1px solid #f2f2f2' }}>
             <td style={{ padding: '7px 12px', whiteSpace: 'nowrap' }}>
               {family && (
-                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 5,
-                  background: FAMILY_COLOR[family], color: FAMILY_TEXT[family], marginRight: 7 }}>
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 5,
+                  background: FAMILY_COLOR[family], color: FAMILY_TEXT[family], marginRight: 7
+                }}>
                   {family}
                 </span>
               )}
               <span style={{ color: '#222', fontWeight: 500 }}>{key}</span>
             </td>
             <td style={{ textAlign: 'center', color: '#bbb', fontSize: 11, padding: '7px 6px' }}>{evaluated}</td>
-            <td style={{ textAlign: 'center', padding: '7px 8px', background: scoreBg(overall),
+            <td style={{
+              textAlign: 'center', padding: '7px 8px', background: scoreBg(overall),
               color: scoreFg(overall), fontWeight: 800, fontSize: 14,
-              borderLeft: '2px solid #bbb', borderRight: '2px solid #bbb' }}>
+              borderLeft: '2px solid #bbb', borderRight: '2px solid #bbb'
+            }}>
               {overall !== null ? overall.toFixed(1) : '—'}
             </td>
             {DASH_METRICS.map(k => <NUM key={k} val={metricAvgs[k]} />)}
             <td style={{ padding: '7px 10px', maxWidth: 240 }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                 {failureModes.slice(0, 3).map(([fm]) => (
-                  <span key={fm} style={{ fontSize: 11, padding: '2px 6px', borderRadius: 3,
+                  <span key={fm} style={{
+                    fontSize: 11, padding: '2px 6px', borderRadius: 3,
                     background: failureModeColor(fm).bg, color: failureModeColor(fm).fg,
-                    border: `1px solid ${failureModeColor(fm).border}`, fontWeight: 500, whiteSpace: 'nowrap' }}>
+                    border: `1px solid ${failureModeColor(fm).border}`, fontWeight: 500, whiteSpace: 'nowrap'
+                  }}>
                     {fm}
                   </span>
                 ))}
                 {failureModes.length > 3 && (
-                  <span style={{ fontSize: 11, padding: '2px 6px', borderRadius: 3,
-                    background: '#f5f5f5', color: '#aaa', border: '1px solid #e8e8e8', whiteSpace: 'nowrap' }}>
+                  <span style={{
+                    fontSize: 11, padding: '2px 6px', borderRadius: 3,
+                    background: '#f5f5f5', color: '#aaa', border: '1px solid #e8e8e8', whiteSpace: 'nowrap'
+                  }}>
                     +{failureModes.length - 3}
                   </span>
                 )}
@@ -1967,9 +1995,11 @@ function SourceSection({ title, color, records, groupKey }) {
   return (
     <div style={{ marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 5,
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 5,
           background: color === 'agent' ? '#e8f0fe' : '#f3e8ff',
-          color: color === 'agent' ? '#1a56cc' : '#7c3aed' }}>
+          color: color === 'agent' ? '#1a56cc' : '#7c3aed'
+        }}>
           {title}
         </span>
         <span style={{ fontSize: 11, color: '#bbb' }}>{n} evaluated</span>
@@ -1983,9 +2013,9 @@ function SourceSection({ title, color, records, groupKey }) {
 
 function DashboardTab() {
   const [apiRecords, setApiRecords] = React.useState([]);
-  const [expTree, setExpTree]       = React.useState([]);
-  const [loading, setLoading]       = React.useState(true);
-  const [view, setView]             = React.useState('models');
+  const [expTree, setExpTree] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [view, setView] = React.useState('models');
 
   React.useEffect(() => {
     Promise.all([
@@ -2044,8 +2074,8 @@ function DashboardTab() {
 // ── Chapter Preview Tab ──────────────────────────────────────────────────────
 function ChapterPreviewTab() {
   const [bookStructure, setBookStructure] = React.useState([]);
-  const [selectedQmd, setSelectedQmd]     = React.useState(null);
-  const [previewHtml, setPreviewHtml]     = React.useState('');
+  const [selectedQmd, setSelectedQmd] = React.useState(null);
+  const [previewHtml, setPreviewHtml] = React.useState('');
   const [previewLoading, setPreviewLoading] = React.useState(false);
 
   // Load book structure (parts + chapters with matchCounts)
@@ -2062,7 +2092,7 @@ function ChapterPreviewTab() {
             if (first) { setSelectedQmd(first); return; }
           }
         }
-      }).catch(() => {});
+      }).catch(() => { });
   }, []);
 
   // Fetch rendered chapter HTML whenever selection changes
@@ -2076,7 +2106,7 @@ function ChapterPreviewTab() {
   }, [selectedQmd]);
 
   const chapterBtn = (q, indent) => {
-    const active  = selectedQmd?.file === q.file;
+    const active = selectedQmd?.file === q.file;
     const hasHTML = q.matchCount > 0;
     return (
       <button
@@ -2151,6 +2181,48 @@ function ChapterPreviewTab() {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+// ── Settings Tab ─────────────────────────────────────────────────────────────
+function SettingsTab({ models, selectedModel, selectedCriticModel, onGeneratorModelChange, onCriticModelChange }) {
+  return (
+    <div style={styles.settingsWrap}>
+      <h3 style={styles.settingsTitle}>Model Settings</h3>
+      <p style={styles.settingsSubtitle}>Set default models used across generation and evaluation workflows.</p>
+
+      <div style={styles.settingsCard}>
+        <label style={styles.settingsLabel}>Default Generator Model</label>
+        <select
+          style={styles.settingsSelect}
+          value={selectedModel}
+          onChange={e => onGeneratorModelChange(e.target.value)}
+          disabled={models.length === 0}
+        >
+          {models.map(m => (
+            <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
+          ))}
+        </select>
+      </div>
+
+      <div style={styles.settingsCard}>
+        <label style={styles.settingsLabel}>Default Critic Model</label>
+        <select
+          style={styles.settingsSelect}
+          value={selectedCriticModel}
+          onChange={e => onCriticModelChange(e.target.value)}
+          disabled={models.length === 0}
+        >
+          {models.map(m => (
+            <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
+          ))}
+        </select>
+      </div>
+
+      <p style={styles.settingsNote}>
+        These defaults are used by the Generator tab, manual re-evaluation in Viewer and Results, and batch evaluation.
+      </p>
     </div>
   );
 }
@@ -2284,4 +2356,13 @@ const styles = {
   chapterPlansWrap: { marginTop: 14, padding: '12px 14px', background: '#f8faff', border: '1px solid #d0ddf0', borderRadius: 8 },
   chapterPlanItem: { marginBottom: 4, borderBottom: '1px solid #e8ecf4' },
   chapterPlanSummary: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', cursor: 'pointer', fontSize: 12, fontWeight: 500, color: '#333' },
+
+  // Settings
+  settingsWrap: { maxWidth: 700, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 },
+  settingsTitle: { fontSize: 20, margin: 0, color: '#222' },
+  settingsSubtitle: { fontSize: 13, margin: 0, color: '#777' },
+  settingsCard: { border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 },
+  settingsLabel: { fontSize: 12, fontWeight: 700, color: '#444', textTransform: 'uppercase', letterSpacing: '0.04em' },
+  settingsSelect: { width: '100%', fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '9px 12px', background: '#fff', color: '#333', cursor: 'pointer' },
+  settingsNote: { fontSize: 12, color: '#666', margin: '2px 0 0' },
 };
