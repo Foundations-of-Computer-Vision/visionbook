@@ -46,6 +46,7 @@ async function runGenerationJob(payload, { pollMs = 2000, maxPolls = 600 } = {})
 
 export default function App() {
   const [tab, setTab] = useState('generator');
+  const [viewerBackTab, setViewerBackTab] = useState('generator');
   const [image, setImage] = useState(null); // { base64, mediaType, filename, previewUrl }
   const [generatedHtml, setGeneratedHtml] = useState('');
   const [systemPrompt, setSystemPrompt] = useState(FALLBACK_PROMPT);
@@ -155,6 +156,7 @@ export default function App() {
         evaluation: data.evaluation || null,
         evaluationModel: data.evaluation ? selectedCriticModel : null,
       });
+      setViewerBackTab(tab);
       setTab('viewer');
     } catch (err) {
       setError(err.message);
@@ -166,8 +168,9 @@ export default function App() {
     setCurrentRecord(record);
     setGeneratedHtml(record.html);
     setEvaluation(record.evaluation || null);
+    setViewerBackTab(tab);
     setTab('viewer');
-  }, []);
+  }, [tab]);
 
   // Delete a saved result by id
   const handleDelete = useCallback(async (id) => {
@@ -220,10 +223,11 @@ export default function App() {
           evaluationModel: item.evaluationModel || null,
         });
         setEvaluation(item.evaluation || null);
+        setViewerBackTab(tab);
         setTab('viewer');
       } catch (err) { alert('Failed to load: ' + err.message); }
     }
-  }, [handleLoadFromHistory]);
+  }, [handleLoadFromHistory, tab]);
 
   // Evaluate: works for API records (by id) and experiment records (by htmlPath)
   const handleEvaluate = useCallback(async () => {
@@ -301,6 +305,8 @@ export default function App() {
           <ViewerTab
             record={currentRecord}
             html={generatedHtml}
+            onBack={() => setTab(viewerBackTab || 'generator')}
+            backLabel={viewerBackTab === 'results' ? 'Back to Results' : viewerBackTab === 'dashboard' ? 'Back to Dashboard' : viewerBackTab === 'preview' ? 'Back to Chapter Preview' : viewerBackTab === 'settings' ? 'Back to Settings' : 'Back'}
             onNew={() => setTab('generator')}
             onDelete={handleDeleteCurrent}
             evaluation={evaluation}
@@ -889,7 +895,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 }
 
 // ── Viewer Tab ────────────────────────────────────────────────────────────────
-function ViewerTab({ record, html, onNew, onDelete, evaluation, evaluating, onEvaluate }) {
+function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluation, evaluating, onEvaluate }) {
   if (!html) {
     return (
       <div style={styles.empty}>
@@ -930,6 +936,9 @@ function ViewerTab({ record, html, onNew, onDelete, evaluation, evaluating, onEv
         <a href={downloadUrl} download={`figure_${Date.now()}.html`} style={styles.downloadBtn}>
           Download HTML
         </a>
+        <button style={styles.backBtn} onClick={onBack}>
+          {backLabel || 'Back'}
+        </button>
         <button style={styles.newBtn} onClick={onNew}>
           New Figure
         </button>
@@ -1342,7 +1351,7 @@ function ResultsTab({ onOpen, criticModel }) {
           ...exp,
           models: exp.models.map(m => m.model !== modelName ? m : {
             ...m,
-              figures: m.figures.map(f => f.name !== figName ? f : { ...f, evaluation: data, evaluationModel: criticModel || f.evaluationModel || null })
+            figures: m.figures.map(f => f.name !== figName ? f : { ...f, evaluation: data, evaluationModel: criticModel || f.evaluationModel || null })
           })
         }));
       }
@@ -1373,7 +1382,7 @@ function ResultsTab({ onOpen, criticModel }) {
             ...exp,
             models: exp.models.map(m => m.model !== modelName ? m : {
               ...m,
-                figures: m.figures.map(f => f.name !== figName ? f : { ...f, evaluation: data, evaluationModel: criticModel || f.evaluationModel || null })
+              figures: m.figures.map(f => f.name !== figName ? f : { ...f, evaluation: data, evaluationModel: criticModel || f.evaluationModel || null })
             })
           }));
         }
@@ -2284,6 +2293,7 @@ const styles = {
   viewerTs: { fontSize: 10, color: '#aaa', margin: 0 },
   viewerMeta: { fontSize: 10, color: '#777', margin: '-4px 0 0' },
   downloadBtn: { display: 'block', padding: '7px 0', textAlign: 'center', background: '#fff', color: '#333', borderRadius: 6, textDecoration: 'none', fontSize: 12, border: '1px solid #ddd' },
+  backBtn: { padding: '7px 0', background: '#fff', border: '1px solid #ddd', color: '#333', borderRadius: 6, cursor: 'pointer', fontSize: 12 },
   newBtn: { padding: '7px 0', background: '#fff', border: '1px solid #ddd', color: '#333', borderRadius: 6, cursor: 'pointer', fontSize: 12 },
   deleteBtn: { padding: '7px 0', background: '#fff', border: '1px solid #fbb', color: '#c00', borderRadius: 6, cursor: 'pointer', fontSize: 12, marginTop: 'auto' },
   viewerRight: { flex: 1, background: '#fff' },
