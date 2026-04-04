@@ -224,6 +224,7 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
     model: modelId,
     experiment: CURRENT_EXPERIMENT,
     promptHash: PROMPT_HASH,
+    plan: plan || null,
   };
   const recordPath = path.join(RESULTS_DIR, `${figureId}.json`);
   fs.writeFileSync(recordPath, JSON.stringify(record, null, 2));
@@ -238,7 +239,7 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
     }
   }
 
-  return { html, figureId, timestamp, model: modelId, evaluation };
+  return { html, figureId, timestamp, model: modelId, evaluation, plan: plan || null };
 }
 
 function updateGenerationJob(jobId, patch) {
