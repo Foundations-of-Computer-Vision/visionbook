@@ -1,0 +1,103 @@
+const crypto = require('crypto');
+const fs = require('fs');
+const { evaluateHtmlWithCritic } = require('./critic');
+const { buildGenerationSystemPrompt } = require('./generation');
+const { upsertEvaluation } = require('./result_schema');
+
+function buildExperimentContext(scaffold, experimentBase = 'base_scene_robust') {
+  if (!scaffold) throw new Error('scaffold is required.');
+  const systemPrompt = buildGenerationSystemPrompt(scaffold);
+  const promptHash = crypto.createHash('sha256').update(systemPrompt).digest('hex').slice(0, 8);
+  const experiment = `${experimentBase}_${promptHash}`;
+  return { systemPrompt, promptHash, experiment };
+}
+
+function buildPlanInjection(plan) {
+  if (!plan) return '';
+  const parts = [];
+  if (plan.contextChunk) {
+    parts.push(`CONTEXT FROM TEXTBOOK:\n${plan.contextChunk.slice(0, 3000)}`);
+  }
+  if (plan.interactionPlan) {
+    parts.push(`INTERACTION PLAN:\n${JSON.stringify(plan.interactionPlan, null, 2)}`);
+  }
+  return parts.join('\n\n');
+}
+
+function createResultRecord({
+  id,
+  filename,
+  html,
+  timestamp,
+  source,
+  model,
+  experiment,
+  promptHash,
+  plan = null,
+  previewBase64,
+  previewMediaType,
+  fallbackBase64,
+  fallbackMediaType,
+  sourceBase64,
+  sourceMediaType,
+  extra = {},
+}) {
+  const record = {
+    id,
+    filename,
+    base64thumb: previewBase64 || fallbackBase64 || null,
+    mediaType: previewMediaType || fallbackMediaType || 'image/png',
+    html,
+    timestamp,
+    source,
+    model,
+    experiment,
+    promptHash,
+    plan,
+    ...extra,
+  };
+
+  if (sourceBase64) record.source_base64 = sourceBase64;
+  if (sourceMediaType) record.source_media_type = sourceMediaType;
+
+  return record;
+}
+
+async function evaluateRecord({ record, evalModel, defaultEvalModel }) {
+  if (!record?.html) throw new Error('No HTML found for evaluation.');
+
+  const usedEvalModel = evalModel || defaultEvalModel;
+  if (!usedEvalModel) throw new Error('No evaluation model configured.');
+
+  const evalImage = record.source_base64 || record.base64thumb;
+  const evalMediaType = record.source_media_type || record.mediaType || 'image/png';
+
+  const evaluation = await evaluateHtmlWithCritic({
+    html: record.html,
+    evalImage,
+    evalMediaType,
+    model: usedEvalModel,
+  });
+
+  const evaluatedAt = new Date().toISOString();
+  const updatedRecord = upsertEvaluation(record, usedEvalModel, evaluation, evaluatedAt);
+
+  return {
+    evaluation,
+    evalModel: usedEvalModel,
+    evaluatedAt,
+    record: updatedRecord,
+  };
+}
+
+function saveRecord(record, filePath) {
+  fs.writeFileSync(filePath, JSON.stringify(record, null, 2));
+}
+
+module.exports = {
+  buildExperimentContext,
+  buildPlanInjection,
+  createResultRecord,
+  evaluateRecord,
+  saveRecord,
+};

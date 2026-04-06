@@ -1,15 +1,21 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { screenshotHtml, loadBaseScaffold } = require('./runtime-helpers');
-const { evaluateHtmlWithCritic } = require('./critic');
-const { generateFigureHtml, buildGenerationSystemPrompt } = require('./generation');
+const { generateFigureHtml } = require('./generation');
+const {
+  buildExperimentContext,
+  buildPlanInjection,
+  createResultRecord,
+  evaluateRecord,
+  saveRecord,
+} = require('./figure_pipeline');
 const { planForFigure, planChapter } = require('./planner');
 const { listChapters, list3dCandidates } = require('./chapter-discovery');
 const { getAvailableModels } = require('./models');
+const { upsertEvaluation } = require('./result_schema');
 
 const app = express();
 const PORT = 3001;
@@ -57,35 +63,16 @@ if (!fs.existsSync(RESULTS_DIR)) {
   fs.mkdirSync(RESULTS_DIR, { recursive: true });
 }
 
-const SYSTEM_PROMPT = buildGenerationSystemPrompt(BASE_SCAFFOLD);
-
-// ── Derive experiment label from prompt content ──────────────────────────────
-const PROMPT_HASH = crypto.createHash('sha256').update(SYSTEM_PROMPT).digest('hex').slice(0, 8);
-const CURRENT_EXPERIMENT = `${EXPERIMENT_BASE}_${PROMPT_HASH}`;
+const {
+  systemPrompt: SYSTEM_PROMPT,
+  promptHash: PROMPT_HASH,
+  experiment: CURRENT_EXPERIMENT,
+} = buildExperimentContext(BASE_SCAFFOLD, EXPERIMENT_BASE);
 console.log(`Experiment: ${CURRENT_EXPERIMENT}  (model: ${CURRENT_MODEL})`);
 
 // ── Helper: generate a simple unique id ───────────────────────────────────────
 function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-}
-
-function upsertEvaluation(record, evalModel, evaluation) {
-  const normalized = {
-    ...record,
-    evaluationResults: { ...(record.evaluationResults || {}) },
-    evaluationMeta: { ...(record.evaluationMeta || {}) },
-  };
-  // Enforce map-only schema on every write.
-  delete normalized.evaluation;
-  delete normalized.evaluationModel;
-  delete normalized.evaluatedAt;
-  delete normalized.eval_model;
-  const evaluatedAt = new Date().toISOString();
-
-  normalized.evaluationResults[evalModel] = evaluation;
-  normalized.evaluationMeta[evalModel] = { evaluatedAt };
-
-  return normalized;
 }
 
 // ── GET /api/prompt — return the current system prompt for UI display ──────────
@@ -179,18 +166,6 @@ async function withRetry(fn, { retries = 4, baseDelay = 2500 } = {}) {
   }
 }
 
-// ── Build the user-message text that injects the plan into the generator ──────
-function buildPlanInjection(plan) {
-  const parts = [];
-  if (plan.contextChunk) {
-    parts.push(`CONTEXT FROM TEXTBOOK:\n${plan.contextChunk.slice(0, 3000)}`);
-  }
-
-  parts.push(`INTERACTION PLAN:\n${JSON.stringify(plan.interactionPlan || {}, null, 2)}`);
-  parts.push('Follow the interaction plan above. Output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.')
-  return parts.join('\n\n');
-}
-
 async function generateFigure({ base64, mediaType, filename, plan, model: requestedModel, evalModel: requestedEvalModel, evaluate = true }) {
   if (!base64 || !mediaType || !filename) {
     const err = new Error('base64, mediaType, and filename are required.');
@@ -205,7 +180,7 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
   console.log(`[generate] requested="${requestedModel}" → using="${modelId}" | file=${filename}`);
 
   const userText = plan
-    ? buildPlanInjection(plan)
+    ? `${buildPlanInjection(plan)}\n\nFollow the interaction plan above. Output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.`
     : 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.';
 
   const html = await withRetry(() => generateFigureHtml({
@@ -230,13 +205,9 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
   const timestamp = new Date().toISOString();
   const shot = await screenshotHtml(html);
 
-  const record = {
+  const record = createResultRecord({
     id: figureId,
     filename,
-    base64thumb: shot ? shot.data : base64,
-    mediaType: shot ? shot.mediaType : (mediaType || 'image/png'),
-    source_base64: base64,
-    source_media_type: mediaType,
     html,
     timestamp,
     source: 'api',
@@ -244,9 +215,15 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
     experiment: CURRENT_EXPERIMENT,
     promptHash: PROMPT_HASH,
     plan: plan || null,
-  };
+    previewBase64: shot ? shot.data : null,
+    previewMediaType: shot ? shot.mediaType : null,
+    fallbackBase64: base64,
+    fallbackMediaType: mediaType || 'image/png',
+    sourceBase64: base64,
+    sourceMediaType: mediaType,
+  });
   const recordPath = path.join(RESULTS_DIR, `${figureId}.json`);
-  fs.writeFileSync(recordPath, JSON.stringify(record, null, 2));
+  saveRecord(record, recordPath);
 
   let evaluation = null;
   if (evaluate !== false) {
@@ -444,29 +421,17 @@ app.post('/api/save', (req, res) => {
 // Calls the shared evaluator, persists to the record file,
 // and returns the evaluation object. Throws on error.
 async function runEvaluation(record, filePath, requestedEvalModel) {
-  const { html, source_base64, source_media_type, base64thumb } = record;
-  if (!html) throw new Error('No HTML found for this result.');
-
-  // Always evaluate against the original source image, not the generated screenshot
-  const evalImage = source_base64 || base64thumb;
-  const evalMediaType = source_media_type || 'image/png';
-  const evalModel = requestedEvalModel || CURRENT_CRITIC_MODEL;
-
-  const evaluation = await evaluateHtmlWithCritic({
-    html,
-    evalImage,
-    evalMediaType,
-    model: evalModel,
+  const result = await evaluateRecord({
+    record,
+    evalModel: requestedEvalModel,
+    defaultEvalModel: CURRENT_CRITIC_MODEL,
   });
+  if (filePath) saveRecord(result.record, filePath);
 
-  // Persist back to disk
-  const updatedRecord = upsertEvaluation(record, evalModel, evaluation);
-  if (filePath) fs.writeFileSync(filePath, JSON.stringify(updatedRecord, null, 2));
+  record.evaluationResults = result.record.evaluationResults;
+  record.evaluationMeta = result.record.evaluationMeta;
 
-  record.evaluationResults = updatedRecord.evaluationResults;
-  record.evaluationMeta = updatedRecord.evaluationMeta;
-
-  return evaluation;
+  return result.evaluation;
 }
 
 // ── POST /api/evaluate ────────────────────────────────────────────────────────
@@ -742,11 +707,14 @@ app.post('/api/experiments/evaluate', async (req, res) => {
 
   try {
     const usedEvalModel = evalModel || CURRENT_CRITIC_MODEL;
-    const evaluation = await evaluateHtmlWithCritic({
-      html,
-      evalImage: base64thumb,
-      evalMediaType: 'image/png',
-      model: usedEvalModel,
+    const { evaluation } = await evaluateRecord({
+      record: {
+        html,
+        source_base64: base64thumb,
+        source_media_type: 'image/png',
+      },
+      evalModel: usedEvalModel,
+      defaultEvalModel: CURRENT_CRITIC_MODEL,
     });
 
     // Cache alongside the HTML file
@@ -756,10 +724,10 @@ app.post('/api/experiments/evaluate', async (req, res) => {
       try { cached = JSON.parse(fs.readFileSync(evalPath, 'utf-8')); } catch { cached = {}; }
     }
     const updatedCache = upsertEvaluation(cached, usedEvalModel, evaluation);
-    fs.writeFileSync(evalPath, JSON.stringify({
+    saveRecord({
       evaluationResults: updatedCache.evaluationResults,
       evaluationMeta: updatedCache.evaluationMeta,
-    }, null, 2));
+    }, evalPath);
 
     return res.json(evaluation);
   } catch (err) {

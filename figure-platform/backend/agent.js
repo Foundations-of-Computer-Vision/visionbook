@@ -28,17 +28,22 @@
  */
 
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { screenshotHtml, closeScreenshotBrowser, loadBaseScaffold } = require('./runtime-helpers');
 
-const { evaluateHtmlWithCritic } = require('./critic');
 const {
   generateFigureHtml,
   generateRefinedFigureHtml,
-  buildGenerationSystemPrompt,
 } = require('./generation');
+const {
+  buildExperimentContext,
+  buildPlanInjection,
+  createResultRecord,
+  evaluateRecord,
+  saveRecord,
+} = require('./figure_pipeline');
+const { upsertEvaluation } = require('./result_schema');
 const { planForFigure } = require('./planner');
 const { inferChapterFromFilename } = require('./chapter-discovery');
 
@@ -83,11 +88,11 @@ try {
   process.exit(1);
 }
 
-const SYSTEM_PROMPT = buildGenerationSystemPrompt(BASE_SCAFFOLD);
-
-// ── Derive experiment label from prompt hash (matches server.js logic) ────────
-const PROMPT_HASH = crypto.createHash('sha256').update(SYSTEM_PROMPT).digest('hex').slice(0, 8);
-const EXPERIMENT = EXPERIMENT_OVERRIDE || `base_scene_robust_${PROMPT_HASH}`;
+const {
+  promptHash: PROMPT_HASH,
+  experiment: DERIVED_EXPERIMENT,
+} = buildExperimentContext(BASE_SCAFFOLD, 'base_scene_robust');
+const EXPERIMENT = EXPERIMENT_OVERRIDE || DERIVED_EXPERIMENT;
 
 // ── Unique id ──────────────────────────────────────────────────────────────────
 function makeId() {
@@ -135,13 +140,7 @@ async function processImage(imagePath) {
   let round = 0;
 
   // Build plan-injection text for the generator
-  let planInjection = '';
-  if (plan && plan.contextChunk) {
-    planInjection += `\n\nTEXTBOOK CONTEXT (from "${plan.chapterName || 'unknown'}" chapter):\n${plan.contextChunk}`;
-  }
-  if (plan && plan.interactionPlan) {
-    planInjection += `\n\nINTERACTION PLAN (follow this closely):\n${JSON.stringify(plan.interactionPlan, null, 2)}`;
-  }
+  const planInjection = plan ? `\n\n${buildPlanInjection(plan)}` : '';
 
   while (round < MAX_ROUNDS) {
     round++;
@@ -185,13 +184,18 @@ async function processImage(imagePath) {
     // ── EVALUATOR ─────────────────────────────────────────────────────────────
     console.log(`  [round ${round}/${MAX_ROUNDS}] evaluating...`);
     try {
-      evaluation = await evaluateHtmlWithCritic({
-        html,
-        evalImage: imageBase64,
-        evalMediaType: mediaType,
-        model: EVAL_MODEL,
-        maxTokens: 512,
+      const result = await evaluateRecord({
+        record: {
+          html,
+          source_base64: imageBase64,
+          source_media_type: mediaType,
+          base64thumb: imageBase64,
+          mediaType,
+        },
+        evalModel: EVAL_MODEL,
+        defaultEvalModel: EVAL_MODEL,
       });
+      evaluation = result.evaluation;
     } catch (err) {
       console.warn(`  ✗ Evaluator failed (round ${round}): ${err.message}. Skipping eval.`);
       evaluation = null;
@@ -221,26 +225,32 @@ async function processImage(imagePath) {
 
   // ── SAVE RESULT ─────────────────────────────────────────────────────────────
   const figureId = makeId();
-  const evaluatedAt = new Date().toISOString();
-  const record = {
+  const timestamp = new Date().toISOString();
+  let record = createResultRecord({
     id: figureId,
     filename,
-    base64thumb: thumb ? thumb.data : imageBase64,
-    mediaType: thumb ? thumb.mediaType : mediaType,
     html,
-    timestamp: evaluatedAt,
+    timestamp,
     source: 'agent',
     model: GEN_MODEL,
     experiment: EXPERIMENT,
     promptHash: PROMPT_HASH,
-    rounds: round,
-    evaluationResults: evaluation ? { [EVAL_MODEL]: evaluation } : {},
-    evaluationMeta: evaluation ? { [EVAL_MODEL]: { evaluatedAt } } : {},
     plan: plan || null,
-  };
+    previewBase64: thumb ? thumb.data : null,
+    previewMediaType: thumb ? thumb.mediaType : null,
+    fallbackBase64: imageBase64,
+    fallbackMediaType: mediaType,
+    sourceBase64: imageBase64,
+    sourceMediaType: mediaType,
+    extra: { rounds: round },
+  });
+
+  if (evaluation) {
+    record = upsertEvaluation(record, EVAL_MODEL, evaluation, timestamp);
+  }
 
   const outPath = path.join(RESULTS_DIR, `${figureId}.json`);
-  fs.writeFileSync(outPath, JSON.stringify(record, null, 2));
+  saveRecord(record, outPath);
   console.log(`  ✓ Saved → results/${figureId}.json`);
 }
 
