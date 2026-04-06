@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: figure-platform
+    rootDir: figure-platform
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /api/models
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: RESULTS_DIR
+        value: /var/data/figure-platform/results
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+    disk:
+      name: figure-platform-results
+      mountPath: /var/data/figure-platform/results
+      sizeGB: 5

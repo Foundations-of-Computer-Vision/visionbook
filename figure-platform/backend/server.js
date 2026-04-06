@@ -18,7 +18,11 @@ const { getAvailableModels } = require('./models');
 const { upsertEvaluation } = require('./result_schema');
 
 const app = express();
-const PORT = 3001;
+const PORT = Number(process.env.PORT) || 3001;
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
 const generationJobs = new Map();
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
@@ -35,7 +39,14 @@ const CURRENT_CRITIC_MODEL = 'gpt-4o';       // model used by evaluator by defau
 // CURRENT_EXPERIMENT is set below, after the system prompt is built.
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.use(cors({ origin: 'http://localhost:3000' }));
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || CORS_ORIGINS.includes('*') || CORS_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`Origin not allowed by CORS: ${origin}`));
+  },
+}));
 app.use(express.json({ limit: '20mb' }));
 
 // ── OpenAI client (imported from models.js for evaluator / planner) ──
@@ -58,7 +69,9 @@ try {
 console.log('Base scaffold loaded:', BASE_SCAFFOLD_PATH);
 
 // ── Results folder ────────────────────────────────────────────────────────────
-const RESULTS_DIR = path.join(__dirname, 'results');
+const RESULTS_DIR = process.env.RESULTS_DIR
+  ? path.resolve(process.env.RESULTS_DIR)
+  : path.join(__dirname, 'results');
 if (!fs.existsSync(RESULTS_DIR)) {
   fs.mkdirSync(RESULTS_DIR, { recursive: true });
 }
@@ -942,5 +955,6 @@ if (fs.existsSync(frontendBuild)) {
 
 // ── Start server ──────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`Backend running on http://localhost:${PORT}`);
+  console.log(`Backend running on port ${PORT}`);
+  console.log('Results directory:', RESULTS_DIR);
 });
