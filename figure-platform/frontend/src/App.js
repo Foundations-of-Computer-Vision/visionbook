@@ -1299,14 +1299,14 @@ function LazyApiThumb({ id, base64thumb, mediaType, style }) {
     base64thumb ? `data:${mediaType || 'image/jpeg'};base64,${base64thumb}` : null
   );
   React.useEffect(() => {
-    if (!id) return;
+    if (!id || base64thumb) return;
     let cancelled = false;
     apiFetch('/api/thumb/' + encodeURIComponent(id))
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`); })
       .catch(() => { });
     return () => { cancelled = true; };
-  }, [id]);
+  }, [id, base64thumb]);
   if (!src) return <div style={{ ...style, background: '#f0f0f0' }} />;
   return <img src={src} alt="" style={style} />;
 }
@@ -1364,6 +1364,54 @@ function ResultsTab({ onOpen, criticModel }) {
   const hoverTimerRef = React.useRef(null);
   const [sidebarGroupBy, setSidebarGroupBy] = React.useState('experiment'); // 'experiment' | 'chapter'
   const [serverPrompt, setServerPrompt] = React.useState('');
+  const [loadingApi, setLoadingApi] = React.useState(true);
+  const [loadingAgent, setLoadingAgent] = React.useState(false);
+  const [loadedApi, setLoadedApi] = React.useState(false);
+  const [loadedAgent, setLoadedAgent] = React.useState(false);
+
+  const stripHash = React.useCallback((name) => (name || '').replace(/_[0-9a-f]{6,8}$/i, ''), []);
+
+  const loadApiRecords = React.useCallback(async () => {
+    if (loadedApi) return;
+    setLoadingApi(true);
+    try {
+      const api = await apiFetch('/api/history-index').then(r => r.json());
+      api.forEach(r => { r.experiment = stripHash(r.experiment || 'base_scene_robust'); });
+      setApiRecords(api);
+      setLoadedApi(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingApi(false);
+    }
+  }, [loadedApi, stripHash]);
+
+  const loadAgentTree = React.useCallback(async () => {
+    if (loadedAgent) return;
+    setLoadingAgent(true);
+    try {
+      const exp = await apiFetch('/api/experiments').then(r => r.json());
+      // Normalize: strip trailing hash so prompt iterations merge into one experiment
+      const merged = {};
+      for (const e of exp) {
+        const base = stripHash(e.experiment);
+        if (!merged[base]) merged[base] = { experiment: base, models: {} };
+        for (const m of e.models) {
+          if (!merged[base].models[m.model]) merged[base].models[m.model] = [];
+          merged[base].models[m.model].push(...m.figures);
+        }
+      }
+      setExpTree(Object.values(merged).map(e => ({
+        experiment: e.experiment,
+        models: Object.entries(e.models).map(([model, figs]) => ({ model, figures: figs })),
+      })));
+      setLoadedAgent(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingAgent(false);
+    }
+  }, [loadedAgent, stripHash]);
 
   // Fetch the real system prompt for the API tab display
   React.useEffect(() => {
@@ -1381,33 +1429,24 @@ function ResultsTab({ onOpen, criticModel }) {
   }, []);
 
   React.useEffect(() => {
-    Promise.all([
-      apiFetch('/api/history').then(r => r.json()),
-      apiFetch('/api/experiments').then(r => r.json()),
-    ])
-      .then(([api, exp]) => {
-        // Normalize: strip trailing hash so prompt iterations merge into one experiment
-        const stripHash = n => n.replace(/_[0-9a-f]{6,8}$/i, '');
-        api.forEach(r => { r.experiment = stripHash(r.experiment || 'base_scene_robust'); });
-        // Merge agent-tree entries sharing the same base experiment name
-        const merged = {};
-        for (const e of exp) {
-          const base = stripHash(e.experiment);
-          if (!merged[base]) merged[base] = { experiment: base, models: {} };
-          for (const m of e.models) {
-            if (!merged[base].models[m.model]) merged[base].models[m.model] = [];
-            merged[base].models[m.model].push(...m.figures);
-          }
-        }
-        setApiRecords(api);
-        setExpTree(Object.values(merged).map(e => ({
-          experiment: e.experiment,
-          models: Object.entries(e.models).map(([model, figs]) => ({ model, figures: figs })),
-        })));
-        setLoading(false);
-      })
-      .catch(err => { setError(err.message); setLoading(false); });
-  }, []);
+    loadApiRecords();
+  }, [loadApiRecords]);
+
+  React.useEffect(() => {
+    if (activeTab === 'agent' && !loadedAgent) {
+      loadAgentTree();
+    }
+  }, [activeTab, loadedAgent, loadAgentTree]);
+
+  React.useEffect(() => {
+    if (loadedApi && !loadedAgent) {
+      loadAgentTree();
+    }
+  }, [loadedApi, loadedAgent, loadAgentTree]);
+
+  React.useEffect(() => {
+    setLoading(activeTab === 'api' ? loadingApi : loadingAgent);
+  }, [activeTab, loadingApi, loadingAgent]);
 
   // Build API tree: { experiment → { model → records[] } }
   const apiTree = React.useMemo(() => {

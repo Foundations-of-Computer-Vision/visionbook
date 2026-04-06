@@ -336,40 +336,64 @@ function inferChapter(stem) {
   return null;
 }
 
+function readHistoryRecord(fileName, { includeThumb = false } = {}) {
+  const raw = fs.readFileSync(path.join(RESULTS_DIR, fileName), 'utf-8');
+  const parsed = JSON.parse(raw);
+  const stem = parsed.filename ? parsed.filename.replace(/\.[^.]+$/, '') : '';
+  const chapter = inferChapter(stem);
+  const model = parsed.model || 'gpt-4o';
+  const experiment = parsed.experiment || 'base_scene_robust';
+
+  const record = {
+    id: parsed.id,
+    filename: parsed.filename,
+    timestamp: parsed.timestamp,
+    source: parsed.source || 'api',
+    model,
+    experiment,
+    evaluationResults: parsed.evaluationResults || {},
+    evaluationMeta: parsed.evaluationMeta || {},
+    chapter,
+  };
+
+  if (includeThumb) {
+    record.base64thumb = parsed.base64thumb || null;
+    record.mediaType = parsed.mediaType || 'image/jpeg';
+  }
+
+  return record;
+}
+
+function listHistoryRecords({ includeThumb = false } = {}) {
+  const files = fs.readdirSync(RESULTS_DIR).filter((f) => f.endsWith('.json'));
+  return files
+    .map((f) => {
+      try {
+        return readHistoryRecord(f, { includeThumb });
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
+
 // ── GET /api/history ──────────────────────────────────────────────────────────
 app.get('/api/history', (req, res) => {
   try {
-    const files = fs.readdirSync(RESULTS_DIR).filter((f) => f.endsWith('.json'));
-    const records = files
-      .map((f) => {
-        try {
-          const raw = fs.readFileSync(path.join(RESULTS_DIR, f), 'utf-8');
-          const parsed = JSON.parse(raw);
-          const { id, filename, base64thumb, timestamp, source, evaluationResults, evaluationMeta } = parsed;
-          const stem = filename ? filename.replace(/\.[^.]+$/, '') : '';
-          const chapter = inferChapter(stem);
-          const model = parsed.model || 'gpt-4o';
-          const experiment = parsed.experiment || 'base_scene_robust';
-          return {
-            id,
-            filename,
-            base64thumb,
-            timestamp,
-            source: source || 'api',
-            model,
-            experiment,
-            evaluationResults: evaluationResults || {},
-            evaluationMeta: evaluationMeta || {},
-            chapter,
-          };
-        } catch {
-          return null;
-        }
-      })
-      .filter(Boolean)
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const includeThumb = req.query.includeThumb === '1';
+    return res.json(listHistoryRecords({ includeThumb }));
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 
-    return res.json(records);
+// ── GET /api/history-index ───────────────────────────────────────────────────
+// Lightweight history list for the Results page. Intentionally excludes
+// inline thumbnail base64 to keep payload small.
+app.get('/api/history-index', (req, res) => {
+  try {
+    return res.json(listHistoryRecords({ includeThumb: false }));
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
