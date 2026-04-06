@@ -4,6 +4,30 @@ const FALLBACK_PROMPT = '(Loading system prompt from server…)';
 const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
 const CRITIC_MODEL_STORAGE_KEY = 'figure-platform:selectedCriticModel';
 
+function pickEvaluationModel(record, preferredModel) {
+  const results = record?.evaluationResults || {};
+  const meta = record?.evaluationMeta || {};
+  const keys = Object.keys(results);
+  if (!keys.length) return null;
+  if (preferredModel && results[preferredModel]) return preferredModel;
+  // Prefer the most recently evaluated model when metadata is available.
+  const sorted = [...keys].sort((a, b) => {
+    const aTime = meta[a]?.evaluatedAt ? new Date(meta[a].evaluatedAt).getTime() : 0;
+    const bTime = meta[b]?.evaluatedAt ? new Date(meta[b].evaluatedAt).getTime() : 0;
+    return bTime - aTime;
+  });
+  return sorted[0] || keys[0];
+}
+
+function getRecordEvaluation(record, modelId) {
+  const results = record?.evaluationResults || {};
+  return modelId ? results[modelId] || null : null;
+}
+
+function hasAnyEvaluation(record) {
+  return Object.keys(record?.evaluationResults || {}).length > 0;
+}
+
 function apiFetch(input, init = {}) {
   return fetch(input, {
     ...init,
@@ -83,6 +107,7 @@ export default function App() {
   }, []);
 
   const [currentRecord, setCurrentRecord] = useState(null); // full record from history
+  const [viewerEvaluationModel, setViewerEvaluationModel] = useState(null);
   useEffect(() => {
     if (selectedModel) window.localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
   }, [selectedModel]);
@@ -96,6 +121,23 @@ export default function App() {
   const [evaluating, setEvaluating] = useState(false);
   const [plan, setPlan] = useState(null);        // planner output for current figure
   const [planning, setPlanning] = useState(false); // true while planner is running
+
+  const syncViewerSelection = useCallback((record, preferredModel = null) => {
+    if (!record) {
+      setViewerEvaluationModel(null);
+      setEvaluation(null);
+      return;
+    }
+    const normalizedRecord = {
+      ...record,
+      evaluationResults: record.evaluationResults || {},
+      evaluationMeta: record.evaluationMeta || {},
+    };
+    const selectedModel = pickEvaluationModel(normalizedRecord, preferredModel);
+    setCurrentRecord(normalizedRecord);
+    setViewerEvaluationModel(selectedModel);
+    setEvaluation(getRecordEvaluation(normalizedRecord, selectedModel));
+  }, []);
 
   // Called by Uploader when a file is selected
   const handleImageSelected = useCallback((imgData) => {
@@ -135,6 +177,7 @@ export default function App() {
     // Step 2: Generate (slow ~30-60s)
     setLoading(true);
     try {
+      const evalModelForRecord = selectedCriticModel || 'gpt-4o';
       const data = await runGenerationJob({
         base64: image.base64,
         mediaType: image.mediaType,
@@ -143,8 +186,14 @@ export default function App() {
         model: selectedModel || undefined,
         evalModel: selectedCriticModel || undefined,
       });
+      const generatedEvaluationResults = data.evaluationResults || {};
+      const generatedEvaluationMeta = data.evaluationMeta || {};
+      const generatedModel = pickEvaluationModel({
+        evaluationResults: generatedEvaluationResults,
+        evaluationMeta: generatedEvaluationMeta,
+      }, evalModelForRecord);
       setGeneratedHtml(data.html);
-      setEvaluation(data.evaluation || null);
+      setEvaluation(getRecordEvaluation({ evaluationResults: generatedEvaluationResults }, generatedModel));
       setCurrentRecord({
         id: data.figureId,
         html: data.html,
@@ -153,10 +202,11 @@ export default function App() {
         mediaType: image.mediaType,
         timestamp: data.timestamp,
         model: data.model,
-        evaluation: data.evaluation || null,
-        evaluationModel: data.evaluation ? selectedCriticModel : null,
+        evaluationResults: generatedEvaluationResults,
+        evaluationMeta: generatedEvaluationMeta,
         plan: data.plan || currentPlan || null,
       });
+      setViewerEvaluationModel(generatedModel);
       setViewerBackTab(tab);
       setTab('viewer');
     } catch (err) {
@@ -164,14 +214,18 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [image, selectedCriticModel, selectedModel]);
+  }, [image, selectedCriticModel, selectedModel, tab]);
   const handleLoadFromHistory = useCallback((record) => {
-    setCurrentRecord(record);
+    const normalizedRecord = {
+      ...record,
+      evaluationResults: record.evaluationResults || {},
+    };
+    const selectedModel = pickEvaluationModel(normalizedRecord, null);
     setGeneratedHtml(record.html);
-    setEvaluation(record.evaluation || null);
+    syncViewerSelection(normalizedRecord, selectedModel);
     setViewerBackTab(tab);
     setTab('viewer');
-  }, [tab]);
+  }, [syncViewerSelection, tab]);
 
   // Delete a saved result by id
   const handleDelete = useCallback(async (id) => {
@@ -189,6 +243,7 @@ export default function App() {
     setCurrentRecord(null);
     setGeneratedHtml('');
     setEvaluation(null);
+    setViewerEvaluationModel(null);
     setTab('generator');
   }, [currentRecord, handleDelete]);
 
@@ -210,8 +265,7 @@ export default function App() {
           if (imgRes.ok) base64thumb = await imgRes.text();
         }
         const expSource = [item.experiment, item.model].filter(Boolean).join(' / ');
-        setGeneratedHtml(html);
-        setCurrentRecord({
+        const viewerRecord = {
           html,
           filename: item.figure + '.html',
           base64thumb,
@@ -221,20 +275,25 @@ export default function App() {
           model: item.model || null,
           htmlPath: item.htmlPath,
           imagePath: item.imagePath,
-          evaluationModel: item.evaluationModel || null,
-        });
-        setEvaluation(item.evaluation || null);
+          evaluationResults: item.evaluationResults || {},
+          evaluationMeta: item.evaluationMeta || {},
+        };
+        const selectedEvalModel = pickEvaluationModel(viewerRecord, null);
+        setGeneratedHtml(html);
+        syncViewerSelection(viewerRecord, selectedEvalModel);
         setViewerBackTab(tab);
         setTab('viewer');
       } catch (err) { alert('Failed to load: ' + err.message); }
     }
-  }, [handleLoadFromHistory, tab]);
+  }, [handleLoadFromHistory, syncViewerSelection, tab]);
 
   // Evaluate: works for API records (by id) and experiment records (by htmlPath)
-  const handleEvaluate = useCallback(async () => {
+  const handleEvaluate = useCallback(async (requestedEvalModel = viewerEvaluationModel) => {
     if (!currentRecord) return;
     setEvaluating(true);
     try {
+      const modelId = requestedEvalModel || selectedCriticModel || pickEvaluationModel(currentRecord, null) || 'gpt-4o';
+      const evalModelToUse = modelId;
       let data;
       if (currentRecord.htmlPath) {
         const res = await apiFetch('/api/experiments/evaluate', {
@@ -242,7 +301,7 @@ export default function App() {
           body: JSON.stringify({
             htmlPath: currentRecord.htmlPath,
             imagePath: currentRecord.imagePath,
-            evalModel: selectedCriticModel || undefined,
+            evalModel: evalModelToUse,
           }),
         });
         data = await res.json();
@@ -252,7 +311,7 @@ export default function App() {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: currentRecord.id,
-            evalModel: selectedCriticModel || undefined,
+            evalModel: evalModelToUse,
           }),
         });
         data = await res.json();
@@ -261,13 +320,24 @@ export default function App() {
         throw new Error('Cannot evaluate: no id or htmlPath.');
       }
       setEvaluation(data);
-      setCurrentRecord(prev => prev ? { ...prev, evaluationModel: selectedCriticModel || prev.evaluationModel || null } : prev);
+      setViewerEvaluationModel(modelId);
+      setCurrentRecord(prev => prev ? {
+        ...prev,
+        evaluationResults: {
+          ...(prev.evaluationResults || {}),
+          [modelId || 'unknown']: data,
+        },
+        evaluationMeta: {
+          ...(prev.evaluationMeta || {}),
+          [modelId || 'unknown']: { evaluatedAt: new Date().toISOString() },
+        },
+      } : prev);
     } catch (err) {
       alert('Evaluation failed: ' + err.message);
     } finally {
       setEvaluating(false);
     }
-  }, [currentRecord, selectedCriticModel]);
+  }, [currentRecord, selectedCriticModel, viewerEvaluationModel]);
 
   return (
     <div style={styles.root}>
@@ -311,8 +381,14 @@ export default function App() {
             onNew={() => setTab('generator')}
             onDelete={handleDeleteCurrent}
             evaluation={evaluation}
+            evaluationModel={viewerEvaluationModel}
+            availableEvaluationModels={models}
             evaluating={evaluating}
             onEvaluate={handleEvaluate}
+            onSelectEvaluationModel={(modelId) => {
+              setViewerEvaluationModel(modelId);
+              setEvaluation(getRecordEvaluation(currentRecord, modelId));
+            }}
           />
         )}
         {tab === 'results' && (
@@ -842,8 +918,8 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                             </span>
                             <span style={{ flex: 1 }}>{r.figureStem}</span>
                             {ev.evaluation?.overall_average != null && (
-                              <span style={{ fontWeight: 700, color: ev.evaluation.overall_average >= 7 ? '#4caf50' : ev.evaluation.overall_average >= 5 ? '#f39c12' : '#e74c3c' }}>
-                                {ev.evaluation.overall_average.toFixed(1)}/10
+                              <span style={{ fontWeight: 700, color: ev.evaluation.overall_average >= 4 ? '#4caf50' : ev.evaluation.overall_average >= 3 ? '#f39c12' : '#e74c3c' }}>
+                                {ev.evaluation.overall_average.toFixed(1)}/5
                               </span>
                             )}
                             {ev.error && <span style={{ color: '#e74c3c' }}>{ev.error}</span>}
@@ -896,7 +972,22 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 }
 
 // ── Viewer Tab ────────────────────────────────────────────────────────────────
-function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluation, evaluating, onEvaluate }) {
+function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluation, evaluationModel, availableEvaluationModels, evaluating, onEvaluate, onSelectEvaluationModel }) {
+  const evaluationResults = React.useMemo(
+    () => record?.evaluationResults || {},
+    [record?.evaluationResults]
+  );
+  const evaluationModelOptions = React.useMemo(() => {
+    const byId = new Map();
+    for (const model of availableEvaluationModels || []) {
+      if (model?.id) byId.set(model.id, model);
+    }
+    for (const modelId of Object.keys(evaluationResults)) {
+      if (!byId.has(modelId)) byId.set(modelId, { id: modelId, label: modelId });
+    }
+    return Array.from(byId.values());
+  }, [availableEvaluationModels, evaluationResults]);
+
   if (!html) {
     return (
       <div style={styles.empty}>
@@ -975,9 +1066,13 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
         )}
         <EvaluationPanel
           evaluation={evaluation}
-          evaluationModel={record?.evaluationModel}
+          evaluationModel={evaluationModel}
+          evaluationModels={evaluationModelOptions}
+          evaluationResults={evaluationResults}
+          evaluationMeta={record?.evaluationMeta || {}}
           evaluating={evaluating}
           onEvaluate={onEvaluate}
+          onSelectEvaluationModel={onSelectEvaluationModel}
           canEvaluate={!!(record?.id || record?.htmlPath)}
         />
       </div>
@@ -996,10 +1091,12 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
 }
 
 // ── Evaluation Panel ─────────────────────────────────────────────────────────
-function EvaluationPanel({ evaluation, evaluationModel, evaluating, onEvaluate, canEvaluate }) {
+function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evaluationResults, evaluationMeta, evaluating, onEvaluate, onSelectEvaluationModel, canEvaluate }) {
   const [showAllFailures, setShowAllFailures] = React.useState(false);
+  const [showAllEvaluations, setShowAllEvaluations] = React.useState(false);
   const scoreTextColor = (s) => { const rgb = lerpColor(s); if (!rgb) return '#888'; return `rgb(${Math.round(rgb[0] * 0.6)},${Math.round(rgb[1] * 0.6)},${Math.round(rgb[2] * 0.5)})`; };
   const scoreBarColor = (s) => { const rgb = lerpColor(s); if (!rgb) return '#ccc'; return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.8)`; };
+  const selectedModelLabel = evaluationModels?.find(m => m.id === evaluationModel)?.label || evaluationModel || 'unknown';
   const METRICS = [
     { key: 'geometry_accuracy', label: 'Geometry' },
     { key: 'interactivity_usability', label: 'Interact.' },
@@ -1012,16 +1109,100 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluating, onEvaluate, 
   if (evaluating) {
     return (
       <div style={styles.evalSection}>
-        <p style={{ fontSize: 11, color: '#888', margin: 0 }}>Evaluating…</p>
+        <p style={{ fontSize: 11, color: '#888', margin: 0 }}>Evaluating {selectedModelLabel}…</p>
       </div>
     );
   }
+
+  const selector = evaluationModels?.length > 0 ? (
+    <label style={{ display: 'block', marginBottom: 8 }}>
+      <span style={{ fontSize: 10, color: '#777', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Evaluation model</span>
+      <select
+        style={{ ...styles.resultFilterSelect, width: '100%' }}
+        value={evaluationModel || ''}
+        onChange={e => onSelectEvaluationModel?.(e.target.value || null)}
+      >
+        {evaluationModels.map(model => (
+          <option key={model.id} value={model.id}>{model.label || model.id}</option>
+        ))}
+      </select>
+    </label>
+  ) : null;
+
+  const allEvaluationEntries = Object.entries(evaluationResults || {})
+    .map(([modelId, result]) => ({
+      modelId,
+      result,
+      modelLabel: evaluationModels?.find(m => m.id === modelId)?.label || modelId,
+      evaluatedAt: evaluationMeta?.[modelId]?.evaluatedAt || null,
+    }))
+    .sort((a, b) => {
+      const aTime = a.evaluatedAt ? new Date(a.evaluatedAt).getTime() : 0;
+      const bTime = b.evaluatedAt ? new Date(b.evaluatedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+
+  const renderAllEvaluations = () => {
+    if (!allEvaluationEntries.length) return null;
+    return (
+      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #e0e0e0' }}>
+        <button
+          style={{ ...styles.evalBtn, padding: '4px 10px', fontSize: 10, marginBottom: 8, background: '#f6f7fb' }}
+          onClick={() => setShowAllEvaluations(v => !v)}
+        >
+          {showAllEvaluations ? 'Hide all evaluations' : `Show all evaluations (${allEvaluationEntries.length})`}
+        </button>
+        {showAllEvaluations && (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {allEvaluationEntries.map(({ modelId, result, modelLabel, evaluatedAt }) => {
+              const isSelected = modelId === evaluationModel;
+              const score = result?.overall_average ?? null;
+              return (
+                <div
+                  key={modelId}
+                  style={{
+                    border: isSelected ? '1px solid #5878a0' : '1px solid #e1e4eb',
+                    borderRadius: 8,
+                    padding: '8px 10px',
+                    background: isSelected ? '#f4f8ff' : '#fff',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#333' }}>{modelLabel}</div>
+                      <div style={{ fontSize: 10, color: '#888' }}>{evaluatedAt ? new Date(evaluatedAt).toLocaleString() : 'No timestamp'}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {score != null ? (
+                        <span style={{ ...styles.evalOverall, color: scoreTextColor(score), fontSize: 14 }}>{score}/5</span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: '#888' }}>No score</span>
+                      )}
+                      <button
+                        style={{ fontSize: 10, padding: '4px 8px', borderRadius: 4, border: '1px solid #d0d8e8', background: '#fff', cursor: 'pointer' }}
+                        onClick={() => onSelectEvaluationModel?.(modelId)}
+                      >
+                        View
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   if (!evaluation) {
     if (!canEvaluate) return null;
     return (
       <div style={styles.evalSection}>
-        <button style={styles.evalBtn} onClick={onEvaluate}>Evaluate</button>
+        {selector}
+        <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px' }}>No evaluation exists for {selectedModelLabel}.</p>
+        <button style={styles.evalBtn} onClick={() => onEvaluate(evaluationModel)}>Generate evaluation</button>
+        {renderAllEvaluations()}
       </div>
     );
   }
@@ -1031,13 +1212,14 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluating, onEvaluate, 
 
   return (
     <div style={styles.evalSection}>
+      {selector}
       <div style={styles.evalHeader}>
         <span style={styles.evalTitle}>Evaluation</span>
         <span style={{ ...styles.evalOverall, color: scoreTextColor(evaluation.overall_average) }}>
           {evaluation.overall_average}/5
         </span>
       </div>
-      <p style={styles.evalMeta}>Model: {evaluationModel || 'unknown'}</p>
+      <p style={styles.evalMeta}>Model: {selectedModelLabel}</p>
 
       {METRICS.map(({ key, label }) => (
         <div key={key} style={styles.evalRow}>
@@ -1083,6 +1265,8 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluating, onEvaluate, 
       {evaluation.notes && (
         <p style={styles.evalNotes}>{evaluation.notes}</p>
       )}
+
+      {renderAllEvaluations()}
     </div>
   );
 }
@@ -1253,7 +1437,8 @@ function ResultsTab({ onOpen, criticModel }) {
                 figure: r.filename ? r.filename.replace(/\.[^.]+$/, '') : r.id,
                 chapter: r.chapter || 'other',
                 base64thumb: r.base64thumb, mediaType: r.mediaType || 'image/png',
-                timestamp: r.timestamp, evaluation: r.evaluation, evaluationModel: r.evaluationModel || null,
+                timestamp: r.timestamp,
+                evaluationResults: r.evaluationResults || {}, evaluationMeta: r.evaluationMeta || {},
                 experiment: expName, model: modelName,
                 imagePath: null, htmlPath: null,
               });
@@ -1269,7 +1454,8 @@ function ResultsTab({ onOpen, criticModel }) {
                 figure: fig.name, chapter: fig.chapter || 'other',
                 experiment: exp.experiment, model: m.model,
                 imagePath: fig.imagePath, htmlPath: fig.htmlPath,
-                timestamp: null, evaluation: fig.evaluation, evaluationModel: fig.evaluationModel || null,
+                timestamp: null,
+                evaluationResults: fig.evaluationResults || {}, evaluationMeta: fig.evaluationMeta || {},
               });
             }
           }
@@ -1287,7 +1473,8 @@ function ResultsTab({ onOpen, criticModel }) {
           figure: r.filename ? r.filename.replace(/\.[^.]+$/, '') : r.id,
           chapter: r.chapter || 'other',
           base64thumb: r.base64thumb, mediaType: r.mediaType || 'image/png',
-          timestamp: r.timestamp, evaluation: r.evaluation, evaluationModel: r.evaluationModel || null,
+          timestamp: r.timestamp,
+          evaluationResults: r.evaluationResults || {}, evaluationMeta: r.evaluationMeta || {},
           experiment: selected.experiment, model: modelName,
           imagePath: null, htmlPath: null,
         }))
@@ -1304,7 +1491,8 @@ function ResultsTab({ onOpen, criticModel }) {
             figure: fig.name, chapter: fig.chapter || 'other',
             experiment: exp.experiment, model: m.model,
             imagePath: fig.imagePath, htmlPath: fig.htmlPath,
-            timestamp: null, evaluation: fig.evaluation, evaluationModel: fig.evaluationModel || null,
+            timestamp: null,
+            evaluationResults: fig.evaluationResults || {}, evaluationMeta: fig.evaluationMeta || {},
           });
         }
       }
@@ -1360,11 +1548,16 @@ function ResultsTab({ onOpen, criticModel }) {
     setEvaluatingKey(item.key);
     try {
       let data;
+      const evalModelId = criticModel || pickEvaluationModel(item, null) || 'gpt-4o';
       if (item.type === 'api') {
         const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: criticModel || undefined }) });
         data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        setApiRecords(prev => prev.map(r => r.id === item.id ? { ...r, evaluation: data, evaluationModel: criticModel || r.evaluationModel || null } : r));
+        setApiRecords(prev => prev.map(r => r.id === item.id ? {
+          ...r,
+          evaluationResults: { ...(r.evaluationResults || {}), [evalModelId]: data },
+          evaluationMeta: { ...(r.evaluationMeta || {}), [evalModelId]: { evaluatedAt: new Date().toISOString() } },
+        } : r));
       } else {
         const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: criticModel || undefined }) });
         data = await res.json();
@@ -1374,7 +1567,11 @@ function ResultsTab({ onOpen, criticModel }) {
           ...exp,
           models: exp.models.map(m => m.model !== modelName ? m : {
             ...m,
-            figures: m.figures.map(f => f.name !== figName ? f : { ...f, evaluation: data, evaluationModel: criticModel || f.evaluationModel || null })
+            figures: m.figures.map(f => f.name !== figName ? f : {
+              ...f,
+              evaluationResults: { ...(f.evaluationResults || {}), [evalModelId]: data },
+              evaluationMeta: { ...(f.evaluationMeta || {}), [evalModelId]: { evaluatedAt: new Date().toISOString() } },
+            })
           })
         }));
       }
@@ -1384,7 +1581,8 @@ function ResultsTab({ onOpen, criticModel }) {
 
   const handleEvalAll = async (e, chapter, items) => {
     e.stopPropagation();
-    const pending = items.filter(item => !item.evaluation);
+    const evalModelId = criticModel || 'gpt-4o';
+    const pending = items.filter(item => !(item.evaluationResults || {})[evalModelId]);
     if (!pending.length) return;
     setEvaluatingAll(chapter);
     for (const item of pending) {
@@ -1395,7 +1593,11 @@ function ResultsTab({ onOpen, criticModel }) {
           const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: criticModel || undefined }) });
           data = await res.json();
           if (!res.ok) throw new Error(data.error);
-          setApiRecords(prev => prev.map(r => r.id === item.id ? { ...r, evaluation: data, evaluationModel: criticModel || r.evaluationModel || null } : r));
+          setApiRecords(prev => prev.map(r => r.id === item.id ? {
+            ...r,
+            evaluationResults: { ...(r.evaluationResults || {}), [evalModelId]: data },
+            evaluationMeta: { ...(r.evaluationMeta || {}), [evalModelId]: { evaluatedAt: new Date().toISOString() } },
+          } : r));
         } else {
           const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: criticModel || undefined }) });
           data = await res.json();
@@ -1405,7 +1607,11 @@ function ResultsTab({ onOpen, criticModel }) {
             ...exp,
             models: exp.models.map(m => m.model !== modelName ? m : {
               ...m,
-              figures: m.figures.map(f => f.name !== figName ? f : { ...f, evaluation: data, evaluationModel: criticModel || f.evaluationModel || null })
+              figures: m.figures.map(f => f.name !== figName ? f : {
+                ...f,
+                evaluationResults: { ...(f.evaluationResults || {}), [evalModelId]: data },
+                evaluationMeta: { ...(f.evaluationMeta || {}), [evalModelId]: { evaluatedAt: new Date().toISOString() } },
+              })
             })
           }));
         }
@@ -1524,10 +1730,10 @@ function ResultsTab({ onOpen, criticModel }) {
           >
             {label}
             {key === 'api' && apiRecords.length > 0 &&
-              <span style={styles.subTabCount}>{apiRecords.filter(r => r.evaluation).length}/{apiRecords.length}</span>}
+              <span style={styles.subTabCount}>{apiRecords.filter(r => hasAnyEvaluation(r)).length}/{apiRecords.length}</span>}
             {key === 'agent' && expTree.length > 0 && (() => {
               const total = expTree.reduce((s, e) => s + e.models.reduce((ms, m) => ms + m.figures.length, 0), 0);
-              const evaled = expTree.reduce((s, e) => s + e.models.reduce((ms, m) => ms + m.figures.filter(f => f.evaluation).length, 0), 0);
+              const evaled = expTree.reduce((s, e) => s + e.models.reduce((ms, m) => ms + m.figures.filter(f => hasAnyEvaluation(f)).length, 0), 0);
               return <span style={styles.subTabCount}>{evaled}/{total}</span>;
             })()}
           </button>
@@ -1614,7 +1820,7 @@ function ResultsTab({ onOpen, criticModel }) {
               for (const item of selectedItems) {
                 const ch = item.chapter || 'other';
                 chapterCounts[ch] = (chapterCounts[ch] || 0) + 1;
-                if (item.evaluation) evalCounts[ch] = (evalCounts[ch] || 0) + 1;
+                if (hasAnyEvaluation(item)) evalCounts[ch] = (evalCounts[ch] || 0) + 1;
               }
               return Object.entries(chapterCounts).sort(([a], [b]) => a.localeCompare(b)).map(([ch, count]) => {
                 const isActive = filterChapter === ch;
@@ -1642,7 +1848,7 @@ function ResultsTab({ onOpen, criticModel }) {
                 ? Object.entries(apiTree).map(([expName, models]) => ({
                   group: expName,
                   items: Object.entries(models).map(([modelName, recs]) => ({
-                    modelName, evalCount: recs.filter(r => r.evaluation).length, total: recs.length,
+                    modelName, evalCount: recs.filter(r => hasAnyEvaluation(r)).length, total: recs.length,
                     nodeKey: `${expName}::${modelName}`,
                     onSelect: () => setSelected({ experiment: expName, model: modelName }),
                   })),
@@ -1650,7 +1856,7 @@ function ResultsTab({ onOpen, criticModel }) {
                 : expTree.map(exp => ({
                   group: exp.experiment,
                   items: exp.models.map(m => ({
-                    modelName: m.model, evalCount: m.figures.filter(f => f.evaluation).length, total: m.figures.length,
+                    modelName: m.model, evalCount: m.figures.filter(f => hasAnyEvaluation(f)).length, total: m.figures.length,
                     nodeKey: `${exp.experiment}::${m.model}`,
                     onSelect: () => setSelected({ experiment: exp.experiment, model: m.model }),
                   })),
@@ -1768,21 +1974,33 @@ function ResultsTab({ onOpen, criticModel }) {
                       <summary style={{ ...styles.resultChapterHeader, cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none' }}>
                         <span style={{ fontSize: 9, color: '#bbb', display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>{groupKey}
                         <span style={{ fontWeight: 400, color: '#bbb', textTransform: 'none', letterSpacing: 0 }}>({items.length})</span>
-                        {items.some(i => !i.evaluation) && (
+                        {items.some(i => !((i.evaluationResults || {})[criticModel || 'gpt-4o'])) && (
                           <button
                             style={{ marginLeft: 'auto', fontSize: 10, padding: '1px 8px', borderRadius: 4, border: '1px solid #d0d8e8', background: '#f2f6fb', color: '#5878a0', cursor: 'pointer', fontWeight: 600 }}
                             onClick={e => handleEvalAll(e, groupKey, items)}
                             disabled={evaluatingAll === groupKey}
                           >
                             {evaluatingAll === groupKey
-                              ? `Evaluating… (${items.filter(i => i.evaluation).length}/${items.length})`
-                              : `Evaluate all (${items.filter(i => !i.evaluation).length} pending)`}
+                              ? `Evaluating… (${items.filter(i => ((i.evaluationResults || {})[criticModel || 'gpt-4o'])).length}/${items.length})`
+                              : `Evaluate all (${items.filter(i => !((i.evaluationResults || {})[criticModel || 'gpt-4o'])).length} pending)`}
                           </button>
                         )}
                       </summary>
                       <div style={{ ...styles.historyGrid, marginTop: 10 }}>
                         {items.map(item => {
-                          const ev = item.evaluation;
+                          const evalEntries = Object.entries(item.evaluationResults || {})
+                            .map(([modelId, result]) => ({
+                              modelId,
+                              result,
+                              modelLabel: modelId,
+                              evaluatedAt: item.evaluationMeta?.[modelId]?.evaluatedAt || null,
+                            }))
+                            .sort((a, b) => {
+                              const aTime = a.evaluatedAt ? new Date(a.evaluatedAt).getTime() : 0;
+                              const bTime = b.evaluatedAt ? new Date(b.evaluatedAt).getTime() : 0;
+                              return bTime - aTime;
+                            });
+                          const ev = evalEntries.length ? evalEntries[0].result : null;
                           return (
                             <div key={item.key} style={styles.card} onClick={() => onOpen(item)}>
                               <div style={{ position: 'relative' }}>
@@ -1802,10 +2020,20 @@ function ResultsTab({ onOpen, criticModel }) {
                                 <p style={styles.cardFilename}>{item.figure}{item.genTotal > 1 && <span style={{ marginLeft: 5, fontSize: 9, background: '#e3e8f0', color: '#556', borderRadius: 6, padding: '1px 5px', fontWeight: 500 }}>g{item.genIndex}</span>}</p>
                                 <p style={styles.cardGenModel}>Gen model: {item.model || 'unknown'}</p>
                                 {item.timestamp && <p style={{ ...styles.cardTs, marginBottom: 3 }}>{new Date(item.timestamp).toLocaleDateString()}</p>}
-                                {ev ? (
+                                {evalEntries.length ? (
                                   <>
                                     <span style={{ ...styles.sourceBadge, background: ev.overall_average >= 4 ? '#e8f5e9' : ev.overall_average >= 3 ? '#fff3e0' : '#ffebee', color: sc(ev.overall_average) }}>{ev.overall_average}/5</span>
-                                    <p style={styles.cardEvalModel}>Eval model: {item.evaluationModel || 'unknown'}</p>
+                                    <p style={styles.cardEvalModel}>Latest eval: {evalEntries[0].modelLabel}</p>
+                                    <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                      {evalEntries.map(({ modelId, modelLabel, result }) => (
+                                        <div key={modelId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#666' }}>
+                                          <span>{modelLabel}</span>
+                                          <span style={{ fontWeight: 700, color: sc(result?.overall_average ?? 0) }}>
+                                            {result?.overall_average != null ? `${result.overall_average.toFixed(1)}/5` : '—'}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
                                     {ev.failure_modes?.length > 0 && (
                                       <CardFailureModes modes={ev.failure_modes} />
                                     )}
@@ -1923,7 +2151,9 @@ function computeStats(records, groupKey) {
     const key = r[groupKey];
     if (!byGroup[key]) byGroup[key] = { evals: [], total: 0, key };
     byGroup[key].total++;
-    if (r.evaluation) byGroup[key].evals.push(r.evaluation);
+    const modelId = pickEvaluationModel(r, null);
+    const evaluation = getRecordEvaluation(r, modelId);
+    if (evaluation) byGroup[key].evals.push(evaluation);
   }
   return Object.values(byGroup).map(({ key, evals, total }) => {
     const avg = (field) => {
@@ -2038,7 +2268,7 @@ function DashTable({ stats, groupKey }) {
 
 function SourceSection({ title, color, records, groupKey }) {
   const stats = React.useMemo(() => computeStats(records, groupKey), [records, groupKey]);
-  const n = records.filter(r => r.evaluation).length;
+  const n = records.filter(r => hasAnyEvaluation(r)).length;
   if (!stats.length) return null;
   return (
     <div style={{ marginBottom: 24 }}>
@@ -2077,17 +2307,25 @@ function DashboardTab() {
   const { agentRecords, copilotRecords } = React.useMemo(() => {
     const agent = apiRecords.map(r => ({
       source: 'agent', experiment: r.experiment || 'base_scene_robust',
-      model: r.model || 'gpt-4o', evaluation: r.evaluation || null,
+      model: r.model || 'gpt-4o',
+      evaluationResults: r.evaluationResults || {},
+      evaluationMeta: r.evaluationMeta || {},
     }));
     const copilot = [];
     for (const exp of expTree)
       for (const m of exp.models)
         for (const fig of m.figures)
-          copilot.push({ source: 'copilot', experiment: exp.experiment, model: m.model, evaluation: fig.evaluation || null });
+          copilot.push({
+            source: 'copilot',
+            experiment: exp.experiment,
+            model: m.model,
+            evaluationResults: fig.evaluationResults || {},
+            evaluationMeta: fig.evaluationMeta || {},
+          });
     return { agentRecords: agent, copilotRecords: copilot };
   }, [apiRecords, expTree]);
 
-  const totalEval = [...agentRecords, ...copilotRecords].filter(r => r.evaluation).length;
+  const totalEval = [...agentRecords, ...copilotRecords].filter(r => hasAnyEvaluation(r)).length;
 
   if (loading) return <div style={styles.empty}>Loading…</div>;
   if (totalEval === 0)

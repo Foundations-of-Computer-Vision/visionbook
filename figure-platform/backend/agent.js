@@ -221,20 +221,21 @@ async function processImage(imagePath) {
 
   // ── SAVE RESULT ─────────────────────────────────────────────────────────────
   const figureId = makeId();
+  const evaluatedAt = new Date().toISOString();
   const record = {
     id: figureId,
     filename,
     base64thumb: thumb ? thumb.data : imageBase64,
     mediaType: thumb ? thumb.mediaType : mediaType,
     html,
-    timestamp: new Date().toISOString(),
+    timestamp: evaluatedAt,
     source: 'agent',
     model: GEN_MODEL,
-    eval_model: EVAL_MODEL,
     experiment: EXPERIMENT,
     promptHash: PROMPT_HASH,
     rounds: round,
-    evaluation: evaluation || null,
+    evaluationResults: evaluation ? { [EVAL_MODEL]: evaluation } : {},
+    evaluationMeta: evaluation ? { [EVAL_MODEL]: { evaluatedAt } } : {},
     plan: plan || null,
   };
 

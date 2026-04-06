@@ -69,6 +69,25 @@ function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+function upsertEvaluation(record, evalModel, evaluation) {
+  const normalized = {
+    ...record,
+    evaluationResults: { ...(record.evaluationResults || {}) },
+    evaluationMeta: { ...(record.evaluationMeta || {}) },
+  };
+  // Enforce map-only schema on every write.
+  delete normalized.evaluation;
+  delete normalized.evaluationModel;
+  delete normalized.evaluatedAt;
+  delete normalized.eval_model;
+  const evaluatedAt = new Date().toISOString();
+
+  normalized.evaluationResults[evalModel] = evaluation;
+  normalized.evaluationMeta[evalModel] = { evaluatedAt };
+
+  return normalized;
+}
+
 // ── GET /api/prompt — return the current system prompt for UI display ──────────
 app.get('/api/prompt', (req, res) => {
   res.json({
@@ -239,7 +258,15 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
     }
   }
 
-  return { html, figureId, timestamp, model: modelId, evaluation, plan: plan || null };
+  return {
+    html,
+    figureId,
+    timestamp,
+    model: modelId,
+    evaluationResults: record.evaluationResults || {},
+    evaluationMeta: record.evaluationMeta || {},
+    plan: plan || null,
+  };
 }
 
 function updateGenerationJob(jobId, patch) {
@@ -341,12 +368,23 @@ app.get('/api/history', (req, res) => {
         try {
           const raw = fs.readFileSync(path.join(RESULTS_DIR, f), 'utf-8');
           const parsed = JSON.parse(raw);
-          const { id, filename, base64thumb, timestamp, source, evaluation, evaluationModel } = parsed;
+          const { id, filename, base64thumb, timestamp, source, evaluationResults, evaluationMeta } = parsed;
           const stem = filename ? filename.replace(/\.[^.]+$/, '') : '';
           const chapter = inferChapter(stem);
           const model = parsed.model || 'gpt-4o';
           const experiment = parsed.experiment || 'base_scene_robust';
-          return { id, filename, base64thumb, timestamp, source: source || 'api', model, experiment, evaluation: evaluation || null, evaluationModel: evaluationModel || null, chapter };
+          return {
+            id,
+            filename,
+            base64thumb,
+            timestamp,
+            source: source || 'api',
+            model,
+            experiment,
+            evaluationResults: evaluationResults || {},
+            evaluationMeta: evaluationMeta || {},
+            chapter,
+          };
         } catch {
           return null;
         }
@@ -422,9 +460,11 @@ async function runEvaluation(record, filePath, requestedEvalModel) {
   });
 
   // Persist back to disk
-  record.evaluation = evaluation;
-  record.evaluationModel = evalModel;
-  if (filePath) fs.writeFileSync(filePath, JSON.stringify(record, null, 2));
+  const updatedRecord = upsertEvaluation(record, evalModel, evaluation);
+  if (filePath) fs.writeFileSync(filePath, JSON.stringify(updatedRecord, null, 2));
+
+  record.evaluationResults = updatedRecord.evaluationResults;
+  record.evaluationMeta = updatedRecord.evaluationMeta;
 
   return evaluation;
 }
@@ -655,18 +695,9 @@ function loadExpEval(htmlPath) {
   if (!fs.existsSync(evalPath)) return null;
   try {
     const parsed = JSON.parse(fs.readFileSync(evalPath, 'utf-8'));
-    // Backward compatibility: old files stored only the raw evaluation object.
-    if (parsed && parsed.evaluation && typeof parsed.evaluation === 'object') {
-      return {
-        evaluation: parsed.evaluation,
-        evaluationModel: parsed.evaluationModel || null,
-        evaluatedAt: parsed.evaluatedAt || null,
-      };
-    }
     return {
-      evaluation: parsed,
-      evaluationModel: null,
-      evaluatedAt: null,
+      evaluationResults: parsed.evaluationResults || {},
+      evaluationMeta: parsed.evaluationMeta || {},
     };
   } catch {
     return null;
@@ -682,9 +713,8 @@ app.get('/api/experiments', (req, res) => {
       for (const m of exp.models) {
         for (const fig of m.figures) {
           const evalData = loadExpEval(fig.htmlPath);
-          fig.evaluation = evalData?.evaluation || null;
-          fig.evaluationModel = evalData?.evaluationModel || null;
-          fig.evaluatedAt = evalData?.evaluatedAt || null;
+          fig.evaluationResults = evalData?.evaluationResults || {};
+          fig.evaluationMeta = evalData?.evaluationMeta || {};
         }
       }
     }
@@ -721,10 +751,14 @@ app.post('/api/experiments/evaluate', async (req, res) => {
 
     // Cache alongside the HTML file
     const evalPath = absHtml.replace(/\.html$/, '.eval.json');
+    let cached = {};
+    if (fs.existsSync(evalPath)) {
+      try { cached = JSON.parse(fs.readFileSync(evalPath, 'utf-8')); } catch { cached = {}; }
+    }
+    const updatedCache = upsertEvaluation(cached, usedEvalModel, evaluation);
     fs.writeFileSync(evalPath, JSON.stringify({
-      evaluation,
-      evaluationModel: usedEvalModel,
-      evaluatedAt: new Date().toISOString(),
+      evaluationResults: updatedCache.evaluationResults,
+      evaluationMeta: updatedCache.evaluationMeta,
     }, null, 2));
 
     return res.json(evaluation);

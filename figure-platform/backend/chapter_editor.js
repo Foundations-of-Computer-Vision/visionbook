@@ -40,7 +40,22 @@ function resolvePandocInvocation() {
   return { command: 'quarto', prefixArgs: ['pandoc'] };
 }
 
-function scoreOf(evaluation) {
+function pickEvaluationModel(record) {
+  const results = record?.evaluationResults || {};
+  const meta = record?.evaluationMeta || {};
+  const keys = Object.keys(results);
+  if (!keys.length) return null;
+  const sorted = [...keys].sort((a, b) => {
+    const aTime = meta[a]?.evaluatedAt ? new Date(meta[a].evaluatedAt).getTime() : 0;
+    const bTime = meta[b]?.evaluatedAt ? new Date(meta[b].evaluatedAt).getTime() : 0;
+    return bTime - aTime;
+  });
+  return sorted[0] || keys[0];
+}
+
+function scoreOf(record) {
+  const modelId = pickEvaluationModel(record);
+  const evaluation = modelId ? record?.evaluationResults?.[modelId] : null;
   return (evaluation && evaluation.overall_average != null) ? evaluation.overall_average : null;
 }
 
@@ -117,7 +132,7 @@ function buildFigureIndex() {
           model: record.model || 'unknown',
           experiment: record.experiment || '',
           html: record.html,
-          score: scoreOf(record.evaluation),
+          score: scoreOf(record),
           timestamp: record.timestamp || '',
           _file: path.join(RESULTS_DIR, file),
         });
@@ -140,7 +155,7 @@ function buildFigureIndex() {
             const htmlPath = path.join(dir, file);
             const stem = path.basename(file, '.html');
             const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
-            let evaluation = null;
+            let evaluation = {};
             if (fs.existsSync(evalPath)) {
               try { evaluation = JSON.parse(fs.readFileSync(evalPath, 'utf-8')); } catch (_) { }
             }
