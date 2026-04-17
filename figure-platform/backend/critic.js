@@ -7,9 +7,13 @@
 
 const { generateWithModel } = require('./models');
 const { screenshotHtml } = require('./runtime-helpers');
+const fs = require('fs');
+const path = require('path');
 
 const CRITIC_DEFAULT_MODEL = 'gpt-4o';
 const CRITIC_MAX_TOKENS = 512;
+// Change this value to start a new evaluation experiment namespace.
+const CRITIC_EXPERIMENT_BASE = 'entire_book_v1';
 
 // ── 10 canonical failure modes ─────────────────────────────────────────────────
 const FAILURE_MODES = [
@@ -117,6 +121,14 @@ Output this exact JSON structure and nothing else:
 ${exampleOutput}`;
 }
 
+function getCriticContext() {
+  const systemPrompt = buildEvalPrompt();
+  return {
+    systemPrompt,
+    criticVersion: CRITIC_EXPERIMENT_BASE,
+  };
+}
+
 // ── Finalise raw evaluator output: clamp, derive visual_aesthetics + overall ──
 function finaliseEval(evaluation) {
   const scoreKeys = SCORE_METRICS.map(m => m.id);
@@ -179,8 +191,10 @@ async function evaluateHtmlWithCritic(opts) {
     },
   ];
 
+  const { systemPrompt } = getCriticContext();
+
   let content = await generateWithModel(model, {
-    systemPrompt: buildEvalPrompt(),
+    systemPrompt,
     userContent,
     maxTokens,
   });
@@ -199,5 +213,7 @@ async function evaluateHtmlWithCritic(opts) {
 }
 
 module.exports = {
+  CRITIC_EXPERIMENT_BASE,
+  getCriticContext,
   evaluateHtmlWithCritic,
 };

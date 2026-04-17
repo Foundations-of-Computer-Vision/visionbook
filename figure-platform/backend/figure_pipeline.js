@@ -1,15 +1,13 @@
-const crypto = require('crypto');
 const fs = require('fs');
-const { evaluateHtmlWithCritic } = require('./critic');
+const { evaluateHtmlWithCritic, getCriticContext } = require('./critic');
 const { buildGenerationSystemPrompt } = require('./generation');
-const { upsertEvaluation } = require('./result_schema');
+const { upsertEvaluation, compactEvaluationStorage } = require('./result_schema');
 
 function buildExperimentContext(scaffold, experimentBase = 'base_scene_robust') {
   if (!scaffold) throw new Error('scaffold is required.');
   const systemPrompt = buildGenerationSystemPrompt(scaffold);
-  const promptHash = crypto.createHash('sha256').update(systemPrompt).digest('hex').slice(0, 8);
-  const experiment = `${experimentBase}_${promptHash}`;
-  return { systemPrompt, promptHash, experiment };
+  const experiment = experimentBase;
+  return { systemPrompt, experiment };
 }
 
 function buildPlanInjection(plan) {
@@ -32,7 +30,6 @@ function createResultRecord({
   source,
   model,
   experiment,
-  promptHash,
   plan = null,
   previewBase64,
   previewMediaType,
@@ -52,7 +49,6 @@ function createResultRecord({
     source,
     model,
     experiment,
-    promptHash,
     plan,
     ...extra,
   };
@@ -68,6 +64,7 @@ async function evaluateRecord({ record, evalModel, defaultEvalModel }) {
 
   const usedEvalModel = evalModel || defaultEvalModel;
   if (!usedEvalModel) throw new Error('No evaluation model configured.');
+  const criticContext = getCriticContext();
 
   const evalImage = record.source_base64 || record.base64thumb;
   const evalMediaType = record.source_media_type || record.mediaType || 'image/png';
@@ -80,18 +77,22 @@ async function evaluateRecord({ record, evalModel, defaultEvalModel }) {
   });
 
   const evaluatedAt = new Date().toISOString();
-  const updatedRecord = upsertEvaluation(record, usedEvalModel, evaluation, evaluatedAt);
+  const updatedRecord = upsertEvaluation(record, usedEvalModel, evaluation, evaluatedAt, {
+    criticVersion: criticContext.criticVersion,
+    criticModel: usedEvalModel,
+  });
 
   return {
     evaluation,
     evalModel: usedEvalModel,
     evaluatedAt,
+    criticVersion: criticContext.criticVersion,
     record: updatedRecord,
   };
 }
 
 function saveRecord(record, filePath) {
-  fs.writeFileSync(filePath, JSON.stringify(record, null, 2));
+  fs.writeFileSync(filePath, JSON.stringify(compactEvaluationStorage(record), null, 2));
 }
 
 module.exports = {

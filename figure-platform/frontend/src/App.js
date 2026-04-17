@@ -28,6 +28,109 @@ function hasAnyEvaluation(record) {
   return Object.keys(record?.evaluationResults || {}).length > 0;
 }
 
+function normalizeEvaluationHistory(record) {
+  return {
+    ...record,
+    evaluationResults: record?.evaluationResults || {},
+    evaluationMeta: record?.evaluationMeta || {},
+    evaluationVersions: record?.evaluationVersions || {},
+  };
+}
+
+function getVersionedEvaluationState(record, criticVersion) {
+  const normalized = normalizeEvaluationHistory(record);
+  if (!criticVersion) {
+    return normalized;
+  }
+  const bucket = normalized.evaluationVersions?.[criticVersion];
+  if (!bucket) {
+    return {
+      ...normalized,
+      evaluationResults: {},
+      evaluationMeta: {},
+    };
+  }
+  return {
+    ...normalized,
+    evaluationResults: bucket.evaluationResults || {},
+    evaluationMeta: bucket.evaluationMeta || {},
+  };
+}
+
+function upsertVersionedEvaluation(record, modelId, evaluation, { criticVersion, evaluatedAt } = {}) {
+  const normalized = normalizeEvaluationHistory(record);
+  const versionKey = criticVersion;
+  const metaEntry = {
+    evaluatedAt: evaluatedAt || new Date().toISOString(),
+    criticVersion: versionKey,
+  };
+
+  normalized.evaluationResults = {
+    ...normalized.evaluationResults,
+    [modelId]: evaluation,
+  };
+  normalized.evaluationMeta = {
+    ...normalized.evaluationMeta,
+    [modelId]: metaEntry,
+  };
+
+  const versionBucket = normalized.evaluationVersions[versionKey] || {};
+  normalized.evaluationVersions = {
+    ...normalized.evaluationVersions,
+    [versionKey]: {
+      ...versionBucket,
+      criticVersion: versionKey,
+      evaluationResults: {
+        ...(versionBucket.evaluationResults || {}),
+        [modelId]: evaluation,
+      },
+      evaluationMeta: {
+        ...(versionBucket.evaluationMeta || {}),
+        [modelId]: metaEntry,
+      },
+    },
+  };
+
+  return normalized;
+}
+
+function collectCriticVersionSummaries(records) {
+  const buckets = new Map();
+
+  const addEntry = (versionId, modelId, result, meta = {}) => {
+    if (!versionId) return;
+    const summary = buckets.get(versionId) || {
+      versionId,
+      label: versionId,
+      count: 0,
+      latestAt: 0,
+      models: new Set(),
+    };
+    summary.count += 1;
+    summary.models.add(modelId);
+    const evaluatedAt = meta?.evaluatedAt ? new Date(meta.evaluatedAt).getTime() : 0;
+    summary.latestAt = Math.max(summary.latestAt, evaluatedAt);
+    buckets.set(versionId, summary);
+    return result;
+  };
+
+  for (const record of records || []) {
+    const versioned = record?.evaluationVersions || {};
+    for (const [versionId, bucket] of Object.entries(versioned)) {
+      for (const [modelId, result] of Object.entries(bucket?.evaluationResults || {})) {
+        addEntry(versionId, modelId, result, bucket?.evaluationMeta?.[modelId] || {});
+      }
+    }
+  }
+
+  return Array.from(buckets.values())
+    .sort((a, b) => b.latestAt - a.latestAt)
+    .map(entry => ({
+      ...entry,
+      models: Array.from(entry.models).sort(),
+    }));
+}
+
 function apiFetch(input, init = {}) {
   return fetch(input, {
     ...init,
@@ -74,6 +177,7 @@ export default function App() {
   const [image, setImage] = useState(null); // { base64, mediaType, filename, previewUrl }
   const [generatedHtml, setGeneratedHtml] = useState('');
   const [systemPrompt, setSystemPrompt] = useState(FALLBACK_PROMPT);
+  const [currentCriticVersion, setCurrentCriticVersion] = useState('');
 
   // Model selection
   const [models, setModels] = useState([]);       // available models from backend
@@ -87,6 +191,7 @@ export default function App() {
       apiFetch('/api/models').then(r => r.json()).catch(() => ([])),
     ]).then(([promptData, list]) => {
       if (promptData.prompt) setSystemPrompt(promptData.prompt);
+      if (promptData.criticVersion) setCurrentCriticVersion(promptData.criticVersion);
       setModels(list);
 
       if (list.length === 0) return;
@@ -132,6 +237,7 @@ export default function App() {
       ...record,
       evaluationResults: record.evaluationResults || {},
       evaluationMeta: record.evaluationMeta || {},
+      evaluationVersions: record.evaluationVersions || {},
     };
     const selectedModel = pickEvaluationModel(normalizedRecord, preferredModel);
     setCurrentRecord(normalizedRecord);
@@ -204,6 +310,7 @@ export default function App() {
         model: data.model,
         evaluationResults: generatedEvaluationResults,
         evaluationMeta: generatedEvaluationMeta,
+        evaluationVersions: data.evaluationVersions || {},
         plan: data.plan || currentPlan || null,
       });
       setViewerEvaluationModel(generatedModel);
@@ -219,6 +326,8 @@ export default function App() {
     const normalizedRecord = {
       ...record,
       evaluationResults: record.evaluationResults || {},
+      evaluationMeta: record.evaluationMeta || {},
+      evaluationVersions: record.evaluationVersions || {},
     };
     const selectedModel = pickEvaluationModel(normalizedRecord, null);
     setGeneratedHtml(record.html);
@@ -277,6 +386,7 @@ export default function App() {
           imagePath: item.imagePath,
           evaluationResults: item.evaluationResults || {},
           evaluationMeta: item.evaluationMeta || {},
+          evaluationVersions: item.evaluationVersions || {},
         };
         const selectedEvalModel = pickEvaluationModel(viewerRecord, null);
         setGeneratedHtml(html);
@@ -323,21 +433,16 @@ export default function App() {
       setViewerEvaluationModel(modelId);
       setCurrentRecord(prev => prev ? {
         ...prev,
-        evaluationResults: {
-          ...(prev.evaluationResults || {}),
-          [modelId || 'unknown']: data,
-        },
-        evaluationMeta: {
-          ...(prev.evaluationMeta || {}),
-          [modelId || 'unknown']: { evaluatedAt: new Date().toISOString() },
-        },
+        ...upsertVersionedEvaluation(prev, modelId || 'unknown', data, {
+          criticVersion: currentCriticVersion,
+        }),
       } : prev);
     } catch (err) {
       alert('Evaluation failed: ' + err.message);
     } finally {
       setEvaluating(false);
     }
-  }, [currentRecord, selectedCriticModel, viewerEvaluationModel]);
+  }, [currentRecord, currentCriticVersion, selectedCriticModel, viewerEvaluationModel]);
 
   return (
     <div style={styles.root}>
@@ -370,6 +475,7 @@ export default function App() {
             systemPrompt={systemPrompt}
             selectedModel={selectedModel}
             selectedCriticModel={selectedCriticModel}
+            currentCriticVersion={currentCriticVersion}
           />
         )}
         {tab === 'viewer' && (
@@ -392,10 +498,14 @@ export default function App() {
           />
         )}
         {tab === 'results' && (
-          <ResultsTab onOpen={handleOpenResult} criticModel={selectedCriticModel} />
+          <ResultsTab
+            onOpen={handleOpenResult}
+            criticModel={selectedCriticModel}
+            currentCriticVersion={currentCriticVersion}
+          />
         )}
         {tab === 'dashboard' && (
-          <DashboardTab />
+          <DashboardTab currentCriticVersion={currentCriticVersion} />
         )}
         {tab === 'preview' && (
           <ChapterPreviewTab />
@@ -1093,7 +1203,6 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
 // ── Evaluation Panel ─────────────────────────────────────────────────────────
 function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evaluationResults, evaluationMeta, evaluating, onEvaluate, onSelectEvaluationModel, canEvaluate }) {
   const [showAllFailures, setShowAllFailures] = React.useState(false);
-  const [showAllEvaluations, setShowAllEvaluations] = React.useState(false);
   const scoreTextColor = (s) => { const rgb = lerpColor(s); if (!rgb) return '#888'; return `rgb(${Math.round(rgb[0] * 0.6)},${Math.round(rgb[1] * 0.6)},${Math.round(rgb[2] * 0.5)})`; };
   const scoreBarColor = (s) => { const rgb = lerpColor(s); if (!rgb) return '#ccc'; return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.8)`; };
   const selectedModelLabel = evaluationModels?.find(m => m.id === evaluationModel)?.label || evaluationModel || 'unknown';
@@ -1116,7 +1225,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
 
   const selector = evaluationModels?.length > 0 ? (
     <label style={{ display: 'block', marginBottom: 8 }}>
-      <span style={{ fontSize: 10, color: '#777', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Evaluation model</span>
+      <span style={{ fontSize: 10, color: '#777', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Critic model</span>
       <select
         style={{ ...styles.resultFilterSelect, width: '100%' }}
         value={evaluationModel || ''}
@@ -1129,72 +1238,6 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
     </label>
   ) : null;
 
-  const allEvaluationEntries = Object.entries(evaluationResults || {})
-    .map(([modelId, result]) => ({
-      modelId,
-      result,
-      modelLabel: evaluationModels?.find(m => m.id === modelId)?.label || modelId,
-      evaluatedAt: evaluationMeta?.[modelId]?.evaluatedAt || null,
-    }))
-    .sort((a, b) => {
-      const aTime = a.evaluatedAt ? new Date(a.evaluatedAt).getTime() : 0;
-      const bTime = b.evaluatedAt ? new Date(b.evaluatedAt).getTime() : 0;
-      return bTime - aTime;
-    });
-
-  const renderAllEvaluations = () => {
-    if (!allEvaluationEntries.length) return null;
-    return (
-      <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #e0e0e0' }}>
-        <button
-          style={{ ...styles.evalBtn, padding: '4px 10px', fontSize: 10, marginBottom: 8, background: '#f6f7fb' }}
-          onClick={() => setShowAllEvaluations(v => !v)}
-        >
-          {showAllEvaluations ? 'Hide all evaluations' : `Show all evaluations (${allEvaluationEntries.length})`}
-        </button>
-        {showAllEvaluations && (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {allEvaluationEntries.map(({ modelId, result, modelLabel, evaluatedAt }) => {
-              const isSelected = modelId === evaluationModel;
-              const score = result?.overall_average ?? null;
-              return (
-                <div
-                  key={modelId}
-                  style={{
-                    border: isSelected ? '1px solid #5878a0' : '1px solid #e1e4eb',
-                    borderRadius: 8,
-                    padding: '8px 10px',
-                    background: isSelected ? '#f4f8ff' : '#fff',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#333' }}>{modelLabel}</div>
-                      <div style={{ fontSize: 10, color: '#888' }}>{evaluatedAt ? new Date(evaluatedAt).toLocaleString() : 'No timestamp'}</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {score != null ? (
-                        <span style={{ ...styles.evalOverall, color: scoreTextColor(score), fontSize: 14 }}>{score}/5</span>
-                      ) : (
-                        <span style={{ fontSize: 11, color: '#888' }}>No score</span>
-                      )}
-                      <button
-                        style={{ fontSize: 10, padding: '4px 8px', borderRadius: 4, border: '1px solid #d0d8e8', background: '#fff', cursor: 'pointer' }}
-                        onClick={() => onSelectEvaluationModel?.(modelId)}
-                      >
-                        View
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   if (!evaluation) {
     if (!canEvaluate) return null;
     return (
@@ -1202,7 +1245,6 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
         {selector}
         <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px' }}>No evaluation exists for {selectedModelLabel}.</p>
         <button style={styles.evalBtn} onClick={() => onEvaluate(evaluationModel)}>Generate evaluation</button>
-        {renderAllEvaluations()}
       </div>
     );
   }
@@ -1214,7 +1256,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
     <div style={styles.evalSection}>
       {selector}
       <div style={styles.evalHeader}>
-        <span style={styles.evalTitle}>Evaluation</span>
+        <span style={styles.evalTitle}>Critic feedback</span>
         <span style={{ ...styles.evalOverall, color: scoreTextColor(evaluation.overall_average) }}>
           {evaluation.overall_average}/5
         </span>
@@ -1266,7 +1308,6 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
         <p style={styles.evalNotes}>{evaluation.notes}</p>
       )}
 
-      {renderAllEvaluations()}
     </div>
   );
 }
@@ -1342,10 +1383,14 @@ function humanTitle(stem) {
   return stem.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function normalizeExperimentName(experimentName) {
+  return (experimentName || '').replace(/_[a-f0-9]{8,}$/i, '');
+}
+
 // ── Results Tab ───────────────────────────────────────────────────────────────
 // Two sub-tabs: API (manually generated) | Agent (prompt_experiments/ runs)
 // Within each: experiment → model → chapters → figure cards
-function ResultsTab({ onOpen, criticModel }) {
+function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
   const [activeTab, setActiveTab] = React.useState('api');
   const [apiRecords, setApiRecords] = React.useState([]);
   const [expTree, setExpTree] = React.useState([]);
@@ -1368,15 +1413,14 @@ function ResultsTab({ onOpen, criticModel }) {
   const [loadingAgent, setLoadingAgent] = React.useState(false);
   const [loadedApi, setLoadedApi] = React.useState(false);
   const [loadedAgent, setLoadedAgent] = React.useState(false);
-
-  const stripHash = React.useCallback((name) => (name || '').replace(/_[0-9a-f]{6,8}$/i, ''), []);
+  const [selectedCriticVersion, setSelectedCriticVersion] = React.useState('');
+  const criticVersionInitializedRef = React.useRef(false);
 
   const loadApiRecords = React.useCallback(async () => {
     if (loadedApi) return;
     setLoadingApi(true);
     try {
       const api = await apiFetch('/api/history-index').then(r => r.json());
-      api.forEach(r => { r.experiment = stripHash(r.experiment || 'base_scene_robust'); });
       setApiRecords(api);
       setLoadedApi(true);
     } catch (err) {
@@ -1384,34 +1428,46 @@ function ResultsTab({ onOpen, criticModel }) {
     } finally {
       setLoadingApi(false);
     }
-  }, [loadedApi, stripHash]);
+  }, [loadedApi]);
 
   const loadAgentTree = React.useCallback(async () => {
     if (loadedAgent) return;
     setLoadingAgent(true);
     try {
       const exp = await apiFetch('/api/experiments').then(r => r.json());
-      // Normalize: strip trailing hash so prompt iterations merge into one experiment
-      const merged = {};
-      for (const e of exp) {
-        const base = stripHash(e.experiment);
-        if (!merged[base]) merged[base] = { experiment: base, models: {} };
-        for (const m of e.models) {
-          if (!merged[base].models[m.model]) merged[base].models[m.model] = [];
-          merged[base].models[m.model].push(...m.figures);
+      const merged = new Map();
+      for (const entry of exp) {
+        const experimentName = normalizeExperimentName(entry.experiment);
+        if (!merged.has(experimentName)) {
+          merged.set(experimentName, {
+            experiment: experimentName,
+            prompt: entry.prompt,
+            models: [],
+          });
+        }
+        const target = merged.get(experimentName);
+        if (!target.prompt && entry.prompt) target.prompt = entry.prompt;
+        for (const modelEntry of entry.models || []) {
+          let targetModel = target.models.find(model => model.model === modelEntry.model);
+          if (!targetModel) {
+            targetModel = { model: modelEntry.model, figures: [] };
+            target.models.push(targetModel);
+          }
+          for (const figure of modelEntry.figures || []) {
+            if (!targetModel.figures.some(existing => existing.name === figure.name && existing.htmlPath === figure.htmlPath)) {
+              targetModel.figures.push(figure);
+            }
+          }
         }
       }
-      setExpTree(Object.values(merged).map(e => ({
-        experiment: e.experiment,
-        models: Object.entries(e.models).map(([model, figs]) => ({ model, figures: figs })),
-      })));
+      setExpTree(Array.from(merged.values()));
       setLoadedAgent(true);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoadingAgent(false);
     }
-  }, [loadedAgent, stripHash]);
+  }, [loadedAgent]);
 
   // Fetch the real system prompt for the API tab display
   React.useEffect(() => {
@@ -1448,11 +1504,50 @@ function ResultsTab({ onOpen, criticModel }) {
     setLoading(activeTab === 'api' ? loadingApi : loadingAgent);
   }, [activeTab, loadingApi, loadingAgent]);
 
+  const criticVersionOptions = React.useMemo(() => {
+    const allRecords = [
+      ...apiRecords,
+      ...expTree.flatMap(exp => exp.models.flatMap(model => model.figures)),
+    ];
+    const options = collectCriticVersionSummaries(allRecords);
+    if (currentCriticVersion && !options.some(option => option.versionId === currentCriticVersion)) {
+      options.unshift({
+        versionId: currentCriticVersion,
+        label: currentCriticVersion,
+        count: 0,
+        latestAt: 0,
+        models: [],
+      });
+    }
+    return options;
+  }, [apiRecords, expTree, currentCriticVersion]);
+
+  React.useEffect(() => {
+    if (currentCriticVersion && !criticVersionInitializedRef.current) {
+      setSelectedCriticVersion(prev => (!prev ? currentCriticVersion : prev));
+      criticVersionInitializedRef.current = true;
+    }
+  }, [currentCriticVersion, criticVersionOptions, selectedCriticVersion]);
+
+  const selectedVersionLabel = React.useMemo(() => {
+    return selectedCriticVersion || currentCriticVersion || '';
+  }, [currentCriticVersion, selectedCriticVersion]);
+
+  const selectedRecordView = React.useCallback(
+    (record) => getVersionedEvaluationState(record, selectedCriticVersion),
+    [selectedCriticVersion]
+  );
+
+  const hasSelectedEvaluation = React.useCallback(
+    (record) => Object.keys(selectedRecordView(record)?.evaluationResults || {}).length > 0,
+    [selectedRecordView]
+  );
+
   // Build API tree: { experiment → { model → records[] } }
   const apiTree = React.useMemo(() => {
     const tree = {};
     for (const r of apiRecords) {
-      const exp = r.experiment || 'base_scene_robust';
+      const exp = normalizeExperimentName(r.experiment || 'base_scene_robust');
       const model = r.model || 'gpt-4o';
       if (!tree[exp]) tree[exp] = {};
       if (!tree[exp][model]) tree[exp][model] = [];
@@ -1471,13 +1566,15 @@ function ResultsTab({ onOpen, criticModel }) {
         for (const [expName, expModels] of Object.entries(apiTree)) {
           for (const [modelName, recs] of Object.entries(expModels)) {
             for (const r of recs) {
+              const view = selectedRecordView(r);
               all.push({
                 key: `api/${r.id}`, type: 'api', id: r.id,
                 figure: r.filename ? r.filename.replace(/\.[^.]+$/, '') : r.id,
                 chapter: r.chapter || 'other',
                 base64thumb: r.base64thumb, mediaType: r.mediaType || 'image/png',
                 timestamp: r.timestamp,
-                evaluationResults: r.evaluationResults || {}, evaluationMeta: r.evaluationMeta || {},
+                evaluationResults: view.evaluationResults || {}, evaluationMeta: view.evaluationMeta || {},
+                evaluationVersions: r.evaluationVersions || {},
                 experiment: expName, model: modelName,
                 imagePath: null, htmlPath: null,
               });
@@ -1488,13 +1585,15 @@ function ResultsTab({ onOpen, criticModel }) {
         for (const exp of expTree) {
           for (const m of exp.models) {
             for (const fig of m.figures) {
+              const view = selectedRecordView(fig);
               all.push({
                 key: `${exp.experiment}/${m.model}/${fig.name}`, type: 'experiment',
                 figure: fig.name, chapter: fig.chapter || 'other',
                 experiment: exp.experiment, model: m.model,
                 imagePath: fig.imagePath, htmlPath: fig.htmlPath,
                 timestamp: null,
-                evaluationResults: fig.evaluationResults || {}, evaluationMeta: fig.evaluationMeta || {},
+                evaluationResults: view.evaluationResults || {}, evaluationMeta: view.evaluationMeta || {},
+                evaluationVersions: fig.evaluationVersions || {},
               });
             }
           }
@@ -1507,16 +1606,20 @@ function ResultsTab({ onOpen, criticModel }) {
       const expModels = apiTree[selected.experiment] || {};
       const modelKeys = selected.model ? [selected.model] : Object.keys(expModels);
       items = modelKeys.flatMap(modelName =>
-        (expModels[modelName] || []).map(r => ({
-          key: `api/${r.id}`, type: 'api', id: r.id,
-          figure: r.filename ? r.filename.replace(/\.[^.]+$/, '') : r.id,
-          chapter: r.chapter || 'other',
-          base64thumb: r.base64thumb, mediaType: r.mediaType || 'image/png',
-          timestamp: r.timestamp,
-          evaluationResults: r.evaluationResults || {}, evaluationMeta: r.evaluationMeta || {},
-          experiment: selected.experiment, model: modelName,
-          imagePath: null, htmlPath: null,
-        }))
+        (expModels[modelName] || []).map(r => {
+          const view = selectedRecordView(r);
+          return {
+            key: `api/${r.id}`, type: 'api', id: r.id,
+            figure: r.filename ? r.filename.replace(/\.[^.]+$/, '') : r.id,
+            chapter: r.chapter || 'other',
+            base64thumb: r.base64thumb, mediaType: r.mediaType || 'image/png',
+            timestamp: r.timestamp,
+            evaluationResults: view.evaluationResults || {}, evaluationMeta: view.evaluationMeta || {},
+            evaluationVersions: r.evaluationVersions || {},
+            experiment: selected.experiment, model: modelName,
+            imagePath: null, htmlPath: null,
+          };
+        })
       );
     } else {
       const exp = expTree.find(e => e.experiment === selected.experiment);
@@ -1525,13 +1628,15 @@ function ResultsTab({ onOpen, criticModel }) {
       items = [];
       for (const m of models) {
         for (const fig of m.figures) {
+          const view = selectedRecordView(fig);
           items.push({
             key: `${exp.experiment}/${m.model}/${fig.name}`, type: 'experiment',
             figure: fig.name, chapter: fig.chapter || 'other',
             experiment: exp.experiment, model: m.model,
             imagePath: fig.imagePath, htmlPath: fig.htmlPath,
             timestamp: null,
-            evaluationResults: fig.evaluationResults || {}, evaluationMeta: fig.evaluationMeta || {},
+            evaluationResults: view.evaluationResults || {}, evaluationMeta: view.evaluationMeta || {},
+            evaluationVersions: fig.evaluationVersions || {},
           });
         }
       }
@@ -1549,7 +1654,7 @@ function ResultsTab({ onOpen, criticModel }) {
       }
     }
     return items;
-  }, [selected, sidebarGroupBy, activeTab, apiTree, expTree]);
+  }, [selected, sidebarGroupBy, activeTab, apiTree, expTree, selectedRecordView]);
 
   // Group selected items by chapter
   const byChapter = React.useMemo(() => {
@@ -1588,14 +1693,15 @@ function ResultsTab({ onOpen, criticModel }) {
     try {
       let data;
       const evalModelId = criticModel || pickEvaluationModel(item, null) || 'gpt-4o';
+      const versionId = currentCriticVersion;
       if (item.type === 'api') {
         const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: criticModel || undefined }) });
         data = await res.json();
         if (!res.ok) throw new Error(data.error);
         setApiRecords(prev => prev.map(r => r.id === item.id ? {
-          ...r,
-          evaluationResults: { ...(r.evaluationResults || {}), [evalModelId]: data },
-          evaluationMeta: { ...(r.evaluationMeta || {}), [evalModelId]: { evaluatedAt: new Date().toISOString() } },
+          ...upsertVersionedEvaluation(r, evalModelId, data, {
+            criticVersion: versionId,
+          }),
         } : r));
       } else {
         const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: criticModel || undefined }) });
@@ -1607,9 +1713,9 @@ function ResultsTab({ onOpen, criticModel }) {
           models: exp.models.map(m => m.model !== modelName ? m : {
             ...m,
             figures: m.figures.map(f => f.name !== figName ? f : {
-              ...f,
-              evaluationResults: { ...(f.evaluationResults || {}), [evalModelId]: data },
-              evaluationMeta: { ...(f.evaluationMeta || {}), [evalModelId]: { evaluatedAt: new Date().toISOString() } },
+              ...upsertVersionedEvaluation(f, evalModelId, data, {
+                criticVersion: versionId,
+              }),
             })
           })
         }));
@@ -1624,6 +1730,7 @@ function ResultsTab({ onOpen, criticModel }) {
     const pending = items.filter(item => !(item.evaluationResults || {})[evalModelId]);
     if (!pending.length) return;
     setEvaluatingAll(chapter);
+    const versionId = currentCriticVersion;
     for (const item of pending) {
       setEvaluatingKey(item.key);
       try {
@@ -1633,9 +1740,9 @@ function ResultsTab({ onOpen, criticModel }) {
           data = await res.json();
           if (!res.ok) throw new Error(data.error);
           setApiRecords(prev => prev.map(r => r.id === item.id ? {
-            ...r,
-            evaluationResults: { ...(r.evaluationResults || {}), [evalModelId]: data },
-            evaluationMeta: { ...(r.evaluationMeta || {}), [evalModelId]: { evaluatedAt: new Date().toISOString() } },
+            ...upsertVersionedEvaluation(r, evalModelId, data, {
+              criticVersion: versionId,
+            }),
           } : r));
         } else {
           const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: criticModel || undefined }) });
@@ -1647,9 +1754,9 @@ function ResultsTab({ onOpen, criticModel }) {
             models: exp.models.map(m => m.model !== modelName ? m : {
               ...m,
               figures: m.figures.map(f => f.name !== figName ? f : {
-                ...f,
-                evaluationResults: { ...(f.evaluationResults || {}), [evalModelId]: data },
-                evaluationMeta: { ...(f.evaluationMeta || {}), [evalModelId]: { evaluatedAt: new Date().toISOString() } },
+                ...upsertVersionedEvaluation(f, evalModelId, data, {
+                  criticVersion: versionId,
+                }),
               })
             })
           }));
@@ -1738,16 +1845,14 @@ function ResultsTab({ onOpen, criticModel }) {
     }
     if (selected?.experiment) {
       setSelected({ experiment: selected.experiment, model: modelName });
+    } else if (activeTab === 'api') {
+      for (const [exp, models] of Object.entries(apiTree)) {
+        if (models[modelName]) { setSelected({ experiment: exp, model: modelName }); return; }
+      }
     } else {
-      if (activeTab === 'api') {
-        for (const [exp, models] of Object.entries(apiTree)) {
-          if (models[modelName]) { setSelected({ experiment: exp, model: modelName }); return; }
-        }
-      } else {
-        for (const exp of expTree) {
-          if (exp.models.find(m => m.model === modelName)) {
-            setSelected({ experiment: exp.experiment, model: modelName }); return;
-          }
+      for (const exp of expTree) {
+        if (exp.models.find(m => m.model === modelName)) {
+          setSelected({ experiment: exp.experiment, model: modelName }); return;
         }
       }
     }
@@ -1760,6 +1865,32 @@ function ResultsTab({ onOpen, criticModel }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
+      <div style={styles.criticVersionBar}>
+        <span style={styles.criticVersionBarLabel}>Critic version</span>
+        <div style={styles.criticVersionRail}>
+          {criticVersionOptions.length === 0 ? (
+            <span style={styles.criticVersionEmpty}>No critic versions yet</span>
+          ) : criticVersionOptions.map(option => {
+            const isActive = option.versionId === selectedCriticVersion;
+            return (
+              <button
+                key={option.versionId}
+                style={{
+                  ...styles.criticVersionPill,
+                  ...(isActive ? styles.criticVersionPillActive : {}),
+                }}
+                onClick={() => setSelectedCriticVersion(option.versionId)}
+                title={option.versionId}
+              >
+                <span>{option.label || option.versionId}</span>
+                <span style={styles.criticVersionCount}>{option.count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <span style={styles.criticVersionMeta}>{selectedVersionLabel}</span>
+      </div>
+
       {/* API / Agent sub-tabs */}
       <div style={styles.subTabBar}>
         {[['api', 'Agent'], ['agent', 'Copilot']].map(([key, label]) => (
@@ -1769,10 +1900,10 @@ function ResultsTab({ onOpen, criticModel }) {
           >
             {label}
             {key === 'api' && apiRecords.length > 0 &&
-              <span style={styles.subTabCount}>{apiRecords.filter(r => hasAnyEvaluation(r)).length}/{apiRecords.length}</span>}
+              <span style={styles.subTabCount}>{apiRecords.filter(r => hasSelectedEvaluation(r)).length}/{apiRecords.length}</span>}
             {key === 'agent' && expTree.length > 0 && (() => {
               const total = expTree.reduce((s, e) => s + e.models.reduce((ms, m) => ms + m.figures.length, 0), 0);
-              const evaled = expTree.reduce((s, e) => s + e.models.reduce((ms, m) => ms + m.figures.filter(f => hasAnyEvaluation(f)).length, 0), 0);
+              const evaled = expTree.reduce((s, e) => s + e.models.reduce((ms, m) => ms + m.figures.filter(f => hasSelectedEvaluation(f)).length, 0), 0);
               return <span style={styles.subTabCount}>{evaled}/{total}</span>;
             })()}
           </button>
@@ -1859,7 +1990,7 @@ function ResultsTab({ onOpen, criticModel }) {
               for (const item of selectedItems) {
                 const ch = item.chapter || 'other';
                 chapterCounts[ch] = (chapterCounts[ch] || 0) + 1;
-                if (hasAnyEvaluation(item)) evalCounts[ch] = (evalCounts[ch] || 0) + 1;
+                if (Object.keys(item.evaluationResults || {}).length > 0) evalCounts[ch] = (evalCounts[ch] || 0) + 1;
               }
               return Object.entries(chapterCounts).sort(([a], [b]) => a.localeCompare(b)).map(([ch, count]) => {
                 const isActive = filterChapter === ch;
@@ -1887,7 +2018,7 @@ function ResultsTab({ onOpen, criticModel }) {
                 ? Object.entries(apiTree).map(([expName, models]) => ({
                   group: expName,
                   items: Object.entries(models).map(([modelName, recs]) => ({
-                    modelName, evalCount: recs.filter(r => hasAnyEvaluation(r)).length, total: recs.length,
+                    modelName, evalCount: recs.filter(r => hasSelectedEvaluation(r)).length, total: recs.length,
                     nodeKey: `${expName}::${modelName}`,
                     onSelect: () => setSelected({ experiment: expName, model: modelName }),
                   })),
@@ -1895,7 +2026,7 @@ function ResultsTab({ onOpen, criticModel }) {
                 : expTree.map(exp => ({
                   group: exp.experiment,
                   items: exp.models.map(m => ({
-                    modelName: m.model, evalCount: m.figures.filter(f => hasAnyEvaluation(f)).length, total: m.figures.length,
+                    modelName: m.model, evalCount: m.figures.filter(f => hasSelectedEvaluation(f)).length, total: m.figures.length,
                     nodeKey: `${exp.experiment}::${m.model}`,
                     onSelect: () => setSelected({ experiment: exp.experiment, model: m.model }),
                   })),
@@ -2184,14 +2315,15 @@ function modelFamily(name) {
 const FAMILY_COLOR = { Claude: '#ede7f6', Gemini: '#e3f2fd', GPT: '#e8f5e9', Other: '#f0f0f0' };
 const FAMILY_TEXT = { Claude: '#5e35b1', Gemini: '#1565c0', GPT: '#2e7d32', Other: '#555' };
 
-function computeStats(records, groupKey) {
+function computeStats(records, groupKey, criticVersion) {
   const byGroup = {};
   for (const r of records) {
     const key = r[groupKey];
     if (!byGroup[key]) byGroup[key] = { evals: [], total: 0, key };
     byGroup[key].total++;
-    const modelId = pickEvaluationModel(r, null);
-    const evaluation = getRecordEvaluation(r, modelId);
+    const versionedRecord = getVersionedEvaluationState(r, criticVersion);
+    const modelId = pickEvaluationModel(versionedRecord, null);
+    const evaluation = getRecordEvaluation(versionedRecord, modelId);
     if (evaluation) byGroup[key].evals.push(evaluation);
   }
   return Object.values(byGroup).map(({ key, evals, total }) => {
@@ -2305,9 +2437,9 @@ function DashTable({ stats, groupKey }) {
   );
 }
 
-function SourceSection({ title, color, records, groupKey }) {
-  const stats = React.useMemo(() => computeStats(records, groupKey), [records, groupKey]);
-  const n = records.filter(r => hasAnyEvaluation(r)).length;
+function SourceSection({ title, color, records, groupKey, criticVersion }) {
+  const stats = React.useMemo(() => computeStats(records, groupKey, criticVersion), [records, groupKey, criticVersion]);
+  const n = records.filter(r => hasAnyEvaluation(getVersionedEvaluationState(r, criticVersion))).length;
   if (!stats.length) return null;
   return (
     <div style={{ marginBottom: 24 }}>
@@ -2328,11 +2460,13 @@ function SourceSection({ title, color, records, groupKey }) {
   );
 }
 
-function DashboardTab() {
+function DashboardTab({ currentCriticVersion }) {
   const [apiRecords, setApiRecords] = React.useState([]);
   const [expTree, setExpTree] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [view, setView] = React.useState('models');
+  const [selectedCriticVersion, setSelectedCriticVersion] = React.useState('');
+  const criticVersionInitializedRef = React.useRef(false);
 
   React.useEffect(() => {
     Promise.all([
@@ -2349,6 +2483,7 @@ function DashboardTab() {
       model: r.model || 'gpt-4o',
       evaluationResults: r.evaluationResults || {},
       evaluationMeta: r.evaluationMeta || {},
+      evaluationVersions: r.evaluationVersions || {},
     }));
     const copilot = [];
     for (const exp of expTree)
@@ -2360,20 +2495,106 @@ function DashboardTab() {
             model: m.model,
             evaluationResults: fig.evaluationResults || {},
             evaluationMeta: fig.evaluationMeta || {},
+            evaluationVersions: fig.evaluationVersions || {},
           });
     return { agentRecords: agent, copilotRecords: copilot };
   }, [apiRecords, expTree]);
 
-  const totalEval = [...agentRecords, ...copilotRecords].filter(r => hasAnyEvaluation(r)).length;
+  const criticVersionOptions = React.useMemo(() => {
+    const allRecords = [
+      ...apiRecords,
+      ...expTree.flatMap(exp => exp.models.flatMap(model => model.figures)),
+    ];
+    const options = collectCriticVersionSummaries(allRecords);
+    if (currentCriticVersion && !options.some(option => option.versionId === currentCriticVersion)) {
+      options.unshift({
+        versionId: currentCriticVersion,
+        label: currentCriticVersion,
+        count: 0,
+        latestAt: 0,
+        models: [],
+      });
+    }
+    return options;
+  }, [apiRecords, expTree, currentCriticVersion]);
+
+  React.useEffect(() => {
+    if (currentCriticVersion && !criticVersionInitializedRef.current) {
+      setSelectedCriticVersion(prev => (!prev ? currentCriticVersion : prev));
+      criticVersionInitializedRef.current = true;
+    }
+  }, [currentCriticVersion, criticVersionOptions, selectedCriticVersion]);
+
+  const selectedVersionLabel = React.useMemo(() => {
+    return selectedCriticVersion || currentCriticVersion || '';
+  }, [currentCriticVersion, selectedCriticVersion]);
+
+  const totalEval = [...agentRecords, ...copilotRecords]
+    .filter(r => hasAnyEvaluation(getVersionedEvaluationState(r, selectedCriticVersion))).length;
 
   if (loading) return <div style={styles.empty}>Loading…</div>;
   if (totalEval === 0)
-    return <div style={styles.empty}>No evaluated figures yet — run evaluations in the Results tab first.</div>;
+    return (
+      <div>
+        <div style={styles.criticVersionBar}>
+          <span style={styles.criticVersionBarLabel}>Critic version</span>
+          <div style={styles.criticVersionRail}>
+            {criticVersionOptions.length === 0 ? (
+              <span style={styles.criticVersionEmpty}>No critic versions yet</span>
+            ) : criticVersionOptions.map(option => {
+              const isActive = option.versionId === selectedCriticVersion;
+              return (
+                <button
+                  key={option.versionId}
+                  style={{
+                    ...styles.criticVersionPill,
+                    ...(isActive ? styles.criticVersionPillActive : {}),
+                  }}
+                  onClick={() => setSelectedCriticVersion(option.versionId)}
+                  title={option.versionId}
+                >
+                  <span>{option.label || option.versionId}</span>
+                  <span style={styles.criticVersionCount}>{option.count}</span>
+                </button>
+              );
+            })}
+          </div>
+          <span style={styles.criticVersionMeta}>{selectedVersionLabel}</span>
+        </div>
+        <div style={styles.empty}>No evaluated figures for this critic version yet.</div>
+      </div>
+    );
 
   const groupKey = view === 'models' ? 'model' : 'experiment';
 
   return (
     <div>
+      <div style={{ ...styles.criticVersionBar, marginBottom: 12, borderRadius: 8 }}>
+        <span style={styles.criticVersionBarLabel}>Critic version</span>
+        <div style={styles.criticVersionRail}>
+          {criticVersionOptions.length === 0 ? (
+            <span style={styles.criticVersionEmpty}>No critic versions yet</span>
+          ) : criticVersionOptions.map(option => {
+            const isActive = option.versionId === selectedCriticVersion;
+            return (
+              <button
+                key={option.versionId}
+                style={{
+                  ...styles.criticVersionPill,
+                  ...(isActive ? styles.criticVersionPillActive : {}),
+                }}
+                onClick={() => setSelectedCriticVersion(option.versionId)}
+                title={option.versionId}
+              >
+                <span>{option.label || option.versionId}</span>
+                <span style={styles.criticVersionCount}>{option.count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <span style={styles.criticVersionMeta}>{selectedVersionLabel}</span>
+      </div>
+
       {/* Tab bar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18, borderBottom: '1px solid #e8e8e8' }}>
         {[['models', 'Compare Models'], ['experiments', 'Compare Experiments']].map(([id, label]) => (
@@ -2390,8 +2611,8 @@ function DashboardTab() {
         </span>
       </div>
 
-      <SourceSection title="Agent" color="agent" records={agentRecords} groupKey={groupKey} />
-      <SourceSection title="Copilot" color="copilot" records={copilotRecords} groupKey={groupKey} />
+      <SourceSection title="Agent" color="agent" records={agentRecords} groupKey={groupKey} criticVersion={selectedCriticVersion} />
+      <SourceSection title="Copilot" color="copilot" records={copilotRecords} groupKey={groupKey} criticVersion={selectedCriticVersion} />
     </div>
   );
 }
@@ -2641,13 +2862,20 @@ const styles = {
   evalBtn: { padding: '6px 0', background: '#fff', border: '1px solid #ddd', color: '#333', borderRadius: 6, cursor: 'pointer', fontSize: 11 },
 
   // Results tab
+  criticVersionBar: { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: '#eef2f7', borderBottom: '1px solid #d9e0ea', overflowX: 'auto' },
+  criticVersionBarLabel: { fontSize: 10, fontWeight: 700, color: '#5a6c86', textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 },
+  criticVersionRail: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', overflowX: 'auto', minWidth: 0, paddingBottom: 2 },
+  criticVersionPill: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', border: '1px solid #ccd5e3', borderRadius: 999, background: '#fff', color: '#445', cursor: 'pointer', fontSize: 11, whiteSpace: 'nowrap' },
+  criticVersionPillActive: { background: '#1f2937', borderColor: '#1f2937', color: '#fff' },
+  criticVersionCount: { fontSize: 10, padding: '1px 5px', borderRadius: 999, background: 'rgba(0,0,0,0.06)' },
+  criticVersionMeta: { marginLeft: 'auto', fontSize: 11, color: '#7c8aa0', whiteSpace: 'nowrap', flexShrink: 0 },
+  criticVersionEmpty: { fontSize: 11, color: '#99a3b2' },
   resultFilterBar: { display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 16, borderBottom: '1px solid #e0e0e0', marginBottom: 20 },
   resultFilterGroup: { display: 'flex', alignItems: 'center', gap: 6 },
   resultFilterLabel: { fontSize: 12, color: '#666' },
   resultFilterSelect: { fontSize: 12, border: '1px solid #ddd', borderRadius: 5, padding: '4px 8px', background: '#fff', color: '#333', cursor: 'pointer' },
   resultChapterHeader: { fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid #f0f0f0' },
 
-  // Experiments tab (legacy)
   expWrap: { display: 'flex', height: 'calc(100vh - 120px)', gap: 0, border: '1px solid #e0e0e0', borderRadius: 10, overflow: 'hidden' },
   expTree: { width: 200, minWidth: 200, background: '#fafafa', borderRight: '1px solid #e0e0e0', overflowY: 'auto', padding: '8px 0' },
   expTreeGroup: { fontSize: 10, fontWeight: 700, color: '#222', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '10px 14px 4px' },

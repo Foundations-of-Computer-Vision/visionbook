@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const yaml = require('js-yaml');
+const { materializeEvaluationViews } = require('./result_schema');
 
 const QMD_DIR = path.join(__dirname, '..', '..');
 const RESULTS_DIR = path.join(__dirname, 'results');
@@ -122,7 +123,7 @@ function buildFigureIndex() {
     for (const file of fs.readdirSync(RESULTS_DIR)) {
       if (!file.endsWith('.json')) continue;
       try {
-        const record = JSON.parse(fs.readFileSync(path.join(RESULTS_DIR, file), 'utf-8'));
+        const record = materializeEvaluationViews(JSON.parse(fs.readFileSync(path.join(RESULTS_DIR, file), 'utf-8')));
         const stem = path.basename(record.filename || '', path.extname(record.filename || ''));
         if (!stem || !record.html) continue;
         pushIndexEntry(index, stem, {
@@ -157,7 +158,7 @@ function buildFigureIndex() {
             const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
             let evaluation = {};
             if (fs.existsSync(evalPath)) {
-              try { evaluation = JSON.parse(fs.readFileSync(evalPath, 'utf-8')); } catch (_) { }
+              try { evaluation = materializeEvaluationViews(JSON.parse(fs.readFileSync(evalPath, 'utf-8'))); } catch (_) { }
             }
             pushIndexEntry(index, stem, {
               sourceType: 'copilot',
@@ -293,7 +294,7 @@ async function analyzeChapterFigure(qmdPath, figStem, { resultId, question, mode
   // Read thumbnail from the stored result JSON
   let base64thumb = null;
   try {
-    const record = JSON.parse(fs.readFileSync(entry._file, 'utf-8'));
+    const record = materializeEvaluationViews(JSON.parse(fs.readFileSync(entry._file, 'utf-8')));
     base64thumb = record.base64thumb || null;
   } catch (_) { /* non-fatal — analysis still runs without image */ }
 

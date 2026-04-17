@@ -46,6 +46,7 @@ const {
 const { upsertEvaluation } = require('./result_schema');
 const { planForFigure } = require('./planner');
 const { inferChapterFromFilename } = require('./chapter-discovery');
+const { CRITIC_EXPERIMENT_BASE } = require('./critic');
 
 // ── Parse CLI args ─────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -62,7 +63,8 @@ const MAX_ROUNDS = parseInt(flag('--rounds') || '1', 10);
 const THRESHOLD = parseFloat(flag('--threshold') || '4.0');
 const GEN_MODEL = flag('--model') || 'gpt-5.4';
 const EVAL_MODEL = flag('--eval-model') || 'gpt-5.4';
-const EXPERIMENT_OVERRIDE = flag('--experiment');  // manual override, else auto-derived from prompt hash
+const EXPERIMENT_OVERRIDE = flag('--experiment');  // manual override, else derived from the configured base name
+const EXPERIMENT_BASE = process.env.EXPERIMENT_BASE || 'base_scene_robust';
 const DO_SCREENSHOT = !hasFlag('--no-screenshot');
 const SKIP_PLAN = hasFlag('--no-plan');
 const CHAPTER_HINT = flag('--chapter');
@@ -89,9 +91,8 @@ try {
 }
 
 const {
-  promptHash: PROMPT_HASH,
   experiment: DERIVED_EXPERIMENT,
-} = buildExperimentContext(BASE_SCAFFOLD, 'base_scene_robust');
+} = buildExperimentContext(BASE_SCAFFOLD, EXPERIMENT_BASE);
 const EXPERIMENT = EXPERIMENT_OVERRIDE || DERIVED_EXPERIMENT;
 
 // ── Unique id ──────────────────────────────────────────────────────────────────
@@ -137,6 +138,7 @@ async function processImage(imagePath) {
 
   let html = null;
   let evaluation = null;
+  let evaluationResult = null;
   let round = 0;
 
   // Build plan-injection text for the generator
@@ -184,7 +186,7 @@ async function processImage(imagePath) {
     // ── EVALUATOR ─────────────────────────────────────────────────────────────
     console.log(`  [round ${round}/${MAX_ROUNDS}] evaluating...`);
     try {
-      const result = await evaluateRecord({
+      evaluationResult = await evaluateRecord({
         record: {
           html,
           source_base64: imageBase64,
@@ -195,10 +197,11 @@ async function processImage(imagePath) {
         evalModel: EVAL_MODEL,
         defaultEvalModel: EVAL_MODEL,
       });
-      evaluation = result.evaluation;
+      evaluation = evaluationResult.evaluation;
     } catch (err) {
       console.warn(`  ✗ Evaluator failed (round ${round}): ${err.message}. Skipping eval.`);
       evaluation = null;
+      evaluationResult = null;
       break;
     }
 
@@ -234,7 +237,6 @@ async function processImage(imagePath) {
     source: 'agent',
     model: GEN_MODEL,
     experiment: EXPERIMENT,
-    promptHash: PROMPT_HASH,
     plan: plan || null,
     previewBase64: thumb ? thumb.data : null,
     previewMediaType: thumb ? thumb.mediaType : null,
@@ -246,7 +248,10 @@ async function processImage(imagePath) {
   });
 
   if (evaluation) {
-    record = upsertEvaluation(record, EVAL_MODEL, evaluation, timestamp);
+    record = upsertEvaluation(record, EVAL_MODEL, evaluation, timestamp, {
+      criticVersion: evaluationResult?.criticVersion || CRITIC_EXPERIMENT_BASE,
+      criticModel: EVAL_MODEL,
+    });
   }
 
   const outPath = path.join(RESULTS_DIR, `${figureId}.json`);

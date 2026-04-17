@@ -1,32 +1,103 @@
-const LEGACY_EVAL_KEYS = ['evaluation', 'evaluationModel', 'evaluatedAt', 'eval_model'];
-
 function isPlainObject(value) {
     return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function resolveCriticVersion(record, extraMeta) {
+    if (typeof extraMeta?.criticVersion === 'string' && extraMeta.criticVersion.trim()) {
+        return extraMeta.criticVersion.trim();
+    }
+
+    return 'legacy_unknown';
 }
 
 function normalizeEvaluationMaps(record) {
     const next = isPlainObject(record) ? { ...record } : {};
     next.evaluationResults = isPlainObject(next.evaluationResults) ? { ...next.evaluationResults } : {};
     next.evaluationMeta = isPlainObject(next.evaluationMeta) ? { ...next.evaluationMeta } : {};
+    next.evaluationVersions = isPlainObject(next.evaluationVersions) ? { ...next.evaluationVersions } : {};
     return next;
 }
 
-function upsertEvaluation(record, evalModel, evaluation, evaluatedAt = new Date().toISOString()) {
+function toMillis(iso) {
+    if (!iso) return 0;
+    const t = new Date(iso).getTime();
+    return Number.isFinite(t) ? t : 0;
+}
+
+function materializeEvaluationViews(record) {
+    const normalized = normalizeEvaluationMaps(record);
+
+    const mergedResults = {};
+    const mergedMeta = {};
+
+    // Versioned data is canonical when present. Merge by most recent evaluatedAt per model.
+    for (const [versionKey, bucket] of Object.entries(normalized.evaluationVersions)) {
+        if (!isPlainObject(bucket)) continue;
+        const bucketResults = isPlainObject(bucket.evaluationResults) ? bucket.evaluationResults : {};
+        const bucketMeta = isPlainObject(bucket.evaluationMeta) ? bucket.evaluationMeta : {};
+
+        for (const [modelId, evaluation] of Object.entries(bucketResults)) {
+            if (!isPlainObject(evaluation)) continue;
+            const candidateMeta = isPlainObject(bucketMeta[modelId]) ? { ...bucketMeta[modelId] } : {};
+            if (!candidateMeta.criticVersion) {
+                candidateMeta.criticVersion = bucket.criticVersion || versionKey || 'legacy_unknown';
+            }
+            const currentMeta = mergedMeta[modelId] || {};
+            if (!mergedResults[modelId] || toMillis(candidateMeta.evaluatedAt) >= toMillis(currentMeta.evaluatedAt)) {
+                mergedResults[modelId] = evaluation;
+                mergedMeta[modelId] = candidateMeta;
+            }
+        }
+    }
+
+    normalized.evaluationResults = mergedResults;
+    normalized.evaluationMeta = mergedMeta;
+    return normalized;
+}
+
+function compactEvaluationStorage(record) {
+    const normalized = materializeEvaluationViews(record);
+    const compacted = { ...normalized };
+    delete compacted.evaluationResults;
+    delete compacted.evaluationMeta;
+    return compacted;
+}
+
+function upsertEvaluation(record, evalModel, evaluation, evaluatedAt = new Date().toISOString(), extraMeta = {}) {
     if (!evalModel) throw new Error('evalModel is required.');
     if (!evaluation || typeof evaluation !== 'object') throw new Error('evaluation is required.');
 
-    const normalized = normalizeEvaluationMaps(record);
+    const normalized = materializeEvaluationViews(record);
+    const criticVersion = resolveCriticVersion(normalized, extraMeta);
+    const metaEntry = {
+        evaluatedAt,
+        criticVersion,
+    };
 
-    // Enforce the model-keyed schema so server/CLI writes stay consistent.
-    for (const key of LEGACY_EVAL_KEYS) delete normalized[key];
+    if (extraMeta.criticModel) metaEntry.criticModel = extraMeta.criticModel;
+    if (extraMeta.criticPromptLabel) metaEntry.criticPromptLabel = extraMeta.criticPromptLabel;
 
     normalized.evaluationResults[evalModel] = evaluation;
-    normalized.evaluationMeta[evalModel] = { evaluatedAt };
+    normalized.evaluationMeta[evalModel] = metaEntry;
+
+    const versionBucket = isPlainObject(normalized.evaluationVersions[criticVersion])
+        ? { ...normalized.evaluationVersions[criticVersion] }
+        : { criticVersion, evaluationResults: {}, evaluationMeta: {} };
+    versionBucket.criticVersion = criticVersion;
+    versionBucket.evaluationResults = isPlainObject(versionBucket.evaluationResults) ? { ...versionBucket.evaluationResults } : {};
+    versionBucket.evaluationMeta = isPlainObject(versionBucket.evaluationMeta) ? { ...versionBucket.evaluationMeta } : {};
+    if (extraMeta.criticModel) versionBucket.criticModel = extraMeta.criticModel;
+    if (extraMeta.criticPromptLabel) versionBucket.criticPromptLabel = extraMeta.criticPromptLabel;
+    versionBucket.evaluationResults[evalModel] = evaluation;
+    versionBucket.evaluationMeta[evalModel] = metaEntry;
+    normalized.evaluationVersions[criticVersion] = versionBucket;
 
     return normalized;
 }
 
 module.exports = {
     normalizeEvaluationMaps,
+    materializeEvaluationViews,
+    compactEvaluationStorage,
     upsertEvaluation,
 };

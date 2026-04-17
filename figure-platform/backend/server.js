@@ -15,11 +15,12 @@ const {
 const { planForFigure, planChapter } = require('./planner');
 const { listChapters, list3dCandidates } = require('./chapter-discovery');
 const { getAvailableModels } = require('./models');
-const { upsertEvaluation } = require('./result_schema');
+const { upsertEvaluation, materializeEvaluationViews, compactEvaluationStorage } = require('./result_schema');
+const { getCriticContext } = require('./critic');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
-const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:3000')
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:3001/')
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);
@@ -30,10 +31,9 @@ const EXPERIMENTS_DIR = path.join(__dirname, '..', '..', 'prompt_experiments');
 const FIGURES_DIR = path.join(__dirname, '..', '..', 'figures');
 
 // ── API generation config ──────────────────────────────────────────────────────
-// CURRENT_EXPERIMENT is derived automatically from a hash of the system prompt +
-// scaffold.  Whenever you edit the prompt or base_scene_robust.html, the next
-// server restart creates a brand-new experiment bucket in the dashboard.
-const EXPERIMENT_BASE = 'base_scene_robust';   // human-readable prefix
+// CURRENT_EXPERIMENT is derived from the configured experiment base.
+// Change EXPERIMENT_BASE to move future generations into a new experiment bucket.
+const EXPERIMENT_BASE = 'entire_book_v1';   // human-readable prefix
 const CURRENT_MODEL = 'gpt-5.4';             // model used by the generator
 const CURRENT_CRITIC_MODEL = 'gpt-4o';       // model used by evaluator by default
 // CURRENT_EXPERIMENT is set below, after the system prompt is built.
@@ -78,9 +78,11 @@ if (!fs.existsSync(RESULTS_DIR)) {
 
 const {
   systemPrompt: SYSTEM_PROMPT,
-  promptHash: PROMPT_HASH,
   experiment: CURRENT_EXPERIMENT,
 } = buildExperimentContext(BASE_SCAFFOLD, EXPERIMENT_BASE);
+const {
+  criticVersion: CURRENT_CRITIC_VERSION,
+} = getCriticContext();
 console.log(`Experiment: ${CURRENT_EXPERIMENT}  (model: ${CURRENT_MODEL})`);
 
 // ── Helper: generate a simple unique id ───────────────────────────────────────
@@ -95,6 +97,7 @@ app.get('/api/prompt', (req, res) => {
     experiment: CURRENT_EXPERIMENT,
     model: CURRENT_MODEL,
     criticModel: CURRENT_CRITIC_MODEL,
+    criticVersion: CURRENT_CRITIC_VERSION,
   });
 });
 
@@ -226,7 +229,6 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
     source: 'api',
     model: modelId,
     experiment: CURRENT_EXPERIMENT,
-    promptHash: PROMPT_HASH,
     plan: plan || null,
     previewBase64: shot ? shot.data : null,
     previewMediaType: shot ? shot.mediaType : null,
@@ -255,6 +257,7 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
     model: modelId,
     evaluationResults: record.evaluationResults || {},
     evaluationMeta: record.evaluationMeta || {},
+    evaluationVersions: record.evaluationVersions || {},
     plan: plan || null,
   };
 }
@@ -351,7 +354,7 @@ function inferChapter(stem) {
 
 function readHistoryRecord(fileName, { includeThumb = false } = {}) {
   const raw = fs.readFileSync(path.join(RESULTS_DIR, fileName), 'utf-8');
-  const parsed = JSON.parse(raw);
+  const parsed = materializeEvaluationViews(JSON.parse(raw));
   const stem = parsed.filename ? parsed.filename.replace(/\.[^.]+$/, '') : '';
   const chapter = inferChapter(stem);
   const model = parsed.model || 'gpt-4o';
@@ -366,6 +369,7 @@ function readHistoryRecord(fileName, { includeThumb = false } = {}) {
     experiment,
     evaluationResults: parsed.evaluationResults || {},
     evaluationMeta: parsed.evaluationMeta || {},
+    evaluationVersions: parsed.evaluationVersions || {},
     chapter,
   };
 
@@ -419,7 +423,7 @@ app.get('/api/result/:id', (req, res) => {
     return res.status(404).json({ error: 'Result not found.' });
   }
   try {
-    const record = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    const record = materializeEvaluationViews(JSON.parse(fs.readFileSync(filePath, 'utf-8')));
     return res.json(record);
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -447,10 +451,13 @@ app.post('/api/save', (req, res) => {
     source: source || 'chat',
     model: req.body.model || CURRENT_MODEL,
     experiment: req.body.experiment || CURRENT_EXPERIMENT,
+    evaluationResults: {},
+    evaluationMeta: {},
+    evaluationVersions: {},
   };
   fs.writeFileSync(
     path.join(RESULTS_DIR, `${id}.json`),
-    JSON.stringify(record, null, 2)
+    JSON.stringify(compactEvaluationStorage(record), null, 2)
   );
   return res.json({ id, timestamp });
 });
@@ -467,6 +474,7 @@ async function runEvaluation(record, filePath, requestedEvalModel) {
 
   record.evaluationResults = result.record.evaluationResults;
   record.evaluationMeta = result.record.evaluationMeta;
+  record.evaluationVersions = result.record.evaluationVersions;
 
   return result.evaluation;
 }
@@ -481,7 +489,7 @@ app.post('/api/evaluate', async (req, res) => {
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Result not found.' });
 
   let record;
-  try { record = JSON.parse(fs.readFileSync(filePath, 'utf-8')); }
+  try { record = materializeEvaluationViews(JSON.parse(fs.readFileSync(filePath, 'utf-8'))); }
   catch { return res.status(500).json({ error: 'Failed to read result file.' }); }
 
   try {
@@ -515,7 +523,7 @@ app.post('/api/evaluate-batch', async (req, res) => {
     }
 
     let record;
-    try { record = JSON.parse(fs.readFileSync(filePath, 'utf-8')); }
+    try { record = materializeEvaluationViews(JSON.parse(fs.readFileSync(filePath, 'utf-8'))); }
     catch { res.write(JSON.stringify({ id, status: 'error', error: 'Failed to read result.' }) + '\n'); continue; }
 
     try {
@@ -696,10 +704,11 @@ function loadExpEval(htmlPath) {
   const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
   if (!fs.existsSync(evalPath)) return null;
   try {
-    const parsed = JSON.parse(fs.readFileSync(evalPath, 'utf-8'));
+    const parsed = materializeEvaluationViews(JSON.parse(fs.readFileSync(evalPath, 'utf-8')));
     return {
       evaluationResults: parsed.evaluationResults || {},
       evaluationMeta: parsed.evaluationMeta || {},
+      evaluationVersions: parsed.evaluationVersions || {},
     };
   } catch {
     return null;
@@ -717,6 +726,7 @@ app.get('/api/experiments', (req, res) => {
           const evalData = loadExpEval(fig.htmlPath);
           fig.evaluationResults = evalData?.evaluationResults || {};
           fig.evaluationMeta = evalData?.evaluationMeta || {};
+          fig.evaluationVersions = evalData?.evaluationVersions || {};
         }
       }
     }
@@ -744,7 +754,7 @@ app.post('/api/experiments/evaluate', async (req, res) => {
 
   try {
     const usedEvalModel = evalModel || CURRENT_CRITIC_MODEL;
-    const { evaluation } = await evaluateRecord({
+    const { evaluation, criticVersion } = await evaluateRecord({
       record: {
         html,
         source_base64: base64thumb,
@@ -758,12 +768,16 @@ app.post('/api/experiments/evaluate', async (req, res) => {
     const evalPath = absHtml.replace(/\.html$/, '.eval.json');
     let cached = {};
     if (fs.existsSync(evalPath)) {
-      try { cached = JSON.parse(fs.readFileSync(evalPath, 'utf-8')); } catch { cached = {}; }
+      try { cached = materializeEvaluationViews(JSON.parse(fs.readFileSync(evalPath, 'utf-8'))); } catch { cached = {}; }
     }
-    const updatedCache = upsertEvaluation(cached, usedEvalModel, evaluation);
+    const updatedCache = upsertEvaluation(cached, usedEvalModel, evaluation, new Date().toISOString(), {
+      criticVersion,
+      criticModel: usedEvalModel,
+    });
     saveRecord({
       evaluationResults: updatedCache.evaluationResults,
       evaluationMeta: updatedCache.evaluationMeta,
+      evaluationVersions: updatedCache.evaluationVersions,
     }, evalPath);
 
     return res.json(evaluation);
