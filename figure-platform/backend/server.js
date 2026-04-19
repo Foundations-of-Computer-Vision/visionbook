@@ -75,6 +75,9 @@ const RESULTS_DIR = process.env.RESULTS_DIR
 if (!fs.existsSync(RESULTS_DIR)) {
   fs.mkdirSync(RESULTS_DIR, { recursive: true });
 }
+const MANIFEST_PATH = path.join(__dirname, 'manifest.json');
+const MANIFEST_SCHEMA_VERSION = 1;
+const MANIFEST_REFRESH_MS = 15000;
 
 const {
   systemPrompt: SYSTEM_PROMPT,
@@ -246,6 +249,7 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
   });
   const recordPath = path.join(RESULTS_DIR, `${figureId}.json`);
   saveRecord(record, recordPath);
+  refreshManifest('result generated');
 
   let evaluation = null;
   if (evaluate !== false) {
@@ -360,47 +364,173 @@ function inferChapter(stem) {
   return null;
 }
 
-function readHistoryRecord(fileName, { includeThumb = false } = {}) {
-  const raw = fs.readFileSync(path.join(RESULTS_DIR, fileName), 'utf-8');
-  const parsed = materializeEvaluationViews(JSON.parse(raw));
-  const stem = parsed.filename ? parsed.filename.replace(/\.[^.]+$/, '') : '';
-  const chapter = inferChapter(stem);
-  const model = parsed.model || 'gpt-4o';
-  const experiment = parsed.experiment || 'base_scene_robust';
+function readJsonFile(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+}
 
-  const record = {
+function buildHistoryRecordFromParsed(parsed) {
+  const stem = parsed.filename ? parsed.filename.replace(/\.[^.]+$/, '') : '';
+  return {
     id: parsed.id,
     filename: parsed.filename,
     timestamp: parsed.timestamp,
     source: parsed.source || 'api',
-    model,
-    experiment,
+    model: parsed.model || 'gpt-4o',
+    experiment: parsed.experiment || 'base_scene_robust',
     evaluationResults: parsed.evaluationResults || {},
     evaluationMeta: parsed.evaluationMeta || {},
     evaluationVersions: parsed.evaluationVersions || {},
-    chapter,
+    chapter: inferChapter(stem),
   };
-
-  if (includeThumb) {
-    record.base64thumb = parsed.base64thumb || null;
-    record.mediaType = parsed.mediaType || 'image/jpeg';
-  }
-
-  return record;
 }
 
-function listHistoryRecords({ includeThumb = false } = {}) {
-  const files = fs.readdirSync(RESULTS_DIR).filter((f) => f.endsWith('.json'));
-  return files
-    .map((f) => {
+function buildHistoryRecordFromFile(fileName) {
+  const filePath = path.join(RESULTS_DIR, fileName);
+  const parsed = materializeEvaluationViews(readJsonFile(filePath));
+  return buildHistoryRecordFromParsed(parsed);
+}
+
+function loadExpEval(htmlPath) {
+  const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
+  if (!fs.existsSync(evalPath)) return null;
+  try {
+    const parsed = materializeEvaluationViews(readJsonFile(evalPath));
+    return {
+      evaluationResults: parsed.evaluationResults || {},
+      evaluationMeta: parsed.evaluationMeta || {},
+      evaluationVersions: parsed.evaluationVersions || {},
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildExperimentsTreeWithEval() {
+  const tree = scanExperiments();
+  for (const exp of tree) {
+    for (const modelEntry of exp.models) {
+      for (const fig of modelEntry.figures) {
+        const evalData = loadExpEval(fig.htmlPath);
+        fig.evaluationResults = evalData?.evaluationResults || {};
+        fig.evaluationMeta = evalData?.evaluationMeta || {};
+        fig.evaluationVersions = evalData?.evaluationVersions || {};
+      }
+    }
+  }
+  return tree;
+}
+
+function buildManifest() {
+  const resultFiles = fs.readdirSync(RESULTS_DIR).filter((f) => f.endsWith('.json'));
+  const results = resultFiles
+    .map((fileName) => {
       try {
-        return readHistoryRecord(f, { includeThumb });
+        return buildHistoryRecordFromFile(fileName);
       } catch {
         return null;
       }
     })
     .filter(Boolean)
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  const experiments = buildExperimentsTreeWithEval();
+
+  const modelSet = new Set();
+  const chapterSet = new Set();
+  let experimentFigureCount = 0;
+  for (const result of results) {
+    if (result.model) modelSet.add(result.model);
+    if (result.chapter) chapterSet.add(result.chapter);
+  }
+  for (const exp of experiments) {
+    for (const modelEntry of exp.models) {
+      if (modelEntry.model) modelSet.add(modelEntry.model);
+      for (const fig of modelEntry.figures) {
+        experimentFigureCount += 1;
+        if (fig.chapter) chapterSet.add(fig.chapter);
+      }
+    }
+  }
+
+  return {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    generatedAt: new Date().toISOString(),
+    summary: {
+      resultCount: results.length,
+      experimentCount: experiments.length,
+      experimentFigureCount,
+      modelCount: modelSet.size,
+      chapterCount: chapterSet.size,
+    },
+    results,
+    experiments,
+  };
+}
+
+let manifestCache = null;
+let manifestLastRefreshMs = 0;
+
+function writeManifest(manifest) {
+  fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2));
+}
+
+function refreshManifest(reason = 'manual') {
+  const next = buildManifest();
+  manifestCache = next;
+  manifestLastRefreshMs = Date.now();
+  writeManifest(next);
+  if (reason) {
+    console.log(`[manifest] refreshed (${reason}) results=${next.summary.resultCount} experiments=${next.summary.experimentCount}`);
+  }
+  return next;
+}
+
+function ensureManifestLoaded() {
+  if (manifestCache) return manifestCache;
+  if (fs.existsSync(MANIFEST_PATH)) {
+    try {
+      const parsed = readJsonFile(MANIFEST_PATH);
+      if (parsed?.schemaVersion === MANIFEST_SCHEMA_VERSION) {
+        manifestCache = parsed;
+        manifestLastRefreshMs = Date.now();
+        return manifestCache;
+      }
+    } catch {
+      // Fall through to rebuild.
+    }
+  }
+  return refreshManifest('startup');
+}
+
+function maybeRefreshManifestForExperiments() {
+  ensureManifestLoaded();
+  if (Date.now() - manifestLastRefreshMs > MANIFEST_REFRESH_MS) {
+    refreshManifest('periodic experiments refresh');
+  }
+}
+
+function listHistoryRecords({ includeThumb = false } = {}) {
+  const manifest = ensureManifestLoaded();
+  if (!includeThumb) {
+    return manifest.results;
+  }
+  return manifest.results.map((record) => {
+    const filePath = path.join(RESULTS_DIR, `${record.id}.json`);
+    let base64thumb = null;
+    let mediaType = 'image/jpeg';
+    try {
+      const parsed = readJsonFile(filePath);
+      base64thumb = parsed.base64thumb || null;
+      mediaType = parsed.mediaType || 'image/jpeg';
+    } catch {
+      // keep defaults
+    }
+    return {
+      ...record,
+      base64thumb,
+      mediaType,
+    };
+  });
 }
 
 // ── GET /api/history ──────────────────────────────────────────────────────────
@@ -467,6 +597,7 @@ app.post('/api/save', (req, res) => {
     path.join(RESULTS_DIR, `${id}.json`),
     JSON.stringify(compactEvaluationStorage(record), null, 2)
   );
+  refreshManifest('result saved');
   return res.json({ id, timestamp });
 });
 
@@ -478,7 +609,10 @@ async function runEvaluation(record, filePath, requestedEvalModel) {
     evalModel: requestedEvalModel,
     defaultEvalModel: CURRENT_CRITIC_MODEL,
   });
-  if (filePath) saveRecord(result.record, filePath);
+  if (filePath) {
+    saveRecord(result.record, filePath);
+    refreshManifest('result evaluated');
+  }
 
   record.evaluationResults = result.record.evaluationResults;
   record.evaluationMeta = result.record.evaluationMeta;
@@ -554,6 +688,7 @@ app.delete('/api/result/:id', (req, res) => {
   }
   try {
     fs.unlinkSync(filePath);
+    refreshManifest('result deleted');
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -707,38 +842,12 @@ function scanExperiments() {
   return experiments;
 }
 
-// Load evaluation cache for experiment figures (stored alongside the html as <name>.eval.json)
-function loadExpEval(htmlPath) {
-  const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
-  if (!fs.existsSync(evalPath)) return null;
-  try {
-    const parsed = materializeEvaluationViews(JSON.parse(fs.readFileSync(evalPath, 'utf-8')));
-    return {
-      evaluationResults: parsed.evaluationResults || {},
-      evaluationMeta: parsed.evaluationMeta || {},
-      evaluationVersions: parsed.evaluationVersions || {},
-    };
-  } catch {
-    return null;
-  }
-}
-
 // ── GET /api/experiments ──────────────────────────────────────────────────────
 app.get('/api/experiments', (req, res) => {
   try {
-    const tree = scanExperiments();
-    // Attach cached evaluations
-    for (const exp of tree) {
-      for (const m of exp.models) {
-        for (const fig of m.figures) {
-          const evalData = loadExpEval(fig.htmlPath);
-          fig.evaluationResults = evalData?.evaluationResults || {};
-          fig.evaluationMeta = evalData?.evaluationMeta || {};
-          fig.evaluationVersions = evalData?.evaluationVersions || {};
-        }
-      }
-    }
-    return res.json(tree);
+    maybeRefreshManifestForExperiments();
+    const manifest = ensureManifestLoaded();
+    return res.json(manifest.experiments || []);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -787,6 +896,7 @@ app.post('/api/experiments/evaluate', async (req, res) => {
       evaluationMeta: updatedCache.evaluationMeta,
       evaluationVersions: updatedCache.evaluationVersions,
     }, evalPath);
+    refreshManifest('experiment evaluated');
 
     return res.json(evaluation);
   } catch (err) {
@@ -966,6 +1076,12 @@ Please produce an improved wrapper that makes this figure look great in the chap
     return res.status(500).json({ error: err.message });
   }
 });
+
+try {
+  ensureManifestLoaded();
+} catch (err) {
+  console.error('[manifest] startup load failed:', err?.message || err);
+}
 
 // ── Serve React build in production ───────────────────────────────────────────
 const frontendBuild = path.join(__dirname, '..', 'frontend', 'build');
