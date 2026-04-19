@@ -33,7 +33,7 @@ const FIGURES_DIR = path.join(__dirname, '..', '..', 'figures');
 // ── API generation config ──────────────────────────────────────────────────────
 // CURRENT_EXPERIMENT is derived from the configured experiment base.
 // Change EXPERIMENT_BASE to move future generations into a new experiment bucket.
-const EXPERIMENT_BASE = 'entire_book_v1';   // human-readable prefix
+const EXPERIMENT_BASE = 'default_base';   // human-readable prefix
 const CURRENT_MODEL = 'gpt-5.4';             // model used by the generator
 const CURRENT_CRITIC_MODEL = 'gpt-4o';       // model used by evaluator by default
 // CURRENT_EXPERIMENT is set below, after the system prompt is built.
@@ -182,18 +182,25 @@ async function withRetry(fn, { retries = 4, baseDelay = 2500 } = {}) {
   }
 }
 
-async function generateFigure({ base64, mediaType, filename, plan, model: requestedModel, evalModel: requestedEvalModel, evaluate = true }) {
+async function generateFigure({ base64, mediaType, filename, plan, model: requestedModel, evalModel: requestedEvalModel, experiment: requestedExperiment, evaluate = true }) {
   if (!base64 || !mediaType || !filename) {
     const err = new Error('base64, mediaType, and filename are required.');
     err.statusCode = 400;
     throw err;
   }
 
+  if (typeof requestedExperiment !== 'string' || !requestedExperiment.trim()) {
+    const err = new Error('experiment is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
   const modelId = requestedModel || CURRENT_MODEL;
+  const experimentName = requestedExperiment.trim();
   if (!requestedModel) {
     console.warn(`[generate] no model provided by client; falling back to default "${CURRENT_MODEL}"`);
   }
-  console.log(`[generate] requested="${requestedModel}" → using="${modelId}" | file=${filename}`);
+  console.log(`[generate] requested="${requestedModel}" experiment="${requestedExperiment}" → using="${modelId}" | file=${filename}`);
 
   const userText = plan
     ? `${buildPlanInjection(plan)}\n\nFollow the interaction plan above. Output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.`
@@ -228,7 +235,7 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
     timestamp,
     source: 'api',
     model: modelId,
-    experiment: CURRENT_EXPERIMENT,
+    experiment: experimentName,
     plan: plan || null,
     previewBase64: shot ? shot.data : null,
     previewMediaType: shot ? shot.mediaType : null,
@@ -255,6 +262,7 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
     figureId,
     timestamp,
     model: modelId,
+    experiment: experimentName,
     evaluationResults: record.evaluationResults || {},
     evaluationMeta: record.evaluationMeta || {},
     evaluationVersions: record.evaluationVersions || {},

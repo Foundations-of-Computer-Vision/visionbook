@@ -13,7 +13,7 @@ const path = require('path');
 const CRITIC_DEFAULT_MODEL = 'gpt-4o';
 const CRITIC_MAX_TOKENS = 512;
 // Change this value to start a new evaluation experiment namespace.
-const CRITIC_EXPERIMENT_BASE = 'entire_book_v1';
+const CRITIC_EXPERIMENT_BASE = 'default_critic';
 
 // ── 10 canonical failure modes ─────────────────────────────────────────────────
 const FAILURE_MODES = [

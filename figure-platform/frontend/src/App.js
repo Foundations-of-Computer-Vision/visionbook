@@ -3,6 +3,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 const FALLBACK_PROMPT = '(Loading system prompt from server…)';
 const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
 const CRITIC_MODEL_STORAGE_KEY = 'figure-platform:selectedCriticModel';
+const EXPERIMENT_STORAGE_KEY = 'figure-platform:selectedExperiment';
 
 function pickEvaluationModel(record, preferredModel) {
   const results = record?.evaluationResults || {};
@@ -183,16 +184,31 @@ export default function App() {
   const [models, setModels] = useState([]);       // available models from backend
   const [selectedModel, setSelectedModel] = useState(''); // '' = server default
   const [selectedCriticModel, setSelectedCriticModel] = useState('');
+  const [experimentOptions, setExperimentOptions] = useState([]);
+  const [selectedExperiment, setSelectedExperiment] = useState('');
 
-  // Fetch the real system prompt + available models from the backend on mount
+  // Fetch the real system prompt + available models + past API/history experiment names on mount
   useEffect(() => {
     Promise.all([
       apiFetch('/api/prompt').then(r => r.json()).catch(() => ({})),
       apiFetch('/api/models').then(r => r.json()).catch(() => ([])),
-    ]).then(([promptData, list]) => {
+      apiFetch('/api/history-index').then(r => r.json()).catch(() => ([])),
+    ]).then(([promptData, list, historyRecords]) => {
       if (promptData.prompt) setSystemPrompt(promptData.prompt);
       if (promptData.criticVersion) setCurrentCriticVersion(promptData.criticVersion);
       setModels(list);
+
+      const experimentSet = new Set();
+      for (const record of historyRecords || []) {
+        if (record?.experiment) experimentSet.add(record.experiment);
+      }
+      const mergedExperiments = Array.from(experimentSet).sort();
+      setExperimentOptions(mergedExperiments);
+
+      const storedExperiment = window.localStorage.getItem(EXPERIMENT_STORAGE_KEY);
+      const preferredExperiment = [storedExperiment, mergedExperiments[0]]
+        .find(experimentName => experimentName);
+      if (preferredExperiment) setSelectedExperiment(preferredExperiment);
 
       if (list.length === 0) return;
 
@@ -219,6 +235,9 @@ export default function App() {
   useEffect(() => {
     if (selectedCriticModel) window.localStorage.setItem(CRITIC_MODEL_STORAGE_KEY, selectedCriticModel);
   }, [selectedCriticModel]);
+  useEffect(() => {
+    if (selectedExperiment) window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, selectedExperiment);
+  }, [selectedExperiment]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -256,7 +275,11 @@ export default function App() {
   const handleGenerate = useCallback(async () => {
     if (!image) return;
     if (!selectedModel) {
-      setError('Set a default generator model in Settings first.');
+      setError('Set a generator model in the Generator tab first.');
+      return;
+    }
+    if (!selectedExperiment || !selectedExperiment.trim()) {
+      setError('Select or type an experiment name before generating.');
       return;
     }
     setError('');
@@ -291,6 +314,7 @@ export default function App() {
         plan: currentPlan || undefined,
         model: selectedModel || undefined,
         evalModel: selectedCriticModel || undefined,
+        experiment: selectedExperiment || undefined,
       });
       const generatedEvaluationResults = data.evaluationResults || {};
       const generatedEvaluationMeta = data.evaluationMeta || {};
@@ -308,6 +332,7 @@ export default function App() {
         mediaType: image.mediaType,
         timestamp: data.timestamp,
         model: data.model,
+        experiment: data.experiment || selectedExperiment || null,
         evaluationResults: generatedEvaluationResults,
         evaluationMeta: generatedEvaluationMeta,
         evaluationVersions: data.evaluationVersions || {},
@@ -321,7 +346,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [image, selectedCriticModel, selectedModel, tab]);
+  }, [image, selectedCriticModel, selectedExperiment, selectedModel, tab]);
   const handleLoadFromHistory = useCallback((record) => {
     const normalizedRecord = {
       ...record,
@@ -449,7 +474,7 @@ export default function App() {
       <header style={styles.header}>
         <span style={styles.logo}>3D Figure Generator</span>
         <nav style={styles.nav}>
-          {['generator', 'viewer', 'results', 'dashboard', 'preview', 'settings'].map((t) => (
+          {['generator', 'viewer', 'results', 'dashboard', 'preview'].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -473,9 +498,15 @@ export default function App() {
             plan={plan}
             error={error}
             systemPrompt={systemPrompt}
+            models={models}
+            experimentOptions={experimentOptions}
+            selectedExperiment={selectedExperiment}
             selectedModel={selectedModel}
             selectedCriticModel={selectedCriticModel}
             currentCriticVersion={currentCriticVersion}
+            onExperimentChange={setSelectedExperiment}
+            onGeneratorModelChange={setSelectedModel}
+            onCriticModelChange={setSelectedCriticModel}
           />
         )}
         {tab === 'viewer' && (
@@ -483,7 +514,7 @@ export default function App() {
             record={currentRecord}
             html={generatedHtml}
             onBack={() => setTab(viewerBackTab || 'generator')}
-            backLabel={viewerBackTab === 'results' ? 'Back to Results' : viewerBackTab === 'dashboard' ? 'Back to Dashboard' : viewerBackTab === 'preview' ? 'Back to Chapter Preview' : viewerBackTab === 'settings' ? 'Back to Settings' : 'Back'}
+            backLabel={viewerBackTab === 'results' ? 'Back to Results' : viewerBackTab === 'dashboard' ? 'Back to Dashboard' : viewerBackTab === 'preview' ? 'Back to Chapter Preview' : 'Back'}
             onNew={() => setTab('generator')}
             onDelete={handleDeleteCurrent}
             evaluation={evaluation}
@@ -510,22 +541,13 @@ export default function App() {
         {tab === 'preview' && (
           <ChapterPreviewTab />
         )}
-        {tab === 'settings' && (
-          <SettingsTab
-            models={models}
-            selectedModel={selectedModel}
-            selectedCriticModel={selectedCriticModel}
-            onGeneratorModelChange={setSelectedModel}
-            onCriticModelChange={setSelectedCriticModel}
-          />
-        )}
       </main>
     </div>
   );
 }
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, selectedModel, selectedCriticModel }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, experimentOptions, selectedExperiment, selectedModel, selectedCriticModel, onExperimentChange, onGeneratorModelChange, onCriticModelChange }) {
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
@@ -603,7 +625,11 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
   const handleRunChapter = async () => {
     if (!selectedChapter || chapterCandidates.length === 0) return;
     if (!selectedModel) {
-      onError?.('Set a default generator model in Settings first.');
+      onError?.('Set a generator model in the Generator tab first.');
+      return;
+    }
+    if (!selectedExperiment || !selectedExperiment.trim()) {
+      onError?.('Select or type an experiment name before generating.');
       return;
     }
     setChapterRunning(true);
@@ -651,6 +677,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             filename: candidate.filename,
             plan: figurePlan || undefined,
             model: selectedModel || undefined,
+            experiment: selectedExperiment || undefined,
             evaluate: false,
           }),
         });
@@ -763,9 +790,61 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
           onClick={() => setMode('chapter')}
         >Select Chapter</button>
       </div>
-      <p style={{ fontSize: 11, color: '#888', margin: '-4px 0 6px' }}>
-        Generator model is managed in the Settings tab.
-      </p>
+      <div style={styles.generatorControlRow}>
+        <div style={styles.generatorExperimentCard}>
+          <label style={styles.generatorModelLabel}>Experiment Name</label>
+          <div style={styles.generatorExperimentControls}>
+            <select
+              style={styles.generatorModelSelect}
+              value={experimentOptions.includes(selectedExperiment) ? selectedExperiment : ''}
+              onChange={e => onExperimentChange?.(e.target.value)}
+              disabled={experimentOptions.length === 0}
+            >
+              <option value="">Select a past experiment...</option>
+              {experimentOptions.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+            <input
+              style={styles.generatorTextInput}
+              value={selectedExperiment}
+              onChange={e => onExperimentChange?.(e.target.value)}
+              placeholder="Or type a new experiment name"
+            />
+          </div>
+          <p style={styles.generatorHint}>
+            Pick an existing name from the dropdown, or type a new one to create a fresh experiment bucket.
+          </p>
+        </div>
+        <div style={styles.generatorModelStack}>
+          <div style={styles.generatorControlCard}>
+            <label style={styles.generatorModelLabel}>Generator Model</label>
+            <select
+              style={styles.generatorModelSelect}
+              value={selectedModel}
+              onChange={e => onGeneratorModelChange?.(e.target.value)}
+              disabled={models.length === 0}
+            >
+              {models.map(m => (
+                <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
+              ))}
+            </select>
+          </div>
+          <div style={styles.generatorControlCard}>
+            <label style={styles.generatorModelLabel}>Critic Model</label>
+            <select
+              style={styles.generatorModelSelect}
+              value={selectedCriticModel}
+              onChange={e => onCriticModelChange?.(e.target.value)}
+              disabled={models.length === 0}
+            >
+              {models.map(m => (
+                <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
       {mode === 'figure' ? (
         <>
@@ -2731,48 +2810,6 @@ function ChapterPreviewTab() {
   );
 }
 
-// ── Settings Tab ─────────────────────────────────────────────────────────────
-function SettingsTab({ models, selectedModel, selectedCriticModel, onGeneratorModelChange, onCriticModelChange }) {
-  return (
-    <div style={styles.settingsWrap}>
-      <h3 style={styles.settingsTitle}>Model Settings</h3>
-      <p style={styles.settingsSubtitle}>Set default models used across generation and evaluation workflows.</p>
-
-      <div style={styles.settingsCard}>
-        <label style={styles.settingsLabel}>Default Generator Model</label>
-        <select
-          style={styles.settingsSelect}
-          value={selectedModel}
-          onChange={e => onGeneratorModelChange(e.target.value)}
-          disabled={models.length === 0}
-        >
-          {models.map(m => (
-            <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
-          ))}
-        </select>
-      </div>
-
-      <div style={styles.settingsCard}>
-        <label style={styles.settingsLabel}>Default Critic Model</label>
-        <select
-          style={styles.settingsSelect}
-          value={selectedCriticModel}
-          onChange={e => onCriticModelChange(e.target.value)}
-          disabled={models.length === 0}
-        >
-          {models.map(m => (
-            <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
-          ))}
-        </select>
-      </div>
-
-      <p style={styles.settingsNote}>
-        These defaults are used by the Generator tab, manual re-evaluation in Viewer and Results, and batch evaluation.
-      </p>
-    </div>
-  );
-}
-
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = {
   root: { fontFamily: 'system-ui, sans-serif', minHeight: '100vh', background: '#fff', color: '#111' },
@@ -2924,12 +2961,14 @@ const styles = {
   chapterPlanItem: { marginBottom: 4, borderBottom: '1px solid #e8ecf4' },
   chapterPlanSummary: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', cursor: 'pointer', fontSize: 12, fontWeight: 500, color: '#333' },
 
-  // Settings
-  settingsWrap: { maxWidth: 700, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 },
-  settingsTitle: { fontSize: 20, margin: 0, color: '#222' },
-  settingsSubtitle: { fontSize: 13, margin: 0, color: '#777' },
-  settingsCard: { border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 },
-  settingsLabel: { fontSize: 12, fontWeight: 700, color: '#444', textTransform: 'uppercase', letterSpacing: '0.04em' },
-  settingsSelect: { width: '100%', fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '9px 12px', background: '#fff', color: '#333', cursor: 'pointer' },
-  settingsNote: { fontSize: 12, color: '#666', margin: '2px 0 0' },
+  generatorModelCard: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12, padding: '12px 14px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
+  generatorControlRow: { display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12, flexWrap: 'nowrap' },
+  generatorExperimentCard: { flex: '0 0 320px', width: 320, display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
+  generatorControlCard: { display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
+  generatorModelStack: { flex: '0 0 320px', width: 320, display: 'flex', flexDirection: 'column', gap: 4 },
+  generatorModelLabel: { fontSize: 12, fontWeight: 700, color: '#444', textTransform: 'uppercase', letterSpacing: '0.04em' },
+  generatorModelSelect: { width: '100%', fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '9px 12px', background: '#fff', color: '#333', cursor: 'pointer' },
+  generatorTextInput: { width: '100%', fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '9px 12px', background: '#fff', color: '#333' },
+  generatorExperimentControls: { display: 'flex', flexDirection: 'column', gap: 8 },
+  generatorHint: { fontSize: 12, color: '#6b7280', margin: '2px 0 0' },
 };
