@@ -72,12 +72,10 @@ console.log('Base scaffold loaded:', BASE_SCAFFOLD_PATH);
 const RESULTS_DIR = process.env.RESULTS_DIR
   ? path.resolve(process.env.RESULTS_DIR)
   : path.join(__dirname, 'results');
+const MANIFEST_PATH = path.join(__dirname, 'manifest.json');
 if (!fs.existsSync(RESULTS_DIR)) {
   fs.mkdirSync(RESULTS_DIR, { recursive: true });
 }
-const MANIFEST_PATH = path.join(__dirname, 'manifest.json');
-const MANIFEST_SCHEMA_VERSION = 1;
-const MANIFEST_REFRESH_MS = 15000;
 
 const {
   systemPrompt: SYSTEM_PROMPT,
@@ -185,9 +183,15 @@ async function withRetry(fn, { retries = 4, baseDelay = 2500 } = {}) {
   }
 }
 
-async function generateFigure({ base64, mediaType, filename, plan, model: requestedModel, evalModel: requestedEvalModel, experiment: requestedExperiment, evaluate = true }) {
+async function generateFigure({ base64, mediaType, filename, plan, model: requestedModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, evaluate = true }) {
   if (!base64 || !mediaType || !filename) {
     const err = new Error('base64, mediaType, and filename are required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (typeof requestedCriticVersion !== 'string' || !requestedCriticVersion.trim()) {
+    const err = new Error('criticVersion is required.');
     err.statusCode = 400;
     throw err;
   }
@@ -249,12 +253,12 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
   });
   const recordPath = path.join(RESULTS_DIR, `${figureId}.json`);
   saveRecord(record, recordPath);
-  refreshManifest('result generated');
+  refreshHistoryManifestSafe();
 
   let evaluation = null;
   if (evaluate !== false) {
     try {
-      evaluation = await runEvaluation(record, recordPath, requestedEvalModel);
+      evaluation = await runEvaluation(record, recordPath, requestedEvalModel, requestedCriticVersion);
       console.log(`Auto-eval for ${figureId}: overall=${evaluation.overall_average}`);
     } catch (evalErr) {
       console.warn('Auto-eval failed (result saved without scores):', evalErr.message);
@@ -364,173 +368,123 @@ function inferChapter(stem) {
   return null;
 }
 
-function readJsonFile(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-}
-
-function buildHistoryRecordFromParsed(parsed) {
+function readHistoryRecord(fileName, { includeThumb = false } = {}) {
+  const raw = fs.readFileSync(path.join(RESULTS_DIR, fileName), 'utf-8');
+  const parsed = materializeEvaluationViews(JSON.parse(raw));
   const stem = parsed.filename ? parsed.filename.replace(/\.[^.]+$/, '') : '';
-  return {
+  const chapter = inferChapter(stem);
+  const model = parsed.model || 'gpt-4o';
+  const experiment = parsed.experiment || 'base_scene_robust';
+
+  const record = {
     id: parsed.id,
     filename: parsed.filename,
     timestamp: parsed.timestamp,
     source: parsed.source || 'api',
-    model: parsed.model || 'gpt-4o',
-    experiment: parsed.experiment || 'base_scene_robust',
+    model,
+    experiment,
     evaluationResults: parsed.evaluationResults || {},
     evaluationMeta: parsed.evaluationMeta || {},
     evaluationVersions: parsed.evaluationVersions || {},
-    chapter: inferChapter(stem),
+    chapter,
   };
-}
 
-function buildHistoryRecordFromFile(fileName) {
-  const filePath = path.join(RESULTS_DIR, fileName);
-  const parsed = materializeEvaluationViews(readJsonFile(filePath));
-  return buildHistoryRecordFromParsed(parsed);
-}
-
-function loadExpEval(htmlPath) {
-  const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
-  if (!fs.existsSync(evalPath)) return null;
-  try {
-    const parsed = materializeEvaluationViews(readJsonFile(evalPath));
-    return {
-      evaluationResults: parsed.evaluationResults || {},
-      evaluationMeta: parsed.evaluationMeta || {},
-      evaluationVersions: parsed.evaluationVersions || {},
-    };
-  } catch {
-    return null;
+  if (includeThumb) {
+    record.base64thumb = parsed.base64thumb || null;
+    record.mediaType = parsed.mediaType || 'image/jpeg';
   }
+
+  return record;
 }
 
-function buildExperimentsTreeWithEval() {
-  const tree = scanExperiments();
-  for (const exp of tree) {
-    for (const modelEntry of exp.models) {
-      for (const fig of modelEntry.figures) {
-        const evalData = loadExpEval(fig.htmlPath);
-        fig.evaluationResults = evalData?.evaluationResults || {};
-        fig.evaluationMeta = evalData?.evaluationMeta || {};
-        fig.evaluationVersions = evalData?.evaluationVersions || {};
-      }
-    }
-  }
-  return tree;
-}
-
-function buildManifest() {
-  const resultFiles = fs.readdirSync(RESULTS_DIR).filter((f) => f.endsWith('.json'));
-  const results = resultFiles
-    .map((fileName) => {
+function listHistoryRecords({ includeThumb = false } = {}) {
+  const files = fs.readdirSync(RESULTS_DIR).filter((f) => f.endsWith('.json'));
+  return files
+    .map((f) => {
       try {
-        return buildHistoryRecordFromFile(fileName);
+        return readHistoryRecord(f, { includeThumb });
       } catch {
         return null;
       }
     })
     .filter(Boolean)
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+}
 
-  const experiments = buildExperimentsTreeWithEval();
-
-  const modelSet = new Set();
-  const chapterSet = new Set();
-  let experimentFigureCount = 0;
-  for (const result of results) {
-    if (result.model) modelSet.add(result.model);
-    if (result.chapter) chapterSet.add(result.chapter);
+function listHistoryIndexFromManifest() {
+  if (!fs.existsSync(MANIFEST_PATH)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf-8'));
+    if (!Array.isArray(parsed?.results)) return null;
+    return parsed.results
+      .map((record) => ({
+        id: record?.id,
+        filename: record?.filename,
+        timestamp: record?.timestamp,
+        source: record?.source || 'api',
+        model: record?.model || 'gpt-4o',
+        experiment: record?.experiment || 'base_scene_robust',
+        evaluationResults: record?.evaluationResults || {},
+        evaluationMeta: record?.evaluationMeta || {},
+        evaluationVersions: record?.evaluationVersions || {},
+        chapter: record?.chapter || null,
+      }))
+      .filter(record => record.id)
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  } catch {
+    return null;
   }
-  for (const exp of experiments) {
-    for (const modelEntry of exp.models) {
-      if (modelEntry.model) modelSet.add(modelEntry.model);
-      for (const fig of modelEntry.figures) {
-        experimentFigureCount += 1;
-        if (fig.chapter) chapterSet.add(fig.chapter);
+}
+
+function rebuildHistoryManifest() {
+  const results = listHistoryRecords({ includeThumb: false });
+
+  const experimentSet = new Set(results.map(r => r.experiment || 'base_scene_robust'));
+  const modelSet = new Set(results.map(r => r.model || 'gpt-4o'));
+  const chapterSet = new Set(results.map(r => r.chapter).filter(Boolean));
+
+  let experimentFigureCount = 0;
+  try {
+    const experiments = scanExperiments();
+    experimentFigureCount = experiments.reduce(
+      (sum, exp) => sum + (exp.models || []).reduce((mSum, model) => mSum + (model.figures || []).length, 0),
+      0
+    );
+    for (const exp of experiments) {
+      for (const model of exp.models || []) {
+        modelSet.add(model.model || 'unknown');
+        for (const fig of model.figures || []) {
+          if (fig.chapter) chapterSet.add(fig.chapter);
+        }
       }
     }
+  } catch {
+    // Keep manifest generation resilient if experiment scan fails.
   }
 
-  return {
-    schemaVersion: MANIFEST_SCHEMA_VERSION,
+  const manifest = {
+    schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     summary: {
       resultCount: results.length,
-      experimentCount: experiments.length,
+      experimentCount: experimentSet.size,
       experimentFigureCount,
       modelCount: modelSet.size,
       chapterCount: chapterSet.size,
     },
     results,
-    experiments,
   };
-}
 
-let manifestCache = null;
-let manifestLastRefreshMs = 0;
-
-function writeManifest(manifest) {
   fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2));
+  return manifest;
 }
 
-function refreshManifest(reason = 'manual') {
-  const next = buildManifest();
-  manifestCache = next;
-  manifestLastRefreshMs = Date.now();
-  writeManifest(next);
-  if (reason) {
-    console.log(`[manifest] refreshed (${reason}) results=${next.summary.resultCount} experiments=${next.summary.experimentCount}`);
+function refreshHistoryManifestSafe() {
+  try {
+    rebuildHistoryManifest();
+  } catch (err) {
+    console.warn('Manifest refresh failed:', err?.message || err);
   }
-  return next;
-}
-
-function ensureManifestLoaded() {
-  if (manifestCache) return manifestCache;
-  if (fs.existsSync(MANIFEST_PATH)) {
-    try {
-      const parsed = readJsonFile(MANIFEST_PATH);
-      if (parsed?.schemaVersion === MANIFEST_SCHEMA_VERSION) {
-        manifestCache = parsed;
-        manifestLastRefreshMs = Date.now();
-        return manifestCache;
-      }
-    } catch {
-      // Fall through to rebuild.
-    }
-  }
-  return refreshManifest('startup');
-}
-
-function maybeRefreshManifestForExperiments() {
-  ensureManifestLoaded();
-  if (Date.now() - manifestLastRefreshMs > MANIFEST_REFRESH_MS) {
-    refreshManifest('periodic experiments refresh');
-  }
-}
-
-function listHistoryRecords({ includeThumb = false } = {}) {
-  const manifest = ensureManifestLoaded();
-  if (!includeThumb) {
-    return manifest.results;
-  }
-  return manifest.results.map((record) => {
-    const filePath = path.join(RESULTS_DIR, `${record.id}.json`);
-    let base64thumb = null;
-    let mediaType = 'image/jpeg';
-    try {
-      const parsed = readJsonFile(filePath);
-      base64thumb = parsed.base64thumb || null;
-      mediaType = parsed.mediaType || 'image/jpeg';
-    } catch {
-      // keep defaults
-    }
-    return {
-      ...record,
-      base64thumb,
-      mediaType,
-    };
-  });
 }
 
 // ── GET /api/history ──────────────────────────────────────────────────────────
@@ -548,8 +502,24 @@ app.get('/api/history', (req, res) => {
 // inline thumbnail base64 to keep payload small.
 app.get('/api/history-index', (req, res) => {
   try {
-    return res.json(listHistoryRecords({ includeThumb: false }));
+    const refresh = req.query.refresh === '1';
+    if (refresh || !fs.existsSync(MANIFEST_PATH)) {
+      rebuildHistoryManifest();
+    }
+
+    const manifestRecords = listHistoryIndexFromManifest();
+    if (manifestRecords) return res.json(manifestRecords);
+
+    // If manifest exists but is malformed, rebuild and return fresh snapshot.
+    const manifest = rebuildHistoryManifest();
+    return res.json(manifest.results || []);
   } catch (err) {
+    try {
+      const liveRecords = listHistoryRecords({ includeThumb: false });
+      return res.json(liveRecords);
+    } catch {
+      // Fall through to original error response below.
+    }
     return res.status(500).json({ error: err.message });
   }
 });
@@ -597,21 +567,22 @@ app.post('/api/save', (req, res) => {
     path.join(RESULTS_DIR, `${id}.json`),
     JSON.stringify(compactEvaluationStorage(record), null, 2)
   );
-  refreshManifest('result saved');
+  refreshHistoryManifestSafe();
   return res.json({ id, timestamp });
 });
 
 // Calls the shared evaluator, persists to the record file,
 // and returns the evaluation object. Throws on error.
-async function runEvaluation(record, filePath, requestedEvalModel) {
+async function runEvaluation(record, filePath, requestedEvalModel, requestedCriticVersion) {
   const result = await evaluateRecord({
     record,
     evalModel: requestedEvalModel,
     defaultEvalModel: CURRENT_CRITIC_MODEL,
+    criticVersionOverride: requestedCriticVersion,
   });
   if (filePath) {
     saveRecord(result.record, filePath);
-    refreshManifest('result evaluated');
+    refreshHistoryManifestSafe();
   }
 
   record.evaluationResults = result.record.evaluationResults;
@@ -624,7 +595,7 @@ async function runEvaluation(record, filePath, requestedEvalModel) {
 // ── POST /api/evaluate ────────────────────────────────────────────────────────
 // Manual re-evaluation endpoint (used for existing results without scores).
 app.post('/api/evaluate', async (req, res) => {
-  const { id, evalModel } = req.body;
+  const { id, evalModel, criticVersion } = req.body;
   if (!id) return res.status(400).json({ error: 'id is required.' });
 
   const filePath = path.join(RESULTS_DIR, `${id}.json`);
@@ -635,7 +606,7 @@ app.post('/api/evaluate', async (req, res) => {
   catch { return res.status(500).json({ error: 'Failed to read result file.' }); }
 
   try {
-    const evaluation = await runEvaluation(record, filePath, evalModel);
+    const evaluation = await runEvaluation(record, filePath, evalModel, criticVersion);
     return res.json(evaluation);
   } catch (err) {
     console.error('Evaluation error:', err?.message || err);
@@ -647,7 +618,7 @@ app.post('/api/evaluate', async (req, res) => {
 // Accepts { ids: string[] } and evaluates them one-by-one (no concurrency).
 // Returns results as they complete via streaming JSON lines.
 app.post('/api/evaluate-batch', async (req, res) => {
-  const { ids, evalModel } = req.body;
+  const { ids, evalModel, criticVersion } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'ids (array) is required.' });
   }
@@ -669,7 +640,7 @@ app.post('/api/evaluate-batch', async (req, res) => {
     catch { res.write(JSON.stringify({ id, status: 'error', error: 'Failed to read result.' }) + '\n'); continue; }
 
     try {
-      const evaluation = await runEvaluation(record, filePath, evalModel);
+      const evaluation = await runEvaluation(record, filePath, evalModel, criticVersion);
       res.write(JSON.stringify({ id, status: 'ok', evaluation }) + '\n');
     } catch (err) {
       console.error(`Batch eval error for ${id}:`, err?.message || err);
@@ -688,7 +659,7 @@ app.delete('/api/result/:id', (req, res) => {
   }
   try {
     fs.unlinkSync(filePath);
-    refreshManifest('result deleted');
+    refreshHistoryManifestSafe();
     return res.json({ success: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -842,12 +813,38 @@ function scanExperiments() {
   return experiments;
 }
 
+// Load evaluation cache for experiment figures (stored alongside the html as <name>.eval.json)
+function loadExpEval(htmlPath) {
+  const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
+  if (!fs.existsSync(evalPath)) return null;
+  try {
+    const parsed = materializeEvaluationViews(JSON.parse(fs.readFileSync(evalPath, 'utf-8')));
+    return {
+      evaluationResults: parsed.evaluationResults || {},
+      evaluationMeta: parsed.evaluationMeta || {},
+      evaluationVersions: parsed.evaluationVersions || {},
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ── GET /api/experiments ──────────────────────────────────────────────────────
 app.get('/api/experiments', (req, res) => {
   try {
-    maybeRefreshManifestForExperiments();
-    const manifest = ensureManifestLoaded();
-    return res.json(manifest.experiments || []);
+    const tree = scanExperiments();
+    // Attach cached evaluations
+    for (const exp of tree) {
+      for (const m of exp.models) {
+        for (const fig of m.figures) {
+          const evalData = loadExpEval(fig.htmlPath);
+          fig.evaluationResults = evalData?.evaluationResults || {};
+          fig.evaluationMeta = evalData?.evaluationMeta || {};
+          fig.evaluationVersions = evalData?.evaluationVersions || {};
+        }
+      }
+    }
+    return res.json(tree);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -856,7 +853,7 @@ app.get('/api/experiments', (req, res) => {
 // ── POST /api/experiments/evaluate ───────────────────────────────────────────
 // Evaluate a single experiment figure in-place; cache result as <name>.eval.json
 app.post('/api/experiments/evaluate', async (req, res) => {
-  const { htmlPath, imagePath, evalModel } = req.body;
+  const { htmlPath, imagePath, evalModel, criticVersion } = req.body;
   if (!htmlPath) return res.status(400).json({ error: 'htmlPath required.' });
 
   const absHtml = path.resolve(htmlPath);
@@ -871,7 +868,7 @@ app.post('/api/experiments/evaluate', async (req, res) => {
 
   try {
     const usedEvalModel = evalModel || CURRENT_CRITIC_MODEL;
-    const { evaluation, criticVersion } = await evaluateRecord({
+    const { evaluation, criticVersion: resolvedCriticVersion } = await evaluateRecord({
       record: {
         html,
         source_base64: base64thumb,
@@ -879,6 +876,7 @@ app.post('/api/experiments/evaluate', async (req, res) => {
       },
       evalModel: usedEvalModel,
       defaultEvalModel: CURRENT_CRITIC_MODEL,
+      criticVersionOverride: criticVersion,
     });
 
     // Cache alongside the HTML file
@@ -888,7 +886,7 @@ app.post('/api/experiments/evaluate', async (req, res) => {
       try { cached = materializeEvaluationViews(JSON.parse(fs.readFileSync(evalPath, 'utf-8'))); } catch { cached = {}; }
     }
     const updatedCache = upsertEvaluation(cached, usedEvalModel, evaluation, new Date().toISOString(), {
-      criticVersion,
+      criticVersion: resolvedCriticVersion,
       criticModel: usedEvalModel,
     });
     saveRecord({
@@ -896,7 +894,6 @@ app.post('/api/experiments/evaluate', async (req, res) => {
       evaluationMeta: updatedCache.evaluationMeta,
       evaluationVersions: updatedCache.evaluationVersions,
     }, evalPath);
-    refreshManifest('experiment evaluated');
 
     return res.json(evaluation);
   } catch (err) {
@@ -1076,12 +1073,6 @@ Please produce an improved wrapper that makes this figure look great in the chap
     return res.status(500).json({ error: err.message });
   }
 });
-
-try {
-  ensureManifestLoaded();
-} catch (err) {
-  console.error('[manifest] startup load failed:', err?.message || err);
-}
 
 // ── Serve React build in production ───────────────────────────────────────────
 const frontendBuild = path.join(__dirname, '..', 'frontend', 'build');

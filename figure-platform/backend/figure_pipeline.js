@@ -59,7 +59,7 @@ function createResultRecord({
   return record;
 }
 
-async function evaluateRecord({ record, evalModel, defaultEvalModel }) {
+async function evaluateRecord({ record, evalModel, defaultEvalModel, criticVersionOverride }) {
   if (!record?.html) throw new Error('No HTML found for evaluation.');
 
   const usedEvalModel = evalModel || defaultEvalModel;
@@ -77,8 +77,12 @@ async function evaluateRecord({ record, evalModel, defaultEvalModel }) {
   });
 
   const evaluatedAt = new Date().toISOString();
+  const resolvedCriticVersion =
+    (typeof criticVersionOverride === 'string' && criticVersionOverride.trim())
+      ? criticVersionOverride.trim()
+      : criticContext.criticVersion;
   const updatedRecord = upsertEvaluation(record, usedEvalModel, evaluation, evaluatedAt, {
-    criticVersion: criticContext.criticVersion,
+    criticVersion: resolvedCriticVersion,
     criticModel: usedEvalModel,
   });
 
@@ -86,7 +90,7 @@ async function evaluateRecord({ record, evalModel, defaultEvalModel }) {
     evaluation,
     evalModel: usedEvalModel,
     evaluatedAt,
-    criticVersion: criticContext.criticVersion,
+    criticVersion: resolvedCriticVersion,
     record: updatedRecord,
   };
 }

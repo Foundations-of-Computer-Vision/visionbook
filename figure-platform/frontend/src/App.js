@@ -3,6 +3,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 const FALLBACK_PROMPT = '(Loading system prompt from server…)';
 const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
 const CRITIC_MODEL_STORAGE_KEY = 'figure-platform:selectedCriticModel';
+const CRITIC_NAME_STORAGE_KEY = 'figure-platform:selectedCriticName';
 const EXPERIMENT_STORAGE_KEY = 'figure-platform:selectedExperiment';
 
 function pickEvaluationModel(record, preferredModel) {
@@ -98,7 +99,7 @@ function upsertVersionedEvaluation(record, modelId, evaluation, { criticVersion,
 function collectCriticVersionSummaries(records) {
   const buckets = new Map();
 
-  const addEntry = (versionId, modelId, result, meta = {}) => {
+  const ensureBucket = (versionId) => {
     if (!versionId) return;
     const summary = buckets.get(versionId) || {
       versionId,
@@ -107,19 +108,26 @@ function collectCriticVersionSummaries(records) {
       latestAt: 0,
       models: new Set(),
     };
-    summary.count += 1;
-    summary.models.add(modelId);
-    const evaluatedAt = meta?.evaluatedAt ? new Date(meta.evaluatedAt).getTime() : 0;
-    summary.latestAt = Math.max(summary.latestAt, evaluatedAt);
     buckets.set(versionId, summary);
-    return result;
+    return summary;
   };
 
   for (const record of records || []) {
     const versioned = record?.evaluationVersions || {};
     for (const [versionId, bucket] of Object.entries(versioned)) {
-      for (const [modelId, result] of Object.entries(bucket?.evaluationResults || {})) {
-        addEntry(versionId, modelId, result, bucket?.evaluationMeta?.[modelId] || {});
+      const summary = ensureBucket(versionId);
+      if (!summary) continue;
+      const modelIds = Object.keys(bucket?.evaluationResults || {});
+      if (modelIds.length > 0) {
+        // Count each record once per critic version to avoid overcounting multi-model evaluations.
+        summary.count += 1;
+      }
+      for (const modelId of modelIds) {
+        summary.models.add(modelId);
+        const evaluatedAt = bucket?.evaluationMeta?.[modelId]?.evaluatedAt
+          ? new Date(bucket.evaluationMeta[modelId].evaluatedAt).getTime()
+          : 0;
+        summary.latestAt = Math.max(summary.latestAt, evaluatedAt);
       }
     }
   }
@@ -184,6 +192,8 @@ export default function App() {
   const [models, setModels] = useState([]);       // available models from backend
   const [selectedModel, setSelectedModel] = useState(''); // '' = server default
   const [selectedCriticModel, setSelectedCriticModel] = useState('');
+  const [criticNameOptions, setCriticNameOptions] = useState([]);
+  const [selectedCriticName, setSelectedCriticName] = useState('');
   const [experimentOptions, setExperimentOptions] = useState([]);
   const [selectedExperiment, setSelectedExperiment] = useState('');
 
@@ -199,16 +209,17 @@ export default function App() {
       setModels(list);
 
       const experimentSet = new Set();
+      const criticNameSet = new Set();
       for (const record of historyRecords || []) {
         if (record?.experiment) experimentSet.add(record.experiment);
+        for (const versionKey of Object.keys(record?.evaluationVersions || {})) {
+          if (versionKey) criticNameSet.add(versionKey);
+        }
       }
       const mergedExperiments = Array.from(experimentSet).sort();
+      const mergedCriticNames = Array.from(criticNameSet).sort();
       setExperimentOptions(mergedExperiments);
-
-      const storedExperiment = window.localStorage.getItem(EXPERIMENT_STORAGE_KEY);
-      const preferredExperiment = [storedExperiment, mergedExperiments[0]]
-        .find(experimentName => experimentName);
-      if (preferredExperiment) setSelectedExperiment(preferredExperiment);
+      setCriticNameOptions(mergedCriticNames);
 
       if (list.length === 0) return;
 
@@ -235,6 +246,10 @@ export default function App() {
   useEffect(() => {
     if (selectedCriticModel) window.localStorage.setItem(CRITIC_MODEL_STORAGE_KEY, selectedCriticModel);
   }, [selectedCriticModel]);
+  useEffect(() => {
+    if (selectedCriticName) window.localStorage.setItem(CRITIC_NAME_STORAGE_KEY, selectedCriticName);
+    else window.localStorage.removeItem(CRITIC_NAME_STORAGE_KEY);
+  }, [selectedCriticName]);
   useEffect(() => {
     if (selectedExperiment) window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, selectedExperiment);
   }, [selectedExperiment]);
@@ -278,6 +293,10 @@ export default function App() {
       setError('Set a generator model in the Generator tab first.');
       return;
     }
+    if (!selectedCriticName || !selectedCriticName.trim()) {
+      setError('Select or type a critic version name before generating.');
+      return;
+    }
     if (!selectedExperiment || !selectedExperiment.trim()) {
       setError('Select or type an experiment name before generating.');
       return;
@@ -314,6 +333,7 @@ export default function App() {
         plan: currentPlan || undefined,
         model: selectedModel || undefined,
         evalModel: selectedCriticModel || undefined,
+        criticVersion: selectedCriticName || undefined,
         experiment: selectedExperiment || undefined,
       });
       const generatedEvaluationResults = data.evaluationResults || {};
@@ -346,7 +366,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [image, selectedCriticModel, selectedExperiment, selectedModel, tab]);
+  }, [image, selectedCriticModel, selectedCriticName, selectedExperiment, selectedModel, tab]);
   const handleLoadFromHistory = useCallback((record) => {
     const normalizedRecord = {
       ...record,
@@ -437,6 +457,7 @@ export default function App() {
             htmlPath: currentRecord.htmlPath,
             imagePath: currentRecord.imagePath,
             evalModel: evalModelToUse,
+            criticVersion: selectedCriticName || undefined,
           }),
         });
         data = await res.json();
@@ -447,6 +468,7 @@ export default function App() {
           body: JSON.stringify({
             id: currentRecord.id,
             evalModel: evalModelToUse,
+            criticVersion: selectedCriticName || undefined,
           }),
         });
         data = await res.json();
@@ -459,7 +481,7 @@ export default function App() {
       setCurrentRecord(prev => prev ? {
         ...prev,
         ...upsertVersionedEvaluation(prev, modelId || 'unknown', data, {
-          criticVersion: currentCriticVersion,
+          criticVersion: selectedCriticName || currentCriticVersion,
         }),
       } : prev);
     } catch (err) {
@@ -467,7 +489,7 @@ export default function App() {
     } finally {
       setEvaluating(false);
     }
-  }, [currentRecord, currentCriticVersion, selectedCriticModel, viewerEvaluationModel]);
+  }, [currentRecord, currentCriticVersion, selectedCriticModel, selectedCriticName, viewerEvaluationModel]);
 
   return (
     <div style={styles.root}>
@@ -499,14 +521,17 @@ export default function App() {
             error={error}
             systemPrompt={systemPrompt}
             models={models}
+            criticNameOptions={criticNameOptions}
             experimentOptions={experimentOptions}
             selectedExperiment={selectedExperiment}
             selectedModel={selectedModel}
             selectedCriticModel={selectedCriticModel}
+            selectedCriticName={selectedCriticName}
             currentCriticVersion={currentCriticVersion}
             onExperimentChange={setSelectedExperiment}
             onGeneratorModelChange={setSelectedModel}
             onCriticModelChange={setSelectedCriticModel}
+            onCriticNameChange={setSelectedCriticName}
           />
         )}
         {tab === 'viewer' && (
@@ -547,7 +572,7 @@ export default function App() {
 }
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, experimentOptions, selectedExperiment, selectedModel, selectedCriticModel, onExperimentChange, onGeneratorModelChange, onCriticModelChange }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, criticNameOptions, experimentOptions, selectedExperiment, selectedModel, selectedCriticModel, selectedCriticName, onExperimentChange, onGeneratorModelChange, onCriticModelChange, onCriticNameChange }) {
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
@@ -628,6 +653,10 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       onError?.('Set a generator model in the Generator tab first.');
       return;
     }
+    if (!selectedCriticName || !selectedCriticName.trim()) {
+      onError?.('Select or type a critic version name before generating.');
+      return;
+    }
     if (!selectedExperiment || !selectedExperiment.trim()) {
       onError?.('Select or type an experiment name before generating.');
       return;
@@ -677,6 +706,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             filename: candidate.filename,
             plan: figurePlan || undefined,
             model: selectedModel || undefined,
+            criticVersion: selectedCriticName || undefined,
             experiment: selectedExperiment || undefined,
             evaluate: false,
           }),
@@ -730,6 +760,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
         body: JSON.stringify({
           ids: successIds.map(s => s.figureId),
           evalModel: selectedCriticModel || undefined,
+          criticVersion: selectedCriticName || undefined,
         }),
       });
 
@@ -791,32 +822,32 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
         >Select Chapter</button>
       </div>
       <div style={styles.generatorControlRow}>
-        <div style={styles.generatorExperimentCard}>
-          <label style={styles.generatorModelLabel}>Experiment Name</label>
-          <div style={styles.generatorExperimentControls}>
-            <select
-              style={styles.generatorModelSelect}
-              value={experimentOptions.includes(selectedExperiment) ? selectedExperiment : ''}
-              onChange={e => onExperimentChange?.(e.target.value)}
-              disabled={experimentOptions.length === 0}
-            >
-              <option value="">Select a past experiment...</option>
-              {experimentOptions.map(name => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-            <input
-              style={styles.generatorTextInput}
-              value={selectedExperiment}
-              onChange={e => onExperimentChange?.(e.target.value)}
-              placeholder="Or type a new experiment name"
-            />
-          </div>
-          <p style={styles.generatorHint}>
-            Pick an existing name from the dropdown, or type a new one to create a fresh experiment bucket.
-          </p>
-        </div>
         <div style={styles.generatorModelStack}>
+          <div style={styles.generatorExperimentCard}>
+            <label style={styles.generatorModelLabel}>Experiment Name</label>
+            <div style={styles.generatorExperimentControls}>
+              <select
+                style={styles.generatorModelSelect}
+                value={experimentOptions.includes(selectedExperiment) ? selectedExperiment : ''}
+                onChange={e => onExperimentChange?.(e.target.value)}
+                disabled={experimentOptions.length === 0}
+              >
+                <option value="">Select a past experiment...</option>
+                {experimentOptions.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <input
+                style={styles.generatorTextInput}
+                value={selectedExperiment}
+                onChange={e => onExperimentChange?.(e.target.value)}
+                placeholder="Or type a new experiment name"
+              />
+            </div>
+            <p style={styles.generatorHint}>
+              Pick an existing name from the dropdown, or type a new one to create a fresh experiment bucket.
+            </p>
+          </div>
           <div style={styles.generatorControlCard}>
             <label style={styles.generatorModelLabel}>Generator Model</label>
             <select
@@ -829,6 +860,33 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                 <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
               ))}
             </select>
+          </div>
+        </div>
+        <div style={styles.generatorModelStack}>
+          <div style={styles.generatorControlCard}>
+            <label style={styles.generatorModelLabel}>Critic Version</label>
+            <div style={styles.generatorExperimentControls}>
+              <select
+                style={styles.generatorModelSelect}
+                value={criticNameOptions.includes(selectedCriticName) ? selectedCriticName : ''}
+                onChange={e => onCriticNameChange?.(e.target.value)}
+                disabled={criticNameOptions.length === 0}
+              >
+                <option value="">Select a past critic name...</option>
+                {criticNameOptions.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <input
+                style={styles.generatorTextInput}
+                value={selectedCriticName}
+                onChange={e => onCriticNameChange?.(e.target.value)}
+                placeholder="Or type a new critic name"
+              />
+            </div>
+            <p style={styles.generatorHint}>
+              Pick an existing name from the dropdown, or type a new one to create a fresh critic bucket.
+            </p>
           </div>
           <div style={styles.generatorControlCard}>
             <label style={styles.generatorModelLabel}>Critic Model</label>
@@ -1493,13 +1551,13 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
   const [loadedApi, setLoadedApi] = React.useState(false);
   const [loadedAgent, setLoadedAgent] = React.useState(false);
   const [selectedCriticVersion, setSelectedCriticVersion] = React.useState('');
-  const criticVersionInitializedRef = React.useRef(false);
 
-  const loadApiRecords = React.useCallback(async () => {
-    if (loadedApi) return;
+  const loadApiRecords = React.useCallback(async ({ force = false } = {}) => {
+    if (loadedApi && !force) return;
     setLoadingApi(true);
     try {
-      const api = await apiFetch('/api/history-index').then(r => r.json());
+      const endpoint = force ? '/api/history-index?refresh=1' : '/api/history-index';
+      const api = await apiFetch(endpoint).then(r => r.json());
       setApiRecords(api);
       setLoadedApi(true);
     } catch (err) {
@@ -1509,8 +1567,8 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
     }
   }, [loadedApi]);
 
-  const loadAgentTree = React.useCallback(async () => {
-    if (loadedAgent) return;
+  const loadAgentTree = React.useCallback(async ({ force = false } = {}) => {
+    if (loadedAgent && !force) return;
     setLoadingAgent(true);
     try {
       const exp = await apiFetch('/api/experiments').then(r => r.json());
@@ -1547,6 +1605,14 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
       setLoadingAgent(false);
     }
   }, [loadedAgent]);
+
+  const handleRefreshResults = React.useCallback(async () => {
+    setError('');
+    await Promise.all([
+      loadApiRecords({ force: true }),
+      loadAgentTree({ force: true }),
+    ]);
+  }, [loadApiRecords, loadAgentTree]);
 
   // Fetch the real system prompt for the API tab display
   React.useEffect(() => {
@@ -1589,28 +1655,16 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
       ...expTree.flatMap(exp => exp.models.flatMap(model => model.figures)),
     ];
     const options = collectCriticVersionSummaries(allRecords);
-    if (currentCriticVersion && !options.some(option => option.versionId === currentCriticVersion)) {
-      options.unshift({
-        versionId: currentCriticVersion,
-        label: currentCriticVersion,
-        count: 0,
-        latestAt: 0,
-        models: [],
-      });
-    }
-    return options;
-  }, [apiRecords, expTree, currentCriticVersion]);
+    // Filter out 'default_critic' from the list
+    return options.filter(option => option.versionId !== 'default_critic');
+  }, [apiRecords, expTree]);
 
-  React.useEffect(() => {
-    if (currentCriticVersion && !criticVersionInitializedRef.current) {
-      setSelectedCriticVersion(prev => (!prev ? currentCriticVersion : prev));
-      criticVersionInitializedRef.current = true;
-    }
-  }, [currentCriticVersion, criticVersionOptions, selectedCriticVersion]);
+  // Don't auto-select any critic version by default
+  // Previously: React.useEffect(() => {...})
 
   const selectedVersionLabel = React.useMemo(() => {
-    return selectedCriticVersion || currentCriticVersion || '';
-  }, [currentCriticVersion, selectedCriticVersion]);
+    return selectedCriticVersion || '';
+  }, [selectedCriticVersion]);
 
   const selectedRecordView = React.useCallback(
     (record) => getVersionedEvaluationState(record, selectedCriticVersion),
@@ -1992,6 +2046,14 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
       {/* Filter nav bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#f4f5f9', borderBottom: '1px solid #e0e2eb', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, fontWeight: 700, color: '#999', textTransform: 'uppercase', letterSpacing: '0.07em', marginRight: 4 }}>Filter</span>
+        <button
+          style={{ fontSize: 11, color: '#5878a0', background: '#fff', border: '1px solid #d6dce9', borderRadius: 4, cursor: 'pointer', padding: '2px 8px' }}
+          onClick={handleRefreshResults}
+          disabled={loadingApi || loadingAgent}
+          title="Refresh results"
+        >
+          {loadingApi || loadingAgent ? 'Refreshing…' : '↻ refresh'}
+        </button>
         <span style={{ fontSize: 11, color: '#aaa' }}>Experiment</span>
         <select style={styles.resultFilterSelect} value={selected?.experiment || ''} onChange={e => handleFilterExp(e.target.value)}>
           <option value=''>All</option>
@@ -2069,7 +2131,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
               for (const item of selectedItems) {
                 const ch = item.chapter || 'other';
                 chapterCounts[ch] = (chapterCounts[ch] || 0) + 1;
-                if (Object.keys(item.evaluationResults || {}).length > 0) evalCounts[ch] = (evalCounts[ch] || 0) + 1;
+                if (hasSelectedEvaluation(item)) evalCounts[ch] = (evalCounts[ch] || 0) + 1;
               }
               return Object.entries(chapterCounts).sort(([a], [b]) => a.localeCompare(b)).map(([ch, count]) => {
                 const isActive = filterChapter === ch;
@@ -2133,7 +2195,9 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
                     >
                       <span style={{ fontSize: 8, color: '#888' }}>{isOpen ? '▾' : '▸'}</span>
                       {group}
-                      <span style={{ fontSize: 9, color: '#aaa', fontWeight: 400, marginLeft: 'auto' }}>{items.length}</span>
+                      <span style={{ fontSize: 9, color: '#aaa', fontWeight: 400, marginLeft: 'auto' }}>
+                        {items.reduce((sum, item) => sum + (item.evalCount || 0), 0)}/{items.reduce((sum, item) => sum + (item.total || 0), 0)}
+                      </span>
                     </div>
                     {isOpen && items.map(({ modelName, evalCount, total, nodeKey, onSelect }) => {
                       const isActive = selKey === nodeKey;
@@ -2963,7 +3027,7 @@ const styles = {
 
   generatorModelCard: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12, padding: '12px 14px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
   generatorControlRow: { display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12, flexWrap: 'nowrap' },
-  generatorExperimentCard: { flex: '0 0 320px', width: 320, display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
+  generatorExperimentCard: { width: 320, display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
   generatorControlCard: { display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
   generatorModelStack: { flex: '0 0 320px', width: 320, display: 'flex', flexDirection: 'column', gap: 4 },
   generatorModelLabel: { fontSize: 12, fontWeight: 700, color: '#444', textTransform: 'uppercase', letterSpacing: '0.04em' },
