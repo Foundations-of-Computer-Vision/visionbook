@@ -5,6 +5,19 @@ const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
 const CRITIC_MODEL_STORAGE_KEY = 'figure-platform:selectedCriticModel';
 const CRITIC_NAME_STORAGE_KEY = 'figure-platform:selectedCriticName';
 const EXPERIMENT_STORAGE_KEY = 'figure-platform:selectedExperiment';
+const HUMAN_EVAL_MODEL = 'human:manual';
+const HUMAN_FAILURE_MODES = [
+  'Depth-Wrong',
+  'Missing-Labels',
+  'Wrong-Primitives',
+  'Interaction-Broken',
+  'Interaction-Missing',
+  'Camera-Wrong',
+  'Scale-Wrong',
+  'Color-Wrong',
+  'Hallucination',
+  'Concept-Misunderstood',
+];
 
 function pickEvaluationModel(record, preferredModel) {
   const results = record?.evaluationResults || {};
@@ -491,6 +504,41 @@ export default function App() {
     }
   }, [currentRecord, currentCriticVersion, selectedCriticModel, selectedCriticName, viewerEvaluationModel]);
 
+  const handleSaveHumanEvaluation = useCallback(async ({ evaluation: humanEvaluation }) => {
+    if (!currentRecord) return;
+    const modelId = HUMAN_EVAL_MODEL;
+
+    const payload = {
+      raterId: 'manual',
+      evaluation: humanEvaluation,
+    };
+
+    if (currentRecord.id) payload.id = currentRecord.id;
+    else if (currentRecord.htmlPath) payload.htmlPath = currentRecord.htmlPath;
+    else throw new Error('Cannot save human evaluation: no id or htmlPath.');
+
+    const res = await apiFetch('/api/evaluate-human', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to save human evaluation.');
+
+    const savedEvaluation = data.evaluation || humanEvaluation;
+    const savedModelId = data.evalModel || modelId;
+    const savedCriticVersion = data.criticVersion || 'human_v1';
+
+    setViewerEvaluationModel(savedModelId);
+    setEvaluation(savedEvaluation);
+    setCurrentRecord(prev => prev ? {
+      ...prev,
+      ...upsertVersionedEvaluation(prev, savedModelId, savedEvaluation, {
+        criticVersion: savedCriticVersion,
+      }),
+    } : prev);
+  }, [currentRecord]);
+
   return (
     <div style={styles.root}>
       <header style={styles.header}>
@@ -547,6 +595,7 @@ export default function App() {
             availableEvaluationModels={models}
             evaluating={evaluating}
             onEvaluate={handleEvaluate}
+            onSaveHumanEvaluation={handleSaveHumanEvaluation}
             onSelectEvaluationModel={(modelId) => {
               setViewerEvaluationModel(modelId);
               setEvaluation(getRecordEvaluation(currentRecord, modelId));
@@ -1219,7 +1268,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 }
 
 // ── Viewer Tab ────────────────────────────────────────────────────────────────
-function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluation, evaluationModel, availableEvaluationModels, evaluating, onEvaluate, onSelectEvaluationModel }) {
+function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluation, evaluationModel, availableEvaluationModels, evaluating, onEvaluate, onSaveHumanEvaluation, onSelectEvaluationModel }) {
   const evaluationResults = React.useMemo(
     () => record?.evaluationResults || {},
     [record?.evaluationResults]
@@ -1245,10 +1294,13 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
 
   const blob = new Blob([html], { type: 'text/html' });
   const downloadUrl = URL.createObjectURL(blob);
+  const sourceMediaType = record?.source_media_type || 'image/png';
   const mediaType = record?.mediaType || 'image/png';
-  const thumbSrc = record?.base64thumb
-    ? `data:${mediaType};base64,${record.base64thumb}`
-    : null;
+  const thumbSrc = record?.source_base64
+    ? `data:${sourceMediaType};base64,${record.source_base64}`
+    : (record?.base64thumb
+      ? `data:${mediaType};base64,${record.base64thumb}`
+      : null);
   const viewerPlan = record?.plan || null;
 
   return (
@@ -1319,6 +1371,7 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
           evaluationMeta={record?.evaluationMeta || {}}
           evaluating={evaluating}
           onEvaluate={onEvaluate}
+          onSaveHumanEvaluation={onSaveHumanEvaluation}
           onSelectEvaluationModel={onSelectEvaluationModel}
           canEvaluate={!!(record?.id || record?.htmlPath)}
         />
@@ -1338,8 +1391,19 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
 }
 
 // ── Evaluation Panel ─────────────────────────────────────────────────────────
-function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evaluationResults, evaluationMeta, evaluating, onEvaluate, onSelectEvaluationModel, canEvaluate }) {
+function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evaluationResults, evaluationMeta, evaluating, onEvaluate, onSaveHumanEvaluation, onSelectEvaluationModel, canEvaluate }) {
   const [showAllFailures, setShowAllFailures] = React.useState(false);
+  const [mode, setMode] = React.useState('ai');
+  const [humanScores, setHumanScores] = React.useState({
+    geometry_accuracy: 3,
+    interactivity_usability: 3,
+    faithfulness: 3,
+    label_quality: 3,
+    concept_accuracy: 3,
+  });
+  const [humanFailureModes, setHumanFailureModes] = React.useState([]);
+  const [humanNotes, setHumanNotes] = React.useState('');
+  const [savingHuman, setSavingHuman] = React.useState(false);
   const scoreTextColor = (s) => { const rgb = lerpColor(s); if (!rgb) return '#888'; return `rgb(${Math.round(rgb[0] * 0.6)},${Math.round(rgb[1] * 0.6)},${Math.round(rgb[2] * 0.5)})`; };
   const scoreBarColor = (s) => { const rgb = lerpColor(s); if (!rgb) return '#ccc'; return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.8)`; };
   const selectedModelLabel = evaluationModels?.find(m => m.id === evaluationModel)?.label || evaluationModel || 'unknown';
@@ -1351,10 +1415,156 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
     { key: 'concept_accuracy', label: 'Concept' },
     { key: 'visual_aesthetics', label: 'Visual*' },
   ];
+  const humanModelId = React.useMemo(() => {
+    const keys = Object.keys(evaluationResults || {});
+    if (keys.includes(HUMAN_EVAL_MODEL)) return HUMAN_EVAL_MODEL;
+    return keys.find(key => key.startsWith('human:')) || HUMAN_EVAL_MODEL;
+  }, [evaluationResults]);
+  const existingHumanEvaluation = (evaluationResults || {})[humanModelId] || null;
+
+  React.useEffect(() => {
+    if (mode !== 'human') return;
+    if (!existingHumanEvaluation) {
+      setHumanScores({
+        geometry_accuracy: 3,
+        interactivity_usability: 3,
+        faithfulness: 3,
+        label_quality: 3,
+        concept_accuracy: 3,
+      });
+      setHumanFailureModes([]);
+      setHumanNotes('');
+      return;
+    }
+
+    setHumanScores({
+      geometry_accuracy: Math.max(1, Math.min(5, Number(existingHumanEvaluation.geometry_accuracy) || 3)),
+      interactivity_usability: Math.max(1, Math.min(5, Number(existingHumanEvaluation.interactivity_usability) || 3)),
+      faithfulness: Math.max(1, Math.min(5, Number(existingHumanEvaluation.faithfulness) || 3)),
+      label_quality: Math.max(1, Math.min(5, Number(existingHumanEvaluation.label_quality) || 3)),
+      concept_accuracy: Math.max(1, Math.min(5, Number(existingHumanEvaluation.concept_accuracy) || 3)),
+    });
+    setHumanFailureModes(Array.isArray(existingHumanEvaluation.failure_modes) ? existingHumanEvaluation.failure_modes : []);
+    setHumanNotes(typeof existingHumanEvaluation.notes === 'string' ? existingHumanEvaluation.notes : '');
+  }, [mode, existingHumanEvaluation]);
+
+  const modeToggle = (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
+      <button
+        style={{ ...styles.evalBtn, background: mode === 'ai' ? '#111' : '#fff', color: mode === 'ai' ? '#fff' : '#333', borderColor: mode === 'ai' ? '#111' : '#ddd' }}
+        onClick={() => setMode('ai')}
+      >
+        AI review
+      </button>
+      <button
+        style={{ ...styles.evalBtn, background: mode === 'human' ? '#111' : '#fff', color: mode === 'human' ? '#fff' : '#333', borderColor: mode === 'human' ? '#111' : '#ddd' }}
+        onClick={() => setMode('human')}
+      >
+        Human review
+      </button>
+    </div>
+  );
+
+  const handleToggleFailureMode = (modeName) => {
+    setHumanFailureModes(prev => prev.includes(modeName)
+      ? prev.filter(m => m !== modeName)
+      : [...prev, modeName]
+    );
+  };
+
+  const handleSubmitHuman = async () => {
+    if (!onSaveHumanEvaluation) return;
+    setSavingHuman(true);
+    try {
+      await onSaveHumanEvaluation({
+        evaluation: {
+          ...humanScores,
+          failure_modes: humanFailureModes,
+          notes: humanNotes,
+        },
+      });
+    } catch (err) {
+      alert('Saving human evaluation failed: ' + (err?.message || 'Unknown error'));
+    } finally {
+      setSavingHuman(false);
+    }
+  };
+
+  if (mode === 'human') {
+    if (!canEvaluate) return null;
+    return (
+      <div style={styles.evalSection}>
+        {modeToggle}
+        <p style={{ fontSize: 10, color: '#666', margin: 0, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Manual review form</p>
+
+        {METRICS.filter(m => m.key !== 'visual_aesthetics').map(({ key, label }) => (
+          <label key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <span style={{ fontSize: 11, color: '#555' }}>{label}</span>
+            <input
+              type="number"
+              min={1}
+              max={5}
+              step={1}
+              value={humanScores[key]}
+              onChange={e => {
+                const parsed = Number(e.target.value);
+                const clamped = Number.isFinite(parsed) ? Math.max(1, Math.min(5, Math.round(parsed))) : 3;
+                setHumanScores(prev => ({ ...prev, [key]: clamped }));
+              }}
+              style={{ width: 56, ...styles.resultFilterSelect, cursor: 'text' }}
+            />
+          </label>
+        ))}
+
+        <div>
+          <p style={{ fontSize: 10, color: '#777', margin: '2px 0 6px' }}>Failure modes (optional)</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {HUMAN_FAILURE_MODES.map(modeName => {
+              const active = humanFailureModes.includes(modeName);
+              return (
+                <button
+                  key={modeName}
+                  onClick={() => handleToggleFailureMode(modeName)}
+                  style={{
+                    ...styles.evalFailureTag,
+                    cursor: 'pointer',
+                    background: active ? failureModeColor(modeName).bg : '#f7f7f7',
+                    color: active ? failureModeColor(modeName).fg : '#666',
+                    borderColor: active ? failureModeColor(modeName).border : '#ddd',
+                  }}
+                >
+                  {modeName}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <label style={{ display: 'block' }}>
+          <span style={{ fontSize: 10, color: '#777', display: 'block', marginBottom: 4 }}>Notes (optional)</span>
+          <textarea
+            value={humanNotes}
+            onChange={e => setHumanNotes(e.target.value)}
+            rows={3}
+            style={{ width: '100%', boxSizing: 'border-box', resize: 'vertical', fontFamily: 'inherit', ...styles.resultFilterSelect, cursor: 'text' }}
+          />
+        </label>
+
+        <button
+          style={{ ...styles.evalBtn, background: savingHuman ? '#f5f5f5' : '#fff', opacity: savingHuman ? 0.8 : 1 }}
+          onClick={handleSubmitHuman}
+          disabled={savingHuman}
+        >
+          {savingHuman ? 'Saving…' : 'Save human changes'}
+        </button>
+      </div>
+    );
+  }
 
   if (evaluating) {
     return (
       <div style={styles.evalSection}>
+        {modeToggle}
         <p style={{ fontSize: 11, color: '#888', margin: 0 }}>Evaluating {selectedModelLabel}…</p>
       </div>
     );
@@ -1379,6 +1589,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
     if (!canEvaluate) return null;
     return (
       <div style={styles.evalSection}>
+        {modeToggle}
         {selector}
         <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px' }}>No evaluation exists for {selectedModelLabel}.</p>
         <button style={styles.evalBtn} onClick={() => onEvaluate(evaluationModel)}>Generate evaluation</button>
@@ -1391,6 +1602,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
 
   return (
     <div style={styles.evalSection}>
+      {modeToggle}
       {selector}
       <div style={styles.evalHeader}>
         <span style={styles.evalTitle}>Critic feedback</span>

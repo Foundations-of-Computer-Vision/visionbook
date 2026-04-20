@@ -592,6 +592,160 @@ async function runEvaluation(record, filePath, requestedEvalModel, requestedCrit
   return result.evaluation;
 }
 
+const HUMAN_SCORE_KEYS = [
+  'geometry_accuracy',
+  'interactivity_usability',
+  'faithfulness',
+  'label_quality',
+  'concept_accuracy',
+];
+
+function normalizeHumanRaterId(rawRaterId) {
+  const fallback = 'anonymous';
+  if (typeof rawRaterId !== 'string' || !rawRaterId.trim()) return fallback;
+  const cleaned = rawRaterId.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '_').replace(/_+/g, '_');
+  return cleaned || fallback;
+}
+
+function toHumanScore(value, key) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    throw new Error(`${key} must be a number from 1 to 5.`);
+  }
+  const rounded = Math.round(n);
+  if (rounded < 1 || rounded > 5) {
+    throw new Error(`${key} must be between 1 and 5.`);
+  }
+  return rounded;
+}
+
+function normalizeHumanEvaluation(input) {
+  if (!input || typeof input !== 'object') {
+    throw new Error('evaluation object is required.');
+  }
+
+  const normalized = {};
+  for (const key of HUMAN_SCORE_KEYS) {
+    normalized[key] = toHumanScore(input[key], key);
+  }
+
+  const failureModes = Array.isArray(input.failure_modes)
+    ? input.failure_modes
+      .map(mode => (typeof mode === 'string' ? mode.trim() : ''))
+      .filter(Boolean)
+      .slice(0, 20)
+    : [];
+  normalized.failure_modes = Array.from(new Set(failureModes));
+
+  normalized.notes = typeof input.notes === 'string'
+    ? input.notes.trim().slice(0, 2000)
+    : '';
+
+  normalized.visual_aesthetics = Math.round(
+    ((normalized.geometry_accuracy + normalized.faithfulness + normalized.label_quality) / 3) * 10
+  ) / 10;
+  normalized.overall_average = Math.round(
+    (HUMAN_SCORE_KEYS.reduce((sum, key) => sum + normalized[key], 0) / HUMAN_SCORE_KEYS.length) * 10
+  ) / 10;
+
+  return normalized;
+}
+
+// ── POST /api/evaluate-human ─────────────────────────────────────────────────
+// Persist a manual/human evaluation into the same versioned schema used by AI.
+app.post('/api/evaluate-human', (req, res) => {
+  const { id, htmlPath, raterId, criticVersion, evaluation } = req.body || {};
+  if (!id && !htmlPath) {
+    return res.status(400).json({ error: 'id or htmlPath is required.' });
+  }
+
+  let normalizedEvaluation;
+  try {
+    normalizedEvaluation = normalizeHumanEvaluation(evaluation);
+  } catch (err) {
+    return res.status(400).json({ error: err?.message || 'Invalid evaluation payload.' });
+  }
+
+  const resolvedRater = normalizeHumanRaterId(raterId);
+  const evalModel = `human:${resolvedRater}`;
+  const resolvedCriticVersion =
+    typeof criticVersion === 'string' && criticVersion.trim()
+      ? criticVersion.trim()
+      : 'human_v1';
+  const evaluatedAt = new Date().toISOString();
+
+  if (id) {
+    const filePath = path.join(RESULTS_DIR, `${id}.json`);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Result not found.' });
+    }
+
+    let record;
+    try {
+      record = materializeEvaluationViews(JSON.parse(fs.readFileSync(filePath, 'utf-8')));
+    } catch {
+      return res.status(500).json({ error: 'Failed to read result file.' });
+    }
+
+    try {
+      const updated = upsertEvaluation(record, evalModel, normalizedEvaluation, evaluatedAt, {
+        criticVersion: resolvedCriticVersion,
+        criticModel: evalModel,
+      });
+      saveRecord(updated, filePath);
+      refreshHistoryManifestSafe();
+      return res.json({
+        evaluation: normalizedEvaluation,
+        evalModel,
+        criticVersion: resolvedCriticVersion,
+        evaluationResults: updated.evaluationResults || {},
+        evaluationMeta: updated.evaluationMeta || {},
+        evaluationVersions: updated.evaluationVersions || {},
+      });
+    } catch (err) {
+      return res.status(500).json({ error: err?.message || 'Failed to save human evaluation.' });
+    }
+  }
+
+  const absHtml = path.resolve(htmlPath);
+  if (!fs.existsSync(absHtml)) {
+    return res.status(404).json({ error: 'HTML file not found.' });
+  }
+
+  try {
+    const evalPath = absHtml.replace(/\.html$/, '.eval.json');
+    let cached = {};
+    if (fs.existsSync(evalPath)) {
+      try {
+        cached = materializeEvaluationViews(JSON.parse(fs.readFileSync(evalPath, 'utf-8')));
+      } catch {
+        cached = {};
+      }
+    }
+
+    const updatedCache = upsertEvaluation(cached, evalModel, normalizedEvaluation, evaluatedAt, {
+      criticVersion: resolvedCriticVersion,
+      criticModel: evalModel,
+    });
+    saveRecord({
+      evaluationResults: updatedCache.evaluationResults,
+      evaluationMeta: updatedCache.evaluationMeta,
+      evaluationVersions: updatedCache.evaluationVersions,
+    }, evalPath);
+
+    return res.json({
+      evaluation: normalizedEvaluation,
+      evalModel,
+      criticVersion: resolvedCriticVersion,
+      evaluationResults: updatedCache.evaluationResults || {},
+      evaluationMeta: updatedCache.evaluationMeta || {},
+      evaluationVersions: updatedCache.evaluationVersions || {},
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || 'Failed to save human evaluation.' });
+  }
+});
+
 // ── POST /api/evaluate ────────────────────────────────────────────────────────
 // Manual re-evaluation endpoint (used for existing results without scores).
 app.post('/api/evaluate', async (req, res) => {
