@@ -7,7 +7,6 @@ const { screenshotHtml, loadBaseScaffold } = require('./runtime-helpers');
 const { generateFigureHtml } = require('./generation');
 const {
   buildExperimentContext,
-  buildPlanInjection,
   createResultRecord,
   evaluateRecord,
   saveRecord,
@@ -227,16 +226,12 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
   }
   console.log(`[generate] requested="${requestedModel}" experiment="${requestedExperiment}" → using="${modelId}" | file=${filename}`);
 
-  const userText = plan
-    ? `${buildPlanInjection(plan)}\n\nFollow the interaction plan above. Output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.`
-    : 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.';
-
   const html = await withRetry(() => generateFigureHtml({
     modelId,
     scaffold: BASE_SCAFFOLD,
     mediaType,
     base64,
-    userText,
+    plan,
     maxTokens: 16384,
     applyFixes: true,
   }));

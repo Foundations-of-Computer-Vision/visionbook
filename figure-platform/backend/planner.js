@@ -119,37 +119,42 @@ function loadChapterText(chapterName) {
 
 const PLAN_SYSTEM_PROMPT = `You are an expert at planning interactive 3D visualizations for textbook figures.
 
-Given a textbook excerpt and figure filename, output a concise interaction plan in JSON:
+Given a textbook excerpt and figure, your goal is to come up with a pedagogically useful guided demonstration that walks through the figure in various states as the user clips next/previous buttons. Accompanying this demonstration is a series of interactions that you will design - toggling between steps of the guided demo will change the states of the interactions (toggles on/off, sliders at different values). Output the description of each step of the guided demonstration and the required ineractions in a concise JSON with no markdown and explanation:
 {
-  "concept": "one-sentence description of the core concept being illustrated",
+  "concept": "multiple sentences explaining the specific implementation of each step of the guided demonstration to implement, at least 3 steps,
   "elements": ["list of geometric elements to recreate in 3D"],
   "interactions": [
     { "type": "slider|toggle|step|animate|drag", "label": "UI label", "teaches": "what this interaction demonstrates" }
   ],
   "camera_suggestion": "description of ideal initial viewpoint",
   "notes": "any special considerations"
-}
-
-Rules:
-- Plan 2-5 meaningful interactions that teach the concept
-- Each interaction must have a clear pedagogical purpose
-- Keep the plan concise — under 400 tokens total
-- Output ONLY valid JSON, no markdown, no explanation`;
+}`
 
 /**
  * Call the LLM to generate a quick interaction plan for one figure.
- * Text-only (no vision) — the generator sees the image instead.
+ * Optionally includes the image for vision-based planning.
  * Returns the parsed plan object.
  */
-async function generateInteractionPlan(contextChunk, figureStem) {
+async function generateInteractionPlan(contextChunk, figureStem, { base64, mediaType } = {}) {
+  const userContent = [];
+
+  // Include image if provided
+  if (base64 && mediaType) {
+    userContent.push({
+      type: 'image_url',
+      image_url: { url: `data:${mediaType};base64,${base64}` },
+    });
+  }
+
+  // Always include text
+  userContent.push({
+    type: 'text',
+    text: `Figure: ${figureStem}\n\nTextbook context:\n${contextChunk.slice(0, 3000)}`,
+  });
+
   let content = await generateWithModel(PLANNER_MODEL, {
     systemPrompt: PLAN_SYSTEM_PROMPT,
-    userContent: [
-      {
-        type: 'text',
-        text: `Figure: ${figureStem}\n\nTextbook context:\n${contextChunk.slice(0, 3000)}`,
-      },
-    ],
+    userContent,
     maxTokens: PLANNER_MAX_TOKENS,
   });
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -169,9 +174,10 @@ async function generateInteractionPlan(contextChunk, figureStem) {
  *
  * @param {string} figureStem  - e.g. "brdf" or "pinhole_geometry2"
  * @param {string} chapterName - e.g. "imaging" (optional, will be inferred)
+ * @param {object} imageData   - optional { base64, mediaType }
  * @returns {{ figureStem, chapterName, contextChunk, interactionPlan }}
  */
-async function planForFigure(figureStem, chapterName) {
+async function planForFigure(figureStem, chapterName, imageData) {
   const resolvedChapter = chapterName || inferChapterFromFilename(figureStem);
 
   // Try to load chapter text
@@ -184,7 +190,7 @@ async function planForFigure(figureStem, chapterName) {
     contextChunk = `Figure: ${figureStem}. No chapter text found — plan from filename alone.`;
   }
 
-  const interactionPlan = await generateInteractionPlan(contextChunk, figureStem);
+  const interactionPlan = await generateInteractionPlan(contextChunk, figureStem, imageData);
 
   return {
     figureStem,
@@ -199,9 +205,10 @@ async function planForFigure(figureStem, chapterName) {
  * Returns plans for all 3D candidates, one at a time (async generator for streaming).
  *
  * @param {string} chapterName
+ * @param {object} imageDataMap - optional map of figureStem -> { base64, mediaType }
  * @returns {Array<{ figureStem, chapterName, contextChunk, interactionPlan, imagePath }>}
  */
-async function planChapter(chapterName) {
+async function planChapter(chapterName, imageDataMap = {}) {
   const candidates = list3dCandidates(chapterName);
   if (!candidates.length) return [];
 
@@ -216,7 +223,7 @@ async function planChapter(chapterName) {
       contextChunk = `Figure: ${candidate.stem} from chapter "${chapterName}". No chapter text found.`;
     }
 
-    const interactionPlan = await generateInteractionPlan(contextChunk, candidate.stem);
+    const interactionPlan = await generateInteractionPlan(contextChunk, candidate.stem, imageDataMap[candidate.stem]);
 
     plans.push({
       figureStem: candidate.stem,
