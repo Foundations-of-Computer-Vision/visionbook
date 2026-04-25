@@ -4,6 +4,7 @@ const FALLBACK_PROMPT = '(Loading system prompt from server…)';
 const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
 const CRITIC_MODEL_STORAGE_KEY = 'figure-platform:selectedCriticModel';
 const CRITIC_NAME_STORAGE_KEY = 'figure-platform:selectedCriticName';
+const CRITIC_PASSES_STORAGE_KEY = 'figure-platform:selectedCriticPasses';
 const EXPERIMENT_STORAGE_KEY = 'figure-platform:selectedExperiment';
 const HUMAN_EVAL_MODEL = 'human:manual';
 const HUMAN_FAILURE_MODES = [
@@ -19,12 +20,16 @@ const HUMAN_FAILURE_MODES = [
   'Concept-Misunderstood',
 ];
 
+function isHumanEvaluationModel(modelId) {
+  return typeof modelId === 'string' && modelId.startsWith('human:');
+}
+
 function pickEvaluationModel(record, preferredModel) {
   const results = record?.evaluationResults || {};
   const meta = record?.evaluationMeta || {};
-  const keys = Object.keys(results);
+  const keys = Object.keys(results).filter(modelId => !isHumanEvaluationModel(modelId));
   if (!keys.length) return null;
-  if (preferredModel && results[preferredModel]) return preferredModel;
+  if (preferredModel && !isHumanEvaluationModel(preferredModel) && results[preferredModel]) return preferredModel;
   // Prefer the most recently evaluated model when metadata is available.
   const sorted = [...keys].sort((a, b) => {
     const aTime = meta[a]?.evaluatedAt ? new Date(meta[a].evaluatedAt).getTime() : 0;
@@ -200,6 +205,7 @@ export default function App() {
   const [generatedHtml, setGeneratedHtml] = useState('');
   const [systemPrompt, setSystemPrompt] = useState(FALLBACK_PROMPT);
   const [currentCriticVersion, setCurrentCriticVersion] = useState('');
+  const [selectedCriticPasses, setSelectedCriticPasses] = useState(1);
 
   // Model selection
   const [models, setModels] = useState([]);       // available models from backend
@@ -247,12 +253,21 @@ export default function App() {
         .find(modelId => modelId && list.some(m => m.id === modelId));
 
       if (preferredCriticModel) setSelectedCriticModel(preferredCriticModel);
+
+      const storedCriticPassesRaw = window.localStorage.getItem(CRITIC_PASSES_STORAGE_KEY);
+      if (storedCriticPassesRaw !== null) {
+        const storedCriticPasses = Number(storedCriticPassesRaw);
+        if (Number.isInteger(storedCriticPasses) && storedCriticPasses >= 0 && storedCriticPasses <= 3) {
+          setSelectedCriticPasses(storedCriticPasses);
+        }
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [currentRecord, setCurrentRecord] = useState(null); // full record from history
   const [viewerEvaluationModel, setViewerEvaluationModel] = useState(null);
+  const [viewerCriticVersion, setViewerCriticVersion] = useState('');
   useEffect(() => {
     if (selectedModel) window.localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
   }, [selectedModel]);
@@ -263,6 +278,9 @@ export default function App() {
     if (selectedCriticName) window.localStorage.setItem(CRITIC_NAME_STORAGE_KEY, selectedCriticName);
     else window.localStorage.removeItem(CRITIC_NAME_STORAGE_KEY);
   }, [selectedCriticName]);
+  useEffect(() => {
+    window.localStorage.setItem(CRITIC_PASSES_STORAGE_KEY, String(selectedCriticPasses));
+  }, [selectedCriticPasses]);
   useEffect(() => {
     if (selectedExperiment) window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, selectedExperiment);
   }, [selectedExperiment]);
@@ -286,11 +304,28 @@ export default function App() {
       evaluationMeta: record.evaluationMeta || {},
       evaluationVersions: record.evaluationVersions || {},
     };
-    const selectedModel = pickEvaluationModel(normalizedRecord, preferredModel);
+    const scopedRecord = getVersionedEvaluationState(normalizedRecord, viewerCriticVersion);
+    const selectedModel = pickEvaluationModel(scopedRecord, preferredModel);
     setCurrentRecord(normalizedRecord);
     setViewerEvaluationModel(selectedModel);
-    setEvaluation(getRecordEvaluation(normalizedRecord, selectedModel));
-  }, []);
+    setEvaluation(getRecordEvaluation(scopedRecord, selectedModel));
+  }, [viewerCriticVersion]);
+
+  useEffect(() => {
+    if (!currentRecord) return;
+    const scopedRecord = getVersionedEvaluationState(currentRecord, viewerCriticVersion);
+    const selectedModelExists = viewerEvaluationModel && scopedRecord.evaluationResults?.[viewerEvaluationModel];
+    const nextModel = selectedModelExists ? viewerEvaluationModel : pickEvaluationModel(scopedRecord, null);
+    if (nextModel !== viewerEvaluationModel) {
+      setViewerEvaluationModel(nextModel);
+    }
+    const nextEvaluation = getRecordEvaluation(scopedRecord, nextModel);
+    const currentOverall = evaluation?.overall_average ?? null;
+    const nextOverall = nextEvaluation?.overall_average ?? null;
+    if (currentOverall !== nextOverall || (!evaluation && nextEvaluation) || (evaluation && !nextEvaluation)) {
+      setEvaluation(nextEvaluation);
+    }
+  }, [currentRecord, viewerCriticVersion, viewerEvaluationModel, evaluation]);
 
   // Called by Uploader when a file is selected
   const handleImageSelected = useCallback((imgData) => {
@@ -324,7 +359,11 @@ export default function App() {
       const planRes = await apiFetch('/api/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: image.filename }),
+        body: JSON.stringify({
+          filename: image.filename,
+          base64: image.base64,
+          mediaType: image.mediaType,
+        }),
       });
       const planData = await planRes.json();
       if (planRes.ok) {
@@ -347,6 +386,7 @@ export default function App() {
         model: selectedModel || undefined,
         evalModel: selectedCriticModel || undefined,
         criticVersion: selectedCriticName || undefined,
+        criticPasses: selectedCriticPasses,
         experiment: selectedExperiment || undefined,
       });
       const generatedEvaluationResults = data.evaluationResults || {};
@@ -379,7 +419,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [image, selectedCriticModel, selectedCriticName, selectedExperiment, selectedModel, tab]);
+  }, [image, selectedCriticModel, selectedCriticName, selectedCriticPasses, selectedExperiment, selectedModel, tab]);
   const handleLoadFromHistory = useCallback((record) => {
     const normalizedRecord = {
       ...record,
@@ -387,6 +427,7 @@ export default function App() {
       evaluationMeta: record.evaluationMeta || {},
       evaluationVersions: record.evaluationVersions || {},
     };
+    setViewerCriticVersion('');
     const selectedModel = pickEvaluationModel(normalizedRecord, null);
     setGeneratedHtml(record.html);
     syncViewerSelection(normalizedRecord, selectedModel);
@@ -446,6 +487,7 @@ export default function App() {
           evaluationMeta: item.evaluationMeta || {},
           evaluationVersions: item.evaluationVersions || {},
         };
+        setViewerCriticVersion('');
         const selectedEvalModel = pickEvaluationModel(viewerRecord, null);
         setGeneratedHtml(html);
         syncViewerSelection(viewerRecord, selectedEvalModel);
@@ -463,6 +505,7 @@ export default function App() {
       const modelId = requestedEvalModel || selectedCriticModel || pickEvaluationModel(currentRecord, null) || 'gpt-4o';
       const evalModelToUse = modelId;
       let data;
+      const selectedCriticVersionForViewer = (viewerCriticVersion || selectedCriticName || '').trim();
       if (currentRecord.htmlPath) {
         const res = await apiFetch('/api/experiments/evaluate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -470,7 +513,8 @@ export default function App() {
             htmlPath: currentRecord.htmlPath,
             imagePath: currentRecord.imagePath,
             evalModel: evalModelToUse,
-            criticVersion: selectedCriticName || undefined,
+            criticVersion: selectedCriticVersionForViewer || undefined,
+            criticPasses: selectedCriticPasses,
           }),
         });
         data = await res.json();
@@ -481,7 +525,8 @@ export default function App() {
           body: JSON.stringify({
             id: currentRecord.id,
             evalModel: evalModelToUse,
-            criticVersion: selectedCriticName || undefined,
+            criticVersion: selectedCriticVersionForViewer || undefined,
+            criticPasses: selectedCriticPasses,
           }),
         });
         data = await res.json();
@@ -494,7 +539,7 @@ export default function App() {
       setCurrentRecord(prev => prev ? {
         ...prev,
         ...upsertVersionedEvaluation(prev, modelId || 'unknown', data, {
-          criticVersion: selectedCriticName || currentCriticVersion,
+          criticVersion: selectedCriticVersionForViewer || currentCriticVersion,
         }),
       } : prev);
     } catch (err) {
@@ -502,7 +547,7 @@ export default function App() {
     } finally {
       setEvaluating(false);
     }
-  }, [currentRecord, currentCriticVersion, selectedCriticModel, selectedCriticName, viewerEvaluationModel]);
+  }, [currentRecord, currentCriticVersion, selectedCriticModel, selectedCriticName, selectedCriticPasses, viewerCriticVersion, viewerEvaluationModel]);
 
   const handleSaveHumanEvaluation = useCallback(async ({ evaluation: humanEvaluation }) => {
     if (!currentRecord) return;
@@ -527,17 +572,24 @@ export default function App() {
 
     const savedEvaluation = data.evaluation || humanEvaluation;
     const savedModelId = data.evalModel || modelId;
-    const savedCriticVersion = data.criticVersion || 'human_v1';
+    const savedCriticVersion = data.criticVersion || viewerCriticVersion || 'human_v1';
 
-    setViewerEvaluationModel(savedModelId);
-    setEvaluation(savedEvaluation);
-    setCurrentRecord(prev => prev ? {
-      ...prev,
-      ...upsertVersionedEvaluation(prev, savedModelId, savedEvaluation, {
+    const updatedRecord = {
+      ...currentRecord,
+      ...upsertVersionedEvaluation(currentRecord, savedModelId, savedEvaluation, {
         criticVersion: savedCriticVersion,
       }),
-    } : prev);
-  }, [currentRecord]);
+    };
+
+    const scopedRecord = getVersionedEvaluationState(updatedRecord, viewerCriticVersion);
+    const nextAiModel = !isHumanEvaluationModel(viewerEvaluationModel) && scopedRecord.evaluationResults?.[viewerEvaluationModel]
+      ? viewerEvaluationModel
+      : pickEvaluationModel(scopedRecord, null);
+
+    setCurrentRecord(updatedRecord);
+    setViewerEvaluationModel(nextAiModel);
+    setEvaluation(getRecordEvaluation(scopedRecord, nextAiModel));
+  }, [currentRecord, viewerCriticVersion, viewerEvaluationModel]);
 
   return (
     <div style={styles.root}>
@@ -575,11 +627,13 @@ export default function App() {
             selectedModel={selectedModel}
             selectedCriticModel={selectedCriticModel}
             selectedCriticName={selectedCriticName}
+            selectedCriticPasses={selectedCriticPasses}
             currentCriticVersion={currentCriticVersion}
             onExperimentChange={setSelectedExperiment}
             onGeneratorModelChange={setSelectedModel}
             onCriticModelChange={setSelectedCriticModel}
             onCriticNameChange={setSelectedCriticName}
+            onCriticPassesChange={setSelectedCriticPasses}
           />
         )}
         {tab === 'viewer' && (
@@ -596,10 +650,15 @@ export default function App() {
             evaluating={evaluating}
             onEvaluate={handleEvaluate}
             onSaveHumanEvaluation={handleSaveHumanEvaluation}
+            selectedCriticVersion={viewerCriticVersion}
+            onSelectCriticVersion={setViewerCriticVersion}
             onSelectEvaluationModel={(modelId) => {
               setViewerEvaluationModel(modelId);
-              setEvaluation(getRecordEvaluation(currentRecord, modelId));
+              const scopedRecord = getVersionedEvaluationState(currentRecord, viewerCriticVersion);
+              setEvaluation(getRecordEvaluation(scopedRecord, modelId));
             }}
+            selectedCriticPasses={selectedCriticPasses}
+            onCriticPassesChange={setSelectedCriticPasses}
           />
         )}
         {tab === 'results' && (
@@ -607,6 +666,8 @@ export default function App() {
             onOpen={handleOpenResult}
             criticModel={selectedCriticModel}
             currentCriticVersion={currentCriticVersion}
+            selectedCriticPasses={selectedCriticPasses}
+            onCriticPassesChange={setSelectedCriticPasses}
           />
         )}
         {tab === 'dashboard' && (
@@ -620,8 +681,26 @@ export default function App() {
   );
 }
 
+function CriticPassSelector({ value, onChange, compact = false, includeZero = true }) {
+  const passOptions = includeZero ? [0, 1, 2, 3] : [1, 2, 3];
+  return (
+    <div style={compact ? styles.criticPassCardCompact : styles.criticPassCard}>
+      <label style={compact ? styles.criticPassLabelCompact : styles.generatorModelLabel}>Critic Passes</label>
+      <select
+        style={compact ? styles.criticPassSelectCompact : styles.generatorModelSelect}
+        value={value}
+        onChange={e => onChange?.(Number(e.target.value))}
+      >
+        {passOptions.map(n => (
+          <option key={n} value={n}>{n} pass{n === 1 ? '' : 'es'}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, criticNameOptions, experimentOptions, selectedExperiment, selectedModel, selectedCriticModel, selectedCriticName, onExperimentChange, onGeneratorModelChange, onCriticModelChange, onCriticNameChange }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, criticNameOptions, experimentOptions, selectedExperiment, selectedModel, selectedCriticModel, selectedCriticName, selectedCriticPasses, onExperimentChange, onGeneratorModelChange, onCriticModelChange, onCriticNameChange, onCriticPassesChange }) {
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
@@ -734,7 +813,12 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
         const planRes = await apiFetch('/api/plan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: candidate.filename, chapterHint: selectedChapter }),
+          body: JSON.stringify({
+            filename: candidate.filename,
+            chapterHint: selectedChapter,
+            base64: candidate.base64,
+            mediaType: candidate.mediaType,
+          }),
         });
         if (planRes.ok) figurePlan = await planRes.json();
       } catch (_) { }
@@ -810,6 +894,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
           ids: successIds.map(s => s.figureId),
           evalModel: selectedCriticModel || undefined,
           criticVersion: selectedCriticName || undefined,
+          criticPasses: selectedCriticPasses,
         }),
       });
 
@@ -950,6 +1035,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
               ))}
             </select>
           </div>
+          <CriticPassSelector value={selectedCriticPasses} onChange={onCriticPassesChange} />
         </div>
       </div>
 
@@ -1268,10 +1354,22 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 }
 
 // ── Viewer Tab ────────────────────────────────────────────────────────────────
-function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluation, evaluationModel, availableEvaluationModels, evaluating, onEvaluate, onSaveHumanEvaluation, onSelectEvaluationModel }) {
+function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluation, evaluationModel, availableEvaluationModels, evaluating, onEvaluate, onSaveHumanEvaluation, selectedCriticVersion, onSelectCriticVersion, onSelectEvaluationModel, selectedCriticPasses, onCriticPassesChange }) {
+  const criticVersionOptions = React.useMemo(
+    () => collectCriticVersionSummaries(record ? [record] : []),
+    [record]
+  );
+  const selectedRecordView = React.useMemo(
+    () => getVersionedEvaluationState(record, selectedCriticVersion),
+    [record, selectedCriticVersion]
+  );
   const evaluationResults = React.useMemo(
-    () => record?.evaluationResults || {},
-    [record?.evaluationResults]
+    () => selectedRecordView?.evaluationResults || {},
+    [selectedRecordView]
+  );
+  const evaluationMeta = React.useMemo(
+    () => selectedRecordView?.evaluationMeta || {},
+    [selectedRecordView]
   );
   const evaluationModelOptions = React.useMemo(() => {
     const byId = new Map();
@@ -1281,7 +1379,7 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
     for (const modelId of Object.keys(evaluationResults)) {
       if (!byId.has(modelId)) byId.set(modelId, { id: modelId, label: modelId });
     }
-    return Array.from(byId.values());
+    return Array.from(byId.values()).filter(model => !isHumanEvaluationModel(model?.id));
   }, [availableEvaluationModels, evaluationResults]);
 
   if (!html) {
@@ -1307,6 +1405,40 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
     <div style={styles.viewerWrap}>
       {/* Left panel */}
       <div style={styles.viewerLeft}>
+        <div style={{ ...styles.viewerCriticVersionBar, marginBottom: 10 }}>
+          <div style={styles.viewerCriticVersionHeaderRow}>
+            <span style={styles.viewerCriticVersionBarLabel}>Critic version</span>
+          </div>
+          <div style={styles.viewerCriticVersionBodyRow}>
+            <div style={styles.viewerCriticVersionRail}>
+              {criticVersionOptions.length === 0 ? (
+                <span style={styles.viewerCriticVersionEmpty}>No critic versions yet</span>
+              ) : criticVersionOptions.map(option => {
+                const isActive = option.versionId === selectedCriticVersion;
+                return (
+                  <button
+                    key={option.versionId}
+                    style={{
+                      ...styles.viewerCriticVersionPill,
+                      ...(isActive ? styles.viewerCriticVersionPillActive : {}),
+                    }}
+                    onClick={() => onSelectCriticVersion?.(option.versionId)}
+                    title={option.versionId}
+                  >
+                    <span>{option.label || option.versionId}</span>
+                    <span style={styles.viewerCriticVersionCount}>{option.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <input
+              style={styles.viewerCriticVersionInput}
+              value={selectedCriticVersion || ''}
+              onChange={e => onSelectCriticVersion?.(e.target.value)}
+              placeholder="Type version for new evals"
+            />
+          </div>
+        </div>
         {thumbSrc && (
           <img src={thumbSrc} alt="original" style={styles.thumbImg} />
         )}
@@ -1368,12 +1500,14 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
           evaluationModel={evaluationModel}
           evaluationModels={evaluationModelOptions}
           evaluationResults={evaluationResults}
-          evaluationMeta={record?.evaluationMeta || {}}
+          evaluationMeta={evaluationMeta}
           evaluating={evaluating}
           onEvaluate={onEvaluate}
           onSaveHumanEvaluation={onSaveHumanEvaluation}
           onSelectEvaluationModel={onSelectEvaluationModel}
           canEvaluate={!!(record?.id || record?.htmlPath)}
+          selectedCriticPasses={selectedCriticPasses}
+          onCriticPassesChange={onCriticPassesChange}
         />
       </div>
 
@@ -1391,7 +1525,7 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
 }
 
 // ── Evaluation Panel ─────────────────────────────────────────────────────────
-function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evaluationResults, evaluationMeta, evaluating, onEvaluate, onSaveHumanEvaluation, onSelectEvaluationModel, canEvaluate }) {
+function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evaluationResults, evaluationMeta, evaluating, onEvaluate, onSaveHumanEvaluation, onSelectEvaluationModel, canEvaluate, selectedCriticPasses, onCriticPassesChange }) {
   const [showAllFailures, setShowAllFailures] = React.useState(false);
   const [mode, setMode] = React.useState('ai');
   const [humanScores, setHumanScores] = React.useState({
@@ -1407,6 +1541,8 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
   const scoreTextColor = (s) => { const rgb = lerpColor(s); if (!rgb) return '#888'; return `rgb(${Math.round(rgb[0] * 0.6)},${Math.round(rgb[1] * 0.6)},${Math.round(rgb[2] * 0.5)})`; };
   const scoreBarColor = (s) => { const rgb = lerpColor(s); if (!rgb) return '#ccc'; return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.8)`; };
   const selectedModelLabel = evaluationModels?.find(m => m.id === evaluationModel)?.label || evaluationModel || 'unknown';
+  const selectedEvaluationMeta = evaluationModel ? (evaluationMeta?.[evaluationModel] || null) : null;
+  const selectedCriticVersionLabel = selectedEvaluationMeta?.criticVersion || 'legacy/unknown';
   const METRICS = [
     { key: 'geometry_accuracy', label: 'Geometry' },
     { key: 'interactivity_usability', label: 'Interact.' },
@@ -1465,6 +1601,12 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
     </div>
   );
 
+  const criticPassSelector = (
+    <div style={{ marginTop: 6 }}>
+      <CriticPassSelector value={selectedCriticPasses} onChange={onCriticPassesChange} includeZero={false} />
+    </div>
+  );
+
   const handleToggleFailureMode = (modeName) => {
     setHumanFailureModes(prev => prev.includes(modeName)
       ? prev.filter(m => m !== modeName)
@@ -1495,6 +1637,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
     return (
       <div style={styles.evalSection}>
         {modeToggle}
+        {criticPassSelector}
         <p style={{ fontSize: 10, color: '#666', margin: 0, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Manual review form</p>
 
         {METRICS.filter(m => m.key !== 'visual_aesthetics').map(({ key, label }) => (
@@ -1565,6 +1708,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
     return (
       <div style={styles.evalSection}>
         {modeToggle}
+        {criticPassSelector}
         <p style={{ fontSize: 11, color: '#888', margin: 0 }}>Evaluating {selectedModelLabel}…</p>
       </div>
     );
@@ -1591,6 +1735,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
       <div style={styles.evalSection}>
         {modeToggle}
         {selector}
+        {criticPassSelector}
         <p style={{ fontSize: 11, color: '#888', margin: '0 0 8px' }}>No evaluation exists for {selectedModelLabel}.</p>
         <button style={styles.evalBtn} onClick={() => onEvaluate(evaluationModel)}>Generate evaluation</button>
       </div>
@@ -1604,6 +1749,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
     <div style={styles.evalSection}>
       {modeToggle}
       {selector}
+      {criticPassSelector}
       <div style={styles.evalHeader}>
         <span style={styles.evalTitle}>Critic feedback</span>
         <span style={{ ...styles.evalOverall, color: scoreTextColor(evaluation.overall_average) }}>
@@ -1611,6 +1757,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
         </span>
       </div>
       <p style={styles.evalMeta}>Model: {selectedModelLabel}</p>
+      <p style={styles.evalMeta}>Critic version: {selectedCriticVersionLabel}</p>
 
       {METRICS.map(({ key, label }) => (
         <div key={key} style={styles.evalRow}>
@@ -1739,7 +1886,7 @@ function normalizeExperimentName(experimentName) {
 // ── Results Tab ───────────────────────────────────────────────────────────────
 // Two sub-tabs: API (manually generated) | Agent (prompt_experiments/ runs)
 // Within each: experiment → model → chapters → figure cards
-function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
+function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticPasses, onCriticPassesChange }) {
   const [activeTab, setActiveTab] = React.useState('api');
   const [apiRecords, setApiRecords] = React.useState([]);
   const [expTree, setExpTree] = React.useState([]);
@@ -1877,6 +2024,10 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
   const selectedVersionLabel = React.useMemo(() => {
     return selectedCriticVersion || '';
   }, [selectedCriticVersion]);
+
+  const evaluationCriticVersion = React.useMemo(() => {
+    return (selectedCriticVersion || currentCriticVersion || '').trim();
+  }, [selectedCriticVersion, currentCriticVersion]);
 
   const selectedRecordView = React.useCallback(
     (record) => getVersionedEvaluationState(record, selectedCriticVersion),
@@ -2038,9 +2189,9 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
     try {
       let data;
       const evalModelId = criticModel || pickEvaluationModel(item, null) || 'gpt-4o';
-      const versionId = currentCriticVersion;
+      const versionId = evaluationCriticVersion || currentCriticVersion || 'legacy_unknown';
       if (item.type === 'api') {
-        const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: criticModel || undefined }) });
+        const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: criticModel || undefined, criticVersion: evaluationCriticVersion || undefined, criticPasses: selectedCriticPasses }) });
         data = await res.json();
         if (!res.ok) throw new Error(data.error);
         setApiRecords(prev => prev.map(r => r.id === item.id ? {
@@ -2049,7 +2200,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
           }),
         } : r));
       } else {
-        const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: criticModel || undefined }) });
+        const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: criticModel || undefined, criticVersion: evaluationCriticVersion || undefined, criticPasses: selectedCriticPasses }) });
         data = await res.json();
         if (!res.ok) throw new Error(data.error);
         const [expName, modelName, figName] = item.key.split('/');
@@ -2075,13 +2226,13 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
     const pending = items.filter(item => !(item.evaluationResults || {})[evalModelId]);
     if (!pending.length) return;
     setEvaluatingAll(chapter);
-    const versionId = currentCriticVersion;
+    const versionId = evaluationCriticVersion || currentCriticVersion || 'legacy_unknown';
     for (const item of pending) {
       setEvaluatingKey(item.key);
       try {
         let data;
         if (item.type === 'api') {
-          const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: criticModel || undefined }) });
+          const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: criticModel || undefined, criticVersion: evaluationCriticVersion || undefined, criticPasses: selectedCriticPasses }) });
           data = await res.json();
           if (!res.ok) throw new Error(data.error);
           setApiRecords(prev => prev.map(r => r.id === item.id ? {
@@ -2090,7 +2241,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
             }),
           } : r));
         } else {
-          const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: criticModel || undefined }) });
+          const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: criticModel || undefined, criticVersion: evaluationCriticVersion || undefined, criticPasses: selectedCriticPasses }) });
           data = await res.json();
           if (!res.ok) throw new Error(data.error);
           const [expName, modelName, figName] = item.key.split('/');
@@ -2233,7 +2384,18 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion }) {
             );
           })}
         </div>
+        <input
+          style={styles.criticVersionInput}
+          value={selectedCriticVersion}
+          onChange={e => setSelectedCriticVersion(e.target.value)}
+          placeholder="Type version for new evals"
+        />
         <span style={styles.criticVersionMeta}>{selectedVersionLabel}</span>
+      </div>
+
+      <div style={{ ...styles.criticVersionBar, marginBottom: 12, borderRadius: 8 }}>
+        <span style={styles.criticVersionBarLabel}>Critic passes</span>
+        <CriticPassSelector value={selectedCriticPasses} onChange={onCriticPassesChange} compact includeZero={false} />
       </div>
 
       {/* API / Agent sub-tabs */}
@@ -3122,7 +3284,7 @@ const styles = {
 
   // Viewer
   viewerWrap: { display: 'flex', gap: 0, height: 'calc(100vh - 95px)', borderRadius: 10, overflow: 'hidden', border: '1px solid #e0e0e0' },
-  viewerLeft: { width: 'clamp(360px, 36vw, 560px)', minWidth: 300, background: '#fafafa', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, borderRight: '1px solid #e0e0e0', overflowY: 'auto' },
+  viewerLeft: { width: 'clamp(440px, 43vw, 700px)', minWidth: 360, background: '#fafafa', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, borderRight: '1px solid #e0e0e0', overflowY: 'auto' },
   thumbImg: { width: '100%', borderRadius: 6, objectFit: 'contain', maxHeight: 150, background: '#fff', border: '1px solid #eee' },
   viewerFilename: { fontSize: 11, color: '#666', margin: 0, wordBreak: 'break-all' },
   viewerTs: { fontSize: 10, color: '#aaa', margin: 0 },
@@ -3181,8 +3343,19 @@ const styles = {
   criticVersionPill: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', border: '1px solid #ccd5e3', borderRadius: 999, background: '#fff', color: '#445', cursor: 'pointer', fontSize: 11, whiteSpace: 'nowrap' },
   criticVersionPillActive: { background: '#1f2937', borderColor: '#1f2937', color: '#fff' },
   criticVersionCount: { fontSize: 10, padding: '1px 5px', borderRadius: 999, background: 'rgba(0,0,0,0.06)' },
+  criticVersionInput: { fontSize: 11, border: '1px solid #ccd5e3', borderRadius: 999, padding: '4px 10px', background: '#fff', color: '#445', minWidth: 190, maxWidth: 240 },
   criticVersionMeta: { marginLeft: 'auto', fontSize: 11, color: '#7c8aa0', whiteSpace: 'nowrap', flexShrink: 0 },
   criticVersionEmpty: { fontSize: 11, color: '#99a3b2' },
+  viewerCriticVersionBar: { display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8, padding: '11px 12px', background: '#eef2f7', border: '1px solid #d9e0ea', borderRadius: 8 },
+  viewerCriticVersionHeaderRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  viewerCriticVersionBodyRow: { display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 },
+  viewerCriticVersionBarLabel: { fontSize: 11, fontWeight: 700, color: '#5a6c86', textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 },
+  viewerCriticVersionRail: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', overflowX: 'auto', minWidth: 0, paddingBottom: 2, flex: 1 },
+  viewerCriticVersionPill: { display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 12px', border: '1px solid #ccd5e3', borderRadius: 999, background: '#fff', color: '#445', cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap' },
+  viewerCriticVersionPillActive: { background: '#1f2937', borderColor: '#1f2937', color: '#fff' },
+  viewerCriticVersionCount: { fontSize: 11, padding: '1px 6px', borderRadius: 999, background: 'rgba(0,0,0,0.06)' },
+  viewerCriticVersionInput: { fontSize: 12, border: '1px solid #ccd5e3', borderRadius: 999, padding: '6px 12px', background: '#fff', color: '#445', minWidth: 240, width: '38%', maxWidth: 340, flexShrink: 0 },
+  viewerCriticVersionEmpty: { fontSize: 12, color: '#99a3b2' },
   resultFilterBar: { display: 'flex', alignItems: 'center', gap: 16, paddingBottom: 16, borderBottom: '1px solid #e0e0e0', marginBottom: 20 },
   resultFilterGroup: { display: 'flex', alignItems: 'center', gap: 6 },
   resultFilterLabel: { fontSize: 12, color: '#666' },
@@ -3238,6 +3411,10 @@ const styles = {
   chapterPlanSummary: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', cursor: 'pointer', fontSize: 12, fontWeight: 500, color: '#333' },
 
   generatorModelCard: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12, padding: '12px 14px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
+  criticPassCard: { display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
+  criticPassCardCompact: { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, padding: '4px 8px', border: '1px solid #ccd5e3', borderRadius: 999, background: '#fff', flexShrink: 0 },
+  criticPassLabelCompact: { fontSize: 10, fontWeight: 700, color: '#5a6c86', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' },
+  criticPassSelectCompact: { fontSize: 11, border: '1px solid #ccd5e3', borderRadius: 999, padding: '2px 8px', background: '#eef2f7', color: '#445', cursor: 'pointer', minWidth: 88, height: 26 },
   generatorControlRow: { display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12, flexWrap: 'nowrap' },
   generatorExperimentCard: { width: 320, display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
   generatorControlCard: { display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
