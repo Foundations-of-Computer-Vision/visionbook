@@ -136,14 +136,15 @@ app.get('/api/chapter-candidates/:chapter', (req, res) => {
 
 // ── POST /api/plan — plan for a single figure (fast, returns before generation) ──
 app.post('/api/plan', async (req, res) => {
-  const { filename, chapterHint } = req.body;
+  const { filename, chapterHint, base64, mediaType } = req.body;
   if (!filename) return res.status(400).json({ error: 'filename is required.' });
 
   const stem = filename.replace(/\.[^.]+$/, '');
   const chapter = chapterHint || null;
+  const imageData = base64 && mediaType ? { base64, mediaType } : undefined;
 
   try {
-    const plan = await planForFigure(stem, chapter);
+    const plan = await planForFigure(stem, chapter, imageData);
     return res.json(plan);
   } catch (err) {
     console.error('Plan error:', err?.message || err);
@@ -183,7 +184,23 @@ async function withRetry(fn, { retries = 4, baseDelay = 2500 } = {}) {
   }
 }
 
-async function generateFigure({ base64, mediaType, filename, plan, model: requestedModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, evaluate = true }) {
+function resolveCriticPasses(rawValue) {
+  if (rawValue == null || rawValue === '') return 1;
+  const parsed = Number(rawValue);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 3) {
+    const err = new Error('criticPasses must be an integer between 0 and 3.');
+    err.statusCode = 400;
+    throw err;
+  }
+  return parsed;
+}
+
+function resolveCriticPassesFromBody(body) {
+  const value = body?.criticPasses ?? body?.passes;
+  return resolveCriticPasses(value);
+}
+
+async function generateFigure({ base64, mediaType, filename, plan, model: requestedModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, evaluate = true, criticPasses: requestedCriticPasses, passes: requestedPasses }) {
   if (!base64 || !mediaType || !filename) {
     const err = new Error('base64, mediaType, and filename are required.');
     err.statusCode = 400;
@@ -204,6 +221,7 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
 
   const modelId = requestedModel || CURRENT_MODEL;
   const experimentName = requestedExperiment.trim();
+  const resolvedCriticPasses = resolveCriticPasses(requestedCriticPasses ?? requestedPasses);
   if (!requestedModel) {
     console.warn(`[generate] no model provided by client; falling back to default "${CURRENT_MODEL}"`);
   }
@@ -257,11 +275,16 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
 
   let evaluation = null;
   if (evaluate !== false) {
-    try {
-      evaluation = await runEvaluation(record, recordPath, requestedEvalModel, requestedCriticVersion);
-      console.log(`Auto-eval for ${figureId}: overall=${evaluation.overall_average}`);
-    } catch (evalErr) {
-      console.warn('Auto-eval failed (result saved without scores):', evalErr.message);
+    if (resolvedCriticPasses > 0) {
+      try {
+        const evaluationResult = await runEvaluation(record, recordPath, requestedEvalModel, requestedCriticVersion, resolvedCriticPasses);
+        evaluation = evaluationResult.evaluation;
+        console.log(`Auto-eval for ${figureId}: overall=${evaluation.overall_average} (passes=${evaluationResult.passCount})`);
+      } catch (evalErr) {
+        console.warn('Auto-eval failed (result saved without scores):', evalErr.message);
+      }
+    } else {
+      console.log(`Auto-eval skipped for ${figureId}: criticPasses=0`);
     }
   }
 
@@ -274,6 +297,7 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
     evaluationResults: record.evaluationResults || {},
     evaluationMeta: record.evaluationMeta || {},
     evaluationVersions: record.evaluationVersions || {},
+    criticPasses: resolvedCriticPasses,
     plan: plan || null,
   };
 }
@@ -573,23 +597,26 @@ app.post('/api/save', (req, res) => {
 
 // Calls the shared evaluator, persists to the record file,
 // and returns the evaluation object. Throws on error.
-async function runEvaluation(record, filePath, requestedEvalModel, requestedCriticVersion) {
+async function runEvaluation(record, filePath, requestedEvalModel, requestedCriticVersion, criticPasses = 1) {
   const result = await evaluateRecord({
     record,
     evalModel: requestedEvalModel,
     defaultEvalModel: CURRENT_CRITIC_MODEL,
     criticVersionOverride: requestedCriticVersion,
+    criticPasses,
   });
-  if (filePath) {
+  if (!result.skipped && filePath) {
     saveRecord(result.record, filePath);
     refreshHistoryManifestSafe();
   }
 
-  record.evaluationResults = result.record.evaluationResults;
-  record.evaluationMeta = result.record.evaluationMeta;
-  record.evaluationVersions = result.record.evaluationVersions;
+  if (!result.skipped) {
+    record.evaluationResults = result.record.evaluationResults;
+    record.evaluationMeta = result.record.evaluationMeta;
+    record.evaluationVersions = result.record.evaluationVersions;
+  }
 
-  return result.evaluation;
+  return result;
 }
 
 const HUMAN_SCORE_KEYS = [
@@ -752,6 +779,13 @@ app.post('/api/evaluate', async (req, res) => {
   const { id, evalModel, criticVersion } = req.body;
   if (!id) return res.status(400).json({ error: 'id is required.' });
 
+  let criticPasses;
+  try {
+    criticPasses = resolveCriticPassesFromBody(req.body);
+  } catch (err) {
+    return res.status(err.statusCode || 400).json({ error: err.message });
+  }
+
   const filePath = path.join(RESULTS_DIR, `${id}.json`);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Result not found.' });
 
@@ -760,8 +794,11 @@ app.post('/api/evaluate', async (req, res) => {
   catch { return res.status(500).json({ error: 'Failed to read result file.' }); }
 
   try {
-    const evaluation = await runEvaluation(record, filePath, evalModel, criticVersion);
-    return res.json(evaluation);
+    const result = await runEvaluation(record, filePath, evalModel, criticVersion, criticPasses);
+    if (result.skipped) {
+      return res.json({ skipped: true, criticPasses: 0 });
+    }
+    return res.json({ ...result.evaluation, criticPasses: result.passCount });
   } catch (err) {
     console.error('Evaluation error:', err?.message || err);
     return res.status(500).json({ error: err?.message || 'Unknown error during evaluation.' });
@@ -775,6 +812,13 @@ app.post('/api/evaluate-batch', async (req, res) => {
   const { ids, evalModel, criticVersion } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'ids (array) is required.' });
+  }
+
+  let criticPasses;
+  try {
+    criticPasses = resolveCriticPassesFromBody(req.body);
+  } catch (err) {
+    return res.status(err.statusCode || 400).json({ error: err.message });
   }
 
   // Stream results line-by-line so the frontend can show progress
@@ -794,8 +838,12 @@ app.post('/api/evaluate-batch', async (req, res) => {
     catch { res.write(JSON.stringify({ id, status: 'error', error: 'Failed to read result.' }) + '\n'); continue; }
 
     try {
-      const evaluation = await runEvaluation(record, filePath, evalModel, criticVersion);
-      res.write(JSON.stringify({ id, status: 'ok', evaluation }) + '\n');
+      const result = await runEvaluation(record, filePath, evalModel, criticVersion, criticPasses);
+      if (result.skipped) {
+        res.write(JSON.stringify({ id, status: 'skipped', criticPasses: 0 }) + '\n');
+      } else {
+        res.write(JSON.stringify({ id, status: 'ok', evaluation: result.evaluation, criticPasses: result.passCount }) + '\n');
+      }
     } catch (err) {
       console.error(`Batch eval error for ${id}:`, err?.message || err);
       res.write(JSON.stringify({ id, status: 'error', error: err?.message || 'Evaluation failed.' }) + '\n');
@@ -1010,6 +1058,13 @@ app.post('/api/experiments/evaluate', async (req, res) => {
   const { htmlPath, imagePath, evalModel, criticVersion } = req.body;
   if (!htmlPath) return res.status(400).json({ error: 'htmlPath required.' });
 
+  let criticPasses;
+  try {
+    criticPasses = resolveCriticPassesFromBody(req.body);
+  } catch (err) {
+    return res.status(err.statusCode || 400).json({ error: err.message });
+  }
+
   const absHtml = path.resolve(htmlPath);
   if (!fs.existsSync(absHtml)) return res.status(404).json({ error: 'HTML file not found.' });
 
@@ -1022,7 +1077,7 @@ app.post('/api/experiments/evaluate', async (req, res) => {
 
   try {
     const usedEvalModel = evalModel || CURRENT_CRITIC_MODEL;
-    const { evaluation, criticVersion: resolvedCriticVersion } = await evaluateRecord({
+    const { evaluation, criticVersion: resolvedCriticVersion, skipped, passCount } = await evaluateRecord({
       record: {
         html,
         source_base64: base64thumb,
@@ -1031,7 +1086,12 @@ app.post('/api/experiments/evaluate', async (req, res) => {
       evalModel: usedEvalModel,
       defaultEvalModel: CURRENT_CRITIC_MODEL,
       criticVersionOverride: criticVersion,
+      criticPasses,
     });
+
+    if (skipped) {
+      return res.json({ skipped: true, criticPasses: 0 });
+    }
 
     // Cache alongside the HTML file
     const evalPath = absHtml.replace(/\.html$/, '.eval.json');
@@ -1049,7 +1109,7 @@ app.post('/api/experiments/evaluate', async (req, res) => {
       evaluationVersions: updatedCache.evaluationVersions,
     }, evalPath);
 
-    return res.json(evaluation);
+    return res.json({ ...evaluation, criticPasses: passCount });
   } catch (err) {
     return res.status(500).json({ error: err?.message || 'Unknown error.' });
   }
