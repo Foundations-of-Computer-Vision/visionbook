@@ -100,16 +100,9 @@ STEP 3 - LABELS - THIS IS CRITICAL, follow exactly:
             - Every axis arrow MUST have a label at its tip.
             - Every named point, vector, plane, or region in the figure MUST have a label.
 
-STEP 4 - INTERACTIVITY - add 2-5 controls in the #ui div (which already exists):
-    - Step-through buttons - animate a process stage by stage
-    - Parameter sliders    - let the user vary a quantity and see the effect
-    - Toggle buttons       - show/hide elements
-    - Animate button       - run a looping demonstration
-    - The Reset View button already exists - do NOT create a second one.
-    - Do NOT redefine animate(). To add per-frame logic, use a separate
-        function and call it from a setInterval or from the controls 'change'
-        event, or just modify objects inline - the scaffold's animate loop
-        continuously re-renders.
+STEP 4 - INTERACTIVITY - add controls in the #ui div (which already exists):
+    - You should follow the interaction plan defining which interactions to have
+    - You should make a step-by-step guided demo following the interaction plan given, with buttons toggling between the different steps.
 
 STEP 5 - CODE STYLE
     - Add brief JS comments explaining what each block of code teaches.
@@ -168,6 +161,25 @@ PREVIOUS HTML (improve this, do not start from scratch unless it is fundamentall
 ${prevHtml}
 
 Fix all identified failure modes and improve every score. Maintain or improve what already works well.`;
+}
+
+function buildPlanInjection(plan) {
+    if (!plan) return '';
+    const parts = [];
+    if (plan.contextChunk) {
+        parts.push(`CONTEXT FROM TEXTBOOK:\n${plan.contextChunk.slice(0, 3000)}`);
+    }
+    if (plan.interactionPlan) {
+        parts.push(`INTERACTION PLAN:\n${JSON.stringify(plan.interactionPlan, null, 2)}`);
+    }
+    return parts.join('\n\n');
+}
+
+function buildGenerationUserText(plan) {
+    if (!plan) {
+        return 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.';
+    }
+    return `${buildPlanInjection(plan)}\n\nFollow the interaction plan above. Output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.`;
 }
 // Strip accidental markdown fences and extract the HTML body.
 function stripFences(text) {
@@ -265,6 +277,7 @@ async function generateFigureHtml({
     scaffold,
     mediaType,
     base64,
+    plan,
     userText,
     maxTokens = 16384,
     applyFixes = true,
@@ -272,11 +285,13 @@ async function generateFigureHtml({
     if (!modelId) throw new Error('modelId is required.');
     if (!scaffold) throw new Error('scaffold is required.');
     if (!mediaType || !base64) throw new Error('mediaType and base64 are required.');
-    if (!userText) throw new Error('userText is required.');
+    const resolvedUserText = userText || buildGenerationUserText(plan);
+
+    if (!resolvedUserText) throw new Error('Could not resolve userText for generation.');
 
     const userContent = [
         { type: 'image_url', image_url: { url: `data:${mediaType};base64,${base64}` } },
-        { type: 'text', text: userText },
+        { type: 'text', text: resolvedUserText },
     ];
 
     let html = await generateWithModel(modelId, {
@@ -326,6 +341,7 @@ async function generateRefinedFigureHtml({
 
 module.exports = {
     buildGenerationSystemPrompt,
+    buildGenerationUserText,
     generateFigureHtml,
     generateRefinedFigureHtml,
 };
