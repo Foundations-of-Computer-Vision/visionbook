@@ -134,8 +134,10 @@ const MODEL_REGISTRY = {
   'o4-mini': { provider: 'openai', apiModel: 'o4-mini', label: 'o4-mini' },
 
   // Anthropic (Claude)
-  'claude-opus-4.6': { provider: 'anthropic', apiModel: 'claude-opus-4-20250514', label: 'Claude Opus 4.6' },
-  'claude-sonnet-4': { provider: 'anthropic', apiModel: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' },
+  'claude-sonnet-4.6': { provider: 'anthropic', apiModel: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+  'claude-opus-4.6':   { provider: 'anthropic', apiModel: 'claude-opus-4-6',   label: 'Claude Opus 4.6'   },
+  'claude-opus-4.6':   { provider: 'anthropic', apiModel: 'claude-opus-4-20250514', label: 'Claude Opus 4 (old)' },
+  'claude-sonnet-4':   { provider: 'anthropic', apiModel: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (old)' },
 
   // Google (Gemini)
   'gemini-3.1-pro': { provider: 'google', apiModel: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
