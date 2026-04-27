@@ -1101,43 +1101,62 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
               )}
               {plan && (
                 <>
-                  <div style={styles.planHeader}>
-                    <span style={styles.planTitle}>📋 Interaction Plan</span>
-                    {plan.chapterName && <span style={styles.planChapter}>Chapter: {plan.chapterName}</span>}
-                  </div>
-                  {plan.interactionPlan ? (
-                    <>
-                      {plan.interactionPlan.concept && (
-                        <p style={styles.planConcept}>{plan.interactionPlan.concept}</p>
-                      )}
-                      {plan.interactionPlan.elements?.length > 0 && (
-                        <div style={{ marginBottom: 6 }}>
-                          <span style={styles.planSubhead}>Elements:</span>
-                          <span style={styles.planList}>{plan.interactionPlan.elements.join(', ')}</span>
+                  {(() => {
+                    const planPayload = plan.interactionPlan || plan;
+                    return (
+                      <>
+                        <div style={styles.planHeader}>
+                          <span style={styles.planTitle}>📋 Interaction Plan</span>
+                          {plan.chapterName && <span style={styles.planChapter}>Chapter: {plan.chapterName}</span>}
                         </div>
-                      )}
-                      {plan.interactionPlan.interactions?.length > 0 && (
-                        <div style={{ marginBottom: 6 }}>
-                          <span style={styles.planSubhead}>Interactions:</span>
-                          {plan.interactionPlan.interactions.map((inter, i) => (
-                            <div key={i} style={styles.planInteraction}>
-                              <span style={styles.planInterType}>{inter.type}</span>
-                              <span style={styles.planInterLabel}>{inter.label}</span>
-                              <span style={styles.planInterTeaches}>— {inter.teaches}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <p style={{ fontSize: 12, color: '#c60', margin: '4px 0' }}>⚠ No interaction plan returned — generating from image only.</p>
-                  )}
-                  {plan.contextChunk && (
-                    <details style={{ marginTop: 8 }}>
-                      <summary style={{ fontSize: 11, color: '#aaa', cursor: 'pointer', userSelect: 'none' }}>Show textbook context</summary>
-                      <pre style={styles.planContext}>{plan.contextChunk.slice(0, 1500)}</pre>
-                    </details>
-                  )}
+                        {planPayload ? (
+                          <>
+                            {planPayload.concept && (
+                              <p style={styles.planConcept}>{planPayload.concept}</p>
+                            )}
+                            {planPayload.elements?.length > 0 && (
+                              <div style={{ marginBottom: 6 }}>
+                                <span style={styles.planSubhead}>Elements:</span>
+                                <span style={styles.planList}>{planPayload.elements.join(', ')}</span>
+                              </div>
+                            )}
+                            {planPayload.interactions?.length > 0 && (
+                              <div style={{ marginBottom: 6 }}>
+                                <span style={styles.planSubhead}>Interactions:</span>
+                                {planPayload.interactions.map((inter, i) => (
+                                  <div key={i} style={styles.planInteraction}>
+                                    <span style={styles.planInterType}>{inter.type}</span>
+                                    <span style={styles.planInterLabel}>{inter.label}</span>
+                                    <span style={styles.planInterTeaches}>— {inter.teaches}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {planPayload.demo_steps?.length > 0 && (
+                              <div style={{ marginBottom: 6 }}>
+                                <span style={styles.planSubhead}>Demo Steps:</span>
+                                {planPayload.demo_steps.map((step, i) => (
+                                  <div key={i} style={styles.planInteraction}>
+                                    <span style={styles.planInterType}>step {i + 1}</span>
+                                    <span style={styles.planInterLabel}>{step.title || `Step ${i + 1}`}</span>
+                                    <span style={styles.planInterTeaches}>— {step.narration || ''}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p style={{ fontSize: 12, color: '#c60', margin: '4px 0' }}>⚠ No interaction plan returned — generating from image only.</p>
+                        )}
+                        {plan.contextChunk && (
+                          <details style={{ marginTop: 8 }}>
+                            <summary style={{ fontSize: 11, color: '#aaa', cursor: 'pointer', userSelect: 'none' }}>Show textbook context</summary>
+                            <pre style={styles.planContext}>{plan.contextChunk.slice(0, 1500)}</pre>
+                          </details>
+                        )}
+                      </>
+                    );
+                  })()}
                 </>
               )}
             </div>
@@ -1248,37 +1267,43 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                   </div>
 
                   {/* Show each active figure */}
-                  {chapterProgress.active?.map(a => (
-                    <div key={a.figureStem} style={{ marginBottom: 10, padding: '8px 10px', background: '#f8faff', borderRadius: 6, border: '1px solid #e0e8f0' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>
-                          {a.phase === 'planning' ? '⏳' : '🔄'} {a.figureStem} — {a.phase}
-                        </span>
-                        {a.plan?.chapterName && <span style={styles.planChapter}>Chapter: {a.plan.chapterName}</span>}
+                  {chapterProgress.active?.map(a => {
+                    const planPayload = a.plan?.interactionPlan || a.plan;
+                    return (
+                      <div key={a.figureStem} style={{ marginBottom: 10, padding: '8px 10px', background: '#f8faff', borderRadius: 6, border: '1px solid #e0e8f0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>
+                            {a.phase === 'planning' ? '⏳' : '🔄'} {a.figureStem} — {a.phase}
+                          </span>
+                          {a.plan?.chapterName && <span style={styles.planChapter}>Chapter: {a.plan.chapterName}</span>}
+                        </div>
+                        {planPayload?.concept && (
+                          <p style={styles.planConcept}>{planPayload.concept}</p>
+                        )}
+                        {planPayload?.elements?.length > 0 && (
+                          <div style={{ marginBottom: 6 }}>
+                            <span style={styles.planSubhead}>Elements:</span>
+                            <span style={styles.planList}>{planPayload.elements.join(', ')}</span>
+                          </div>
+                        )}
+                        {planPayload?.interactions?.length > 0 && (
+                          <div style={{ marginBottom: 4 }}>
+                            <span style={styles.planSubhead}>Interactions:</span>
+                            {planPayload.interactions.map((inter, i) => (
+                              <div key={i} style={styles.planInteraction}>
+                                <span style={styles.planInterType}>{inter.type}</span>
+                                <span style={styles.planInterLabel}>{inter.label}</span>
+                                <span style={styles.planInterTeaches}>— {inter.teaches}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {planPayload?.demo_steps?.length > 0 && (
+                          <p style={styles.planList}>Demo steps: {planPayload.demo_steps.length}</p>
+                        )}
                       </div>
-                      {a.plan?.interactionPlan?.concept && (
-                        <p style={styles.planConcept}>{a.plan.interactionPlan.concept}</p>
-                      )}
-                      {a.plan?.interactionPlan?.elements?.length > 0 && (
-                        <div style={{ marginBottom: 6 }}>
-                          <span style={styles.planSubhead}>Elements:</span>
-                          <span style={styles.planList}>{a.plan.interactionPlan.elements.join(', ')}</span>
-                        </div>
-                      )}
-                      {a.plan?.interactionPlan?.interactions?.length > 0 && (
-                        <div style={{ marginBottom: 4 }}>
-                          <span style={styles.planSubhead}>Interactions:</span>
-                          {a.plan.interactionPlan.interactions.map((inter, i) => (
-                            <div key={i} style={styles.planInteraction}>
-                              <span style={styles.planInterType}>{inter.type}</span>
-                              <span style={styles.planInterLabel}>{inter.label}</span>
-                              <span style={styles.planInterTeaches}>— {inter.teaches}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
@@ -1442,19 +1467,33 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
         <p style={styles.viewerMeta}>Generated by: {record?.model || 'unknown'}</p>
         {viewerPlan ? (
           <div style={styles.viewerPlanWrap}>
-            <p style={styles.viewerPlanTitle}>Planner Output</p>
-            {viewerPlan.chapterName && <p style={styles.viewerPlanMeta}>Chapter: {viewerPlan.chapterName}</p>}
-            {viewerPlan.interactionPlan?.concept && <p style={styles.viewerPlanConcept}>{viewerPlan.interactionPlan.concept}</p>}
-            {viewerPlan.interactionPlan?.elements?.length > 0 && (
-              <p style={styles.viewerPlanLine}>Elements: {viewerPlan.interactionPlan.elements.join(', ')}</p>
-            )}
-            {viewerPlan.interactionPlan?.interactions?.length > 0 && (
-              <p style={styles.viewerPlanLine}>Interactions: {viewerPlan.interactionPlan.interactions.map(i => i.label || i.type).join(', ')}</p>
-            )}
-            <details>
-              <summary style={styles.viewerPlanSummary}>Show raw plan JSON</summary>
-              <pre style={styles.viewerPlanRaw}>{JSON.stringify(viewerPlan, null, 2)}</pre>
-            </details>
+            {(() => {
+              const planPayload = viewerPlan.interactionPlan || viewerPlan;
+              return (
+                <>
+                  <p style={styles.viewerPlanTitle}>Planner Output</p>
+                  {viewerPlan.chapterName && <p style={styles.viewerPlanMeta}>Chapter: {viewerPlan.chapterName}</p>}
+                  {planPayload?.concept && <p style={styles.viewerPlanConcept}>{planPayload.concept}</p>}
+                  {planPayload?.elements?.length > 0 && (
+                    <p style={styles.viewerPlanLine}>Elements: {planPayload.elements.join(', ')}</p>
+                  )}
+                  {planPayload?.interactions?.length > 0 && (
+                    <p style={styles.viewerPlanLine}>Interactions: {planPayload.interactions.map(i => i.label || i.type).join(', ')}</p>
+                  )}
+                  {planPayload?.demo_steps?.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      {planPayload.demo_steps.map((step, i) => (
+                        <p key={i} style={styles.viewerPlanLine}>Step {i + 1}: {step.title || `Step ${i + 1}`}</p>
+                      ))}
+                    </div>
+                  )}
+                  <details>
+                    <summary style={styles.viewerPlanSummary}>Show raw plan JSON</summary>
+                    <pre style={styles.viewerPlanRaw}>{JSON.stringify(viewerPlan, null, 2)}</pre>
+                  </details>
+                </>
+              );
+            })()}
           </div>
         ) : (
           <div style={styles.viewerPlanPlaceholder}>
