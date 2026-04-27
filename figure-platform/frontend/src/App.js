@@ -766,16 +766,19 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       setChapterProgress({ completed: results.length, total, active: [...activeMap.values()] });
     };
 
-    // Process a single candidate (plan → generate)
+    // Process a single candidate (plan → generate) — routes 2D vs 3D automatically
     const processFigure = async (candidate) => {
       if (chapterAbortRef.current) return;
       activeMap.set(candidate.stem, { figureStem: candidate.stem, phase: 'planning', plan: null });
       updateProgress();
 
+      const is2d = candidate.type === '2d';
+
       // Phase 1: Plan
       let figurePlan = null;
       try {
-        const planRes = await apiFetch('/api/plan', {
+        const planEndpoint = is2d ? '/api/plan-2d' : '/api/plan';
+        const planRes = await apiFetch(planEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -793,25 +796,57 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       activeMap.set(candidate.stem, { figureStem: candidate.stem, phase: 'generating', plan: figurePlan });
       updateProgress();
 
-      // Phase 2: Generate (direct call — no polling overhead)
+      // Phase 2: Generate
       try {
-        const genRes = await apiFetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            base64: candidate.base64,
-            mediaType: candidate.mediaType,
-            filename: candidate.filename,
-            plan: figurePlan || undefined,
-            model: selectedModel || undefined,
-            criticVersion: selectedCriticName || undefined,
-            experiment: selectedExperiment || undefined,
-            evaluate: false,
-          }),
-        });
-        const genData = await genRes.json();
-        if (!genRes.ok) throw new Error(genData.error || 'Generation failed.');
-        results.push({ figureStem: candidate.stem, status: 'ok', figureId: genData.figureId });
+        if (is2d) {
+          // 2D: async job — start then poll
+          const startRes = await apiFetch('/api/generate-2d-async', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              base64: candidate.base64,
+              mediaType: candidate.mediaType,
+              filename: candidate.filename,
+              plan: figurePlan || undefined,
+              model: selectedModel || undefined,
+            }),
+          });
+          const startData = await startRes.json();
+          if (!startRes.ok) throw new Error(startData.error || '2D generation failed to start.');
+
+          // Poll until done
+          for (let i = 0; i < 300; i++) {
+            await new Promise(r => setTimeout(r, 2000));
+            if (chapterAbortRef.current) { activeMap.delete(candidate.stem); return; }
+            const statusRes = await apiFetch(`/api/generate-status/${encodeURIComponent(startData.jobId)}`);
+            const statusData = await statusRes.json();
+            if (statusData.status === 'done') {
+              results.push({ figureStem: candidate.stem, status: 'ok', figureId: statusData.result.figureId });
+              break;
+            }
+            if (statusData.status === 'error') throw new Error(statusData.error || '2D generation failed.');
+            if (i === 299) throw new Error('2D generation timed out.');
+          }
+        } else {
+          // 3D: direct synchronous call
+          const genRes = await apiFetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              base64: candidate.base64,
+              mediaType: candidate.mediaType,
+              filename: candidate.filename,
+              plan: figurePlan || undefined,
+              model: selectedModel || undefined,
+              criticVersion: selectedCriticName || undefined,
+              experiment: selectedExperiment || undefined,
+              evaluate: false,
+            }),
+          });
+          const genData = await genRes.json();
+          if (!genRes.ok) throw new Error(genData.error || 'Generation failed.');
+          results.push({ figureStem: candidate.stem, status: 'ok', figureId: genData.figureId });
+        }
       } catch (err) {
         results.push({ figureStem: candidate.stem, status: 'error', error: err.message });
       }

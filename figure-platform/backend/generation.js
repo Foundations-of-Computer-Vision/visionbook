@@ -100,9 +100,39 @@ STEP 3 - LABELS - THIS IS CRITICAL, follow exactly:
             - Every axis arrow MUST have a label at its tip.
             - Every named point, vector, plane, or region in the figure MUST have a label.
 
-STEP 4 - INTERACTIVITY - add controls in the #ui div (which already exists):
-    - You should follow the interaction plan defining which interactions to have
-    - You should make a step-by-step guided demo following the interaction plan given, with buttons toggling between the different steps.
+STEP 4 - INTERACTIVITY (unified system — interactions + demo are ONE thing):
+
+    The plan gives you two keys: "interactions" and "demo_steps".
+    They must form a single unified system — the demo drives the interactions, not a separate UI.
+
+    4a. BUILD DISCRETE CONTROLS from plan.interactions:
+        - Render each control in #ui as a styled element (slider, toggle, or button)
+        - Every control has a live event listener that immediately updates the scene
+        - Store each control's current value in a plain JS object: const state = { id: defaultValue, ... }
+        - Example slider:
+            <label>Angle <span id="angleVal">0</span>°</label>
+            <input type="range" min="0" max="360" step="1" value="0" id="angleSlider"
+                   oninput="state.angle=+this.value; document.getElementById('angleVal').textContent=this.value; updateScene()">
+        - updateScene() reads from state and repositions / recolours geometry accordingly
+
+    4b. BUILD GUIDED DEMO from plan.demo_steps — layered on top of 4a:
+        - Add a narration card ABOVE the controls:
+            <div id="narration" style="..."> step title + narration text </div>
+        - Add "◀" and "▶" buttons to step through demo_steps
+        - Each step calls goToStep(i) which:
+            1. ANIMATES each control smoothly to the target control_values using
+               requestAnimationFrame tweening (lerp over ~600ms) — NOT a hard snap
+            2. Calls updateScene() every animation frame during the tween
+            3. Updates the narration card with the step's title and narration text
+            4. Updates the control DOM elements (slider position, toggle state) to match
+        - Narration card style: position absolute, bottom of #ui, dark background
+          (#1a1a1a), white text, 13px, padding 10px 14px, border-radius 8px,
+          border-left 3px solid #4a9eff, max-width 260px, line-height 1.5
+        - Step title: bold 13px white. Narration body: 12px #ccc, margin-top 4px.
+
+    4c. NEVER make the demo and the interactions two separate systems.
+        The demo must tween through the exact same state object that the controls use.
+        goToStep() sets state values; updateScene() reads them — same path as manual control.
 
 STEP 5 - CODE STYLE
     - Add brief JS comments explaining what each block of code teaches.
@@ -170,7 +200,25 @@ function buildPlanInjection(plan) {
         parts.push(`CONTEXT FROM TEXTBOOK:\n${plan.contextChunk.slice(0, 3000)}`);
     }
     if (plan.interactionPlan) {
-        parts.push(`INTERACTION PLAN:\n${JSON.stringify(plan.interactionPlan, null, 2)}`);
+        const ip = plan.interactionPlan;
+        // Spell out each section explicitly so the generator doesn't conflate them
+        const sections = [];
+        if (ip.elements?.length) {
+            sections.push(`ELEMENTS TO RECREATE IN 3D:\n${ip.elements.map(e => `  - ${e}`).join('\n')}`);
+        }
+        if (ip.interactions?.length) {
+            sections.push(`DISCRETE CONTROLS (implement every one of these in #ui, each must work independently):\n${JSON.stringify(ip.interactions, null, 2)}`);
+        }
+        if (ip.demo_steps?.length) {
+            sections.push(`DEMO STEPS (tween through these using goToStep(); each step drives the controls above):\n${JSON.stringify(ip.demo_steps, null, 2)}`);
+        }
+        if (ip.camera_suggestion) {
+            sections.push(`CAMERA: ${ip.camera_suggestion}`);
+        }
+        if (ip.notes) {
+            sections.push(`NOTES: ${ip.notes}`);
+        }
+        parts.push(sections.join('\n\n'));
     }
     return parts.join('\n\n');
 }

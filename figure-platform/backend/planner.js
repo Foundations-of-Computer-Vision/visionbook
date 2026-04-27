@@ -25,7 +25,7 @@ const QMD_DIR = ROOT_DIR;                                     // .qmd files live
 
 const PLANNER_MODEL = 'gpt-4o';
 // gpt-4o is fast and non-reasoning — no hidden thinking tokens.
-const PLANNER_MAX_TOKENS = 1024;
+const PLANNER_MAX_TOKENS = 2048;
 
 // ── Context extraction ─────────────────────────────────────────────────────────
 
@@ -119,16 +119,45 @@ function loadChapterText(chapterName) {
 
 const PLAN_SYSTEM_PROMPT = `You are an expert at planning interactive 3D visualizations for textbook figures.
 
-Given a textbook excerpt and figure, your goal is to come up with a pedagogically useful guided demonstration that walks through the figure in various states as the user clips next/previous buttons. Accompanying this demonstration is a series of interactions that you will design - toggling between steps of the guided demo will change the states of the interactions (toggles on/off, sliders at different values). Output the description of each step of the guided demonstration and the required ineractions in a concise JSON with no markdown and explanation:
+Your output drives two things that must work as ONE unified system:
+  1. DISCRETE CONTROLS — sliders, toggles, and buttons the user can manipulate freely at any time.
+  2. GUIDED DEMO — a narrative walkthrough that animates the controls to preset values and explains what is happening.
+
+The demo does NOT have its own geometry or state — it drives the controls. Each demo step is a snapshot of control values plus a tutor narration sentence.
+
+Output ONLY valid JSON (no markdown, no explanation):
 {
-  "concept": "multiple sentences explaining the specific implementation of each step of the guided demonstration to implement, at least 3 steps,
-  "elements": ["list of geometric elements to recreate in 3D"],
+  "elements": ["exhaustive list of every geometric element visible in the figure that must be recreated in 3D"],
+
   "interactions": [
-    { "type": "slider|toggle|step|animate|drag", "label": "UI label", "teaches": "what this interaction demonstrates" }
+    {
+      "id": "unique_camelCase_id",
+      "type": "slider | toggle | button",
+      "label": "short UI label shown next to the control",
+      "range": [min, max, step],
+      "default": defaultValue,
+      "teaches": "one sentence: what manipulating this control demonstrates"
+    }
   ],
-  "camera_suggestion": "description of ideal initial viewpoint",
-  "notes": "any special considerations"
-}`
+
+  "demo_steps": [
+    {
+      "title": "short step title (3-6 words)",
+      "narration": "2-3 sentences written as a tutor speaking directly to the learner — explain what is happening and why it matters, referencing what they can see changing in the scene. Make it conversational and specific, not generic.",
+      "control_values": { "unique_camelCase_id": value, ... },
+      "animate": true
+    }
+  ],
+
+  "camera_suggestion": "description of ideal initial viewpoint and zoom level",
+  "notes": "any special Three.js or rendering considerations"
+}
+
+Rules:
+- At least 3 demo steps, at most 6.
+- Every interaction must appear in at least one demo step's control_values.
+- Narration must be specific to THIS figure — never generic like "notice how things change". Say exactly what changes and what it means physically/mathematically.
+- demo_steps must tell a coherent pedagogical story: start simple, build complexity, end with the key insight.`
 
 /**
  * Call the LLM to generate a quick interaction plan for one figure.
