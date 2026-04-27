@@ -52,8 +52,15 @@ EDGES AND ARROWHEADS — non-negotiable:
     </defs>
     <line x1="…" y1="…" x2="…" y2="…" stroke="#333" stroke-width="1.2" marker-end="url(#arr)"/>
   Match arrow color to the edge color EXACTLY. Do NOT default to blue.
-  Shorten the line endpoint by ~6px toward origin so the arrowhead tip lands on the target,
-  not buried inside it: x2 = x2 - 6*cos(angle), y2 = y2 - 6*sin(angle).
+
+  ARROWHEAD ENDPOINT — generalized for any node size:
+  The line must stop at the node's boundary, not at its center. Shorten every line endpoint
+  by (nodeRadius + markerRefX) along the edge direction:
+    const dx = x2-x1, dy = y2-y1, len = Math.sqrt(dx*dx+dy*dy);
+    const pull = nodeRadius + 5;   // nodeRadius = actual radius of the target node in SVG units
+    x2 = x2 - (dx/len)*pull;
+    y2 = y2 - (dy/len)*pull;
+  Use the SAME nodeRadius value you used to draw the circles — do not hardcode a pixel offset.
 
 NODE DECORATIONS:
   Reproduce symbols inside nodes (squiggles, icons) as SVG <path>/<polyline>.
