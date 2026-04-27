@@ -14,14 +14,19 @@ async function getBrowser() {
     return _browser;
 }
 
-async function screenshotHtml(html, waitMs = 2800) {
+async function screenshotHtml(html, waitMs = 3500) {
+    // Detect if the figure uses ES module imports (Three.js CDN) — needs longer wait
+    const isModule = html.includes('type="module"') || html.includes("type='module'");
+    const effectiveWait = isModule ? Math.max(waitMs, 5000) : waitMs;
+
     let page;
     try {
         const browser = await getBrowser();
         page = await browser.newPage();
         await page.setViewport({ width: 900, height: 600 });
-        await page.setContent(html, { waitUntil: 'domcontentloaded', timeout: 15000 });
-        await new Promise(r => setTimeout(r, waitMs));
+        // 'networkidle2' waits for CDN scripts to finish loading (critical for Three.js modules)
+        await page.setContent(html, { waitUntil: isModule ? 'networkidle2' : 'domcontentloaded', timeout: 30000 });
+        await new Promise(r => setTimeout(r, effectiveWait));
         const shot = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 82 });
         return { data: shot, mediaType: 'image/jpeg' };
     } catch (err) {
