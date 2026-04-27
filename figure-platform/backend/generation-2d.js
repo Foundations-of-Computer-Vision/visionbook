@@ -31,43 +31,54 @@ Interactivity is layered on top AFTER the geometry is correct.
   html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#fff; }
 
 SVG SIZING AND PROPORTIONS:
-  Choose a viewBox that preserves the original aspect ratio, e.g. viewBox="0 0 400 220".
-  <svg width="100%" height="100%" viewBox="0 0 W H"> — fills the iframe edge-to-edge.
-  8px inner padding only. NEVER fixed px width/height on the svg element.
+  STEP 1A — SET THE VIEWBOX FROM THE BLUEPRINT (non-negotiable):
+  The blueprint includes aspectRatio = originalWidth / originalHeight.
+  Use it to compute H:
+    const W = 600;
+    const H = Math.round(W / plan.aspectRatio);  // e.g. AR=2.0 → H=300, AR=1.5 → H=400
+  Set: <svg width="100%" height="100%" viewBox="0 0 {W} {H}" preserveAspectRatio="xMidYMid meet">
+  NEVER invent your own viewBox numbers. The blueprint's aspectRatio is the ground truth.
+  If no blueprint is provided, estimate the ratio by looking at the image carefully, then set W=600.
 
-  DERIVE ALL COORDINATES FROM THE IMAGE PROPORTIONS:
-  Before placing any element, estimate the figure's coordinate grid:
-    • Divide the figure visually into a W×H grid (e.g. 400×220 units)
-    • Express every node center, edge endpoint, and label as (x/W, y/H) fractions
-      then multiply back: cx = fraction_x * W, cy = fraction_y * H
-    • Node radius r = (node_diameter_as_fraction_of_W) * W / 2
-  This ensures every element is proportionally correct — not guessed in isolation.
-  Example for a 3-layer network spanning the full width:
-    Input nodes at x=60, hidden at x=180, output at x=320 (for W=400)
-    Node radius r=18 if nodes appear to be ~9% of figure width
+  STEP 1B — SET ELEMENT SIZES FROM THE BLUEPRINT:
+  The blueprint includes elementSizes with fractions measured from the original.
+  Use them — do NOT re-estimate from the image:
+    const r = (plan.elementSizes.nodeRadiusFraction || 0.045) * W;
+    const strokeW = plan.elementSizes.strokeWidth || 1.5;
+    const fontSize = plan.elementSizes.fontSize || 11;
+    const arrSize = plan.elementSizes.arrowheadSize || 6;
+  These variables must be used for EVERY node, edge, and label — no hardcoding.
+
+  STEP 1C — DERIVE ALL ELEMENT POSITIONS AS FRACTIONS OF W×H:
+  Before placing any element, express its center as (fx, fy) fractions of the figure:
+    cx = fx * W,  cy = fy * H
+  Read fractional positions by looking at the image:
+    "this node center is ~15% from the left and ~50% from top" → cx=0.15*W, cy=0.5*H
+  This ensures correct layout regardless of the chosen viewBox scale.
 
 WHAT MUST MATCH THE ORIGINAL:
-  ✓ Node positions: use fraction-based coordinates, not arbitrary guesses
-  ✓ Node sizes: radius/width as a fraction of the figure's total width
-  ✓ Edge angles: compute from the ACTUAL node center coordinates — never eyeball
+  ✓ ViewBox aspect ratio: set from plan.aspectRatio — matches original figure proportions
+  ✓ Node sizes: set from plan.elementSizes.nodeRadiusFraction * W — never guessed
+  ✓ Node positions: fraction-based (fx*W, fy*H) from the image
+  ✓ Edge angles: computed from ACTUAL node center coordinates
   ✓ Every arrowhead: direction, color — reproduce ALL of them
-  ✓ Every label: exact text, 10–13px sans-serif, positioned near its element
+  ✓ Every label: exact text, fontSize px, positioned near its element
   ✓ Stroke widths, fill colors: read from the image, do not substitute
 
 EDGES AND ARROWHEADS — non-negotiable:
   Count edges in the original. Generate EXACTLY that many.
-  Define ONE reusable marker:
+  Define ONE reusable marker, sized from arrSize:
     <defs>
-      <marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-        <path d="M0,0 L0,6 L6,3 z" fill="#333"/>
+      <marker id="arr" markerWidth="{arrSize}" markerHeight="{arrSize}" refX="{arrSize-1}" refY="{arrSize/2}" orient="auto">
+        <path d="M0,0 L0,{arrSize} L{arrSize},{arrSize/2} z" fill="#333"/>
       </marker>
     </defs>
-    <line x1="…" y1="…" x2="…" y2="…" stroke="#333" stroke-width="1.2" marker-end="url(#arr)"/>
+    <line x1="…" y1="…" x2="…" y2="…" stroke="#333" stroke-width="{strokeW}" marker-end="url(#arr)"/>
   Match arrow color to edge color EXACTLY. Never default to blue.
 
   ARROWHEAD ENDPOINT — stop line at node boundary, not center:
     const dx=x2-x1, dy=y2-y1, len=Math.sqrt(dx*dx+dy*dy);
-    const pull = r + 5;  // r = the same nodeRadius variable used to draw the circles
+    const pull = r + arrSize;  // r = nodeRadius, arrSize from blueprint
     x2 = x2-(dx/len)*pull;  y2 = y2-(dy/len)*pull;
 
 NODE DECORATIONS:
@@ -78,57 +89,46 @@ NODE DECORATIONS:
 Default view looks identical to the original. Interactions reveal on user action only.
 BANNED from default view: titles, toolbars, description boxes, visible buttons, any chrome.
 
-THE GOAL OF EVERY INTERACTION IS TO EXPLAIN THE CONCEPT — not to look impressive.
-Ask: "does this animation help a student understand what this figure is showing?"
-If the answer is no, remove it. No decorative pops, flashes, or bounces.
+PRINCIPLE: every interaction must help a student understand what the figure is showing.
+Before writing any JS, ask for each element: "what does interacting with this teach?"
+If the answer is nothing, skip it. Never add animation for visual effect alone.
 
-── HOVER ──
-  Node/element hover: stroke +1.5px only — subtle, no fill change.
-  Tooltip: small, near cursor, label + one short explanation phrase (≤8 words).
+── HOVER — label and context ──
+  Any hoverable element: stroke or opacity shift only (+1.5px stroke, or opacity 0.7→1).
+  No fill changes, no movement, no scale on hover.
+  Tooltip near cursor — name of the element + one short phrase explaining its role:
     CSS: position:fixed; background:rgba(0,0,0,0.55); color:#fff; font:11px/1.4 sans-serif;
          padding:3px 8px; border-radius:4px; pointer-events:none; z-index:100; white-space:nowrap;
     document.addEventListener('mousemove', e => { tt.style.left=(e.clientX+12)+'px'; tt.style.top=(e.clientY-28)+'px'; });
-  On hover of an edge: briefly highlight that edge only (stroke color, +1px). Nothing else.
 
 ── CLICK → POPUP (postMessage) ──
   function showPopup(title, body) { window.parent.postMessage({ type:'alex-popup', title, body }, '*'); }
   function hidePopup()            { window.parent.postMessage({ type:'alex-popup', title:null  }, '*'); }
   document.addEventListener('keydown', e => { if(e.key==='Escape') hidePopup(); });
   svg.addEventListener('click', e => { if(e.target===svg||e.target.tagName==='svg') hidePopup(); });
-  Popup body should explain what the clicked element MEANS conceptually — 2–3 sentences.
+  Click popup body: 2–3 sentences explaining what the element means conceptually.
   DO NOT create any fixed-position popup element inside the HTML.
 
-── CLICK → CONCEPTUAL STATE ANIMATION ──
-  Animation must show the concept the figure illustrates, not just look active.
-  Use COLOR STATE CHANGES only — no scale transforms, no bouncing, no popping.
-  NEVER use: transform scale, translate, or any position change on elements.
+── CLICK → STATE / SEQUENCE ANIMATION ──
+  Only add this if the figure shows a PROCESS, FLOW, or SEQUENCE that can be stepped through.
+  The animation should reveal the concept — what happens when something in this system activates.
 
-  For neural networks / graphs (forward pass on click):
-    • Activate nodes layer-by-layer left→right with a fill color change:
-        inactive node: original fill (e.g. white)
-        active node:   fill → '#c8e0ff' (soft blue — visually shows "receiving signal")
-        active edge:   stroke → '#4a7ef5', stroke-width +1
-      Transition: node.style.transition = 'fill 0.35s ease'; node.style.fill = '#c8e0ff';
-    • Timing: layer 0 at 0ms, layer 1 at 700ms, layer 2 at 1400ms, etc.
-    • After +1200ms past last layer, reset all nodes and edges to original colors.
-    • Shift+click = backward pass: active color → '#ffc8c8' (soft red).
-    This directly shows how information flows through the network — the concept itself.
+  HOW TO DESIGN IT FOR ANY FIGURE TYPE:
+  1. Look at the figure and identify: what is the thing that changes or propagates?
+     (signal flowing, a step executing, a region activating, a path being traced, etc.)
+  2. Show ONLY that change — use fill or stroke color transitions.
+     active state: soft highlight color (e.g. '#c8e0ff' blue or '#c8f0c8' green)
+     inactive state: original colors
+     Transition: element.style.transition = 'fill 0.35s ease, stroke 0.35s ease';
+  3. If there is a natural sequence (step 1 → step 2 → step 3), reveal it with timed delays.
+     Each step should wait for the previous to complete before highlighting the next.
+  4. After the full sequence, reset everything to original colors.
 
-  For flow charts / pipelines:
-    • Click a step → that step's fill brightens, all others dim to 0.4 opacity.
-    • No movement, no scale change. Just opacity + fill to show "this is the active step."
+  NEVER USE: scale transform, translate, bounce, pop, or any position/size change.
+  NEVER animate just because it looks active — only animate what the concept requires.
 
-  For scatter/line plots:
-    • Hover a data point → highlight it + show (x, y) values in tooltip.
-    • No animation on load or click — data speaks for itself.
-
-  For matrices / tables:
-    • Hover row/column → highlight that row or column with a soft background tint.
-    • Click cell → popup explains the value's meaning in context.
-
-── DRAGGABLE NODES (graphs only, when it helps exploration) ──
-  function svgPt(s,e){const p=s.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(s.getScreenCTM().inverse());}
-  mousedown: record offset. mousemove: update cx/cy AND all connected edge x1/y1/x2/y2.
+── CLICK → POPUP (postMessage) ──
+  Already defined above — call showPopup(title, body) on meaningful element clicks.
 
 ━━━ RENDERING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   • Diagrams, graphs, matrices, flow charts → inline SVG
@@ -137,17 +137,18 @@ If the answer is no, remove it. No decorative pops, flashes, or bounces.
 
 ━━━ SELF-CHECK ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Before outputting, verify:
-  1. Are node sizes proportionally correct relative to the figure's total width?
-  2. Edge count matches the original exactly? (count them)
-  3. Every edge that had an arrowhead has marker-end="url(#arr)"?
-  4. Diagonal edge angles correct — computed from actual node center coords?
-  5. Default view matches original — layout, colors, every label, proportions?
-  6. html/body no margin/padding, background #fff, SVG width/height 100%?
-  7. Figure fills viewBox edge-to-edge (8px padding only)?
-  8. No title, toolbar, or description visible by default?
-  9. Does each animation explain the concept, or is it just decorative? Remove decorative ones.
-  10. No scale transforms, bounces, or position changes on elements?
-Fix any NO before outputting. Proportions (#1) and geometry (#2–4) matter most.
+  1. ViewBox set from plan.aspectRatio? (W=600, H=600/AR) — not an invented number?
+  2. Node radius = plan.elementSizes.nodeRadiusFraction * 600? Not a hardcoded guess?
+  3. Edge count matches the original exactly? (count them)
+  4. Every edge that had an arrowhead has marker-end="url(#arr)"?
+  5. Diagonal edge angles correct — computed from actual node center coords?
+  6. Default view matches original — layout, colors, every label, proportions?
+  7. html/body no margin/padding, background #fff, SVG width/height 100%?
+  8. SVG has preserveAspectRatio="xMidYMid meet"?
+  9. No title, toolbar, or description visible by default?
+  10. Does each animation explain the concept, or is it just decorative? Remove decorative ones.
+  11. No scale transforms, bounces, or position changes on elements?
+Fix any NO before outputting. ViewBox (#1) and element sizes (#2) are the most critical — wrong here = wrong everywhere.
 
 ━━━ JAVASCRIPT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Vanilla JS only (no libraries except Three.js when explicitly needed for 3D).
@@ -213,7 +214,7 @@ For multi-panel with mixed 2D+3D:
 /**
  * Generate a figure-faithful interactive HTML page.
  */
-async function generate2dFigureHtml({ modelId, base64, mediaType, plan, userText, iframeWidth, iframeHeight, maxTokens = 16000 }) {
+async function generate2dFigureHtml({ modelId, base64, mediaType, plan, userText, maxTokens = 16000 }) {
   if (!modelId) throw new Error('modelId is required.');
   if (!base64 || !mediaType) throw new Error('base64 and mediaType are required.');
 
@@ -235,22 +236,37 @@ async function generate2dFigureHtml({ modelId, base64, mediaType, plan, userText
     renderingHint = '\nRENDERING MODE: 2D — use inline SVG. Do NOT use Three.js.';
   }
 
+  // Extract concrete geometry constraints from plan to inject as hard numbers
+  const aspectRatio = plan?.aspectRatio;
+  const H_from_ar = aspectRatio ? Math.round(600 / aspectRatio) : null;
+  const nodeR = plan?.elementSizes?.nodeRadiusFraction
+    ? Math.round(plan.elementSizes.nodeRadiusFraction * 600)
+    : null;
+  const strokeW = plan?.elementSizes?.strokeWidth || null;
+  const fontSize = plan?.elementSizes?.fontSize || null;
+  const arrSize = plan?.elementSizes?.arrowheadSize || null;
+
+  const geometryConstraints = (aspectRatio || nodeR)
+    ? `\nGEOMETRY CONSTRAINTS (from blueprint measurements — use these exact values):` +
+      (H_from_ar ? `\n  viewBox="0 0 600 ${H_from_ar}"  ← from aspectRatio=${aspectRatio}` : '') +
+      (nodeR    ? `\n  nodeRadius = ${nodeR}px  ← from nodeRadiusFraction=${plan.elementSizes.nodeRadiusFraction}` : '') +
+      (strokeW  ? `\n  strokeWidth = ${strokeW}` : '') +
+      (fontSize ? `\n  fontSize = ${fontSize}px` : '') +
+      (arrSize  ? `\n  arrowheadSize = ${arrSize}` : '')
+    : '';
+
   const planSection = plan
-    ? `\n\nFIGURE BLUEPRINT:\n${JSON.stringify(plan, null, 2)}${renderingHint}`
+    ? `\n\nFIGURE BLUEPRINT:\n${JSON.stringify(plan, null, 2)}${renderingHint}${geometryConstraints}`
     : renderingHint;
 
   // Inject Three.js boilerplate into user message only when needed
   const threeSection = has3d ? THREEJS_BOILERPLATE : '';
 
-  const dimHint = (iframeWidth && iframeHeight)
-    ? `\nIFRAME SIZE: ${iframeWidth}×${iframeHeight}px — set viewBox="0 0 ${iframeWidth} ${iframeHeight}" and fill ALL of it (8px padding only, no empty borders).`
-    : '';
-
   const message = userText
     ? `${userText}${planSection}${threeSection}`
-    : `Reconstruct this figure as an interactive HTML page.${dimHint}${planSection}${threeSection}
+    : `Reconstruct this figure as an interactive HTML page.${planSection}${threeSection}
 
-STEP 1 — Build the SVG geometry: every node, every edge, every arrowhead, exact angles. Count edges in the original and match exactly.
+STEP 1 — Build the SVG geometry using the viewBox and element sizes from GEOMETRY CONSTRAINTS above. Every node, every edge, every arrowhead, exact angles.
 STEP 2 — Add hover tooltips, click postMessage popup, and signal-flow animation on top.
 No title, no description, no buttons by default. Do NOT embed the image.`;
 
