@@ -194,6 +194,33 @@ async function runGenerationJob(payload, { pollMs = 2000, maxPolls = 600 } = {})
   throw new Error('Generation timed out while waiting for completion.');
 }
 
+async function runGenerationJob2d(payload, { pollMs = 2000, maxPolls = 600 } = {}) {
+  const createRes = await apiFetch('/api/generate-2d-async', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const createData = await createRes.json();
+  if (!createRes.ok) throw new Error(createData.error || 'Failed to start 2D generation.');
+
+  let transientPollFailures = 0;
+  for (let pollCount = 0; pollCount < maxPolls; pollCount += 1) {
+    await new Promise(resolve => setTimeout(resolve, pollMs));
+    try {
+      const statusRes = await apiFetch(`/api/generate-status/${encodeURIComponent(createData.jobId)}`);
+      const statusData = await statusRes.json();
+      if (!statusRes.ok) throw new Error(statusData.error || 'Failed to check status.');
+      transientPollFailures = 0;
+      if (statusData.status === 'done') return statusData.result;
+      if (statusData.status === 'error') throw new Error(statusData.error || '2D generation failed.');
+    } catch (err) {
+      transientPollFailures += 1;
+      if (transientPollFailures >= 5) throw new Error(err.message || 'Connection error while checking status.');
+    }
+  }
+  throw new Error('2D generation timed out.');
+}
+
 export default function App() {
   const [tab, setTab] = useState('generator');
   const [viewerBackTab, setViewerBackTab] = useState('generator');
@@ -281,6 +308,7 @@ export default function App() {
   }, [selectedExperiment]);
 
   const [loading, setLoading] = useState(false);
+  const [figureType, setFigureType] = useState('3d'); // '3d' | '2d'
   const [error, setError] = useState('');
   const [evaluation, setEvaluation] = useState(null);
   const [evaluating, setEvaluating] = useState(false);
@@ -356,17 +384,12 @@ export default function App() {
     setLoading(true);
     try {
       const evalModelForRecord = selectedCriticModel || 'gpt-4o';
-      const data = await runGenerationJob({
-        base64: image.base64,
-        mediaType: image.mediaType,
-        filename: image.filename,
-        plan: currentPlan || undefined,
-        model: selectedModel || undefined,
-        evalModel: selectedCriticModel || undefined,
-        criticVersion: selectedCriticName || undefined,
-        criticPasses: selectedCriticPasses,
-        experiment: selectedExperiment || undefined,
-      });
+      const is2d = figureType === '2d';
+      const jobFn = is2d ? runGenerationJob2d : runGenerationJob;
+      const payload = is2d
+        ? { base64: image.base64, mediaType: image.mediaType, filename: image.filename, plan: currentPlan || undefined, model: selectedModel || undefined }
+        : { base64: image.base64, mediaType: image.mediaType, filename: image.filename, plan: currentPlan || undefined, model: selectedModel || undefined, evalModel: selectedCriticModel || undefined, criticVersion: selectedCriticName || undefined, criticPasses: selectedCriticPasses, experiment: selectedExperiment || undefined };
+      const data = await jobFn(payload);
       const generatedEvaluationResults = data.evaluationResults || {};
       const generatedEvaluationMeta = data.evaluationMeta || {};
       const generatedModel = pickEvaluationModel({
@@ -602,6 +625,8 @@ export default function App() {
             onCriticModelChange={setSelectedCriticModel}
             onCriticNameChange={setSelectedCriticName}
             onCriticPassesChange={setSelectedCriticPasses}
+            figureType={figureType}
+            onFigureTypeChange={setFigureType}
           />
         )}
         {tab === 'viewer' && (
@@ -665,7 +690,7 @@ function CriticPassSelector({ value, onChange, compact = false, includeZero = tr
 }
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, criticNameOptions, experimentOptions, selectedExperiment, selectedModel, selectedCriticModel, selectedCriticName, selectedCriticPasses, onExperimentChange, onGeneratorModelChange, onCriticModelChange, onCriticNameChange, onCriticPassesChange }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, criticNameOptions, experimentOptions, selectedExperiment, selectedModel, selectedCriticModel, selectedCriticName, selectedCriticPasses, onExperimentChange, onGeneratorModelChange, onCriticModelChange, onCriticNameChange, onCriticPassesChange, figureType, onFigureTypeChange }) {
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
@@ -939,6 +964,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       filename: candidate.filename,
       previewUrl: `data:${candidate.mediaType};base64,${candidate.base64}`,
     });
+    onFigureTypeChange?.(candidate.type === '2d' ? '2d' : '3d');
     setMode('figure');
   };
 
@@ -1134,7 +1160,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             onClick={onGenerate}
             disabled={loading || planning || !image || !selectedModel}
           >
-            {planning ? 'Planning…' : loading ? 'Generating — this may take 30-60s…' : 'Generate 3D Figure'}
+            {planning ? 'Planning…' : loading ? 'Generating — this may take 30-60s…' : figureType === '2d' ? 'Generate 2D Figure' : 'Generate 3D Figure'}
           </button>
         </>
       ) : (
@@ -1148,8 +1174,8 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
           >
             <option value="">— choose —</option>
             {chapters.map(ch => (
-              <option key={ch.name} value={ch.name} disabled={ch.candidateCount === 0} style={ch.candidateCount === 0 ? { color: '#bbb' } : {}}>
-                {ch.name} ({ch.candidateCount} candidate{ch.candidateCount !== 1 ? 's' : ''})
+              <option key={ch.name} value={ch.name} disabled={(ch.candidateCount || 0) + (ch.candidateCount2d || 0) === 0} style={(ch.candidateCount || 0) + (ch.candidateCount2d || 0) === 0 ? { color: '#bbb' } : {}}>
+                {ch.name}{(() => { const parts = []; if (ch.candidateCount) parts.push(`${ch.candidateCount} 3D`); if (ch.candidateCount2d) parts.push(`${ch.candidateCount2d} 2D`); return parts.length ? ` (${parts.join(' · ')})` : ''; })()}
               </option>
             ))}
           </select>
@@ -1168,6 +1194,9 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                     <div key={c.stem} style={{ ...styles.candidateCard, border: `2px solid ${borderColor}`, opacity: chapterRunning && !isCurrent && !done ? 0.4 : 1, position: 'relative' }}>
                       <img src={`data:${c.mediaType};base64,${c.base64}`} alt={c.stem} style={styles.candidateThumb}
                         onClick={() => handleSelectCandidate(c)} />
+                      <div style={{ position: 'absolute', top: 4, left: 4, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: c.type === '2d' ? '#a855f7' : '#4a90d9', color: '#fff', letterSpacing: '0.5px' }}>
+                        {c.type === '2d' ? '2D' : '3D'}
+                      </div>
                       <p style={styles.candidateName}>
                         {done ? (done.status === 'ok' ? '✓ ' : '✗ ') : isCurrent ? '⏳ ' : ''}
                         {c.stem}
