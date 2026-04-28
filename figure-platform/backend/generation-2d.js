@@ -62,8 +62,16 @@ WHAT MUST MATCH THE ORIGINAL:
   ✓ Node positions: fraction-based (fx*W, fy*H) from the image
   ✓ Edge angles: computed from ACTUAL node center coordinates
   ✓ Every arrowhead: direction, color — reproduce ALL of them
-  ✓ Every label: exact text, fontSize px, positioned near its element
+  ✓ Every label: exact text, font-size in SVG USER UNITS (NOT px) — see TEXT SIZING below
   ✓ Stroke widths, fill colors: read from the image, do not substitute
+
+TEXT SIZING — critical for readability at all zoom levels:
+  SVG font-size in "px" units does NOT scale with the viewBox — it will appear tiny when the
+  overlay is small. Always use raw user-unit numbers (no "px" suffix):
+    <text font-size="11" font-family="sans-serif">   ← CORRECT (scales with viewBox)
+    <text font-size="11px" font-family="sans-serif"> ← WRONG (stays fixed, becomes tiny)
+  Scale based on W=600: use fontSize from plan.elementSizes.fontSize (default 11).
+  If labels look crowded, reduce to 9. If sparse, use 12. Never below 9 or above 14.
 
 EDGES AND ARROWHEADS — non-negotiable:
   Count edges in the original. Generate EXACTLY that many.
