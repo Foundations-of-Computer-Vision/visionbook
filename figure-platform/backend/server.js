@@ -33,7 +33,7 @@ const FIGURES_DIR = path.join(__dirname, '..', '..', 'figures');
 // CURRENT_EXPERIMENT is derived from the configured experiment base.
 // Change EXPERIMENT_BASE to move future generations into a new experiment bucket.
 const EXPERIMENT_BASE = 'default_base';   // human-readable prefix
-const CURRENT_MODEL = 'gpt-5.4';             // model used by the generator
+const CURRENT_MODEL = 'gpt-5.5';             // model used by the generator
 const CURRENT_CRITIC_MODEL = 'gpt-4o';       // model used by evaluator by default
 // CURRENT_EXPERIMENT is set below, after the system prompt is built.
 

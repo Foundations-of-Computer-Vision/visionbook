@@ -129,6 +129,7 @@ async function getGemini() {
 //   label     — human-readable name shown in the UI
 const MODEL_REGISTRY = {
   // OpenAI
+  'gpt-5.5': { provider: 'openai', apiModel: 'gpt-5.5', label: 'GPT-5.5' },
   'gpt-5.4': { provider: 'openai', apiModel: 'gpt-5.4', label: 'GPT-5.4' },
   'gpt-4o': { provider: 'openai', apiModel: 'gpt-4o', label: 'GPT-4o' },
   'o4-mini': { provider: 'openai', apiModel: 'o4-mini', label: 'o4-mini' },

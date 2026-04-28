@@ -165,46 +165,75 @@ Wrap all JS in try-catch so a runtime error never leaves a blank white page.`;
 // ── Three.js boilerplate — injected into user message for 3D figures ────────
 const THREEJS_BOILERPLATE = `
 ━━━ THREE.JS SECTION (3D figures only) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Use Three.js r128 from unpkg CDN. Load from:
-  https://unpkg.com/three@0.128.0/build/three.min.js
-  https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js
+Use Three.js r171 via importmap (ESM). This version uses pointer-event capture
+so drag-to-rotate works even when the cursor leaves the iframe boundary.
 
 NEVER fake 3D with CSS perspective/transform. Build real Three.js meshes.
+NEVER use <script src="...three.min.js">. Always use the importmap below.
 
-MANDATORY SETUP — use this verbatim (do not change renderer background or lighting):
+MANDATORY HTML STRUCTURE — copy this verbatim into <head>:
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setClearColor(0xffffff, 1);  // WHITE — never change this
+  <script type="importmap">
+  {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"}}
+  </script>
+
+MANDATORY SCRIPT — use <script type="module"> and this exact setup:
+
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+  // Canvas fills the entire iframe — required for rotation to work
+  const canvas = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setClearColor(0xffffff, 1);
   renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xffffff);
 
   // Orthographic camera for isometric academic diagrams:
-  const aspect = window.innerWidth / window.innerHeight;
-  const d = 8;  // adjust scale to fit the scene
+  let d = 8;  // adjust to fit your scene
+  let aspect = canvas.clientWidth / canvas.clientHeight;
   const camera = new THREE.OrthographicCamera(-d*aspect, d*aspect, d, -d, 0.1, 1000);
-  camera.position.set(10, 8, 10);  // standard isometric — tune to match original angle
+  camera.position.set(10, 8, 10);
   camera.lookAt(0, 0, 0);
 
-  // Ambient light ONLY — no directional/spot/point lights (flat academic style):
+  // OrbitControls — ALWAYS include for rotation. enableDamping = smooth inertia.
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+
+  // Ambient light ONLY (flat academic style — no shadows):
   scene.add(new THREE.AmbientLight(0xffffff, 1.0));
 
-  // Resize handler (orthographic):
-  window.addEventListener('resize', () => {
-    const a = window.innerWidth / window.innerHeight;
-    camera.left=-d*a; camera.right=d*a; camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+  // Render loop — controls.update() required for damping:
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // Resize handler:
+  new ResizeObserver(() => {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    aspect = w / h;
+    camera.left=-d*aspect; camera.right=d*aspect; camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false);
+  }).observe(canvas);
+
+REQUIRED CSS (add to <style>):
+  html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#fff; }
+  #c { width:100%; height:100%; display:block; }
 
 MATERIALS — use MeshBasicMaterial (unlit = matches flat diagram style):
   Colored sphere:    new THREE.MeshBasicMaterial({ color:0xcc4444, transparent:true, opacity:0.82 })
-  Outline (larger):  new THREE.MeshBasicMaterial({ color:0x222222 })  // placed behind colored sphere
   White/gray node:   new THREE.MeshBasicMaterial({ color:0xeeeeee, transparent:true, opacity:0.90 })
   Box face:          new THREE.MeshBasicMaterial({ color:0xbb7744 })
   Box edges:         new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({color:0x333333}))
 
 NEVER USE: MeshPhongMaterial, MeshStandardMaterial, DirectionalLight, PointLight, SpotLight.
-  These produce shiny plastic balls, dark shadows, and look nothing like the original.
 
 CAMERA ANALYSIS — before writing any code, output this comment:
   // x-axis→[dir], y-axis→[dir], z-axis→[dir]
