@@ -23,8 +23,7 @@ const { inferChapterFromFilename, list3dCandidates } = require('./chapter-discov
 const ROOT_DIR = path.join(__dirname, '..', '..');
 const QMD_DIR = ROOT_DIR;                                     // .qmd files live at repo root
 
-const PLANNER_MODEL = 'gpt-4o';
-// gpt-4o is fast and non-reasoning — no hidden thinking tokens.
+const PLANNER_MODEL = 'gpt-5.5';
 const PLANNER_MAX_TOKENS = 2048;
 
 // ── Context extraction ─────────────────────────────────────────────────────────
