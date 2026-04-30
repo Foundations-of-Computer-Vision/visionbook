@@ -129,15 +129,17 @@ async function getGemini() {
 //   label     — human-readable name shown in the UI
 const MODEL_REGISTRY = {
   // OpenAI
+  'gpt-5.5': { provider: 'openai', apiModel: 'gpt-5.5', label: 'GPT-5.5' },
   'gpt-5.4': { provider: 'openai', apiModel: 'gpt-5.4', label: 'GPT-5.4' },
   'gpt-4o': { provider: 'openai', apiModel: 'gpt-4o', label: 'GPT-4o' },
   'o4-mini': { provider: 'openai', apiModel: 'o4-mini', label: 'o4-mini' },
 
   // Anthropic (Claude)
+  'claude-opus-4.7': { provider: 'anthropic', apiModel: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
   'claude-sonnet-4.6': { provider: 'anthropic', apiModel: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-  'claude-opus-4.6':   { provider: 'anthropic', apiModel: 'claude-opus-4-6',   label: 'Claude Opus 4.6'   },
-  'claude-opus-4.6':   { provider: 'anthropic', apiModel: 'claude-opus-4-20250514', label: 'Claude Opus 4 (old)' },
-  'claude-sonnet-4':   { provider: 'anthropic', apiModel: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (old)' },
+  'claude-opus-4.6': { provider: 'anthropic', apiModel: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
+  'claude-opus-4-old': { provider: 'anthropic', apiModel: 'claude-opus-4-20250514', label: 'Claude Opus 4 (old)' },
+  'claude-sonnet-4': { provider: 'anthropic', apiModel: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (old)' },
 
   // Google (Gemini)
   'gemini-3.1-pro': { provider: 'google', apiModel: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },

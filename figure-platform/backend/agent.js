@@ -17,8 +17,8 @@
  *   --ext   <list>       comma-separated extensions to match (default: png,jpg,jpeg)
  *   --rounds <n>         max generator-evaluator rounds (default: 1)
  *   --threshold <score>  stop refining when overall_average >= this (default: 4.0)
- *   --model <name>       generator model (default: gpt-4o)
- *   --eval-model <name>  evaluator model (default: gpt-5.4)
+ *   --model <name>       generator model (default: gpt-5.5)
+ *   --eval-model <name>  evaluator model (default: claude-opus-4.7)
  *   --experiment <label> experiment label written to result (default: agent-v1)
  *   --screenshot         take a Puppeteer screenshot after generation (default: true)
  *   --no-screenshot      skip screenshots (faster)
@@ -61,8 +61,8 @@ const DIR_PATH = flag('--dir');
 const EXTS = (flag('--ext') || 'png,jpg,jpeg').split(',').map(e => e.toLowerCase().replace(/^\./, ''));
 const MAX_ROUNDS = parseInt(flag('--rounds') || '1', 10);
 const THRESHOLD = parseFloat(flag('--threshold') || '4.0');
-const GEN_MODEL = flag('--model') || 'gpt-5.4';
-const EVAL_MODEL = flag('--eval-model') || 'gpt-5.4';
+const GEN_MODEL = flag('--model') || 'gpt-5.5';
+const EVAL_MODEL = flag('--eval-model') || 'claude-opus-4.7';
 const EXPERIMENT_OVERRIDE = flag('--experiment');  // manual override, else derived from the configured base name
 const EXPERIMENT_BASE = process.env.EXPERIMENT_BASE || 'base_scene_robust';
 const DO_SCREENSHOT = !hasFlag('--no-screenshot');

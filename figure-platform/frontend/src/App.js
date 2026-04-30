@@ -6,7 +6,11 @@ const CRITIC_MODEL_STORAGE_KEY = 'figure-platform:selectedCriticModel';
 const CRITIC_NAME_STORAGE_KEY = 'figure-platform:selectedCriticName';
 const CRITIC_PASSES_STORAGE_KEY = 'figure-platform:selectedCriticPasses';
 const EXPERIMENT_STORAGE_KEY = 'figure-platform:selectedExperiment';
+const FIGURE_TYPE_STORAGE_KEY = 'figure-platform:selectedFigureType';
+const CRITIC_VERSION_STORAGE_KEY = 'figure-platform:selectedCriticVersion';
 const HUMAN_EVAL_MODEL = 'human:manual';
+const DEFAULT_GENERATION_MODEL = 'gpt-5.5';
+const DEFAULT_EVALUATION_MODEL = 'claude-opus-4.7';
 const HUMAN_FAILURE_MODES = [
   'Depth-Wrong',
   'Missing-Labels',
@@ -250,6 +254,19 @@ export default function App() {
       if (promptData.criticVersion) setCurrentCriticVersion(promptData.criticVersion);
       setModels(list);
 
+      const storedExperiment = window.localStorage.getItem(EXPERIMENT_STORAGE_KEY);
+      const newestExperiment = historyRecords?.[0]?.experiment || '';
+      if (storedExperiment) setSelectedExperiment(storedExperiment);
+      else if (newestExperiment) setSelectedExperiment(newestExperiment);
+
+      const storedCriticName = window.localStorage.getItem(CRITIC_NAME_STORAGE_KEY);
+      const newestCriticName = collectCriticVersionSummaries(historyRecords || [])[0]?.versionId || '';
+      if (storedCriticName) setSelectedCriticName(storedCriticName);
+      else if (newestCriticName) setSelectedCriticName(newestCriticName);
+
+      const storedFigureType = window.localStorage.getItem(FIGURE_TYPE_STORAGE_KEY);
+      if (storedFigureType === '2d' || storedFigureType === '3d') setFigureType(storedFigureType);
+
       const experimentSet = new Set();
       const criticNameSet = new Set();
       for (const record of historyRecords || []) {
@@ -262,6 +279,14 @@ export default function App() {
       const mergedCriticNames = Array.from(criticNameSet).sort();
       setExperimentOptions(mergedExperiments);
       setCriticNameOptions(mergedCriticNames);
+
+      const storedCriticPassesRaw = window.localStorage.getItem(CRITIC_PASSES_STORAGE_KEY);
+      if (storedCriticPassesRaw !== null) {
+        const storedCriticPasses = Number(storedCriticPassesRaw);
+        if (Number.isInteger(storedCriticPasses) && storedCriticPasses >= 0 && storedCriticPasses <= 3) {
+          setSelectedCriticPasses(storedCriticPasses);
+        }
+      }
 
       if (list.length === 0) return;
 
@@ -277,13 +302,6 @@ export default function App() {
 
       if (preferredCriticModel) setSelectedCriticModel(preferredCriticModel);
 
-      const storedCriticPassesRaw = window.localStorage.getItem(CRITIC_PASSES_STORAGE_KEY);
-      if (storedCriticPassesRaw !== null) {
-        const storedCriticPasses = Number(storedCriticPassesRaw);
-        if (Number.isInteger(storedCriticPasses) && storedCriticPasses >= 0 && storedCriticPasses <= 3) {
-          setSelectedCriticPasses(storedCriticPasses);
-        }
-      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -314,6 +332,10 @@ export default function App() {
   const [evaluating, setEvaluating] = useState(false);
   const [plan, setPlan] = useState(null);        // planner output for current figure
   const [planning, setPlanning] = useState(false); // true while planner is running
+
+  useEffect(() => {
+    if (figureType) window.localStorage.setItem(FIGURE_TYPE_STORAGE_KEY, figureType);
+  }, [figureType]);
 
   const syncViewerSelection = useCallback((record, preferredModel = null) => {
     if (!record) {
@@ -383,7 +405,7 @@ export default function App() {
     // Step 2: Generate (slow ~30-60s)
     setLoading(true);
     try {
-      const evalModelForRecord = selectedCriticModel || 'gpt-4o';
+      const evalModelForRecord = selectedCriticModel || DEFAULT_EVALUATION_MODEL;
       const is2d = figureType === '2d';
       const jobFn = is2d ? runGenerationJob2d : runGenerationJob;
       const payload = is2d
@@ -501,7 +523,7 @@ export default function App() {
     if (!currentRecord) return;
     setEvaluating(true);
     try {
-      const modelId = requestedEvalModel || selectedCriticModel || pickEvaluationModel(currentRecord, null) || 'gpt-4o';
+      const modelId = requestedEvalModel || selectedCriticModel || pickEvaluationModel(currentRecord, null) || DEFAULT_EVALUATION_MODEL;
       const evalModelToUse = modelId;
       let data;
       if (currentRecord.htmlPath) {
@@ -981,89 +1003,94 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
           onClick={() => setMode('chapter')}
         >Select Chapter</button>
       </div>
-      <div style={styles.generatorControlRow}>
-        <div style={styles.generatorModelStack}>
-          <div style={styles.generatorExperimentCard}>
-            <label style={styles.generatorModelLabel}>Experiment Name</label>
-            <div style={styles.generatorExperimentControls}>
-              <select
-                style={styles.generatorModelSelect}
-                value={experimentOptions.includes(selectedExperiment) ? selectedExperiment : ''}
-                onChange={e => onExperimentChange?.(e.target.value)}
-                disabled={experimentOptions.length === 0}
-              >
-                <option value="">Select a past experiment...</option>
-                {experimentOptions.map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-              <input
-                style={styles.generatorTextInput}
-                value={selectedExperiment}
-                onChange={e => onExperimentChange?.(e.target.value)}
-                placeholder="Or type a new experiment name"
-              />
+      <details style={styles.generatorSettingsDetails}>
+        <summary style={styles.generatorSettingsSummary}>Settings</summary>
+        <div style={styles.generatorSettingsBody}>
+          <div style={styles.generatorControlRow}>
+            <div style={styles.generatorModelStack}>
+              <div style={styles.generatorExperimentCard}>
+                <label style={styles.generatorModelLabel}>Experiment Name</label>
+                <div style={styles.generatorExperimentControls}>
+                  <select
+                    style={styles.generatorModelSelect}
+                    value={experimentOptions.includes(selectedExperiment) ? selectedExperiment : ''}
+                    onChange={e => onExperimentChange?.(e.target.value)}
+                    disabled={experimentOptions.length === 0}
+                  >
+                    <option value="">Select a past experiment...</option>
+                    {experimentOptions.map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                  <input
+                    style={styles.generatorTextInput}
+                    value={selectedExperiment}
+                    onChange={e => onExperimentChange?.(e.target.value)}
+                    placeholder="Or type a new experiment name"
+                  />
+                </div>
+                <p style={styles.generatorHint}>
+                  Pick an existing name from the dropdown, or type a new one to create a fresh experiment bucket.
+                </p>
+              </div>
+              <div style={styles.generatorControlCard}>
+                <label style={styles.generatorModelLabel}>Generator Model</label>
+                <select
+                  style={styles.generatorModelSelect}
+                  value={selectedModel}
+                  onChange={e => onGeneratorModelChange?.(e.target.value)}
+                  disabled={models.length === 0}
+                >
+                  {models.map(m => (
+                    <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <p style={styles.generatorHint}>
-              Pick an existing name from the dropdown, or type a new one to create a fresh experiment bucket.
-            </p>
-          </div>
-          <div style={styles.generatorControlCard}>
-            <label style={styles.generatorModelLabel}>Generator Model</label>
-            <select
-              style={styles.generatorModelSelect}
-              value={selectedModel}
-              onChange={e => onGeneratorModelChange?.(e.target.value)}
-              disabled={models.length === 0}
-            >
-              {models.map(m => (
-                <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
-              ))}
-            </select>
+            <div style={styles.generatorModelStack}>
+              <div style={styles.generatorControlCard}>
+                <label style={styles.generatorModelLabel}>Critic Version</label>
+                <div style={styles.generatorExperimentControls}>
+                  <select
+                    style={styles.generatorModelSelect}
+                    value={criticNameOptions.includes(selectedCriticName) ? selectedCriticName : ''}
+                    onChange={e => onCriticNameChange?.(e.target.value)}
+                    disabled={criticNameOptions.length === 0}
+                  >
+                    <option value="">Select a past critic name...</option>
+                    {criticNameOptions.map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                  <input
+                    style={styles.generatorTextInput}
+                    value={selectedCriticName}
+                    onChange={e => onCriticNameChange?.(e.target.value)}
+                    placeholder="Or type a new critic name"
+                  />
+                </div>
+                <p style={styles.generatorHint}>
+                  Pick an existing name from the dropdown, or type a new one to create a fresh critic bucket.
+                </p>
+              </div>
+              <div style={styles.generatorControlCard}>
+                <label style={styles.generatorModelLabel}>Critic Model</label>
+                <select
+                  style={styles.generatorModelSelect}
+                  value={selectedCriticModel}
+                  onChange={e => onCriticModelChange?.(e.target.value)}
+                  disabled={models.length === 0}
+                >
+                  {models.map(m => (
+                    <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
+                  ))}
+                </select>
+              </div>
+              <CriticPassSelector value={selectedCriticPasses} onChange={onCriticPassesChange} />
+            </div>
           </div>
         </div>
-        <div style={styles.generatorModelStack}>
-          <div style={styles.generatorControlCard}>
-            <label style={styles.generatorModelLabel}>Critic Version</label>
-            <div style={styles.generatorExperimentControls}>
-              <select
-                style={styles.generatorModelSelect}
-                value={criticNameOptions.includes(selectedCriticName) ? selectedCriticName : ''}
-                onChange={e => onCriticNameChange?.(e.target.value)}
-                disabled={criticNameOptions.length === 0}
-              >
-                <option value="">Select a past critic name...</option>
-                {criticNameOptions.map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-              <input
-                style={styles.generatorTextInput}
-                value={selectedCriticName}
-                onChange={e => onCriticNameChange?.(e.target.value)}
-                placeholder="Or type a new critic name"
-              />
-            </div>
-            <p style={styles.generatorHint}>
-              Pick an existing name from the dropdown, or type a new one to create a fresh critic bucket.
-            </p>
-          </div>
-          <div style={styles.generatorControlCard}>
-            <label style={styles.generatorModelLabel}>Critic Model</label>
-            <select
-              style={styles.generatorModelSelect}
-              value={selectedCriticModel}
-              onChange={e => onCriticModelChange?.(e.target.value)}
-              disabled={models.length === 0}
-            >
-              {models.map(m => (
-                <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
-              ))}
-            </select>
-          </div>
-          <CriticPassSelector value={selectedCriticPasses} onChange={onCriticPassesChange} />
-        </div>
-      </div>
+      </details>
 
       {mode === 'figure' ? (
         <>
@@ -1929,6 +1956,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticP
   const [loadedApi, setLoadedApi] = React.useState(false);
   const [loadedAgent, setLoadedAgent] = React.useState(false);
   const [selectedCriticVersion, setSelectedCriticVersion] = React.useState('');
+  const criticVersionInitializedRef = React.useRef(false);
 
   const loadApiRecords = React.useCallback(async ({ force = false } = {}) => {
     if (loadedApi && !force) return;
@@ -2037,8 +2065,18 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticP
     return options.filter(option => option.versionId !== 'default_critic');
   }, [apiRecords, expTree]);
 
-  // Don't auto-select any critic version by default
-  // Previously: React.useEffect(() => {...})
+  React.useEffect(() => {
+    if (criticVersionInitializedRef.current) return;
+    if (criticVersionOptions.length > 0) {
+      setSelectedCriticVersion(criticVersionOptions[0].versionId);
+      criticVersionInitializedRef.current = true;
+      return;
+    }
+    if (!loading && currentCriticVersion) {
+      setSelectedCriticVersion(currentCriticVersion);
+      criticVersionInitializedRef.current = true;
+    }
+  }, [criticVersionOptions, currentCriticVersion, loading]);
 
   const selectedVersionLabel = React.useMemo(() => {
     return selectedCriticVersion || '';
@@ -2063,7 +2101,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticP
     const tree = {};
     for (const r of apiRecords) {
       const exp = normalizeExperimentName(r.experiment || 'base_scene_robust');
-      const model = r.model || 'gpt-4o';
+      const model = r.model || DEFAULT_GENERATION_MODEL;
       if (!tree[exp]) tree[exp] = {};
       if (!tree[exp][model]) tree[exp][model] = [];
       tree[exp][model].push(r);
@@ -2207,7 +2245,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticP
     setEvaluatingKey(item.key);
     try {
       let data;
-      const evalModelId = criticModel || pickEvaluationModel(item, null) || 'gpt-4o';
+      const evalModelId = criticModel || pickEvaluationModel(item, null) || DEFAULT_EVALUATION_MODEL;
       const versionId = evaluationCriticVersion || currentCriticVersion || 'legacy_unknown';
       if (item.type === 'api') {
         const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: criticModel || undefined, criticVersion: evaluationCriticVersion || undefined, criticPasses: selectedCriticPasses }) });
@@ -2241,7 +2279,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticP
 
   const handleEvalAll = async (e, chapter, items) => {
     e.stopPropagation();
-    const evalModelId = criticModel || 'gpt-4o';
+    const evalModelId = criticModel || DEFAULT_EVALUATION_MODEL;
     const pending = items.filter(item => !(item.evaluationResults || {})[evalModelId]);
     if (!pending.length) return;
     setEvaluatingAll(chapter);
@@ -2680,15 +2718,15 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticP
                       <summary style={{ ...styles.resultChapterHeader, cursor: 'pointer', listStyle: 'none', display: 'flex', alignItems: 'center', gap: 6, userSelect: 'none' }}>
                         <span style={{ fontSize: 9, color: '#bbb', display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>{groupKey}
                         <span style={{ fontWeight: 400, color: '#bbb', textTransform: 'none', letterSpacing: 0 }}>({items.length})</span>
-                        {items.some(i => !((i.evaluationResults || {})[criticModel || 'gpt-4o'])) && (
+                        {items.some(i => !((i.evaluationResults || {})[criticModel || DEFAULT_EVALUATION_MODEL])) && (
                           <button
                             style={{ marginLeft: 'auto', fontSize: 10, padding: '1px 8px', borderRadius: 4, border: '1px solid #d0d8e8', background: '#f2f6fb', color: '#5878a0', cursor: 'pointer', fontWeight: 600 }}
                             onClick={e => handleEvalAll(e, groupKey, items)}
                             disabled={evaluatingAll === groupKey}
                           >
                             {evaluatingAll === groupKey
-                              ? `Evaluating… (${items.filter(i => ((i.evaluationResults || {})[criticModel || 'gpt-4o'])).length}/${items.length})`
-                              : `Evaluate all (${items.filter(i => !((i.evaluationResults || {})[criticModel || 'gpt-4o'])).length} pending)`}
+                              ? `Evaluating… (${items.filter(i => ((i.evaluationResults || {})[criticModel || DEFAULT_EVALUATION_MODEL])).length}/${items.length})`
+                              : `Evaluate all (${items.filter(i => !((i.evaluationResults || {})[criticModel || DEFAULT_EVALUATION_MODEL])).length} pending)`}
                           </button>
                         )}
                       </summary>
@@ -3005,6 +3043,14 @@ function DashboardTab({ currentCriticVersion }) {
   const criticVersionInitializedRef = React.useRef(false);
 
   React.useEffect(() => {
+    const storedCriticVersion = window.localStorage.getItem(CRITIC_VERSION_STORAGE_KEY);
+    if (storedCriticVersion) {
+      setSelectedCriticVersion(storedCriticVersion);
+      criticVersionInitializedRef.current = true;
+    }
+  }, []);
+
+  React.useEffect(() => {
     Promise.all([
       apiFetch('/api/history').then(r => r.json()),
       apiFetch('/api/experiments').then(r => r.json()),
@@ -3016,7 +3062,7 @@ function DashboardTab({ currentCriticVersion }) {
   const { agentRecords, copilotRecords } = React.useMemo(() => {
     const agent = apiRecords.map(r => ({
       source: 'agent', experiment: r.experiment || 'base_scene_robust',
-      model: r.model || 'gpt-4o',
+      model: r.model || DEFAULT_GENERATION_MODEL,
       evaluationResults: r.evaluationResults || {},
       evaluationMeta: r.evaluationMeta || {},
       evaluationVersions: r.evaluationVersions || {},
@@ -3055,11 +3101,22 @@ function DashboardTab({ currentCriticVersion }) {
   }, [apiRecords, expTree, currentCriticVersion]);
 
   React.useEffect(() => {
-    if (currentCriticVersion && !criticVersionInitializedRef.current) {
-      setSelectedCriticVersion(prev => (!prev ? currentCriticVersion : prev));
+    if (criticVersionInitializedRef.current) return;
+    if (criticVersionOptions.length > 0) {
+      setSelectedCriticVersion(criticVersionOptions[0].versionId);
+      criticVersionInitializedRef.current = true;
+      return;
+    }
+    if (!loading && currentCriticVersion) {
+      setSelectedCriticVersion(currentCriticVersion);
       criticVersionInitializedRef.current = true;
     }
-  }, [currentCriticVersion, criticVersionOptions, selectedCriticVersion]);
+  }, [criticVersionOptions, currentCriticVersion, loading]);
+
+  React.useEffect(() => {
+    if (selectedCriticVersion) window.localStorage.setItem(CRITIC_VERSION_STORAGE_KEY, selectedCriticVersion);
+    else window.localStorage.removeItem(CRITIC_VERSION_STORAGE_KEY);
+  }, [selectedCriticVersion]);
 
   const selectedVersionLabel = React.useMemo(() => {
     return selectedCriticVersion || currentCriticVersion || '';
@@ -3424,10 +3481,13 @@ const styles = {
   criticPassCardCompact: { display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, padding: '4px 8px', border: '1px solid #ccd5e3', borderRadius: 999, background: '#fff', flexShrink: 0 },
   criticPassLabelCompact: { fontSize: 10, fontWeight: 700, color: '#5a6c86', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' },
   criticPassSelectCompact: { fontSize: 11, border: '1px solid #ccd5e3', borderRadius: 999, padding: '2px 8px', background: '#eef2f7', color: '#445', cursor: 'pointer', minWidth: 88, height: 26 },
-  generatorControlRow: { display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12, flexWrap: 'nowrap' },
-  generatorExperimentCard: { width: 320, display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
-  generatorControlCard: { display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff' },
-  generatorModelStack: { flex: '0 0 320px', width: 320, display: 'flex', flexDirection: 'column', gap: 4 },
+  generatorSettingsDetails: { width: '100%', boxSizing: 'border-box', marginBottom: 14, border: '1px solid #e0e0e0', borderRadius: 10, background: '#fafafa', overflow: 'hidden' },
+  generatorSettingsSummary: { listStyle: 'none', cursor: 'pointer', padding: '10px 14px', fontSize: 12, fontWeight: 700, color: '#445', textTransform: 'uppercase', letterSpacing: '0.06em', userSelect: 'none' },
+  generatorSettingsBody: { padding: '0 14px 14px', boxSizing: 'border-box' },
+  generatorControlRow: { display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap' },
+  generatorExperimentCard: { width: '100%', display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff', boxSizing: 'border-box' },
+  generatorControlCard: { width: '100%', display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 12px', border: '1px solid #e0e0e0', borderRadius: 10, background: '#fff', boxSizing: 'border-box' },
+  generatorModelStack: { flex: '1 1 280px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 },
   generatorModelLabel: { fontSize: 12, fontWeight: 700, color: '#444', textTransform: 'uppercase', letterSpacing: '0.04em' },
   generatorModelSelect: { width: '100%', fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '9px 12px', background: '#fff', color: '#333', cursor: 'pointer' },
   generatorTextInput: { width: '100%', fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '9px 12px', background: '#fff', color: '#333' },

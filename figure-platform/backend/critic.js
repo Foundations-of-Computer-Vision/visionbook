@@ -10,7 +10,7 @@ const { screenshotHtml } = require('./runtime-helpers');
 const fs = require('fs');
 const path = require('path');
 
-const CRITIC_DEFAULT_MODEL = 'gpt-4o';
+const CRITIC_DEFAULT_MODEL = 'claude-opus-4.7';
 const CRITIC_MAX_TOKENS = 512;
 // Change this value to start a new evaluation experiment namespace.
 const CRITIC_EXPERIMENT_BASE = 'default_critic';
