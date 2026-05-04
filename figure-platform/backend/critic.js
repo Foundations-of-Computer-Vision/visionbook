@@ -1,7 +1,7 @@
 /**
  * critic.js — shared critic (evaluator) definition
  *
- * Used by both server.js (single-pass web generation) and agent.js (multi-round loop).
+ * Used by the web generation pipeline.
  * Edit this file to change what the critic looks for, how it scores, or what it outputs.
  */
 

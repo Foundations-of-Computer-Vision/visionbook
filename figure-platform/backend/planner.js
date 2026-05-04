@@ -11,7 +11,7 @@
  *   - contextChunk:    the paragraphs around the figure reference in the .qmd
  *   - interactionPlan: LLM-generated interaction blueprint (fast, ~200 tokens)
  *
- * Used by both server.js (web) and agent.js (CLI).
+ * Used by the web generation pipeline.
  */
 
 const fs = require('fs');

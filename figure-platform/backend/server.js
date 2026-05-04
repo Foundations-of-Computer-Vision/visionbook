@@ -54,7 +54,7 @@ app.use(express.json({ limit: '20mb' }));
 // The model extends this file instead of writing from scratch.
 // It provides: renderer, scene, orthographic camera, OrbitControls,
 // floating label system (addLabel), resize handler, Reset View button, CSS.
-// Edit backend/base_scene_robust.html to change the starting point for all generations.
+// Edit backend/base_scene_new.html to change the starting point for all generations.
 let BASE_SCAFFOLD_PATH;
 let BASE_SCAFFOLD;
 try {

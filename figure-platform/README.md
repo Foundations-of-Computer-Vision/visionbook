@@ -56,7 +56,6 @@ figure-platform/
 │   ├── server.js              # Express API (plan, generate, evaluate, history)
 │   ├── planner.js             # Analyzes figures, plans 3D interactions
 │   ├── critic.js              # Evaluator: 10 failure modes, 5 score rubrics
-│   ├── agent.js               # CLI batch agent with multi-round refinement
 │   ├── base_scene_robust.html # Three.js scaffold injected into every prompt
 │   ├── sort_chapter_figures.js# Classifies figures as 2D/3D candidates
 │   ├── results/               # Generated outputs (git-ignored)
@@ -64,17 +63,6 @@ figure-platform/
 ├── frontend/
 │   └── src/App.js             # React UI (Generator + Viewer + Results tabs)
 └── chapter-figures/           # Per-chapter figure images + candidates_3d/
-```
-
-## CLI Agent (optional)
-
-Batch-process figures from the command line:
-
-```bash
-cd backend
-node agent.js --image ../../figures/imaging/pinhole.png
-node agent.js --dir ../../figures/homography --rounds 3 --threshold 4.0
-node agent.js --dir ../../figures/imaging --dry-run
 ```
 
 ## Notes

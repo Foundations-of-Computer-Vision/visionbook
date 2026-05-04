@@ -2,12 +2,21 @@ const { generateWithModel } = require('./models');
 
 // === Code Divider =============================================================
 const BASE_ROLE = 'You are an expert Three.js developer who converts 2D textbook figures into interactive 3D web visualizations.';
+
+// Scaffold insertion markers (must match backend/base_scene_new.html)
+const UI_BEGIN_MARKER = '<!-- @FIGURE_UI_BEGIN -->';
+const UI_END_MARKER = '<!-- @FIGURE_UI_END -->';
+const CODE_BEGIN_MARKER = '// @FIGURE_CODE_BEGIN';
+const CODE_END_MARKER = '// @FIGURE_CODE_END';
 // === Code Divider =============================================================
 const BASE_OUTPUT_RULES = `OUTPUT RULES - non-negotiable:
-- Your response MUST be ONLY a complete HTML file. No explanation, no markdown, no code fences.
-- It MUST start with exactly: <!DOCTYPE html>
-- It MUST end with exactly: </html>
-- Do NOT truncate. Output every line.`;
+- Your response must be only the scaffold fill-in payload, not a full HTML file.
+- It must contain these exact markers (even if sections are empty):
+        ${UI_BEGIN_MARKER} ... ${UI_END_MARKER}
+        ${CODE_BEGIN_MARKER} ... ${CODE_END_MARKER}
+- Between the UI markers: output only HTML that belongs inside <div id="ui"> (no <html>, <head>, <body>, <script>, or <style>).
+- Between the code markers: output only JavaScript that runs inside the existing <script type="module">. Do NOT add imports, importmaps, or re-declare scaffold globals.
+- Do not include any other text. No explanation, no markdown, no code fences.`;
 
 // === Code Divider =============================================================
 function buildPromptHeader({ scaffold, roleSuffix = '', scaffoldIntro, framedScaffold = true }) {
@@ -29,114 +38,39 @@ ${scaffoldSection}`;
 }
 
 // === Code Divider =============================================================
-const GENERATION_TASK_GUIDE = `What the scaffold already provides (do NOT re-declare or re-implement):
+const GENERATION_TASK_GUIDE = `SCAFFOLD MARKERS (fill these only):
+- UI HTML: between ${UI_BEGIN_MARKER} and ${UI_END_MARKER}
+- Module JS: between ${CODE_BEGIN_MARKER} and ${CODE_END_MARKER}
+
+What the scaffold already provides (do NOT re-declare):
 - THREE + OrbitControls imports via importmap
-- WebGLRenderer on <canvas id="c">
-- Orthographic camera - tune: d (view half-size), camera.position, camera.zoom
-- Damped OrbitControls render loop
-- animate() function with requestAnimationFrame + _syncLabels()
-- addLabel(html, position, options?) helper -> pushes to _labels[]
-- _syncLabels() called each frame inside animate()
-- ResizeObserver resize handler keeping camera + renderer in sync
-- White background, full-page <canvas id="c">
+- renderer + <canvas id="c">, scene, orthographic camera (d, aspect), OrbitControls
+- animate() render loop and ResizeObserver
+- addLabel(...) + _syncLabels() floating label system
 
-CRITICAL - DO NOT redefine any of these identifiers:
-    addLabel, _labels, _syncLabels, animate, renderer, scene, camera, controls, d, aspect
-    Redefining them causes a SyntaxError or silently breaks the scene.
-    Just CALL them and ADD new objects to scene.
+Hard constraints:
+- Do NOT redeclare: addLabel, _labels, _syncLabels, animate, renderer, scene, camera, controls, d, aspect
+- Do NOT add any import statements or importmaps.
+- Keep background white (#ffffff).
 
-YOUR TASK - extend the scaffold for the uploaded figure:
+Your task:
+1) Consider the given plan and what the figure is conceptually intended to illustrate.
+2) Recreate the figure's geometry by adding objects to the existing scene, taking into consideration that you are being shown a 2D figure that you want to transform into a 3D figure.
+3) Add ALL visible text labels using addLabel(htmlString, THREE.Vector3, options?).
+   Missing or incorrect labels are a critical failure.
+4) Add interactivity:
+   - Put your controls HTML inside the UI marker block (buttons/sliders/toggles).
+   - In JS, keep ONE state object + updateScene() that renders from state.
+   - If demo_steps are provided, implement goToStep(i) that tweens the SAME state values used by the controls.
+5) Adjust camera.position / camera.zoom / controls.target as needed so the scene is comfortably framed and the initial view matches what the figure looks like.
 
-STEP 1 - ANALYSE THE FIGURE
-    Look carefully at every element: axes, planes, surfaces, points, lines,
-    arrows, curves, labels, colours, and the geometric relationships between them.
-    Identify the core concept being illustrated.
-
-STEP 2 - PLAN GEOMETRY - map each 2D element to a Three.js primitive:
-    axis/arrow    -> THREE.ArrowHelper
-    line segment  -> THREE.Line with BufferGeometry
-    dashed line   -> LineDashedMaterial (call .computeLineDistances())
-    flat plane    -> PlaneGeometry + MeshBasicMaterial(transparent, DoubleSide)
-    solid surface -> appropriate BufferGeometry + MeshBasicMaterial
-    point / dot   -> SphereGeometry, radius 0.04-0.08
-    curve         -> CatmullRomCurve3 -> TubeGeometry
-    Set d and camera.position so the whole scene is comfortably framed.
-    Match colours from the original figure. Keep background white (#ffffff).
-
-STEP 3 - LABELS - THIS IS CRITICAL, follow exactly:
-
-    3a. LABEL AUDIT - before writing any code:
-            - List EVERY text label visible in the original figure: axis names, point
-                names, variable names, coordinate labels, titles, annotations, dimensions.
-            - Verify each axis label matches the correct geometric direction - if the
-                figure shows "x1" pointing right, your label must also point right.
-            - If the figure uses subscripted names (x1, x2, x3) instead of (x, y, z),
-                reproduce the EXACT names from the figure.
-            - Missing or mislabeled text is a critical failure.
-
-    3b. USE THE SCAFFOLD'S LABEL SYSTEM - do NOT create your own.
-            The scaffold already provides addLabel() and _syncLabels(). Call the
-            scaffold's addLabel exactly like this:
-
-                addLabel('x<sub>1</sub>', new THREE.Vector3(5, 0, 0), { bold: true });
-                addLabel('origin',        new THREE.Vector3(0, 0, 0), { fontSize: '11px', color: '#888' });
-
-            Signature:  addLabel(htmlString, THREE.Vector3, options?)
-                options.color      - css color   (default '#111')
-                options.fontSize   - css string  (default '13px')
-                options.bold       - boolean     (default false)
-                options.offset     - [dx,dy] px  (default [0,0])
-                options.background - css string  (default 'none')
-
-            DO NOT redefine addLabel, _syncLabels, _labels, updateLabels, or animate.
-                They already exist in the scaffold. Redefining them causes fatal JS errors.
-                Just CALL addLabel() in your code below the scaffold marker comment.
-
-    3c. LABEL CONTENT RULES:
-            - Use HTML entities for maths: 'x<sub>1</sub>', '&theta;', '&lambda;',
-                '<i>f</i>', '&pi;', 'R<sup>2</sup>', '&#x2192;' (arrow).
-            - Offset label positions 0.15-0.25 units away from their anchor point
-                so text does not overlap geometry.
-            - Every axis arrow MUST have a label at its tip.
-            - Every named point, vector, plane, or region in the figure MUST have a label.
-
-STEP 4 - INTERACTIVITY (unified system — interactions + demo are ONE thing):
-
-    The plan gives you two keys: "interactions" and "demo_steps".
-    They must form a single unified system — the demo drives the interactions, not a separate UI.
-
-    4a. BUILD DISCRETE CONTROLS from plan.interactions:
-        - Render each control in #ui as a styled element (slider, toggle, or button)
-        - Every control has a live event listener that immediately updates the scene
-        - Store each control's current value in a plain JS object: const state = { id: defaultValue, ... }
-        - Example slider:
-            <label>Angle <span id="angleVal">0</span>°</label>
-            <input type="range" min="0" max="360" step="1" value="0" id="angleSlider"
-                   oninput="state.angle=+this.value; document.getElementById('angleVal').textContent=this.value; updateScene()">
-        - updateScene() reads from state and repositions / recolours geometry accordingly
-
-    4b. BUILD GUIDED DEMO from plan.demo_steps — layered on top of 4a:
-        - Add a narration card ABOVE the controls:
-            <div id="narration" style="..."> step title + narration text </div>
-        - Add "◀" and "▶" buttons to step through demo_steps
-        - Each step calls goToStep(i) which:
-            1. ANIMATES each control smoothly to the target control_values using
-               requestAnimationFrame tweening (lerp over ~600ms) — NOT a hard snap
-            2. Calls updateScene() every animation frame during the tween
-            3. Updates the narration card with the step's title and narration text
-            4. Updates the control DOM elements (slider position, toggle state) to match
-        - Narration card style: position absolute, bottom of #ui, dark background
-          (#1a1a1a), white text, 13px, padding 10px 14px, border-radius 8px,
-          border-left 3px solid #4a9eff, max-width 260px, line-height 1.5
-        - Step title: bold 13px white. Narration body: 12px #ccc, margin-top 4px.
-
-    4c. NEVER make the demo and the interactions two separate systems.
-        The demo must tween through the exact same state object that the controls use.
-        goToStep() sets state values; updateScene() reads them — same path as manual control.
-
-STEP 5 - CODE STYLE
-    - Add brief JS comments explaining what each block of code teaches.
-    - Prefer conceptual clarity over visual realism.`;
+Output format (return ONLY this, nothing else):
+${UI_BEGIN_MARKER}
+...UI HTML...
+${UI_END_MARKER}
+${CODE_BEGIN_MARKER}
+...JavaScript...
+${CODE_END_MARKER}`;
 
 // === Code Divider =============================================================
 function buildGenerationSystemPrompt(scaffold) {
@@ -144,18 +78,21 @@ function buildGenerationSystemPrompt(scaffold) {
 
     const header = buildPromptHeader({
         scaffold,
-        scaffoldIntro: `BASE SCAFFOLD - copy this file VERBATIM, then insert your code at the marked
-location: "// ADD YOUR SCENE OBJECTS, GEOMETRY, LABELS, AND INTERACTION LOGIC BELOW HERE"
-Do NOT modify, remove, or re-declare anything already in the scaffold.`,
+        scaffoldIntro: `BASE SCAFFOLD - DO NOT copy this file into your response.
+The backend will keep this scaffold and insert your payload at the markers:
+- UI:   ${UI_BEGIN_MARKER} ... ${UI_END_MARKER}
+- CODE: ${CODE_BEGIN_MARKER} ... ${CODE_END_MARKER}
+Only output the marker blocks. Do NOT modify, remove, or re-declare anything already in the scaffold.`,
     });
 
     return `${header}
 
 SCAFFOLD USAGE RULES:
-- Copy the BASE SCAFFOLD below in full, then add your code where indicated.
+- Do NOT output the scaffold.
+- Output ONLY the marker-wrapped payload (UI + JS).
 - The scaffold already includes the importmap and imports for Three.js + OrbitControls.
-  Do NOT add duplicate <script type="importmap"> or duplicate import statements.
-  If you need additional Three.js addons, import them from 'three/addons/...'.
+    Do NOT add another <script type="importmap"> or any import statements.
+- Do NOT re-declare scaffold globals; only add objects to scene and wire UI to state.
 
 ${GENERATION_TASK_GUIDE}`;
 }
@@ -175,10 +112,18 @@ function buildGenerationRefinementPrompt(scaffold, prevHtml, evaluation) {
         `- notes: ${evaluation.notes || ''}`,
     ].join('\n');
 
+    const prevPayload = extractPayloadFromHtml(prevHtml);
+    const prevPayloadText = prevPayload
+        ? formatPayload(prevPayload)
+        : '(Could not find scaffold markers in previous HTML. Output a fresh payload using the required markers.)';
+
     const header = buildPromptHeader({
         scaffold,
         roleSuffix: 'improving a previous attempt based on critic feedback.',
-        scaffoldIntro: 'The BASE SCAFFOLD must still be used as the foundation:',
+        scaffoldIntro: `The BASE SCAFFOLD is fixed and will be used at runtime. Do NOT output it.
+Only output an improved payload for these markers:
+- UI:   ${UI_BEGIN_MARKER} ... ${UI_END_MARKER}
+- CODE: ${CODE_BEGIN_MARKER} ... ${CODE_END_MARKER}`,
         framedScaffold: false,
     });
 
@@ -187,10 +132,11 @@ function buildGenerationRefinementPrompt(scaffold, prevHtml, evaluation) {
 CRITIC FEEDBACK ON PREVIOUS ATTEMPT:
 ${issues}
 
-PREVIOUS HTML (improve this, do not start from scratch unless it is fundamentally broken):
-${prevHtml}
+PREVIOUS GENERATED PAYLOAD (edit this; do NOT output full HTML):
+${prevPayloadText}
 
-Fix all identified failure modes and improve every score. Maintain or improve what already works well.`;
+Fix all identified failure modes and improve every score. Maintain or improve what already works well.
+Return ONLY the updated marker-wrapped payload.`;
 }
 
 function buildPlanInjection(plan) {
@@ -225,19 +171,74 @@ function buildPlanInjection(plan) {
 
 function buildGenerationUserText(plan) {
     if (!plan) {
-        return 'Analyse this figure carefully. Then output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.';
+        return 'Analyse this figure carefully. Then output ONLY the scaffold fill-in payload using the required markers. No explanation, no markdown, no fences.';
     }
-    return `${buildPlanInjection(plan)}\n\nFollow the interaction plan above. Output the complete extended HTML file — starting with <!DOCTYPE html> and ending with </html>. No explanation, no markdown, no fences.`;
+    return `${buildPlanInjection(plan)}\n\nFollow the interaction plan above. Output ONLY the scaffold fill-in payload using the required markers. No explanation, no markdown, no fences.`;
 }
-// Strip accidental markdown fences and extract the HTML body.
+// Strip accidental markdown fences and return raw content.
 function stripFences(text) {
-    const fenced = text.match(/```(?:html)?\s*([\s\S]*?)```/i);
-    if (fenced) return fenced[1].trim();
-    return text
-        .replace(/^```html\s*/i, '')
-        .replace(/^```\s*/i, '')
-        .replace(/```\s*$/i, '')
-        .trim();
+    if (typeof text !== 'string') return '';
+
+    // Full fenced block
+    const fullFence = text.match(/^\s*```[a-zA-Z]*\s*\n([\s\S]*?)\n```\s*$/);
+    if (fullFence) return fullFence[1].trim();
+
+    // Any fenced block (fallback)
+    const anyFence = text.match(/```[a-zA-Z]*\s*([\s\S]*?)```/);
+    if (anyFence) return anyFence[1].trim();
+
+    return text.trim();
+}
+
+function escapeRegExp(str) {
+    return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractBetweenMarkers(text, beginMarker, endMarker) {
+    if (!text) return null;
+    const re = new RegExp(`${escapeRegExp(beginMarker)}([\\s\\S]*?)${escapeRegExp(endMarker)}`, 'm');
+    const match = String(text).match(re);
+    if (!match) return null;
+    return match[1].trim();
+}
+
+function extractPayloadFromText(text) {
+    const uiHtml = extractBetweenMarkers(text, UI_BEGIN_MARKER, UI_END_MARKER);
+    const codeJs = extractBetweenMarkers(text, CODE_BEGIN_MARKER, CODE_END_MARKER);
+    if (uiHtml == null && codeJs == null) return null;
+    return { uiHtml: uiHtml ?? '', codeJs: codeJs ?? '' };
+}
+
+function extractPayloadFromHtml(html) {
+    const payload = extractPayloadFromText(html);
+    if (!payload) return null;
+    return payload;
+}
+
+function formatPayload({ uiHtml = '', codeJs = '' } = {}) {
+    return `${UI_BEGIN_MARKER}\n${uiHtml || ''}\n${UI_END_MARKER}\n${CODE_BEGIN_MARKER}\n${codeJs || ''}\n${CODE_END_MARKER}`;
+}
+
+function replaceBetweenMarkers(source, beginMarker, endMarker, replacement) {
+    const re = new RegExp(`(${escapeRegExp(beginMarker)})([\\s\\S]*?)(${escapeRegExp(endMarker)})`, 'm');
+    if (!re.test(source)) {
+        throw new Error(`Scaffold is missing required markers: ${beginMarker} ... ${endMarker}`);
+    }
+    const body = (replacement || '').trim();
+    const middle = body ? `\n${body}\n` : `\n`;
+    return String(source).replace(re, `$1${middle}$3`);
+}
+
+function mergePayloadIntoScaffold(scaffold, payload) {
+    let merged = scaffold;
+    merged = replaceBetweenMarkers(merged, UI_BEGIN_MARKER, UI_END_MARKER, payload?.uiHtml ?? '');
+    merged = replaceBetweenMarkers(merged, CODE_BEGIN_MARKER, CODE_END_MARKER, payload?.codeJs ?? '');
+    return merged;
+}
+
+function looksLikeFullHtmlDocument(text) {
+    const prefix = String(text || '').trimStart().slice(0, 300).toLowerCase();
+    return prefix.includes('<!doctype html') || prefix.includes('<html');
 }
 
 // Fix common model mistakes that can break generated scenes.
@@ -342,13 +343,23 @@ async function generateFigureHtml({
         { type: 'text', text: resolvedUserText },
     ];
 
-    let html = await generateWithModel(modelId, {
+    let out = await generateWithModel(modelId, {
         systemPrompt: buildGenerationSystemPrompt(scaffold),
         userContent,
         maxTokens,
     });
 
-    html = stripFences(html);
+    out = stripFences(out);
+
+    let html;
+    if (looksLikeFullHtmlDocument(out)) {
+        // Backwards-compatible: sometimes models still return a full HTML document.
+        html = out;
+    } else {
+        const payload = extractPayloadFromText(out) || { uiHtml: '', codeJs: out };
+        html = mergePayloadIntoScaffold(scaffold, payload);
+    }
+
     if (applyFixes) html = fixGeneratedHtml(html);
     return html;
 }
@@ -376,13 +387,22 @@ async function generateRefinedFigureHtml({
         { type: 'text', text: userText },
     ];
 
-    let html = await generateWithModel(modelId, {
+    let out = await generateWithModel(modelId, {
         systemPrompt: buildGenerationRefinementPrompt(scaffold, prevHtml, evaluation),
         userContent,
         maxTokens,
     });
 
-    html = stripFences(html);
+    out = stripFences(out);
+
+    let html;
+    if (looksLikeFullHtmlDocument(out)) {
+        html = out;
+    } else {
+        const payload = extractPayloadFromText(out) || { uiHtml: '', codeJs: out };
+        html = mergePayloadIntoScaffold(scaffold, payload);
+    }
+
     if (applyFixes) html = fixGeneratedHtml(html);
     return html;
 }

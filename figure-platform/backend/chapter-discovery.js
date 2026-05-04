@@ -6,7 +6,7 @@
  * - Finding 3D candidate images in a chapter
  * - Inferring chapter from a figure filename
  *
- * Used by server.js, agent.js, and planner.js.
+ * Used by server.js and planner.js.
  */
 
 const fs = require('fs');

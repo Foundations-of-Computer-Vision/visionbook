@@ -45,9 +45,9 @@ async function closeScreenshotBrowser() {
 }
 
 function loadBaseScaffold(backendDir) {
-    const scaffoldPath = path.join(backendDir, 'base_scene_robust.html');
+    const scaffoldPath = path.join(backendDir, 'base_scene_new.html');
     if (!fs.existsSync(scaffoldPath)) {
-        throw new Error('ERROR: base_scene_robust.html not found in backend/.');
+        throw new Error('ERROR: base_scene_new.html not found in backend/.');
     }
     const scaffold = fs.readFileSync(scaffoldPath, 'utf-8');
     return { scaffoldPath, scaffold };

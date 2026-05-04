@@ -368,9 +368,7 @@ dominate:</p>
 <p>The evaluation study documented in this report was conducted <strong>primarily through manual experimentation</strong>:
 models and prompts were selected and run by hand, outputs were scored by a single human evaluator per session, and
 results were logged in a tracking spreadsheet. This approach yielded the 153-row dataset analysed below.</p>
-<p>The project is now transitioning toward <strong>fully automated batch evaluation</strong> via the <span class="model-name">agent.js</span>
-CLI, which orchestrates the full loop without human intervention and logs structured JSON results
-automatically. This shift is intended to enable evaluation at the scale of the full 2,377-figure corpus.</p>
+<p>The project is now transitioning toward <strong>fully automated batch evaluation</strong> through the web pipeline, which orchestrates the full loop without human intervention and logs structured JSON results automatically. This shift is intended to enable evaluation at the scale of the full 2,377-figure corpus.</p>
 
 <div class="callout note">
   <p><strong>Why automation matters.</strong> Running a single model–prompt combination across the 9-figure
