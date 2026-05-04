@@ -58,7 +58,7 @@ Your task:
 1) Consider the given plan and what the figure is conceptually intended to illustrate.
 2) Recreate the figure's geometry by adding objects to the existing scene, taking into consideration that you are being shown a 2D figure that you want to transform into a 3D figure.
 3) Add ALL visible text labels using addLabel(htmlString, THREE.Vector3, options?).
-   Missing or incorrect labels are a critical failure.
+   Missing or incorrect labels are a critical failure.  Make sure to match the font size with the original image.
 4) Add interactivity:
    - Put your controls HTML inside the UI marker block (buttons/sliders/toggles).
    - In JS, keep ONE state object + updateScene() that renders from state.
