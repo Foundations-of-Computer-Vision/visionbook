@@ -137,7 +137,6 @@
     );
     camera.position.set(4, 4, 4);
     camera.lookAt(0, 0, 0);
-    camera.zoom = 1.2;
     camera.updateProjectionMatrix();
 
     /* ── Controls ────────────────────────────────────────────────────────── */
@@ -150,10 +149,12 @@
     // still allowing interactive OrbitControls.
     const HOME_POS = new THREE.Vector3();
     const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+    let HOME_ZOOM = 0.75;
 
     document.getElementById('btnReset').addEventListener('click', () => {
       camera.position.copy(HOME_POS);
       controls.target.copy(HOME_TARGET);
+      camera.zoom = HOME_ZOOM;
       controls.update();
     });
 
@@ -184,7 +185,7 @@
      * This sets camera.position, camera.zoom, and controls.target, and stores them
      * in HOME_POS / HOME_TARGET so Reset returns to this deterministic view.
      */
-    function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.8 } = {}) {
+    function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.5 } = {}) {
       const { center, size } = computeSceneBounds();
 
       // Compute zoom so contentHeight occupies `heightFraction` of the view height
@@ -208,6 +209,9 @@
 
       HOME_POS.copy(camera.position);
       HOME_TARGET.copy(controls.target);
+      HOME_ZOOM = camera.zoom;
+
+      console.log("yeet");
     }
 
     // Apply a standard view once at startup so tall/narrow scenes get a similar framing.
@@ -216,6 +220,7 @@
 
     /* ── Label system ────────────────────────────────────────────────────── */
     const _labels = [];
+    const _v = new THREE.Vector3();
 
     /**
      * addLabel(text, position3D, options?) → entry
@@ -248,15 +253,28 @@
       return entry;
     }
 
-    /* project labels each frame */
-    const _v = new THREE.Vector3();
+    const _referenceDistance = 10;
+
     function _syncLabels() {
       for (const { div, pos, offset } of _labels) {
         _v.copy(pos).project(camera);
+
+        // Behind camera — hide
+        if (_v.z > 1) {
+          div.style.display = 'none';
+          continue;
+        }
+        div.style.display = '';
+
         const x = (_v.x * 0.5 + 0.5) * canvas.clientWidth + offset[0];
         const y = (-_v.y * 0.5 + 0.5) * canvas.clientHeight + offset[1];
+
+        const distance = camera.position.distanceTo(pos);
+        const scale = _referenceDistance / distance * camera.zoom;
+
         div.style.left = x + 'px';
         div.style.top = y + 'px';
+        div.style.transform = `translate(-50%, -50%) scale(${scale})`;
       }
     }
 

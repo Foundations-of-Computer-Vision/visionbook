@@ -49,8 +49,9 @@ What the scaffold already provides (do NOT re-declare):
 - addLabel(...) + _syncLabels() floating label system
 
 Hard constraints:
-- Do NOT redeclare: addLabel, _labels, _syncLabels, animate, renderer, scene, camera, controls, d, aspect
-- Do NOT add any import statements or importmaps.
+- Do not redeclare: addLabel, _labels, _syncLabels, animate, renderer, scene, camera, controls, d, aspect
+- Do not add any import statements or importmaps.
+- Do not change camera.zoom
 - Keep background white (#ffffff).
 
 Your task:
@@ -62,7 +63,6 @@ Your task:
    - Put your controls HTML inside the UI marker block (buttons/sliders/toggles).
    - In JS, keep ONE state object + updateScene() that renders from state.
    - If demo_steps are provided, implement goToStep(i) that tweens the SAME state values used by the controls.
-5) Adjust camera.position / camera.zoom / controls.target as needed so the scene is comfortably framed and the initial view matches what the figure looks like.
 
 Output format (return ONLY this, nothing else):
 ${UI_BEGIN_MARKER}
