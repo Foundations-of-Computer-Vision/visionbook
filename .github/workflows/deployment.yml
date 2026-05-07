@@ -21,11 +21,11 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           echo "${{ secrets.PUBLIC_KEY }}" > ~/.ssh/id_rsa.pub
           chmod 600 ~/.ssh/id_rsa ~/.ssh/id_rsa.pub
-          ssh-keyscan -t rsa ${{ secrets.HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -p ${{ secrets.PUBLIC_PORT }} -t rsa ${{ secrets.HOST }} >> ~/.ssh/known_hosts
 
       - name: Pull and Render
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.ID }}@${{ secrets.HOST }} << 'EOF'
+          ssh -p ${{ secrets.PUBLIC_PORT }} -o StrictHostKeyChecking=no ${{ secrets.ID }}@${{ secrets.HOST }} << 'EOF'
           cd ${{ secrets.DIR }}
           git pull
           quarto render --no-clean
