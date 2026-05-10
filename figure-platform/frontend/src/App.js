@@ -793,100 +793,46 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
     }
     setChapterRunning(true);
     setChapterResults([]);
+    setBatchEvalRunning(false);
+    setBatchEvalProgress(null);
+    setBatchEvalResults({});
     chapterAbortRef.current = false;
 
     const total = chapterCandidates.length;
     const results = [];           // shared results array
-    const activeMap = new Map();   // stem → { figureStem, phase, plan }
+    const activeMap = new Map();   // stem → { figureStem, phase }
 
     const updateProgress = () => {
       setChapterProgress({ completed: results.length, total, active: [...activeMap.values()] });
     };
 
-    // Process a single candidate (plan → generate) — routes 2D vs 3D automatically
+    // Process a single candidate through the iterative loop.
     const processFigure = async (candidate) => {
       if (chapterAbortRef.current) return;
-      activeMap.set(candidate.stem, { figureStem: candidate.stem, phase: 'planning', plan: null });
+      activeMap.set(candidate.stem, { figureStem: candidate.stem, phase: 'looping' });
       updateProgress();
 
-      const is2d = candidate.type === '2d';
-
-      // Phase 1: Plan
-      let figurePlan = null;
+      // The backend loop handles planning, generation, and critique internally.
       try {
-        const planEndpoint = is2d ? '/api/plan-2d' : '/api/plan';
-        const planRes = await apiFetch(planEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: candidate.filename,
-            chapterHint: selectedChapter,
-            base64: candidate.base64,
-            mediaType: candidate.mediaType,
-            plannerModel: selectedPlannerModel || undefined,
-          }),
+        const loopResult = await runGenerationLoop({
+          base64: candidate.base64,
+          mediaType: candidate.mediaType,
+          filename: candidate.filename,
+          figureStem: candidate.stem,
+          chapterName: selectedChapter,
+          model: selectedModel || undefined,
+          plannerModel: selectedPlannerModel || undefined,
+          criticVersion: selectedCriticName || undefined,
+          experiment: selectedExperiment || undefined,
         });
-        if (planRes.ok) figurePlan = await planRes.json();
-      } catch (_) { }
 
-      if (chapterAbortRef.current) { activeMap.delete(candidate.stem); return; }
+        if (chapterAbortRef.current) { activeMap.delete(candidate.stem); return; }
 
-      activeMap.set(candidate.stem, { figureStem: candidate.stem, phase: 'generating', plan: figurePlan });
-      updateProgress();
-
-      // Phase 2: Generate
-      try {
-        if (is2d) {
-          // 2D: async job — start then poll
-          const startRes = await apiFetch('/api/generate-2d-async', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              base64: candidate.base64,
-              mediaType: candidate.mediaType,
-              filename: candidate.filename,
-              plan: figurePlan || undefined,
-              model: selectedModel || undefined,
-              plannerModel: selectedPlannerModel || undefined,
-            }),
-          });
-          const startData = await startRes.json();
-          if (!startRes.ok) throw new Error(startData.error || '2D generation failed to start.');
-
-          // Poll until done
-          for (let i = 0; i < 300; i++) {
-            await new Promise(r => setTimeout(r, 2000));
-            if (chapterAbortRef.current) { activeMap.delete(candidate.stem); return; }
-            const statusRes = await apiFetch(`/api/generate-status/${encodeURIComponent(startData.jobId)}`);
-            const statusData = await statusRes.json();
-            if (statusData.status === 'done') {
-              results.push({ figureStem: candidate.stem, status: 'ok', figureId: statusData.result.figureId });
-              break;
-            }
-            if (statusData.status === 'error') throw new Error(statusData.error || '2D generation failed.');
-            if (i === 299) throw new Error('2D generation timed out.');
-          }
-        } else {
-          // 3D: direct synchronous call
-          const genRes = await apiFetch('/api/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              base64: candidate.base64,
-              mediaType: candidate.mediaType,
-              filename: candidate.filename,
-              plan: figurePlan || undefined,
-              model: selectedModel || undefined,
-              plannerModel: selectedPlannerModel || undefined,
-              criticVersion: selectedCriticName || undefined,
-              experiment: selectedExperiment || undefined,
-              evaluate: false,
-            }),
-          });
-          const genData = await genRes.json();
-          if (!genRes.ok) throw new Error(genData.error || 'Generation failed.');
-          results.push({ figureStem: candidate.stem, status: 'ok', figureId: genData.figureId });
-        }
+        results.push({
+          figureStem: candidate.stem,
+          status: 'ok',
+          figureId: loopResult.figureId,
+        });
       } catch (err) {
         results.push({ figureStem: candidate.stem, status: 'error', error: err.message });
       }
@@ -909,11 +855,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 
     setChapterProgress(null);
     setChapterRunning(false);
-
-    // Auto-evaluate all successful figures
-    if (results.some(r => r.status === 'ok')) {
-      runBatchEvaluation(results);
-    }
   };
 
   const handleAbortChapter = () => { chapterAbortRef.current = true; };
@@ -1282,7 +1223,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                 </button>
               )}
 
-              {/* Live progress: current figure's plan + context while generating */}
+              {/* Live progress: figures currently running through the iterative loop */}
               {chapterProgress && (
                 <div style={{ ...styles.planPanel, marginTop: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -1306,9 +1247,8 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                       <div key={a.figureStem} style={{ marginBottom: 10, padding: '8px 10px', background: '#f8faff', borderRadius: 6, border: '1px solid #e0e8f0' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>
-                            {a.phase === 'planning' ? '⏳' : '🔄'} {a.figureStem} — {a.phase}
+                            🔄 {a.figureStem} — {a.phase}
                           </span>
-                          {a.plan?.chapterName && <span style={styles.planChapter}>Chapter: {a.plan.chapterName}</span>}
                         </div>
                         {planPayload?.concept && (
                           <p style={styles.planConcept}>{planPayload.concept}</p>
