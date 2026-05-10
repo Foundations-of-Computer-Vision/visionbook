@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 
 const FALLBACK_PROMPT = '(Loading system prompt from server…)';
 const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
+const PLANNER_MODEL_STORAGE_KEY = 'figure-platform:selectedPlannerModel';
 const CRITIC_MODEL_STORAGE_KEY = 'figure-platform:selectedCriticModel';
 const CRITIC_NAME_STORAGE_KEY = 'figure-platform:selectedCriticName';
 const CRITIC_PASSES_STORAGE_KEY = 'figure-platform:selectedCriticPasses';
@@ -237,6 +238,7 @@ export default function App() {
   // Model selection
   const [models, setModels] = useState([]);       // available models from backend
   const [selectedModel, setSelectedModel] = useState(''); // '' = server default
+  const [selectedPlannerModel, setSelectedPlannerModel] = useState('');
   const [selectedCriticModel, setSelectedCriticModel] = useState('');
   const [criticNameOptions, setCriticNameOptions] = useState([]);
   const [selectedCriticName, setSelectedCriticName] = useState('');
@@ -296,6 +298,12 @@ export default function App() {
 
       if (preferredModel) setSelectedModel(preferredModel);
 
+      const storedPlannerModel = window.localStorage.getItem(PLANNER_MODEL_STORAGE_KEY);
+      const preferredPlannerModel = [storedPlannerModel, promptData.plannerModel, list[0]?.id]
+        .find(modelId => modelId && list.some(m => m.id === modelId));
+
+      if (preferredPlannerModel) setSelectedPlannerModel(preferredPlannerModel);
+
       const storedCriticModel = window.localStorage.getItem(CRITIC_MODEL_STORAGE_KEY);
       const preferredCriticModel = [storedCriticModel, promptData.criticModel, list[0]?.id]
         .find(modelId => modelId && list.some(m => m.id === modelId));
@@ -311,6 +319,9 @@ export default function App() {
   useEffect(() => {
     if (selectedModel) window.localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
   }, [selectedModel]);
+  useEffect(() => {
+    if (selectedPlannerModel) window.localStorage.setItem(PLANNER_MODEL_STORAGE_KEY, selectedPlannerModel);
+  }, [selectedPlannerModel]);
   useEffect(() => {
     if (selectedCriticModel) window.localStorage.setItem(CRITIC_MODEL_STORAGE_KEY, selectedCriticModel);
   }, [selectedCriticModel]);
@@ -391,6 +402,7 @@ export default function App() {
           filename: image.filename,
           base64: image.base64,
           mediaType: image.mediaType,
+          plannerModel: selectedPlannerModel || undefined,
         }),
       });
       const planData = await planRes.json();
@@ -409,8 +421,8 @@ export default function App() {
       const is2d = figureType === '2d';
       const jobFn = is2d ? runGenerationJob2d : runGenerationJob;
       const payload = is2d
-        ? { base64: image.base64, mediaType: image.mediaType, filename: image.filename, plan: currentPlan || undefined, model: selectedModel || undefined }
-        : { base64: image.base64, mediaType: image.mediaType, filename: image.filename, plan: currentPlan || undefined, model: selectedModel || undefined, evalModel: selectedCriticModel || undefined, criticVersion: selectedCriticName || undefined, criticPasses: selectedCriticPasses, experiment: selectedExperiment || undefined };
+        ? { base64: image.base64, mediaType: image.mediaType, filename: image.filename, plan: currentPlan || undefined, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined }
+        : { base64: image.base64, mediaType: image.mediaType, filename: image.filename, plan: currentPlan || undefined, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined, evalModel: selectedCriticModel || undefined, criticVersion: selectedCriticName || undefined, criticPasses: selectedCriticPasses, experiment: selectedExperiment || undefined };
       const data = await jobFn(payload);
       const generatedEvaluationResults = data.evaluationResults || {};
       const generatedEvaluationMeta = data.evaluationMeta || {};
@@ -442,7 +454,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [image, selectedCriticModel, selectedCriticName, selectedCriticPasses, selectedExperiment, selectedModel, tab]);
+  }, [image, selectedCriticModel, selectedCriticName, selectedCriticPasses, selectedExperiment, selectedModel, selectedPlannerModel, tab]);
   const handleLoadFromHistory = useCallback((record) => {
     const normalizedRecord = {
       ...record,
@@ -638,12 +650,14 @@ export default function App() {
             experimentOptions={experimentOptions}
             selectedExperiment={selectedExperiment}
             selectedModel={selectedModel}
+            selectedPlannerModel={selectedPlannerModel}
             selectedCriticModel={selectedCriticModel}
             selectedCriticName={selectedCriticName}
             selectedCriticPasses={selectedCriticPasses}
             currentCriticVersion={currentCriticVersion}
             onExperimentChange={setSelectedExperiment}
             onGeneratorModelChange={setSelectedModel}
+            onPlannerModelChange={setSelectedPlannerModel}
             onCriticModelChange={setSelectedCriticModel}
             onCriticNameChange={setSelectedCriticName}
             onCriticPassesChange={setSelectedCriticPasses}
@@ -712,7 +726,7 @@ function CriticPassSelector({ value, onChange, compact = false, includeZero = tr
 }
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, criticNameOptions, experimentOptions, selectedExperiment, selectedModel, selectedCriticModel, selectedCriticName, selectedCriticPasses, onExperimentChange, onGeneratorModelChange, onCriticModelChange, onCriticNameChange, onCriticPassesChange, figureType, onFigureTypeChange }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, criticNameOptions, experimentOptions, selectedExperiment, selectedModel, selectedPlannerModel, selectedCriticModel, selectedCriticName, selectedCriticPasses, onExperimentChange, onGeneratorModelChange, onPlannerModelChange, onCriticModelChange, onCriticNameChange, onCriticPassesChange, figureType, onFigureTypeChange }) {
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
@@ -833,6 +847,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             chapterHint: selectedChapter,
             base64: candidate.base64,
             mediaType: candidate.mediaType,
+            plannerModel: selectedPlannerModel || undefined,
           }),
         });
         if (planRes.ok) figurePlan = await planRes.json();
@@ -856,6 +871,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
               filename: candidate.filename,
               plan: figurePlan || undefined,
               model: selectedModel || undefined,
+              plannerModel: selectedPlannerModel || undefined,
             }),
           });
           const startData = await startRes.json();
@@ -885,6 +901,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
               filename: candidate.filename,
               plan: figurePlan || undefined,
               model: selectedModel || undefined,
+              plannerModel: selectedPlannerModel || undefined,
               criticVersion: selectedCriticName || undefined,
               experiment: selectedExperiment || undefined,
               evaluate: false,
@@ -1039,6 +1056,19 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                   style={styles.generatorModelSelect}
                   value={selectedModel}
                   onChange={e => onGeneratorModelChange?.(e.target.value)}
+                  disabled={models.length === 0}
+                >
+                  {models.map(m => (
+                    <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
+                  ))}
+                </select>
+              </div>
+              <div style={styles.generatorControlCard}>
+                <label style={styles.generatorModelLabel}>Planner Model</label>
+                <select
+                  style={styles.generatorModelSelect}
+                  value={selectedPlannerModel}
+                  onChange={e => onPlannerModelChange?.(e.target.value)}
                   disabled={models.length === 0}
                 >
                   {models.map(m => (
@@ -1206,7 +1236,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             onClick={onGenerate}
             disabled={loading || planning || !image || !selectedModel}
           >
-            {planning ? 'Planning…' : loading ? 'Generating — this may take 30-60s…' : figureType === '2d' ? 'Generate 2D Figure' : 'Generate 3D Figure'}
+            {planning ? 'Planning…' : loading ? 'Generating — this may take 1-2min…' : figureType === '2d' ? 'Generate 2D Figure' : 'Generate 3D Figure'}
           </button>
         </>
       ) : (

@@ -137,12 +137,14 @@ const MODEL_REGISTRY = {
   // Anthropic (Claude)
   'claude-opus-4.7': { provider: 'anthropic', apiModel: 'claude-opus-4-7', label: 'Claude Opus 4.7' },
   'claude-sonnet-4.6': { provider: 'anthropic', apiModel: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
+  'claude-haiku-4.5': { provider: 'anthropic', apiModel: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' },
   'claude-opus-4.6': { provider: 'anthropic', apiModel: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
   'claude-opus-4-old': { provider: 'anthropic', apiModel: 'claude-opus-4-20250514', label: 'Claude Opus 4 (old)' },
   'claude-sonnet-4': { provider: 'anthropic', apiModel: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4 (old)' },
 
   // Google (Gemini)
   'gemini-3.1-pro': { provider: 'google', apiModel: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+  'gemini-3-flash-preview': { provider: 'google', apiModel: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
   'gemini-2.5-pro': { provider: 'google', apiModel: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
   'gemini-2.5-flash': { provider: 'google', apiModel: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
 };

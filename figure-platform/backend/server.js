@@ -11,7 +11,7 @@ const {
   evaluateRecord,
   saveRecord,
 } = require('./figure_pipeline');
-const { planForFigure, planChapter } = require('./planner');
+const { planForFigure, planChapter, PLANNER_MODEL } = require('./planner');
 const { listChapters, list3dCandidates } = require('./chapter-discovery');
 const { getAvailableModels } = require('./models');
 const { upsertEvaluation, materializeEvaluationViews, compactEvaluationStorage } = require('./result_schema');
@@ -97,6 +97,7 @@ app.get('/api/prompt', (req, res) => {
     experiment: CURRENT_EXPERIMENT,
     model: CURRENT_MODEL,
     criticModel: CURRENT_CRITIC_MODEL,
+    plannerModel: PLANNER_MODEL,
     criticVersion: CURRENT_CRITIC_VERSION,
   });
 });
@@ -135,7 +136,7 @@ app.get('/api/chapter-candidates/:chapter', (req, res) => {
 
 // ── POST /api/plan — plan for a single figure (fast, returns before generation) ──
 app.post('/api/plan', async (req, res) => {
-  const { filename, chapterHint, base64, mediaType } = req.body;
+  const { filename, chapterHint, base64, mediaType, plannerModel } = req.body;
   if (!filename) return res.status(400).json({ error: 'filename is required.' });
 
   const stem = filename.replace(/\.[^.]+$/, '');
@@ -143,7 +144,7 @@ app.post('/api/plan', async (req, res) => {
   const imageData = base64 && mediaType ? { base64, mediaType } : undefined;
 
   try {
-    const plan = await planForFigure(stem, chapter, imageData);
+    const plan = await planForFigure(stem, chapter, imageData, plannerModel);
     return res.json(plan);
   } catch (err) {
     console.error('Plan error:', err?.message || err);
@@ -153,11 +154,11 @@ app.post('/api/plan', async (req, res) => {
 
 // ── POST /api/plan-chapter — plan all 3D candidates in a chapter ─────────────
 app.post('/api/plan-chapter', async (req, res) => {
-  const { chapter } = req.body;
+  const { chapter, plannerModel } = req.body;
   if (!chapter) return res.status(400).json({ error: 'chapter is required.' });
 
   try {
-    const plans = await planChapter(chapter);
+    const plans = await planChapter(chapter, {}, plannerModel);
     return res.json(plans);
   } catch (err) {
     console.error('Plan-chapter error:', err?.message || err);
