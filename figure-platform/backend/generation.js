@@ -407,9 +407,76 @@ async function generateRefinedFigureHtml({
     return html;
 }
 
+/**
+ * Unified generation function that handles both fresh generation and refinement.
+ * Routes to the appropriate path based on whether prevHtml and evaluation are provided.
+ *
+ * @param {{
+ *   scaffold: string,
+ *   plan?: object,
+ *   prevHtml?: string,
+ *   evaluation?: object,
+ *   modelId?: string,
+ *   mediaType?: string,
+ *   base64?: string,
+ *   userText?: string,
+ *   maxTokens?: number,
+ *   applyFixes?: boolean,
+ * }} opts
+ * @returns {Promise<string>} - merged HTML with injected payload
+ */
+async function generateCode(opts) {
+    const {
+        scaffold,
+        plan,
+        prevHtml,
+        evaluation,
+        modelId,
+        mediaType,
+        base64,
+        userText,
+        maxTokens = 16384,
+        applyFixes = true,
+    } = opts;
+
+    if (!scaffold) throw new Error('scaffold is required');
+    if (!modelId) throw new Error('modelId is required');
+    if (!mediaType || !base64) throw new Error('mediaType and base64 are required');
+
+    // REFINEMENT MODE: previous generation + evaluation feedback
+    if (prevHtml && evaluation) {
+        const refinementUserText = userText || buildGenerationUserText(plan);
+        return generateRefinedFigureHtml({
+            modelId,
+            scaffold,
+            prevHtml,
+            evaluation,
+            mediaType,
+            base64,
+            userText: refinementUserText,
+            maxTokens,
+            applyFixes,
+        });
+    }
+
+    // FRESH GENERATION MODE
+    const generationUserText = userText || buildGenerationUserText(plan);
+    return generateFigureHtml({
+        modelId,
+        scaffold,
+        mediaType,
+        base64,
+        plan,
+        userText: generationUserText,
+        maxTokens,
+        applyFixes,
+    });
+}
+
 module.exports = {
     buildGenerationSystemPrompt,
     buildGenerationUserText,
     generateFigureHtml,
     generateRefinedFigureHtml,
+    generateCode,
 };

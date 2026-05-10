@@ -169,36 +169,6 @@ function apiFetch(input, init = {}) {
   });
 }
 
-async function runGenerationJob(payload, { pollMs = 2000, maxPolls = 600 } = {}) {
-  const createRes = await apiFetch('/api/generate-async', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  const createData = await createRes.json();
-  if (!createRes.ok) throw new Error(createData.error || 'Failed to start generation.');
-
-  let transientPollFailures = 0;
-  for (let pollCount = 0; pollCount < maxPolls; pollCount += 1) {
-    await new Promise(resolve => setTimeout(resolve, pollMs));
-    try {
-      const statusRes = await apiFetch(`/api/generate-status/${encodeURIComponent(createData.jobId)}`);
-      const statusData = await statusRes.json();
-      if (!statusRes.ok) throw new Error(statusData.error || 'Failed to check generation status.');
-      transientPollFailures = 0;
-      if (statusData.status === 'done') return statusData.result;
-      if (statusData.status === 'error') throw new Error(statusData.error || 'Generation failed.');
-    } catch (err) {
-      transientPollFailures += 1;
-      if (transientPollFailures >= 5) {
-        throw new Error(err.message || 'Connection error while checking generation status.');
-      }
-    }
-  }
-
-  throw new Error('Generation timed out while waiting for completion.');
-}
-
 async function runGenerationJob2d(payload, { pollMs = 2000, maxPolls = 600 } = {}) {
   const createRes = await apiFetch('/api/generate-2d-async', {
     method: 'POST',
@@ -224,6 +194,35 @@ async function runGenerationJob2d(payload, { pollMs = 2000, maxPolls = 600 } = {
     }
   }
   throw new Error('2D generation timed out.');
+}
+
+// Run iterative loop-based generation (3D). Polls the async job until completion.
+async function runGenerationLoop(payload, { pollMs = 2000, maxPolls = 600 } = {}) {
+  const createRes = await apiFetch('/api/generate-loop-async', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const createData = await createRes.json();
+  if (!createRes.ok) throw new Error(createData.error || 'Failed to start loop generation.');
+
+  let transientPollFailures = 0;
+  for (let pollCount = 0; pollCount < maxPolls; pollCount += 1) {
+    await new Promise(resolve => setTimeout(resolve, pollMs));
+    try {
+      const statusRes = await apiFetch(`/api/generate-status/${encodeURIComponent(createData.jobId)}`);
+      const statusData = await statusRes.json();
+      if (!statusRes.ok) throw new Error(statusData.error || 'Failed to check generation status.');
+      transientPollFailures = 0;
+      if (statusData.status === 'done') return statusData.result;
+      if (statusData.status === 'error') throw new Error(statusData.error || 'Loop generation failed.');
+    } catch (err) {
+      transientPollFailures += 1;
+      if (transientPollFailures >= 5) throw new Error(err.message || 'Connection error while checking generation status.');
+    }
+  }
+
+  throw new Error('Loop generation timed out while waiting for completion.');
 }
 
 export default function App() {
@@ -390,47 +389,24 @@ export default function App() {
     }
     setError('');
 
-    // Step 1: Plan (fast ~2-3s)
-    setPlanning(true);
-    setPlan(null);
-    let currentPlan = null;
-    try {
-      const planRes = await apiFetch('/api/plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename: image.filename,
-          base64: image.base64,
-          mediaType: image.mediaType,
-          plannerModel: selectedPlannerModel || undefined,
-        }),
-      });
-      const planData = await planRes.json();
-      if (planRes.ok) {
-        currentPlan = planData;
-        setPlan(planData);
-      }
-      // If planning fails, we still continue to generate without a plan
-    } catch (_) { /* planner failure is non-fatal */ }
-    setPlanning(false);
-
-    // Step 2: Generate (slow ~30-60s)
+    // Step 1: Generate (slow ~30-60s, includes planning internally)
     setLoading(true);
     try {
-      const evalModelForRecord = selectedCriticModel || DEFAULT_EVALUATION_MODEL;
       const is2d = figureType === '2d';
-      const jobFn = is2d ? runGenerationJob2d : runGenerationJob;
+      // For 3D (non-2d) generations use the iterative loop endpoint to preserve attempts
+      const jobFn = is2d ? runGenerationJob2d : runGenerationLoop;
       const payload = is2d
-        ? { base64: image.base64, mediaType: image.mediaType, filename: image.filename, plan: currentPlan || undefined, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined }
-        : { base64: image.base64, mediaType: image.mediaType, filename: image.filename, plan: currentPlan || undefined, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined, evalModel: selectedCriticModel || undefined, criticVersion: selectedCriticName || undefined, criticPasses: selectedCriticPasses, experiment: selectedExperiment || undefined };
+        ? { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined }
+        : { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined, evalModel: selectedCriticModel || undefined, criticVersion: selectedCriticName || undefined, criticPasses: selectedCriticPasses, experiment: selectedExperiment || undefined };
       const data = await jobFn(payload);
       const generatedEvaluationResults = data.evaluationResults || {};
       const generatedEvaluationMeta = data.evaluationMeta || {};
       const generatedModel = pickEvaluationModel({
         evaluationResults: generatedEvaluationResults,
         evaluationMeta: generatedEvaluationMeta,
-      }, evalModelForRecord);
+      }, null);
       setGeneratedHtml(data.html);
+      setPlan(data.plan || null);
       setEvaluation(getRecordEvaluation({ evaluationResults: generatedEvaluationResults }, generatedModel));
       setCurrentRecord({
         id: data.figureId,
@@ -444,7 +420,7 @@ export default function App() {
         evaluationResults: generatedEvaluationResults,
         evaluationMeta: generatedEvaluationMeta,
         evaluationVersions: data.evaluationVersions || {},
-        plan: data.plan || currentPlan || null,
+        plan: data.plan || null,
       });
       setViewerEvaluationModel(generatedModel);
       setViewerBackTab(tab);
@@ -454,7 +430,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [image, selectedCriticModel, selectedCriticName, selectedCriticPasses, selectedExperiment, selectedModel, selectedPlannerModel, tab]);
+  }, [image, selectedCriticModel, selectedCriticName, selectedCriticPasses, selectedExperiment, selectedModel, selectedPlannerModel, tab, figureType]);
   const handleLoadFromHistory = useCallback((record) => {
     const normalizedRecord = {
       ...record,

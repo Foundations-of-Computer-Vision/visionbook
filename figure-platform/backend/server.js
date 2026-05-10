@@ -14,8 +14,9 @@ const {
 const { planForFigure, planChapter, PLANNER_MODEL } = require('./planner');
 const { listChapters, list3dCandidates } = require('./chapter-discovery');
 const { getAvailableModels } = require('./models');
-const { upsertEvaluation, materializeEvaluationViews, compactEvaluationStorage } = require('./result_schema');
+const { upsertEvaluation, materializeEvaluationViews, compactEvaluationStorage, upsertAttempts } = require('./result_schema');
 const { getCriticContext } = require('./critic');
+const { runFigureLoop } = require('./figure_loop');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -298,6 +299,123 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
   };
 }
 
+/**
+ * Generate figure using auto-iterative loop
+ * Runs plan → generate → critique → decide cycle, saving all iterations
+ */
+async function generateFigureWithLoop({ base64, mediaType, filename, figureStem, chapterName, model: requestedModel, plannerModel: requestedPlannerModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, maxAttempts = 3 }) {
+  const resolvedFigureStem = figureStem || (filename ? path.parse(filename).name : null);
+
+  if (!base64 || !mediaType || !filename || !resolvedFigureStem) {
+    const err = new Error('base64, mediaType, filename, and figureStem are required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (typeof requestedCriticVersion !== 'string' || !requestedCriticVersion.trim()) {
+    const err = new Error('criticVersion is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (typeof requestedExperiment !== 'string' || !requestedExperiment.trim()) {
+    const err = new Error('experiment is required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const modelId = requestedModel || CURRENT_MODEL;
+  const plannerModelId = requestedPlannerModel || CURRENT_MODEL;
+  const criticModelId = requestedEvalModel || CURRENT_CRITIC_MODEL;
+  const experimentName = requestedExperiment.trim();
+
+  if (!requestedModel) {
+    console.warn(`[generate-loop] no model provided; falling back to default "${CURRENT_MODEL}"`);
+  }
+  console.log(`[generate-loop] figureStem="${resolvedFigureStem}" chapter="${chapterName || 'unknown'}" experiment="${experimentName}" maxAttempts=${maxAttempts}`);
+
+  // Run the iterative loop
+  const loopState = await runFigureLoop({
+    figureStem: resolvedFigureStem,
+    chapterName: chapterName || null,
+    imageData: { base64, mediaType },
+    scaffold: BASE_SCAFFOLD,
+    sourceBase64: base64,
+    sourceMediaType: mediaType,
+    maxAttempts,
+    passThreshold: 4.0,
+    plannerModel: plannerModelId,
+    generatorModel: modelId,
+    criticModel: criticModelId,
+  });
+
+  if (loopState.status === 'failed_planning') {
+    const err = new Error(`Failed to generate plan for ${resolvedFigureStem}`);
+    err.statusCode = 502;
+    throw err;
+  }
+
+  // Use best HTML from loop
+  const html = loopState.currentHtml || '';
+  if (!html.trimStart().startsWith('<')) {
+    const err = new Error('Loop did not produce valid HTML output');
+    err.statusCode = 502;
+    throw err;
+  }
+
+  const figureId = makeId();
+  const timestamp = new Date().toISOString();
+  const shot = await screenshotHtml(html);
+
+  // Create result record with attempts attached
+  let record = createResultRecord({
+    id: figureId,
+    filename,
+    html,
+    timestamp,
+    source: 'api',
+    model: modelId,
+    experiment: experimentName,
+    plan: loopState.currentPlan || null,
+    previewBase64: shot ? shot.data : null,
+    previewMediaType: shot ? shot.mediaType : null,
+    fallbackBase64: base64,
+    fallbackMediaType: mediaType || 'image/png',
+    sourceBase64: base64,
+    sourceMediaType: mediaType,
+  });
+
+  // Attach loop iteration history
+  record = upsertAttempts(record, loopState.attempts);
+
+  // Attach best evaluation if available
+  if (loopState.currentEvaluation) {
+    record = upsertEvaluation(record, criticModelId, loopState.currentEvaluation, timestamp, {
+      criticVersion: requestedCriticVersion,
+      criticModel: criticModelId,
+    });
+  }
+
+  const recordPath = path.join(RESULTS_DIR, `${figureId}.json`);
+  saveRecord(record, recordPath);
+  refreshHistoryManifestSafe();
+
+  return {
+    html,
+    figureId,
+    timestamp,
+    model: modelId,
+    experiment: experimentName,
+    loopStatus: loopState.status,
+    attempts: loopState.attempts.length,
+    bestScore: loopState.bestScore,
+    plan: loopState.currentPlan || null,
+    evaluationResults: record.evaluationResults || {},
+    evaluationMeta: record.evaluationMeta || {},
+    evaluationVersions: record.evaluationVersions || {},
+  };
+}
+
 function updateGenerationJob(jobId, patch) {
   const current = generationJobs.get(jobId);
   if (!current) return;
@@ -349,6 +467,33 @@ app.get('/api/generate-status/:id', (req, res) => {
   const job = generationJobs.get(req.params.id);
   if (!job) return res.status(404).json({ error: 'Generation job not found.' });
   return res.json(job);
+});
+
+// ── POST /api/generate-loop-async ────────────────────────────────────────────
+// Runs iterative figure generation with full loop (plan → generate → critique → decide)
+// Returns jobId immediately; results include full attempts array with all iterations
+app.post('/api/generate-loop-async', (req, res) => {
+  const jobId = makeId();
+  generationJobs.set(jobId, {
+    id: jobId,
+    status: 'running',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  generateFigureWithLoop(req.body)
+    .then((result) => {
+      updateGenerationJob(jobId, { status: 'done', result });
+    })
+    .catch((err) => {
+      updateGenerationJob(jobId, {
+        status: 'error',
+        error: err?.message || 'Loop generation failed.',
+        ...(err?.raw ? { raw: err.raw } : {}),
+      });
+    });
+
+  return res.status(202).json({ jobId });
 });
 
 // ── Chapter inference ───────────────────────────────────────────────────────

@@ -218,7 +218,6 @@ async function planForFigure(figureStem, chapterName, imageData, plannerModel = 
   } else {
     contextChunk = `Figure: ${figureStem}. No chapter text found — plan from filename alone.`;
   }
-
   const interactionPlan = await generateInteractionPlan(contextChunk, figureStem, imageData, plannerModel);
 
   return {
@@ -267,8 +266,69 @@ async function planChapter(chapterName, imageDataMap = {}, plannerModel = PLANNE
   return plans;
 }
 
+/**
+ * Refine an existing plan based on critic feedback.
+ * Called when plan-level issues are detected (e.g., missing interactions, concept misunderstood).
+ *
+ * @param {object} previousPlan - the interaction plan that failed
+ * @param {object} evaluation - critic evaluation with scores and failure modes
+ * @param {object} feedback - reviewer feedback with actionItems
+ * @param {string} figureStem - e.g. "brdf"
+ * @param {string} plannerModel - e.g. "gpt-4o"
+ * @returns {Promise<object>} - revised interactionPlan
+ */
+async function refinePlan(previousPlan, evaluation, feedback, figureStem, plannerModel = PLANNER_MODEL) {
+  if (!previousPlan) throw new Error('previousPlan is required');
+  if (!evaluation) throw new Error('evaluation is required');
+  if (!feedback) throw new Error('feedback is required');
+  if (!figureStem) throw new Error('figureStem is required');
+
+  const feedbackSummary = [
+    'The previous interaction plan had issues.',
+    'Critic feedback:',
+    ...(feedback.action_items || []).map(a => `  • ${a}`),
+    '',
+    'Specific scores:',
+    `  • Overall: ${evaluation.overall_average}/5`,
+    `  • Concept accuracy: ${evaluation.concept_accuracy}/5`,
+    ...(evaluation.failure_modes || []).map(m => `  • ${m}`),
+    '',
+    'Revise the interaction plan to address these issues.',
+    'Focus on:',
+    '  • Ensuring all required interactions are explicitly specified',
+    '  • Clarifying the core concept that is being illustrated',
+    '  • Specifying demo steps that progressively build understanding',
+    'Output ONLY valid JSON (no markdown, no explanation).',
+  ].join('\n');
+
+  const userContent = [
+    {
+      type: 'text',
+      text: `Figure: ${figureStem}\n\nContext:\n${previousPlan.contextChunk?.slice(0, 2000) || 'N/A'}\n\n${feedbackSummary}\n\nPrevious plan (for reference):\n${JSON.stringify(previousPlan.interactionPlan, null, 2)}`,
+    },
+  ];
+
+  let content = await generateWithModel(plannerModel, {
+    systemPrompt: PLAN_SYSTEM_PROMPT,
+    userContent,
+    maxTokens: PLANNER_MAX_TOKENS,
+  });
+
+  // Strip markdown fences if present
+  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) content = fenced[1].trim();
+
+  try {
+    const refinedPlan = JSON.parse(content);
+    return refinedPlan;
+  } catch (e) {
+    throw new Error(`Failed to parse refined plan: ${e.message}\n${content.slice(0, 300)}`);
+  }
+}
+
 module.exports = {
   planForFigure,
   planChapter,
+  refinePlan,
   PLANNER_MODEL,
 };

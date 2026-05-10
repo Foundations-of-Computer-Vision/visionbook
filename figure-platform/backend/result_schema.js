@@ -95,9 +95,45 @@ function upsertEvaluation(record, evalModel, evaluation, evaluatedAt = new Date(
     return normalized;
 }
 
+/**
+ * Normalize attempts array: ensure it's a valid array of attempt objects
+ * @param {object} record - result record
+ * @returns {object} - record with normalized attempts
+ */
+function normalizeAttempts(record) {
+    const next = isPlainObject(record) ? { ...record } : {};
+    // Convert attempts to array if missing or invalid
+    if (!Array.isArray(next.attempts)) {
+        next.attempts = [];
+    } else {
+        // Validate each attempt has required fields
+        next.attempts = next.attempts.map(a =>
+            isPlainObject(a) ? a : {}
+        );
+    }
+    return next;
+}
+
+/**
+ * Add or update loop attempts in a result record
+ * Preserves all other fields; idempotent
+ * @param {object} record - existing result record
+ * @param {array} attempts - loop attempts from runFigureLoop
+ * @returns {object} - updated record with attempts
+ */
+function upsertAttempts(record, attempts) {
+    const normalized = normalizeAttempts(record);
+    if (Array.isArray(attempts)) {
+        normalized.attempts = attempts;
+    }
+    return normalized;
+}
+
 module.exports = {
     normalizeEvaluationMaps,
     materializeEvaluationViews,
     compactEvaluationStorage,
     upsertEvaluation,
+    normalizeAttempts,
+    upsertAttempts,
 };

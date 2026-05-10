@@ -281,14 +281,43 @@ async function generateWithModel(modelId, { systemPrompt, userContent, maxTokens
   if (!entry) throw new Error(`Unknown model: "${modelId}". Available: ${Object.keys(MODEL_REGISTRY).join(', ')}`);
 
   const { provider, apiModel } = entry;
+  const { randomUUID } = require('crypto');
 
+
+  const callId = randomUUID();
+  const startedAt = new Date().toISOString();
+  const recordBase = {
+    id: callId,
+    startedAt,
+    modelId,
+    provider,
+    apiModel,
+  };
+  const finalize = (out, err) => {
+    const finishedAt = new Date().toISOString();
+    const durationMs = Date.parse(finishedAt) - Date.parse(startedAt);
+    const entry = {
+      ...recordBase,
+      event: 'call_end',
+      finishedAt,
+      durationMs,
+      success: !err,
+    };
+    if (err) entry.error = String(err?.message || err);
+  };
   switch (provider) {
     case 'openai':
-      return callOpenAI(apiModel, systemPrompt, userContent, maxTokens);
+      return callOpenAI(apiModel, systemPrompt, userContent, maxTokens)
+        .then((out) => { finalize(out); return out; })
+        .catch((e) => { finalize(null, e); throw e; });
     case 'anthropic':
-      return callAnthropic(apiModel, systemPrompt, userContent, maxTokens);
+      return callAnthropic(apiModel, systemPrompt, userContent, maxTokens)
+        .then((out) => { finalize(out); return out; })
+        .catch((e) => { finalize(null, e); throw e; });
     case 'google':
-      return callGemini(apiModel, systemPrompt, userContent, maxTokens);
+      return callGemini(apiModel, systemPrompt, userContent, maxTokens)
+        .then((out) => { finalize(out); return out; })
+        .catch((e) => { finalize(null, e); throw e; });
     default:
       throw new Error(`Unknown provider: ${provider}`);
   }

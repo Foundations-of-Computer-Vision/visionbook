@@ -45,9 +45,9 @@ const SCORE_METRICS = [
     id: 'interactivity_usability',
     note: 'CRITICAL: OrbitControls (mouse drag to rotate/zoom) does NOT count as an interaction. Meaningful interactions = buttons, sliders, toggles, step-through animations, parameter controls built by the developer.',
     rubric: [
-      '5 – 3+ meaningful interactions all functional; reset button works; guided step-through demo present',
-      '4 – 2 meaningful interactions functional; reset button present; minor usability issues',
-      '3 – 1 meaningful interaction functional; no guided demo',
+      '5 – 3+ meaningful interactions all functional and pedagogically useful; reset button works; guided step-through demo present',
+      '4 – 2 meaningful interactions functional and pedagogically useful; reset button present; minor usability issues',
+      '3 – 1 meaningful interaction functional and pedagogically useful; no guided demo',
       '2 – Interactions exist in code but are broken or have no visible effect',
       '1 – Only OrbitControls present, or no interactions at all — score MUST be 1',
     ],
@@ -100,6 +100,7 @@ function buildEvalPrompt() {
       ['failure_modes', []],
       ...SCORE_METRICS.map(m => [m.id, 3]),
       ['notes', 'one concise sentence summarizing the main strengths and weaknesses'],
+      ['action_items', ['Specific actionable improvement 1', 'Specific actionable improvement 2']],
     ]),
     null,
     2
@@ -117,6 +118,12 @@ ${failureModeLines}
 SCORES — integer 1–5 for each field:
 
 ${metricLines}
+
+ACTION ITEMS — list 2-4 specific, actionable improvements based on the scores and failure modes:
+- Be concrete and specific to THIS figure, not generic
+- If scores are high (4+), note what works well and minor refinements
+- If scores are low, identify the most impactful fixes (geometry issues, missing labels, broken interactions, concept errors)
+- Give feedback to both the plan and the generation
 
 Output this exact JSON structure and nothing else:
 ${exampleOutput}`;
@@ -199,6 +206,7 @@ async function evaluateHtmlWithCritic(opts) {
     userContent,
     maxTokens,
   });
+
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) content = fenced[1].trim();
   content = content.trim();
