@@ -156,6 +156,7 @@ Rules:
 - At least 3 demo steps, at most 6.
 - Every interaction must appear in at least one demo step's control_values.
 - Narration must be specific to THIS figure — never generic like "notice how things change". Say exactly what changes and what it means physically/mathematically.
+- If the figure shows multiple views of the same object, the same scene in different versions, or repeated panels that swap between alternatives, model that as a toggleable interaction rather than separate independent geometry. The demo should use that toggle to switch between the versions and explain what changes from one view/state to the next.
 - demo_steps must tell a coherent pedagogical story: start simple, build complexity, end with the key insight.`
 
 /**
