@@ -13,6 +13,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { normalizeHtmlSource } = require('./html_source');
 
 const [,, htmlFile, imageFile, displayName] = process.argv;
 
@@ -26,9 +27,9 @@ if (!fs.existsSync(htmlFile)) {
   process.exit(1);
 }
 
-const html = fs.readFileSync(htmlFile, 'utf-8');
+const html = normalizeHtmlSource(fs.readFileSync(htmlFile, 'utf-8'));
 if (!html.trimStart().startsWith('<')) {
-  console.error('ERROR: File does not appear to be HTML (must start with <).');
+  console.error('ERROR: File does not appear to be HTML or escaped HTML.');
   process.exit(1);
 }
 
