@@ -709,9 +709,9 @@ we send *copies* of the same output to multiple downstream nodes.
 Therefore, we have multiple gradients coming back to the
 $\texttt{branch}$ module, each from different downstream paths. So the
 inputs to this module on the backward pass are
-$\frac{\partial J}{\partial \mathbf{x}_{\texttt{in}}^{a}}, \frac{\partial J}{\partial \mathbf{x}_{\texttt{in}}^{b}}$,
+$\frac{\partial J}{\partial \mathbf{x}_{\texttt{out}}^{a}}, \frac{\partial J}{\partial \mathbf{x}_{\texttt{out}}^{b}}$,
 which we can write as the gradient vector
-$\mathbf{g}_{\texttt{out}}= \frac{\partial J}{\partial [\mathbf{x}_{\texttt{in}}^a, \mathbf{x}_{\texttt{in}}^b]} = [\frac{\partial J}{\partial \mathbf{x}_{\texttt{in}}^{a}}, \frac{\partial J}{\partial \mathbf{x}_{\texttt{in}}^{b}}] = [\mathbf{g}_{\texttt{out}}^a, \mathbf{g}_{\texttt{out}}^b]$.
+$\mathbf{g}_{\texttt{out}}= \frac{\partial J}{\partial [\mathbf{x}_{\texttt{out}}^a, \mathbf{x}_{\texttt{out}}^b]} = [\frac{\partial J}{\partial \mathbf{x}_{\texttt{out}}^{a}}, \frac{\partial J}{\partial \mathbf{x}_{\texttt{out}}^{b}}] = [\mathbf{g}_{\texttt{out}}^a, \mathbf{g}_{\texttt{out}}^b]$.
 Let's compute the backward pass output: $$\begin{aligned}
     \mathbf{g}_{\texttt{in}}&= \mathbf{g}_{\texttt{out}}\mathbf{L}^{\mathbf{x}}\\
     &= [\mathbf{g}_{\texttt{out}}^a, \mathbf{g}_{\texttt{out}}^b] \frac{\partial [\mathbf{x}_{\texttt{out}}^a, \mathbf{x}_{\texttt{out}}^b]}{\partial \mathbf{x}_{\texttt{in}}}\\
