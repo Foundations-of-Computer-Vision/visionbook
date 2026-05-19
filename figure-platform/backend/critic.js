@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const CRITIC_DEFAULT_MODEL = 'claude-opus-4.7';
-const CRITIC_MAX_TOKENS = 512;
+const CRITIC_MAX_TOKENS = 1024;
 // Change this value to start a new evaluation experiment namespace.
 const CRITIC_EXPERIMENT_BASE = 'default_critic';
 
@@ -106,9 +106,9 @@ function buildEvalPrompt() {
     2
   );
 
-  return `You are a strict evaluator of generated interactive Three.js 3D figures against original 2D textbook figure images.
+  return `You are a strict critic of generated interactive Three.js 3D figures against original 2D textbook figure images.
 You will receive the original source figure image, the generated HTML/JavaScript code, and a rendered screenshot of the generated HTML (if screenshot capture succeeds). If the screenshot was not received, mention this in the notes. Otherwise, use the screenshot to help evaluate the faithfulness of the generated figure to the original figure.
-Score the generated figure using the rubric, taking special attention to the guided demonstration made.
+Score the generated figure using the rubric and give feedback to improve the figure.
 Be critical and honest — err toward lower scores when in doubt. Do not give credit for things that are absent or barely present.
 Output ONLY a valid JSON object — no explanation, no markdown, no fences.
 
