@@ -540,7 +540,6 @@ function readHistoryRecord(fileName, { includeThumb = false } = {}) {
   const chapter = inferChapter(stem);
   const model = parsed.model || 'gpt-4o';
   const experiment = parsed.experiment || 'base_scene_robust';
-
   const record = {
     id: parsed.id,
     filename: parsed.filename,
@@ -552,6 +551,8 @@ function readHistoryRecord(fileName, { includeThumb = false } = {}) {
     evaluationMeta: parsed.evaluationMeta || {},
     evaluationVersions: parsed.evaluationVersions || {},
     chapter,
+    // Number of loop iterations/attempts saved for this result (0 when not applicable)
+    iterations: Array.isArray(parsed.attempts) ? parsed.attempts.length : 0,
   };
 
   if (includeThumb) {
@@ -593,6 +594,8 @@ function listHistoryIndexFromManifest() {
         evaluationMeta: record?.evaluationMeta || {},
         evaluationVersions: record?.evaluationVersions || {},
         chapter: record?.chapter || null,
+        // Prefer explicit iterations property on manifest entry, otherwise fall back to attempts array length
+        iterations: typeof record?.iterations === 'number' ? record.iterations : (Array.isArray(record?.attempts) ? record.attempts.length : 0),
       }))
       .filter(record => record.id)
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));

@@ -2179,6 +2179,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticP
                 evaluationVersions: r.evaluationVersions || {},
                 experiment: expName, model: modelName,
                 imagePath: null, htmlPath: null,
+                iterations: r.iterations || 0,
               });
             }
           }
@@ -2220,6 +2221,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticP
             evaluationVersions: r.evaluationVersions || {},
             experiment: selected.experiment, model: modelName,
             imagePath: null, htmlPath: null,
+            iterations: r.iterations || 0,
           };
         })
       );
@@ -2239,6 +2241,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticP
             timestamp: null,
             evaluationResults: view.evaluationResults || {}, evaluationMeta: view.evaluationMeta || {},
             evaluationVersions: fig.evaluationVersions || {},
+                iterations: fig.iterations || 0,
           });
         }
       }
@@ -2813,6 +2816,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticP
                                 <p style={styles.cardFilename}>{item.figure}{item.genTotal > 1 && <span style={{ marginLeft: 5, fontSize: 9, background: '#e3e8f0', color: '#556', borderRadius: 6, padding: '1px 5px', fontWeight: 500 }}>g{item.genIndex}</span>}</p>
                                 <p style={styles.cardGenModel}>Gen model: {item.model || 'unknown'}</p>
                                 {item.timestamp && <p style={{ ...styles.cardTs, marginBottom: 3 }}>{new Date(item.timestamp).toLocaleDateString()}</p>}
+                                {item.iterations != null && <p style={{ ...styles.cardTs, marginBottom: 3 }}>Iterations: {item.iterations}</p>}
                                 {evalEntries.length ? (
                                   <>
                                     <span style={{ ...styles.sourceBadge, background: ev.overall_average >= 4 ? '#e8f5e9' : ev.overall_average >= 3 ? '#fff3e0' : '#ffebee', color: sc(ev.overall_average) }}>{ev.overall_average}/5</span>
