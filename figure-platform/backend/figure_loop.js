@@ -5,7 +5,7 @@
  *   1. PLAN: Generate interaction blueprint
  *   2. GENERATE: Create 3D code from plan
  *   3. CRITIQUE: Evaluate with critic (5 metrics + failure modes + feedback)
- *   4. DECIDE: Fix plan vs. refine generation based on critic's next_step
+ *   4. DECIDE: Use orchestrator to route fix_plan vs. refine_generation
  *   5. LOOP or EXIT
  *
  * Tracks all iterations for audit trail and debugging.
@@ -14,6 +14,7 @@
 const { planForFigure, refinePlan } = require('./planner');
 const { generateCode } = require('./generation');
 const { evaluateHtmlWithCritic } = require('./critic');
+const { decideFigureRefinement } = require('./orchestrator');
 
 /**
  * Main loop orchestrator.
@@ -160,13 +161,17 @@ async function runFigureLoop(opts) {
             break;
         }
 
-        // ───── EXTRACT FEEDBACK AND CALCULATE NEXT STEP ─────
+        // ───── EXTRACT FEEDBACK AND ASK ORCHESTRATOR ─────
         loopState.status = 'reviewing';
 
-        // Parse critic's actionable feedback
         const actionItems = loopState.currentEvaluation.action_items || [];
 
-        // Calculate next_step based on score thresholds
+        console.log(`[Orchestrator] deciding next step from critic feedback...`);
+        loopState.currentFeedback = await decideFigureRefinement({
+            evaluation: loopState.currentEvaluation,
+            model: criticModel,
+        });
+
         const geometry = loopState.currentEvaluation.geometry_accuracy || 0;
         const interactivity = loopState.currentEvaluation.interactivity_usability || 0;
         const faithfulness = loopState.currentEvaluation.faithfulness || 0;
@@ -174,29 +179,14 @@ async function runFigureLoop(opts) {
         const concept = loopState.currentEvaluation.concept_accuracy || 0;
         const overall = loopState.currentEvaluation.overall_average || 0;
 
-        // Critical metrics that must all pass
-        const CRITICAL_THRESHOLD = 4.0;
-        const PASS_OVERALL = 4.0;
-
-        let nextStep = 'pass';
-
-        // Determine if this is a plan issue or generation issue
-        if (concept < CRITICAL_THRESHOLD) {
-            // Plan issue: concept not well understood
-            nextStep = 'fix_plan';
-        } else if (interactivity < CRITICAL_THRESHOLD || labels < CRITICAL_THRESHOLD) {
-            // Generation issue: implementation/execution problems
-            nextStep = 'refine_generation';
-        } else if (overall < PASS_OVERALL) {
-            // General quality issue; try generation refinement first
-            nextStep = 'refine_generation';
-        }
-
         loopState.currentFeedback = {
-            next_step: nextStep,
+            ...loopState.currentFeedback,
             action_items: actionItems,
+            actionItems,
             scores: { geometry, interactivity, faithfulness, labels, concept, overall },
         };
+
+        console.log(`[Orchestrator] decision: ${loopState.currentFeedback.next_step}`);
         attempt.feedback = loopState.currentFeedback;
 
         console.log(`Feedback: ${loopState.currentFeedback.next_step}`, {
@@ -205,7 +195,7 @@ async function runFigureLoop(opts) {
         });
 
         // ───── CHECK: PASS? ─────
-        if (loopState.currentFeedback.next_step === 'pass' && loopState.currentEvaluation.overall_average >= passThreshold) {
+        if (loopState.currentFeedback.next_step === 'pass') {
             attempt.status = 'passed';
             loopState.attempts.push(attempt);
             loopState.status = 'passed';
@@ -221,21 +211,6 @@ async function runFigureLoop(opts) {
             loopState.status = 'failed_max_attempts';
             console.log(`\n✗ Max attempts (${maxAttempts}) reached`);
             console.log(`Best score achieved: ${loopState.bestScore}/5 on attempt ${loopState.bestAttempt?.iteration || '?'}`);
-            return loopState;
-        }
-
-        // ───── CHECK: RECOVERABLE? ─────
-        // Consider unrecoverable if score is very low and too many failures
-        const score = loopState.currentEvaluation.overall_average || 0;
-        const failureCount = (loopState.currentEvaluation.failure_modes || []).length;
-        const isRecoverable = score >= 2.0 || failureCount <= 3;
-
-        if (!isRecoverable) {
-            attempt.status = 'unrecoverable';
-            loopState.attempts.push(attempt);
-            loopState.status = 'failed_unrecoverable';
-            console.log(`\n✗ UNRECOVERABLE: Score ${score}/5 with ${failureCount} failures`);
-            console.log(`Best score achieved: ${loopState.bestScore}/5`);
             return loopState;
         }
 
@@ -312,7 +287,7 @@ function formatLoopResults(loopState) {
 
     if (loopState.currentFeedback) {
         lines.push('', 'Final Feedback:');
-        lines.push(...loopState.currentFeedback.actionItems.map(a => `  ${a}`));
+        lines.push(...(loopState.currentFeedback.actionItems || loopState.currentFeedback.action_items || []).map(a => `  ${a}`));
     }
 
     return lines.join('\n');

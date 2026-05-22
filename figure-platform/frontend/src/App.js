@@ -1435,7 +1435,7 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
     ? attempts[Math.min(Math.max(selectedAttemptIndex, 0), attempts.length - 1)]
     : null;
   const selectedIterationLabel = selectedAttempt
-    ? `Iteration ${selectedAttempt.iteration ?? (selectedAttemptIndex + 1)}`
+    ? `Iteration ${typeof selectedAttempt.iteration === 'number' ? Math.max(0, selectedAttempt.iteration - 1) : (selectedAttemptIndex + 1)}`
     : 'Final result';
   const previewHtml = selectedAttempt?.html || html;
   const selectedFeedback = selectedAttempt?.feedback || null;
@@ -1515,7 +1515,7 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
                 {attempts.map((attempt, index) => {
                   const isActive = index === selectedAttemptIndex;
                   const score = attempt?.evaluation?.overall_average;
-                  const attemptLabel = attempt?.iteration ?? index + 1;
+                  const attemptLabel = typeof attempt?.iteration === 'number' ? Math.max(0, attempt.iteration - 1) : index + 1;
                   return (
                     <button
                       key={`${record?.id || 'record'}-${attemptLabel}-${index}`}
@@ -1551,6 +1551,12 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
                 </div>
                 {selectedAttempt?.refinement_type && (
                   <p style={styles.viewerHistoryMeta}>Refinement: {selectedAttempt.refinement_type}</p>
+                )}
+                {selectedFeedback?.next_step && (
+                  <p style={styles.viewerHistoryMeta}>Orchestrator decision: {selectedFeedback.next_step}</p>
+                )}
+                {selectedFeedback?.rationale && (
+                  <p style={styles.viewerHistoryNotes}>{selectedFeedback.rationale}</p>
                 )}
                 {selectedFeedback?.action_items?.length > 0 ? (
                   <div style={styles.viewerHistoryList}>
@@ -2241,7 +2247,7 @@ function ResultsTab({ onOpen, criticModel, currentCriticVersion, selectedCriticP
             timestamp: null,
             evaluationResults: view.evaluationResults || {}, evaluationMeta: view.evaluationMeta || {},
             evaluationVersions: fig.evaluationVersions || {},
-                iterations: fig.iterations || 0,
+            iterations: fig.iterations || 0,
           });
         }
       }
