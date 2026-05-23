@@ -258,18 +258,26 @@
       for (const { div, pos, offset } of _labels) {
         _v.copy(pos).project(camera);
 
-        // Behind camera — hide
-        if (_v.z > 1) {
+        // Hide labels that are behind the camera or outside the normalized device
+        // coordinate cube to avoid showing offscreen labels.
+        if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
           div.style.display = 'none';
           continue;
         }
         div.style.display = '';
 
-        const x = (_v.x * 0.5 + 0.5) * canvas.clientWidth + offset[0];
-        const y = (-_v.y * 0.5 + 0.5) * canvas.clientHeight + offset[1];
+        const ox = offset && offset[0] ? offset[0] : 0;
+        const oy = offset && offset[1] ? offset[1] : 0;
+        const x = (_v.x * 0.5 + 0.5) * canvas.clientWidth + ox;
+        const y = (-_v.y * 0.5 + 0.5) * canvas.clientHeight + oy;
 
-        const distance = camera.position.distanceTo(pos);
-        const scale = _referenceDistance / distance * camera.zoom;
+        // Compute scale differently for orthographic vs perspective cameras.
+        let scale;
+        const distance = Math.max(camera.position.distanceTo(pos), 1e-4);
+        scale = (_referenceDistance / distance) * (camera.zoom || 1);
+
+        // Clamp scale to a reasonable range to avoid extremely small/large labels.
+        scale = Math.max(0.04, Math.min(scale, 6));
 
         div.style.left = x + 'px';
         div.style.top = y + 'px';
