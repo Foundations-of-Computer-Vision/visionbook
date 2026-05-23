@@ -341,7 +341,7 @@ export default function App() {
   const [evaluation, setEvaluation] = useState(null);
   const [evaluating, setEvaluating] = useState(false);
   const [plan, setPlan] = useState(null);        // planner output for current figure
-  const [planning, setPlanning] = useState(false); // true while planner is running
+  const [planning] = useState(false); // true while planner is running
 
   useEffect(() => {
     if (figureType) window.localStorage.setItem(FIGURE_TYPE_STORAGE_KEY, figureType);
@@ -858,58 +858,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
   };
 
   const handleAbortChapter = () => { chapterAbortRef.current = true; };
-
-  // Deferred batch evaluation: evaluate all successful figures after generation completes
-  const runBatchEvaluation = async (finalResults) => {
-    const successIds = (finalResults || chapterResults).filter(r => r.status === 'ok' && r.figureId).map(r => ({ figureId: r.figureId, figureStem: r.figureStem }));
-    if (successIds.length === 0) return;
-    setBatchEvalRunning(true);
-    setBatchEvalProgress({ completed: 0, total: successIds.length, current: successIds[0].figureStem });
-    setBatchEvalResults({});
-
-    try {
-      const res = await apiFetch('/api/evaluate-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ids: successIds.map(s => s.figureId),
-          evalModel: selectedCriticModel || undefined,
-          criticVersion: selectedCriticName || undefined,
-          criticPasses: selectedCriticPasses,
-        }),
-      });
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let completed = 0;
-      const evalMap = {};
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop(); // keep incomplete line
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const parsed = JSON.parse(line);
-            completed += 1;
-            evalMap[parsed.id] = parsed;
-            setBatchEvalResults({ ...evalMap });
-            const nextStem = completed < successIds.length ? successIds[completed].figureStem : null;
-            setBatchEvalProgress({ completed, total: successIds.length, current: nextStem });
-          } catch (_) { }
-        }
-      }
-    } catch (err) {
-      console.error('Batch evaluation error:', err);
-    }
-
-    setBatchEvalRunning(false);
-    setBatchEvalProgress(null);
-  };
 
   // Select a chapter candidate to load it into the figure drop zone (still works for individual)
   const handleSelectCandidate = (candidate) => {
