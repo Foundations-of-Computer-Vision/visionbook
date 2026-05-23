@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 
 const CRITIC_DEFAULT_MODEL = 'claude-opus-4.7';
-const CRITIC_MAX_TOKENS = 1024;
+const CRITIC_MAX_TOKENS = 2048;
 // Change this value to start a new evaluation experiment namespace.
 const CRITIC_EXPERIMENT_BASE = 'default_critic';
 
@@ -26,7 +26,7 @@ const FAILURE_MODES = [
   { id: 'Scale-Wrong', desc: 'element proportions are noticeably off' },
   { id: 'Color-Wrong', desc: "colors don't match the original figure" },
   { id: 'Hallucination', desc: 'elements present that do not appear in the original' },
-  { id: 'Concept-Misunderstood', desc: 'the core concept being illustrated is misrepresented' },
+  { id: 'Concept-Misunderstood', desc: 'the core concept being illustrated is    misrepresented' },
 ];
 
 // ── 5 primary scored metrics (each 1–5) ────────────────────────────────────────
@@ -97,6 +97,7 @@ function buildEvalPrompt() {
 
   const exampleOutput = JSON.stringify(
     Object.fromEntries([
+      ['discrepancies', []],
       ['failure_modes', []],
       ...SCORE_METRICS.map(m => [m.id, 3]),
       ['notes', 'one concise sentence summarizing the main strengths and weaknesses'],
@@ -107,19 +108,19 @@ function buildEvalPrompt() {
   );
 
   return `You are a strict critic of generated interactive Three.js 3D figures against original 2D textbook figure images.
-You will receive the original source figure image, the generated HTML/JavaScript code, and a rendered screenshot of the generated HTML (if screenshot capture succeeds). If the screenshot was not received, mention this in the notes. Otherwise, use the screenshot to help evaluate the faithfulness of the generated figure to the original figure.
-Score the generated figure using the rubric and give feedback to improve the figure.
-Be critical and honest — err toward lower scores when in doubt. Do not give credit for things that are absent or barely present.
-Output ONLY a valid JSON object — no explanation, no markdown, no fences.
+You will receive the original source figure image, the generated HTML/JavaScript code, and a rendered screenshot of the generated HTML (if screenshot capture succeeds). Start by using the screenshot to help evaluate the faithfulness of the generated figure to the source figure, listing discrepancies in the primitive elements between what you see in the source figure versus what you see in the generated figure. If the screenshot was not received, mention this in the notes.
+Score the generated figure using the rubric and give feedback to improve the figure. Be critical and honest — err toward lower scores when in doubt. Do not give credit for things that are absent or barely present. Output ONLY a valid JSON object — no explanation, no markdown, no fences.
+
+DISCREPANCIES - list 0-5 visual discrepancies between the primitive elements in source figure and the generated figure
+- Primitives include color, text size, geometric shapes, geometric relations
 
 FAILURE MODES — list any that apply (use empty array [] if none):
 ${failureModeLines}
 
 SCORES — integer 1–5 for each field:
-
 ${metricLines}
 
-ACTION ITEMS — list 2-4 specific, actionable improvements based on the scores and failure modes:
+ACTION ITEMS — list 3-5 specific, actionable improvements based on the scores and failure modes:
 - Be concrete and specific to THIS figure, not generic
 - If scores are high (4+), note what works well and minor refinements
 - If scores are low, identify the most impactful fixes (geometry issues, missing labels, broken interactions, concept errors)

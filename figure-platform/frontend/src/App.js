@@ -1506,14 +1506,29 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
                 {selectedFeedback?.rationale && (
                   <p style={styles.viewerHistoryNotes}>{selectedFeedback.rationale}</p>
                 )}
+                {selectedEvaluation?.discrepancies?.length > 0 && (
+                  <>
+                    <p style={{ ...styles.viewerHistoryMeta, fontWeight: 700, color: '#555' }}>Discrepancies</p>
+                    <div style={styles.viewerHistoryList}>
+                      {selectedEvaluation.discrepancies.map((item, index) => (
+                        <div key={`discrepancy-${index}`} style={styles.viewerHistoryItem}>
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
                 {selectedFeedback?.action_items?.length > 0 ? (
-                  <div style={styles.viewerHistoryList}>
-                    {selectedFeedback.action_items.map((item, index) => (
-                      <div key={index} style={styles.viewerHistoryItem}>
-                        {item}
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    <p style={{ ...styles.viewerHistoryMeta, fontWeight: 700, color: '#555' }}>Action items</p>
+                    <div style={styles.viewerHistoryList}>
+                      {selectedFeedback.action_items.map((item, index) => (
+                        <div key={index} style={styles.viewerHistoryItem}>
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 ) : selectedEvaluation?.notes ? (
                   <p style={styles.viewerHistoryNotes}>{selectedEvaluation.notes}</p>
                 ) : (
