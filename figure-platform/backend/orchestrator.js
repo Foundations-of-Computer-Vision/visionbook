@@ -4,9 +4,9 @@ const ORCHESTRATOR_DEFAULT_MODEL = 'claude-opus-4.7';
 const ORCHESTRATOR_MAX_TOKENS = 512;
 
 function buildOrchestratorPrompt() {
-    return `You are the orchestration agent for an iterative figure-generation loop.
+    return `You are the orchestration agent for an iterative figure-generation loop. Generation works by taking an original 2D figure, making a generation plan, generating an interactive 3D figure, and evaluating it.
 
-You will receive a critic evaluation for a generated figure, including failure modes, scores, notes, and action items.
+You will receive the critic evaluation, including failure modes, scores, notes, and action items.
 Your job is to decide which part of the system is most responsible for the problem:
 - planner: the interaction plan or conceptual decomposition is wrong, incomplete, or missing the right elements
 - generator: the plan is close to right, but the rendered implementation, labels, layout, interactivity, or execution is broken
