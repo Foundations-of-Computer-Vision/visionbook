@@ -45,29 +45,3 @@ Then open [http://localhost:3000](http://localhost:3000).
 2. **Generate All** → plans each figure, then generates interactive HTML (runs in parallel)
 3. **Auto-evaluate** → critic scores each result on 5 rubrics (1–5) and flags failure modes
 4. **Results tab** → browse by experiment, model, chapter; compare runs side-by-side
-
-You can also drop a single figure image to plan + generate just that one.
-
-## Project Structure
-
-```
-figure-platform/
-├── backend/
-│   ├── server.js              # Express API (plan, generate, evaluate, history)
-│   ├── planner.js             # Analyzes figures, plans 3D interactions
-│   ├── critic.js              # Evaluator: 10 failure modes, 5 score rubrics
-│   ├── base_scene_robust.html # Three.js scaffold injected into every prompt
-│   ├── sort_chapter_figures.js# Classifies figures as 2D/3D candidates
-│   ├── results/               # Generated outputs (git-ignored)
-│   └── .env                   # API key (git-ignored)
-├── frontend/
-│   └── src/App.js             # React UI (Generator + Viewer + Results tabs)
-└── chapter-figures/           # Per-chapter figure images + candidates_3d/
-```
-
-## Notes
-
-- Model is currently set to `gpt-5.4` in `server.js` (change `CURRENT_MODEL` to use a different one)
-- Experiments are auto-labeled by a hash of the system prompt — changing the prompt or scaffold creates a new experiment group
-- Results are saved to `backend/results/` (git-ignored) and appear in the UI immediately
-- `chapter-figures/` contains the textbook figures organized by chapter
