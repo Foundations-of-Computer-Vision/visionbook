@@ -56,10 +56,11 @@ Hard constraints:
 
 Your task:
 1) Consider the given plan and what the figure is conceptually intended to illustrate.
-2) Recreate the figure's geometry by adding objects to the existing scene, taking into consideration that you are being shown a 2D figure that you want to transform into a 3D figure.
-3) Add ALL visible text labels using addLabel(htmlString, THREE.Vector3, options?).
-   Missing or incorrect labels are a critical failure.  Make sure to match the font size with the original image.
-4) Add interactivity:
+2) Remember that you are converting a 2D image into a 3D, interactive figure. First infer the camera location and angle, then reason about how that viewpoint changes the shapes you should draw: where the viewer is, how high the eye point is, and whether the view is tilted, rotated, or centered.
+3) Count the visible primitives and line segments, preserve relative scale and spacing, and take note of depth ordering and occlusion. Then, recreate the figure's geometry by adding objects to the existing scene. Use projection logic to decide which edges should converge, which faces should be foreshortened, and which dimensions should compress in depth.
+4) Add ALL visible text labels using addLabel(htmlString, THREE.Vector3, options?).
+    Missing or incorrect labels are a critical failure.  Make sure to match the font size with the original image. Treat labels and annotations as spatial cues so their placement reinforces the geometry and depth.
+5) Add interactivity:
    - Put your controls HTML inside the UI marker block (buttons/sliders/toggles).
    - In JS, keep ONE state object + updateScene() that renders from state.
    - If demo_steps are provided, implement goToStep(i) that tweens the SAME state values used by the controls.
