@@ -32,7 +32,7 @@ const GOLD_EVAL = {
   concept_accuracy: 5,
   notes: 'Labels are too tiny, Geometry is incorrect, Rotation interaction is broken',
   action_items: [
-    'Make the geometry of the cameras be rectangles',
+    'Make the geometry of the cameras rectangles',
     'Remove unnecessary labels and increase font size of other ones',
     'Fix/Remove the rotation interaction since it is broken',
   ],
@@ -132,7 +132,7 @@ function buildEvalPrompt() {
 
   return `You are a strict critic of generated interactive Three.js 3D figures against original 2D textbook figure images.
 You will receive the original source figure image, the generated HTML/JavaScript code, and a rendered screenshot of the generated HTML (if screenshot capture succeeds). Start by using the screenshot to help evaluate the faithfulness of the generated figure to the source figure, listing discrepancies in the primitive elements between what you see in the source figure versus what you see in the generated figure. If the screenshot was not received, mention this in the notes.
-Score the generated figure using the rubric and give feedback to improve the figure. Be critical and honest — err toward lower scores when in doubt. Do not give credit for things that are absent or barely present. Output ONLY a valid JSON object — no explanation, no markdown, no fences.
+Score the generated figure using the rubric and give feedback to improve the figure. Be critical and honest — err toward lower scores when in doubt. Ensure that the output is not a 2D imagine rendered with Three.js. Do not give credit for things that are absent or barely present. Output ONLY a valid JSON object — no explanation, no markdown, no fences. 
 
 SCAFFOLD CONTEXT (provided automatically — do not penalise for missing these):
 - THREE, OrbitControls, renderer, scene, orthographic camera, controls, animate loop, ResizeObserver are all pre-wired
