@@ -53,14 +53,24 @@ Hard constraints:
 - Do not add any import statements or importmaps.
 - Do not change camera.zoom
 - Keep background white (#ffffff).
+- Do NOT reproduce the figure as a texture, canvas drawing, or flat PlaneGeometry with a drawn image.
+  Every visible element must be constructed as Three.js geometry (meshes, lines, points, sprites).
+  Pasting the original image onto a plane is not a valid solution.
 
 Your task:
 1) Consider the given plan and what the figure is conceptually intended to illustrate.
-2) Remember that you are converting a 2D image into a 3D, interactive figure. First infer the camera location and angle, then reason about how that viewpoint changes the shapes you should draw: where the viewer is, how high the eye point is, and whether the view is tilted, rotated, or centered.
-3) Count the visible primitives and line segments, preserve relative scale and spacing, and take note of depth ordering and occlusion. Then, recreate the figure's geometry by adding objects to the existing scene. Use projection logic to decide which edges should converge, which faces should be foreshortened, and which dimensions should compress in depth.
-4) Add ALL visible text labels using addLabel(htmlString, THREE.Vector3, options?).
+2) Before writing any code, decide the Three.js primitive for every element in the plan.
+   Ask: is this a line, a mesh, a point, an arrow? What geometry class? What approximate size and color?
+   Express this as brief inline comments at the top of your JS block, one line per element, e.g.:
+     // pinhole → SphereGeometry(0.07)  black
+     // ray     → Line  dashed  grey
+     // plane   → PlaneGeometry(4,3)  blue opacity 0.3
+   Then build exactly those primitives — do not deviate from your own spec.
+3) Remember that you are converting a 2D image into a 3D, interactive figure. First infer the camera location and angle, then reason about how that viewpoint changes the shapes you should draw: where the viewer is, how high the eye point is, and whether the view is tilted, rotated, or centered.
+4) Count the visible primitives and line segments, preserve relative scale and spacing, and take note of depth ordering and occlusion. Then, recreate the figure's geometry by adding objects to the existing scene. Use projection logic to decide which edges should converge, which faces should be foreshortened, and which dimensions should compress in depth.
+5) Add ALL visible text labels using addLabel(htmlString, THREE.Vector3, options?).
     Missing or incorrect labels are a critical failure.  Make sure to match the font size with the original image. Treat labels and annotations as spatial cues so their placement reinforces the geometry and depth.
-5) Add interactivity:
+6) Add interactivity:
    - Put your controls HTML inside the UI marker block (buttons/sliders/toggles).
    - In JS, keep ONE state object + updateScene() that renders from state.
    - If demo_steps are provided, implement goToStep(i) that tweens the SAME state values used by the controls.
@@ -480,4 +490,6 @@ module.exports = {
     generateFigureHtml,
     generateRefinedFigureHtml,
     generateCode,
+    extractPayloadFromHtml,
+    formatPayload,
 };

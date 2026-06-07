@@ -20,7 +20,24 @@ Return ONLY valid JSON with this exact shape:
 {
 	"next_step": "pass | fix_plan | refine_generation",
 	"rationale": "one concise sentence explaining the decision"
-}`;
+}
+
+CALIBRATION EXAMPLES — use these to calibrate your judgment:
+
+Example 1 — correct decision: pass
+Evaluation:
+${JSON.stringify({discrepancies:["The arrow labels (x1, y1) colors don't match the original green.","Curved arrow in the bottom is more pronounced in the HTML version.","Camera representations differ: solid shapes vs outlined in source.","Label 'p2?' is missing the '?' in the HTML version."],failure_modes:["Color-Wrong","Missing-Labels"],geometry_accuracy:4,interactivity_usability:4,faithfulness:3,label_quality:3,concept_accuracy:4,notes:"Interactive elements are mostly functional, but visual and label details do not fully align with the source.",action_items:["Adjust the colors of arrow labels to match the original figure.","Ensure all labels match exactly, including punctuation marks like '?'."],overall_average:3.6}, null, 2)}
+Decision: {"next_step": "pass", "rationale": "Scores are consistently high (mostly 4s), failure modes are minor visual polish issues, and concept and interactivity are solid — further iteration is unlikely to yield meaningful improvement."}
+
+Example 2 — correct decision: refine_generation
+Evaluation:
+${JSON.stringify({discrepancies:["Text overlaps in 3D rendering causing poor readability","Projection plane opacity misaligned with original","Axis colors do not match original","Incorrect perspective lengths for arrows and lines","3D object has different shade/color than 2D"],failure_modes:["Color-Wrong","Scale-Wrong","Interaction-Missing","Camera-Wrong"],geometry_accuracy:3,interactivity_usability:3,faithfulness:3,label_quality:3,concept_accuracy:3,notes:"The rendering contains overlapping text, varying colors, and lacks precise interactivity, making it somewhat difficult to grasp the 3D representation.",action_items:["Fix text overlap by adjusting label positions and scaling.","Align colors and transparency with source to enhance visual consistency.","Improve 3D element proportions and viewpoint to better simulate depth."],overall_average:3.0}, null, 2)}
+Decision: {"next_step": "refine_generation", "rationale": "The concept is present but execution has multiple implementation-level issues — color mismatches, missing interactions, wrong camera angle, scale errors — all fixable by the generator without changing the plan."}
+
+Example 3 — correct decision: fix_plan
+Evaluation:
+${JSON.stringify({discrepancies:["The pinhole and projection elements are missing in the first scene.","The tree proportions and positions are different.","Labels are not in the same positions or orientations as the original image.","Colors of the tree and rays vary slightly.","The pinhole setup in Step 2 is incomplete or incorrect."],failure_modes:["Missing-Labels","Interaction-Missing","Camera-Wrong","Color-Wrong","Concept-Misunderstood"],geometry_accuracy:2,interactivity_usability:2,faithfulness:2,label_quality:2,concept_accuracy:2,notes:"Discrepancies in elements and labels, with limited interactivity and conceptual errors.",action_items:["Add the pinhole and projection elements to match the second diagram.","Adjust tree proportions and ray directions to better align with the source.","Provide accurate labels for the pinhole scene and ensure all are correctly placed."],overall_average:2.0}, null, 2)}
+Decision: {"next_step": "fix_plan", "rationale": "Concept-Misunderstood failure mode and all scores at 2/5 indicate the plan failed to correctly decompose the figure — the generator cannot fix a fundamentally wrong conceptual structure."}`;
 }
 
 function normalizeStringArray(value) {

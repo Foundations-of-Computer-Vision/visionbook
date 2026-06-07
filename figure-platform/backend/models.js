@@ -163,14 +163,17 @@ function getAvailableModels() {
  * userContent is an array of { type:'image_url'|'text', … } objects — already
  * in OpenAI format, so we pass through directly.
  */
-async function callOpenAI(apiModel, systemPrompt, userContent, maxTokens) {
+async function callOpenAI(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples = []) {
+  const messages = [{ role: 'system', content: systemPrompt }];
+  for (const ex of fewShotExamples) {
+    messages.push({ role: 'user', content: [{ type: 'text', text: ex.userText }] });
+    messages.push({ role: 'assistant', content: ex.assistantContent });
+  }
+  messages.push({ role: 'user', content: userContent });
   const response = await getOpenAI().chat.completions.create({
     model: apiModel,
     max_completion_tokens: maxTokens,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userContent },
-    ],
+    messages,
   });
   return response.choices[0].message.content || '';
 }
@@ -181,28 +184,32 @@ async function callOpenAI(apiModel, systemPrompt, userContent, maxTokens) {
  *   image_url { url: "data:mime;base64,…" }  →  image { source: { type:'base64', media_type, data } }
  *   text { text }                              →  text { text }
  */
-async function callAnthropic(apiModel, systemPrompt, userContent, maxTokens) {
-  const convertedContent = userContent.map(block => {
-    if (block.type === 'image_url') {
-      // Parse the data URL
-      const url = block.image_url.url;
-      const match = url.match(/^data:([^;]+);base64,(.+)$/);
-      if (!match) throw new Error('Anthropic adapter: invalid data URL for image');
-      return {
-        type: 'image',
-        source: { type: 'base64', media_type: match[1], data: match[2] },
-      };
-    }
-    // text block — pass through
-    return { type: 'text', text: block.text };
-  });
+async function callAnthropic(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples = []) {
+  function toAnthropicContent(blocks) {
+    return blocks.map(block => {
+      if (block.type === 'image_url') {
+        const url = block.image_url.url;
+        const match = url.match(/^data:([^;]+);base64,(.+)$/);
+        if (!match) throw new Error('Anthropic adapter: invalid data URL for image');
+        return { type: 'image', source: { type: 'base64', media_type: match[1], data: match[2] } };
+      }
+      return { type: 'text', text: block.text };
+    });
+  }
+
+  const messages = [];
+  for (const ex of fewShotExamples) {
+    messages.push({ role: 'user', content: [{ type: 'text', text: ex.userText }] });
+    messages.push({ role: 'assistant', content: ex.assistantContent });
+  }
+  messages.push({ role: 'user', content: toAnthropicContent(userContent) });
 
   // Use streaming to avoid Anthropic's 10-minute timeout on large max_tokens
   const stream = getAnthropic().messages.stream({
     model: apiModel,
     max_tokens: maxTokens,
     system: systemPrompt,
-    messages: [{ role: 'user', content: convertedContent }],
+    messages,
   });
 
   const finalMessage = await stream.finalMessage();
@@ -219,7 +226,7 @@ async function callAnthropic(apiModel, systemPrompt, userContent, maxTokens) {
  * timeout that Google imposes on non-streaming generateContent requests.
  * With generateContentStream, tokens arrive immediately and we accumulate them.
  */
-async function callGemini(apiModel, systemPrompt, userContent, maxTokens) {
+async function callGemini(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples = []) {
   return enqueueGemini(async () => {
     const waitMs = Math.max(0, GEMINI_MIN_REQUEST_INTERVAL_MS - (Date.now() - _lastGeminiRequestAt));
     if (waitMs > 0) {
@@ -228,12 +235,18 @@ async function callGemini(apiModel, systemPrompt, userContent, maxTokens) {
 
     const client = await getGemini();
 
+    const contents = [];
+    for (const ex of fewShotExamples) {
+      contents.push({ role: 'user', parts: [{ text: ex.userText }] });
+      contents.push({ role: 'model', parts: [{ text: ex.assistantContent }] });
+    }
     const parts = await Promise.all(userContent.map(async block => {
       if (block.type === 'image_url') {
         return prepareGeminiImage(block.image_url.url);
       }
       return { text: block.text };
     }));
+    contents.push({ role: 'user', parts });
 
     try {
       // Use streaming to avoid Google's ~60 s HTTP connection timeout.
@@ -241,7 +254,7 @@ async function callGemini(apiModel, systemPrompt, userContent, maxTokens) {
       // the first byte, which exceeds the timeout for large HTML generations.
       const stream = await client.models.generateContentStream({
         model: apiModel,
-        contents: [{ role: 'user', parts }],
+        contents,
         config: {
           systemInstruction: systemPrompt,
           maxOutputTokens: maxTokens,
@@ -276,7 +289,7 @@ async function callGemini(apiModel, systemPrompt, userContent, maxTokens) {
  * @param {number}   maxTokens    — max completion tokens (default 16384)
  * @returns {Promise<string>}     — raw text from the model
  */
-async function generateWithModel(modelId, { systemPrompt, userContent, maxTokens = 16384 }) {
+async function generateWithModel(modelId, { systemPrompt, userContent, maxTokens = 16384, fewShotExamples = [] }) {
   const entry = MODEL_REGISTRY[modelId];
   if (!entry) throw new Error(`Unknown model: "${modelId}". Available: ${Object.keys(MODEL_REGISTRY).join(', ')}`);
 
@@ -307,15 +320,15 @@ async function generateWithModel(modelId, { systemPrompt, userContent, maxTokens
   };
   switch (provider) {
     case 'openai':
-      return callOpenAI(apiModel, systemPrompt, userContent, maxTokens)
+      return callOpenAI(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples)
         .then((out) => { finalize(out); return out; })
         .catch((e) => { finalize(null, e); throw e; });
     case 'anthropic':
-      return callAnthropic(apiModel, systemPrompt, userContent, maxTokens)
+      return callAnthropic(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples)
         .then((out) => { finalize(out); return out; })
         .catch((e) => { finalize(null, e); throw e; });
     case 'google':
-      return callGemini(apiModel, systemPrompt, userContent, maxTokens)
+      return callGemini(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples)
         .then((out) => { finalize(out); return out; })
         .catch((e) => { finalize(null, e); throw e; });
     default:
