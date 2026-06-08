@@ -131,6 +131,7 @@ const MODEL_REGISTRY = {
   // OpenAI
   'gpt-5.5': { provider: 'openai', apiModel: 'gpt-5.5', label: 'GPT-5.5' },
   'gpt-5.4': { provider: 'openai', apiModel: 'gpt-5.4', label: 'GPT-5.4' },
+  'gpt-4.1': { provider: 'openai', apiModel: 'gpt-4.1', label: 'GPT-4.1' },
   'gpt-4o': { provider: 'openai', apiModel: 'gpt-4o', label: 'GPT-4o' },
   'o4-mini': { provider: 'openai', apiModel: 'o4-mini', label: 'o4-mini' },
 
@@ -144,6 +145,7 @@ const MODEL_REGISTRY = {
 
   // Google (Gemini)
   'gemini-3.1-pro': { provider: 'google', apiModel: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro' },
+  'gemini-3.5-flash': { provider: 'google', apiModel: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
   'gemini-3-flash-preview': { provider: 'google', apiModel: 'gemini-3-flash-preview', label: 'Gemini 3 Flash' },
   'gemini-2.5-pro': { provider: 'google', apiModel: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
   'gemini-2.5-flash': { provider: 'google', apiModel: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },

@@ -822,6 +822,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
           chapterName: selectedChapter,
           model: selectedModel || undefined,
           plannerModel: selectedPlannerModel || undefined,
+          evalModel: selectedCriticModel || undefined,
           criticVersion: selectedCriticName || undefined,
           experiment: selectedExperiment || undefined,
         });

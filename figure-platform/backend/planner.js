@@ -24,7 +24,7 @@ const ROOT_DIR = path.join(__dirname, '..', '..');
 const QMD_DIR = ROOT_DIR;                                     // .qmd files live at repo root
 
 const PLANNER_MODEL = 'gpt-4o';
-const PLANNER_MAX_TOKENS = 2048;
+const PLANNER_MAX_TOKENS = 8192;
 
 // ── Context extraction ─────────────────────────────────────────────────────────
 
@@ -236,8 +236,6 @@ Perspective projection equations derived geometrically. A 3D point P at world co
 === END EXAMPLE 1 ===
 
 === EXAMPLE 2: Mathematical function figure with sliders driving continuous curve shape ===
-
-Figure: gaus
 
 Textbook context:
 The parameter sigma adjusts the spatial extent of the Gaussian g(x; sigma) = (1 / sqrt(2*pi*sigma^2)) * exp(-x^2 / (2*sigma^2)). The normalization constant is set so that the function integrates to 1. The Gaussian kernel is positive and symmetric (a zero-phase filter). In practice only samples within three standard deviations are needed — at 3*sigma the amplitude is around 1% of its central value. The Fourier transform of a Gaussian is also a Gaussian with width inversely proportional to sigma.

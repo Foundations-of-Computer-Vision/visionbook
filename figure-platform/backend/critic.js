@@ -10,7 +10,7 @@ const { screenshotHtml } = require('./runtime-helpers');
 const { extractPayloadFromHtml, formatPayload } = require('./generation');
 
 const CRITIC_DEFAULT_MODEL = 'claude-opus-4.7';
-const CRITIC_MAX_TOKENS = 2048;
+const CRITIC_MAX_TOKENS = 8196;
 // Change this value to start a new evaluation experiment namespace.
 const CRITIC_EXPERIMENT_BASE = 'default_critic';
 
