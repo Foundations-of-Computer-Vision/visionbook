@@ -47,6 +47,7 @@ async function runFigureLoop(opts) {
         plannerModel = 'gpt-4o',
         generatorModel = 'gpt-4o',
         criticModel = 'claude-opus-4.7',
+        fewShot = { planner: true, critic: true, orchestrator: true },
     } = opts;
 
     if (!figureStem) throw new Error('figureStem is required');
@@ -75,7 +76,7 @@ async function runFigureLoop(opts) {
     loopState.status = 'planning';
 
     try {
-        loopState.currentPlan = await planForFigure(figureStem, chapterName, imageData, plannerModel);
+        loopState.currentPlan = await planForFigure(figureStem, chapterName, imageData, plannerModel, fewShot.planner !== false);
         console.log(`Plan created`, { elements: loopState.currentPlan.interactionPlan?.elements?.length || 0 });
     } catch (e) {
         loopState.status = 'failed_planning';
@@ -139,6 +140,7 @@ async function runFigureLoop(opts) {
                 evalImage: sourceBase64,
                 evalMediaType: sourceMediaType,
                 model: criticModel,
+                useFewShot: fewShot.critic !== false,
             });
             attempt.evaluation = loopState.currentEvaluation;
 
@@ -170,6 +172,7 @@ async function runFigureLoop(opts) {
         loopState.currentFeedback = await decideFigureRefinement({
             evaluation: loopState.currentEvaluation,
             model: criticModel,
+            useFewShot: fewShot.orchestrator !== false,
         });
 
         const geometry = loopState.currentEvaluation.geometry_accuracy || 0;
@@ -227,7 +230,8 @@ async function runFigureLoop(opts) {
                     loopState.currentEvaluation,
                     loopState.currentFeedback,
                     figureStem,
-                    plannerModel
+                    plannerModel,
+                    fewShot.planner !== false
                 );
                 console.log(`Plan refined`);
             } catch (e) {

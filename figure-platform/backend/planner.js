@@ -116,7 +116,7 @@ function loadChapterText(chapterName) {
 
 // ── LLM interaction planner (fast, small-token call) ────────────────────────
 
-const PLAN_SYSTEM_PROMPT = `You are an expert at planning interactive 3D visualizations for textbook figures.
+function buildPlannerPrompt(useFewShot = true) { return `You are an expert at planning interactive 3D visualizations for textbook figures.
 
 Your output drives two things that must work as ONE unified system:
   1. DISCRETE CONTROLS — sliders, toggles, and buttons the user can manipulate freely at any time.
@@ -158,7 +158,7 @@ Rules:
 - Narration must be specific to THIS figure — never generic like "notice how things change". Say exactly what changes and what it means physically/mathematically.
 - demo_steps must tell a coherent pedagogical story: start simple, build complexity, end with the key insight.
 
-Here are two examples of good plans:
+${useFewShot ? `Here are two examples of good plans:
 
 === EXAMPLE 1: Geometric 3D scene with sliders driving continuous object motion ===
 
@@ -311,14 +311,14 @@ The parameter sigma adjusts the spatial extent of the Gaussian g(x; sigma) = (1 
   "notes": "Render the Gaussian curve as a smooth THREE.Line sampled at 200 points. For discrete stems use LineSegments from each integer sample down to y=0. Recompute all curve points reactively whenever sigma changes. For the domain toggle, keep both curves in the scene and show/hide rather than destroying geometry. The frequency-domain Gaussian has sigma_freq = 1 / (2 * pi * sigma_spatial) — for sigma in [0.5, 3] this gives sigma_freq in [0.053, 0.318], so the frequency axis must use x range [-0.5, 0.5] (Nyquist range) rather than the spatial domain's [-4, 4], otherwise the curve will be an invisible spike."
 }
 
-=== END EXAMPLE 2 ===`
+=== END EXAMPLE 2 ===` : ''}`; }
 
 /**
  * Call the LLM to generate a quick interaction plan for one figure.
  * Optionally includes the image for vision-based planning.
  * Returns the parsed plan object.
  */
-async function generateInteractionPlan(contextChunk, figureStem, { base64, mediaType } = {}, plannerModel = PLANNER_MODEL) {
+async function generateInteractionPlan(contextChunk, figureStem, { base64, mediaType } = {}, plannerModel = PLANNER_MODEL, useFewShot = true) {
   const userContent = [];
 
   // Include image if provided
@@ -336,7 +336,7 @@ async function generateInteractionPlan(contextChunk, figureStem, { base64, media
   });
 
   let content = await generateWithModel(plannerModel || PLANNER_MODEL, {
-    systemPrompt: PLAN_SYSTEM_PROMPT,
+    systemPrompt: buildPlannerPrompt(useFewShot),
     userContent,
     maxTokens: PLANNER_MAX_TOKENS,
   });
@@ -360,7 +360,7 @@ async function generateInteractionPlan(contextChunk, figureStem, { base64, media
  * @param {object} imageData   - optional { base64, mediaType }
  * @returns {{ figureStem, chapterName, contextChunk, interactionPlan }}
  */
-async function planForFigure(figureStem, chapterName, imageData, plannerModel = PLANNER_MODEL) {
+async function planForFigure(figureStem, chapterName, imageData, plannerModel = PLANNER_MODEL, useFewShot = true) {
   const resolvedChapter = chapterName || inferChapterFromFilename(figureStem);
 
   // Try to load chapter text
@@ -372,7 +372,7 @@ async function planForFigure(figureStem, chapterName, imageData, plannerModel = 
   } else {
     contextChunk = `Figure: ${figureStem}. No chapter text found — plan from filename alone.`;
   }
-  const interactionPlan = await generateInteractionPlan(contextChunk, figureStem, imageData, plannerModel);
+  const interactionPlan = await generateInteractionPlan(contextChunk, figureStem, imageData, plannerModel, useFewShot);
 
   return {
     figureStem,
@@ -390,7 +390,7 @@ async function planForFigure(figureStem, chapterName, imageData, plannerModel = 
  * @param {object} imageDataMap - optional map of figureStem -> { base64, mediaType }
  * @returns {Array<{ figureStem, chapterName, contextChunk, interactionPlan, imagePath }>}
  */
-async function planChapter(chapterName, imageDataMap = {}, plannerModel = PLANNER_MODEL) {
+async function planChapter(chapterName, imageDataMap = {}, plannerModel = PLANNER_MODEL, useFewShot = true) {
   const candidates = list3dCandidates(chapterName);
   if (!candidates.length) return [];
 
@@ -405,7 +405,7 @@ async function planChapter(chapterName, imageDataMap = {}, plannerModel = PLANNE
       contextChunk = `Figure: ${candidate.stem} from chapter "${chapterName}". No chapter text found.`;
     }
 
-    const interactionPlan = await generateInteractionPlan(contextChunk, candidate.stem, imageDataMap[candidate.stem], plannerModel);
+    const interactionPlan = await generateInteractionPlan(contextChunk, candidate.stem, imageDataMap[candidate.stem], plannerModel, useFewShot);
 
     plans.push({
       figureStem: candidate.stem,
@@ -431,7 +431,7 @@ async function planChapter(chapterName, imageDataMap = {}, plannerModel = PLANNE
  * @param {string} plannerModel - e.g. "gpt-4o"
  * @returns {Promise<object>} - revised interactionPlan
  */
-async function refinePlan(previousPlan, evaluation, feedback, figureStem, plannerModel = PLANNER_MODEL) {
+async function refinePlan(previousPlan, evaluation, feedback, figureStem, plannerModel = PLANNER_MODEL, useFewShot = true) {
   if (!previousPlan) throw new Error('previousPlan is required');
   if (!evaluation) throw new Error('evaluation is required');
   if (!feedback) throw new Error('feedback is required');
@@ -463,7 +463,7 @@ async function refinePlan(previousPlan, evaluation, feedback, figureStem, planne
   ];
 
   let content = await generateWithModel(plannerModel, {
-    systemPrompt: PLAN_SYSTEM_PROMPT,
+    systemPrompt: buildPlannerPrompt(useFewShot),
     userContent,
     maxTokens: PLANNER_MAX_TOKENS,
   });

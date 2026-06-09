@@ -108,7 +108,7 @@ const SCORE_METRICS = [
 ];
 
 // ── Build the system prompt sent to the critic model ─────────────────────────
-function buildEvalPrompt() {
+function buildEvalPrompt(useFewShot = true) {
   const failureModeLines = FAILURE_MODES
     .map(f => `"${f.id}"${' '.repeat(Math.max(1, 24 - f.id.length))}— ${f.desc}`)
     .join('\n');
@@ -158,16 +158,16 @@ ACTION ITEMS — list 3-5 specific actions to take to improve the scores and rem
 Output this exact JSON structure and nothing else:
 ${exampleOutput}
 
-Here is an example output - study this before scoring. Do not copy these scores; only use them as a reference example for judgement.
+${useFewShot ? `Here is an example output - study this before scoring. Do not copy these scores; only use them as a reference example for judgement.
 Generated code:
 ${EXAMPLE_PAYLOAD}
 
 Correct evaluation for the above code:
-${JSON.stringify(GOLD_EVAL, null, 2)}`;
+${JSON.stringify(GOLD_EVAL, null, 2)}` : ''}`;
 }
 
-function getCriticContext() {
-  const systemPrompt = buildEvalPrompt();
+function getCriticContext(useFewShot = true) {
+  const systemPrompt = buildEvalPrompt(useFewShot);
   return {
     systemPrompt,
     criticVersion: CRITIC_EXPERIMENT_BASE,
@@ -209,6 +209,7 @@ async function evaluateHtmlWithCritic(opts) {
     evalMediaType = 'image/png',
     model = CRITIC_DEFAULT_MODEL,
     maxTokens = CRITIC_MAX_TOKENS,
+    useFewShot = true,
   } = opts || {};
 
   if (!html) throw new Error('No HTML found for evaluation.');
@@ -236,7 +237,7 @@ async function evaluateHtmlWithCritic(opts) {
     },
   ];
 
-  const { systemPrompt } = getCriticContext();
+  const { systemPrompt } = getCriticContext(useFewShot);
 
   let content = await generateWithModel(model, {
     systemPrompt,

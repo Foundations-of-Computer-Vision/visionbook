@@ -38,6 +38,9 @@ const CURRENT_MODEL = 'gpt-5.5';             // model used by the generator
 const CURRENT_CRITIC_MODEL = 'gpt-4o';       // model used by evaluator by default
 // CURRENT_EXPERIMENT is set below, after the system prompt is built.
 
+// ── Few-shot config — set each to false to ablate that component's examples ──
+const FEW_SHOT = { planner: false, critic: false, orchestrator: false };
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({
   origin(origin, callback) {
@@ -347,6 +350,7 @@ async function generateFigureWithLoop({ base64, mediaType, filename, figureStem,
     plannerModel: plannerModelId,
     generatorModel: modelId,
     criticModel: criticModelId,
+    fewShot: FEW_SHOT,
   });
 
   if (loopState.status === 'failed_planning') {

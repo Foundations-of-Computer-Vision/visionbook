@@ -3,7 +3,7 @@ const { generateWithModel } = require('./models');
 const ORCHESTRATOR_DEFAULT_MODEL = 'gpt-4o';
 const ORCHESTRATOR_MAX_TOKENS = 1024;
 
-function buildOrchestratorPrompt() {
+function buildOrchestratorPrompt(useFewShot = true) {
     return `You are the orchestration agent for an iterative figure-generation loop. Generation works by taking an original 2D figure, making a generation plan, generating an interactive 3D figure, and evaluating it.
 
 You will receive the critic evaluation, including failure modes, scores, notes, and action items.
@@ -22,7 +22,7 @@ Return ONLY valid JSON with this exact shape:
 	"rationale": "one concise sentence explaining the decision"
 }
 
-CALIBRATION EXAMPLES — use these to calibrate your judgment:
+${useFewShot ? `CALIBRATION EXAMPLES — use these to calibrate your judgment:
 
 Example 1 — correct decision: pass
 Evaluation:
@@ -37,7 +37,7 @@ Decision: {"next_step": "refine_generation", "rationale": "The concept is presen
 Example 3 — correct decision: fix_plan
 Evaluation:
 ${JSON.stringify({ discrepancies: ["The pinhole and projection elements are missing in the first scene.", "The tree proportions and positions are different.", "Labels are not in the same positions or orientations as the original image.", "Colors of the tree and rays vary slightly.", "The pinhole setup in Step 2 is incomplete or incorrect."], failure_modes: ["Missing-Labels", "Interaction-Missing", "Camera-Wrong", "Color-Wrong", "Concept-Misunderstood"], geometry_accuracy: 2, interactivity_usability: 2, faithfulness: 2, label_quality: 2, concept_accuracy: 2, notes: "Discrepancies in elements and labels, with limited interactivity and conceptual errors.", action_items: ["Add the pinhole and projection elements to match the second diagram.", "Adjust tree proportions and ray directions to better align with the source.", "Provide accurate labels for the pinhole scene and ensure all are correctly placed."], overall_average: 2.0 }, null, 2)}
-Decision: {"next_step": "fix_plan", "rationale": "Concept-Misunderstood failure mode and all scores at 2/5 indicate the plan failed to correctly decompose the figure — the generator cannot fix a fundamentally wrong conceptual structure."}`;
+Decision: {"next_step": "fix_plan", "rationale": "Concept-Misunderstood failure mode and all scores at 2/5 indicate the plan failed to correctly decompose the figure — the generator cannot fix a fundamentally wrong conceptual structure."}` : ''}`;
 }
 
 function normalizeStringArray(value) {
@@ -72,6 +72,7 @@ async function decideFigureRefinement(opts) {
         evaluation,
         model = ORCHESTRATOR_DEFAULT_MODEL,
         maxTokens = ORCHESTRATOR_MAX_TOKENS,
+        useFewShot = true,
     } = opts || {};
 
     if (!evaluation) throw new Error('evaluation is required');
@@ -82,7 +83,7 @@ async function decideFigureRefinement(opts) {
     }];
 
     let content = await generateWithModel(model || ORCHESTRATOR_DEFAULT_MODEL, {
-        systemPrompt: buildOrchestratorPrompt(),
+        systemPrompt: buildOrchestratorPrompt(useFewShot),
         userContent,
         maxTokens,
     });
