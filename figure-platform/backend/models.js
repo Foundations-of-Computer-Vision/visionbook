@@ -48,15 +48,43 @@ let _anthropic = null;
 let _gemini = null;
 let _googleGenAIClass = null;
 let _geminiQueue = Promise.resolve();
+let _openaiQueue = Promise.resolve();
 let _lastGeminiRequestAt = 0;
+let _lastOpenAIRequestAt = 0;
 
 const GEMINI_MAX_IMAGE_DIMENSION = 2048;
 const GEMINI_JPEG_QUALITY = 82;
 const GEMINI_MIN_REQUEST_INTERVAL_MS = 1200;
+const OPENAI_MIN_REQUEST_INTERVAL_MS = Number(process.env.OPENAI_MIN_REQUEST_INTERVAL_MS) || 1200;
+const MODEL_CALL_TIMEOUT_MS = Number(process.env.MODEL_CALL_TIMEOUT_MS) || 600_000;
+
+function withTimeout(promise, label, timeoutMs = MODEL_CALL_TIMEOUT_MS) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 function enqueueGemini(task) {
   const run = _geminiQueue.then(task, task);
   _geminiQueue = run.catch(() => { });
+  return run;
+}
+
+function enqueueOpenAI(task) {
+  const run = _openaiQueue.then(async () => {
+    const waitMs = Math.max(0, OPENAI_MIN_REQUEST_INTERVAL_MS - (Date.now() - _lastOpenAIRequestAt));
+    if (waitMs > 0) await new Promise(resolve => setTimeout(resolve, waitMs));
+    try {
+      return await task();
+    } finally {
+      _lastOpenAIRequestAt = Date.now();
+    }
+  }, async () => task());
+  _openaiQueue = run.catch(() => { });
   return run;
 }
 
@@ -91,7 +119,11 @@ function getOpenAI() {
     const key = process.env.OPENAI_API_KEY;
     if (!key || key === 'your_openai_api_key_here')
       throw new Error('OPENAI_API_KEY is not set. Add it to backend/.env');
-    _openai = new OpenAI({ apiKey: key });
+    _openai = new OpenAI({
+      apiKey: key,
+      timeout: MODEL_CALL_TIMEOUT_MS,
+      maxRetries: Number(process.env.OPENAI_SDK_MAX_RETRIES) || 1,
+    });
   }
   return _openai;
 }
@@ -166,18 +198,30 @@ function getAvailableModels() {
  * in OpenAI format, so we pass through directly.
  */
 async function callOpenAI(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples = []) {
-  const messages = [{ role: 'system', content: systemPrompt }];
-  for (const ex of fewShotExamples) {
-    messages.push({ role: 'user', content: [{ type: 'text', text: ex.userText }] });
-    messages.push({ role: 'assistant', content: ex.assistantContent });
-  }
-  messages.push({ role: 'user', content: userContent });
-  const response = await getOpenAI().chat.completions.create({
-    model: apiModel,
-    max_completion_tokens: maxTokens,
-    messages,
-  });
-  return response.choices[0].message.content || '';
+  const run = async () => {
+    const messages = [{ role: 'system', content: systemPrompt }];
+    for (const ex of fewShotExamples) {
+      messages.push({ role: 'user', content: [{ type: 'text', text: ex.userText }] });
+      messages.push({ role: 'assistant', content: ex.assistantContent });
+    }
+    messages.push({ role: 'user', content: userContent });
+    const stream = await getOpenAI().chat.completions.create({
+      model: apiModel,
+      max_completion_tokens: maxTokens,
+      messages,
+      stream: true,
+    });
+    let text = '';
+    for await (const chunk of stream) {
+      text += chunk.choices?.[0]?.delta?.content || '';
+    }
+    return text;
+  };
+
+  // GPT-5.5 vision calls are slow and provider-side connection errors become
+  // common under concurrent load. Serialize them; other OpenAI models can stay parallel.
+  if (apiModel === 'gpt-5.5') return enqueueOpenAI(run);
+  return run();
 }
 
 /**
@@ -322,15 +366,15 @@ async function generateWithModel(modelId, { systemPrompt, userContent, maxTokens
   };
   switch (provider) {
     case 'openai':
-      return callOpenAI(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples)
+      return withTimeout(callOpenAI(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples), `${modelId} call`)
         .then((out) => { finalize(out); return out; })
         .catch((e) => { finalize(null, e); throw e; });
     case 'anthropic':
-      return callAnthropic(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples)
+      return withTimeout(callAnthropic(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples), `${modelId} call`)
         .then((out) => { finalize(out); return out; })
         .catch((e) => { finalize(null, e); throw e; });
     case 'google':
-      return callGemini(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples)
+      return withTimeout(callGemini(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples), `${modelId} call`)
         .then((out) => { finalize(out); return out; })
         .catch((e) => { finalize(null, e); throw e; });
     default:

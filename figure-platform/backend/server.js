@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { screenshotHtml, loadBaseScaffold } = require('./runtime-helpers');
 const { generateFigureHtml } = require('./generation');
+const { generate2dFigureHtml } = require('./generation-2d');
 const {
   buildExperimentContext,
   createResultRecord,
@@ -12,7 +13,8 @@ const {
   saveRecord,
 } = require('./figure_pipeline');
 const { planForFigure, planChapter, PLANNER_MODEL } = require('./planner');
-const { listChapters, list3dCandidates } = require('./chapter-discovery');
+const { plan2dFigure } = require('./planner-2d');
+const { listChapters, list3dCandidates, list2dCandidates } = require('./chapter-discovery');
 const { getAvailableModels } = require('./models');
 const { upsertEvaluation, materializeEvaluationViews, compactEvaluationStorage, upsertAttempts } = require('./result_schema');
 const { getCriticContext } = require('./critic');
@@ -20,11 +22,15 @@ const { runFigureLoop } = require('./figure_loop');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
-const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:3001/')
-  .split(',')
-  .map(origin => origin.trim())
+const CORS_ORIGINS = [
+  ...(process.env.CORS_ORIGINS || '').split(','),
+  'http://localhost:3000',
+  `http://localhost:${PORT}`,
+]
+  .map(origin => origin.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 const generationJobs = new Map();
+let generationQueue = Promise.resolve();
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 const EXPERIMENTS_DIR = path.join(__dirname, '..', '..', 'prompt_experiments');
@@ -44,7 +50,8 @@ const FEW_SHOT = { planner: false, critic: false, orchestrator: false };
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || CORS_ORIGINS.includes('*') || CORS_ORIGINS.includes(origin)) {
+    const normalizedOrigin = origin ? origin.replace(/\/+$/, '') : origin;
+    if (!normalizedOrigin || CORS_ORIGINS.includes('*') || CORS_ORIGINS.includes(normalizedOrigin)) {
       return callback(null, true);
     }
     return callback(new Error(`Origin not allowed by CORS: ${origin}`));
@@ -124,13 +131,16 @@ app.get('/api/chapters', (req, res) => {
 // ── GET /api/chapter-candidates/:chapter — list 3D candidate images in a chapter ─
 app.get('/api/chapter-candidates/:chapter', (req, res) => {
   try {
-    const candidates = list3dCandidates(req.params.chapter);
+    const candidates = [
+      ...list3dCandidates(req.params.chapter).map(candidate => ({ ...candidate, type: '3d' })),
+      ...list2dCandidates(req.params.chapter).map(candidate => ({ ...candidate, type: '2d' })),
+    ];
     // Return filename + base64 thumbnail for each
     const result = candidates.map(c => {
       const base64 = fs.readFileSync(c.fullPath).toString('base64');
       const ext = path.extname(c.filename).toLowerCase();
       const mediaType = ext === '.png' ? 'image/png' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
-      return { filename: c.filename, stem: c.stem, base64, mediaType };
+      return { filename: c.filename, stem: c.stem, type: c.type, base64, mediaType };
     });
     return res.json(result);
   } catch (err) {
@@ -153,6 +163,22 @@ app.post('/api/plan', async (req, res) => {
   } catch (err) {
     console.error('Plan error:', err?.message || err);
     return res.status(500).json({ error: err?.message || 'Planning failed.' });
+  }
+});
+
+// ── POST /api/plan-2d — image-first plan for inline ActiveReader overlays ────
+app.post('/api/plan-2d', async (req, res) => {
+  const { filename, chapterHint, base64, mediaType } = req.body;
+  if (!filename) return res.status(400).json({ error: 'filename is required.' });
+  if (!base64 || !mediaType) return res.status(400).json({ error: 'base64 and mediaType are required.' });
+
+  const stem = filename.replace(/\.[^.]+$/, '');
+  try {
+    const plan = await plan2dFigure(stem, chapterHint || null, base64, mediaType);
+    return res.json(plan);
+  } catch (err) {
+    console.error('Plan-2d error:', err?.message || err);
+    return res.status(500).json({ error: err?.message || '2D planning failed.' });
   }
 });
 
@@ -302,6 +328,74 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
   };
 }
 
+async function generate2dFigure({ base64, mediaType, filename, plan, model: requestedModel, experiment: requestedExperiment }) {
+  if (!base64 || !mediaType || !filename) {
+    const err = new Error('base64, mediaType, and filename are required.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const modelId = requestedModel || CURRENT_MODEL;
+  const experimentName = (typeof requestedExperiment === 'string' && requestedExperiment.trim())
+    ? requestedExperiment.trim()
+    : CURRENT_EXPERIMENT;
+
+  console.log(`[generate-2d] requested="${requestedModel}" experiment="${experimentName}" -> using="${modelId}" | file=${filename}`);
+
+  const html = await withRetry(() => generate2dFigureHtml({
+    modelId,
+    base64,
+    mediaType,
+    plan,
+    maxTokens: 16000,
+  }));
+
+  if (!html.trimStart().startsWith('<')) {
+    const err = new Error('The model did not return a valid HTML file. Please try again.');
+    err.statusCode = 502;
+    err.raw = html.slice(0, 500);
+    throw err;
+  }
+
+  const figureId = makeId();
+  const timestamp = new Date().toISOString();
+  const shot = await screenshotHtml(html);
+
+  const record = createResultRecord({
+    id: figureId,
+    filename,
+    html,
+    timestamp,
+    source: 'api',
+    model: modelId,
+    experiment: experimentName,
+    plan: plan || null,
+    previewBase64: shot ? shot.data : null,
+    previewMediaType: shot ? shot.mediaType : null,
+    fallbackBase64: base64,
+    fallbackMediaType: mediaType || 'image/png',
+    sourceBase64: base64,
+    sourceMediaType: mediaType,
+    extra: { type: '2d' },
+  });
+
+  const recordPath = path.join(RESULTS_DIR, `${figureId}.json`);
+  saveRecord(record, recordPath);
+  refreshHistoryManifestSafe();
+
+  return {
+    html,
+    figureId,
+    timestamp,
+    model: modelId,
+    experiment: experimentName,
+    plan: plan || null,
+    evaluationResults: record.evaluationResults || {},
+    evaluationMeta: record.evaluationMeta || {},
+    evaluationVersions: record.evaluationVersions || {},
+  };
+}
+
 /**
  * Generate figure using auto-iterative loop
  * Runs plan → generate → critique → decide cycle, saving all iterations
@@ -328,7 +422,7 @@ async function generateFigureWithLoop({ base64, mediaType, filename, figureStem,
   }
 
   const modelId = requestedModel || CURRENT_MODEL;
-  const plannerModelId = requestedPlannerModel || CURRENT_MODEL;
+  const plannerModelId = requestedPlannerModel || PLANNER_MODEL;
   const criticModelId = requestedEvalModel || CURRENT_CRITIC_MODEL;
   const experimentName = requestedExperiment.trim();
 
@@ -430,6 +524,31 @@ function updateGenerationJob(jobId, patch) {
   });
 }
 
+function enqueueGenerationJob(jobId, label, task) {
+  const run = async () => {
+    updateGenerationJob(jobId, {
+      status: 'running',
+      startedAt: new Date().toISOString(),
+    });
+    console.log(`[generation-queue] start ${label} (${jobId})`);
+    try {
+      const result = await task();
+      updateGenerationJob(jobId, { status: 'done', result });
+      console.log(`[generation-queue] done ${label} (${jobId})`);
+    } catch (err) {
+      console.error(`[generation-queue] error ${label} (${jobId}):`, err?.message || err);
+      updateGenerationJob(jobId, {
+        status: 'error',
+        error: err?.message || 'Generation failed.',
+        ...(err?.raw ? { raw: err.raw } : {}),
+      });
+    }
+  };
+
+  updateGenerationJob(jobId, { status: 'queued' });
+  generationQueue = generationQueue.then(run, run);
+}
+
 // ── POST /api/generate ────────────────────────────────────────────────────────
 app.post('/api/generate', async (req, res) => {
   try {
@@ -446,30 +565,39 @@ app.post('/api/generate-async', (req, res) => {
   const jobId = makeId();
   generationJobs.set(jobId, {
     id: jobId,
-    status: 'running',
+    status: 'queued',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
 
-  // Run immediately — no queue, full parallelism
-  generateFigure(req.body)
-    .then((result) => {
-      updateGenerationJob(jobId, { status: 'done', result });
-    })
-    .catch((err) => {
-      updateGenerationJob(jobId, {
-        status: 'error',
-        error: err?.message || 'Generation failed.',
-        ...(err?.raw ? { raw: err.raw } : {}),
-      });
-    });
+  enqueueGenerationJob(jobId, req.body?.filename || 'single-figure', () => generateFigure(req.body));
+
+  return res.status(202).json({ jobId });
+});
+
+app.post('/api/generate-2d-async', (req, res) => {
+  const jobId = makeId();
+  generationJobs.set(jobId, {
+    id: jobId,
+    status: 'queued',
+    type: '2d',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  enqueueGenerationJob(jobId, req.body?.filename || '2d-figure', () => generate2dFigure(req.body));
 
   return res.status(202).json({ jobId });
 });
 
 app.get('/api/generate-status/:id', (req, res) => {
   const job = generationJobs.get(req.params.id);
-  if (!job) return res.status(404).json({ error: 'Generation job not found.' });
+  if (!job) {
+    return res.status(410).json({
+      error: 'Generation job not found. The backend was likely restarted after this job was launched; rerun the batch to create fresh jobs.',
+      staleJob: true,
+    });
+  }
   return res.json(job);
 });
 
@@ -480,22 +608,12 @@ app.post('/api/generate-loop-async', (req, res) => {
   const jobId = makeId();
   generationJobs.set(jobId, {
     id: jobId,
-    status: 'running',
+    status: 'queued',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
 
-  generateFigureWithLoop(req.body)
-    .then((result) => {
-      updateGenerationJob(jobId, { status: 'done', result });
-    })
-    .catch((err) => {
-      updateGenerationJob(jobId, {
-        status: 'error',
-        error: err?.message || 'Loop generation failed.',
-        ...(err?.raw ? { raw: err.raw } : {}),
-      });
-    });
+  enqueueGenerationJob(jobId, req.body?.figureStem || req.body?.filename || 'loop-figure', () => generateFigureWithLoop(req.body));
 
   return res.status(202).json({ jobId });
 });

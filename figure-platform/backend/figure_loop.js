@@ -16,6 +16,21 @@ const { generateCode } = require('./generation');
 const { evaluateHtmlWithCritic } = require('./critic');
 const { decideFigureRefinement } = require('./orchestrator');
 
+async function withRetry(label, fn, { retries = 3, baseDelay = 2500 } = {}) {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            return await fn();
+        } catch (err) {
+            const msg = err?.message || String(err);
+            const retryable = /fetch failed|connection error|ECONNRESET|ETIMEDOUT|socket hang up|EAI_AGAIN|ENOTFOUND|429|503|timeout/i.test(msg);
+            if (!retryable || attempt >= retries) throw err;
+            const delay = baseDelay * Math.pow(2, attempt);
+            console.warn(`[${label}] retryable error (${attempt + 1}/${retries}): ${msg}. Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+}
+
 /**
  * Main loop orchestrator.
  * Returns a full audit trail of all iterations.
@@ -76,7 +91,9 @@ async function runFigureLoop(opts) {
     loopState.status = 'planning';
 
     try {
-        loopState.currentPlan = await planForFigure(figureStem, chapterName, imageData, plannerModel, fewShot.planner !== false);
+        loopState.currentPlan = await withRetry(`plan:${figureStem}`, () =>
+            planForFigure(figureStem, chapterName, imageData, plannerModel, fewShot.planner !== false)
+        );
         console.log(`Plan created`, { elements: loopState.currentPlan.interactionPlan?.elements?.length || 0 });
     } catch (e) {
         loopState.status = 'failed_planning';
@@ -110,7 +127,7 @@ async function runFigureLoop(opts) {
         attempt.step = 'generate';
 
         try {
-            loopState.currentHtml = await generateCode({
+            loopState.currentHtml = await withRetry(`generate:${figureStem}:attempt${attemptNum}`, () => generateCode({
                 scaffold,
                 plan: loopState.currentPlan,
                 prevHtml: loopState.attempts[attemptNum - 2]?.html || null,
@@ -118,7 +135,7 @@ async function runFigureLoop(opts) {
                 modelId: generatorModel,
                 mediaType: imageData.mediaType,
                 base64: imageData.base64,
-            });
+            }));
             attempt.html = loopState.currentHtml;
             console.log(`Generated HTML (${loopState.currentHtml.length} chars)`);
         } catch (e) {
@@ -135,13 +152,13 @@ async function runFigureLoop(opts) {
         loopState.status = 'critiquing';
 
         try {
-            loopState.currentEvaluation = await evaluateHtmlWithCritic({
+            loopState.currentEvaluation = await withRetry(`critic:${figureStem}:attempt${attemptNum}`, () => evaluateHtmlWithCritic({
                 html: loopState.currentHtml,
                 evalImage: sourceBase64,
                 evalMediaType: sourceMediaType,
                 model: criticModel,
                 useFewShot: fewShot.critic !== false,
-            });
+            }));
             attempt.evaluation = loopState.currentEvaluation;
 
             console.log(`Critic scores`, {
@@ -225,14 +242,14 @@ async function runFigureLoop(opts) {
             attempt.refinement_type = 'plan';
 
             try {
-                loopState.currentPlan = await refinePlan(
+                loopState.currentPlan = await withRetry(`refine-plan:${figureStem}:attempt${attemptNum}`, () => refinePlan(
                     loopState.currentPlan,
                     loopState.currentEvaluation,
                     loopState.currentFeedback,
                     figureStem,
                     plannerModel,
                     fewShot.planner !== false
-                );
+                ));
                 console.log(`Plan refined`);
             } catch (e) {
                 attempt.status = 'plan_refinement_error';
