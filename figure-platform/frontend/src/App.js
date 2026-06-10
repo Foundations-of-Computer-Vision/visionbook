@@ -9,6 +9,7 @@ const CRITIC_PASSES_STORAGE_KEY = 'figure-platform:selectedCriticPasses';
 const EXPERIMENT_STORAGE_KEY = 'figure-platform:selectedExperiment';
 const FIGURE_TYPE_STORAGE_KEY = 'figure-platform:selectedFigureType';
 const CRITIC_VERSION_STORAGE_KEY = 'figure-platform:selectedCriticVersion';
+const FEW_SHOT_STORAGE_KEY = 'figure-platform:fewShot';
 const HUMAN_EVAL_MODEL = 'human:manual';
 const DEFAULT_GENERATION_MODEL = 'gpt-5.5';
 const DEFAULT_EVALUATION_MODEL = 'claude-opus-4.7';
@@ -243,6 +244,7 @@ export default function App() {
   const [selectedCriticName, setSelectedCriticName] = useState('');
   const [experimentOptions, setExperimentOptions] = useState([]);
   const [selectedExperiment, setSelectedExperiment] = useState('');
+  const [fewShot, setFewShot] = useState({ planner: true, critic: true, orchestrator: true });
 
   // Fetch the real system prompt + available models + past API/history experiment names on mount
   useEffect(() => {
@@ -267,6 +269,9 @@ export default function App() {
 
       const storedFigureType = window.localStorage.getItem(FIGURE_TYPE_STORAGE_KEY);
       if (storedFigureType === '2d' || storedFigureType === '3d') setFigureType(storedFigureType);
+
+      const storedFewShot = window.localStorage.getItem(FEW_SHOT_STORAGE_KEY);
+      if (storedFewShot) { try { setFewShot(JSON.parse(storedFewShot)); } catch {} }
 
       const experimentSet = new Set();
       const criticNameSet = new Set();
@@ -346,6 +351,9 @@ export default function App() {
   useEffect(() => {
     if (figureType) window.localStorage.setItem(FIGURE_TYPE_STORAGE_KEY, figureType);
   }, [figureType]);
+  useEffect(() => {
+    window.localStorage.setItem(FEW_SHOT_STORAGE_KEY, JSON.stringify(fewShot));
+  }, [fewShot]);
 
   const syncViewerSelection = useCallback((record, preferredModel = null) => {
     if (!record) {
@@ -397,7 +405,7 @@ export default function App() {
       const jobFn = is2d ? runGenerationJob2d : runGenerationLoop;
       const payload = is2d
         ? { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined }
-        : { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined, evalModel: selectedCriticModel || undefined, criticVersion: selectedCriticName || undefined, criticPasses: selectedCriticPasses, experiment: selectedExperiment || undefined };
+        : { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined, evalModel: selectedCriticModel || undefined, criticVersion: selectedCriticName || undefined, criticPasses: selectedCriticPasses, experiment: selectedExperiment || undefined, fewShot };
       const data = await jobFn(payload);
       const generatedEvaluationResults = data.evaluationResults || {};
       const generatedEvaluationMeta = data.evaluationMeta || {};
@@ -430,7 +438,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [image, selectedCriticModel, selectedCriticName, selectedCriticPasses, selectedExperiment, selectedModel, selectedPlannerModel, tab, figureType]);
+  }, [image, selectedCriticModel, selectedCriticName, selectedCriticPasses, selectedExperiment, selectedModel, selectedPlannerModel, tab, figureType, fewShot]);
   const handleLoadFromHistory = useCallback((record) => {
     const normalizedRecord = {
       ...record,
@@ -639,6 +647,8 @@ export default function App() {
             onCriticPassesChange={setSelectedCriticPasses}
             figureType={figureType}
             onFigureTypeChange={setFigureType}
+            fewShot={fewShot}
+            onFewShotChange={setFewShot}
           />
         )}
         {tab === 'viewer' && (
@@ -702,7 +712,7 @@ function CriticPassSelector({ value, onChange, compact = false, includeZero = tr
 }
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, criticNameOptions, experimentOptions, selectedExperiment, selectedModel, selectedPlannerModel, selectedCriticModel, selectedCriticName, selectedCriticPasses, onExperimentChange, onGeneratorModelChange, onPlannerModelChange, onCriticModelChange, onCriticNameChange, onCriticPassesChange, figureType, onFigureTypeChange }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, criticNameOptions, experimentOptions, selectedExperiment, selectedModel, selectedPlannerModel, selectedCriticModel, selectedCriticName, selectedCriticPasses, onExperimentChange, onGeneratorModelChange, onPlannerModelChange, onCriticModelChange, onCriticNameChange, onCriticPassesChange, figureType, onFigureTypeChange, fewShot = { planner: true, critic: true, orchestrator: true }, onFewShotChange }) {
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
@@ -825,6 +835,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
           evalModel: selectedCriticModel || undefined,
           criticVersion: selectedCriticName || undefined,
           experiment: selectedExperiment || undefined,
+          fewShot,
         });
 
         if (chapterAbortRef.current) { activeMap.delete(candidate.stem); return; }
@@ -983,6 +994,21 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                 </select>
               </div>
               <CriticPassSelector value={selectedCriticPasses} onChange={onCriticPassesChange} />
+              <div style={styles.generatorControlCard}>
+                <label style={styles.generatorModelLabel}>Few-shot Prompts</label>
+                {['planner', 'critic', 'orchestrator'].map(key => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151', cursor: 'pointer', padding: '2px 0' }}>
+                    <input
+                      type="checkbox"
+                      checked={fewShot[key] !== false}
+                      onChange={e => onFewShotChange?.({ ...fewShot, [key]: e.target.checked })}
+                      style={{ width: 14, height: 14, cursor: 'pointer' }}
+                    />
+                    {key.charAt(0).toUpperCase() + key.slice(1)}
+                  </label>
+                ))}
+                <p style={styles.generatorHint}>Uncheck to ablate few-shot examples from that component's prompt.</p>
+              </div>
             </div>
           </div>
         </div>

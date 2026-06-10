@@ -306,7 +306,7 @@ async function generateFigure({ base64, mediaType, filename, plan, model: reques
  * Generate figure using auto-iterative loop
  * Runs plan → generate → critique → decide cycle, saving all iterations
  */
-async function generateFigureWithLoop({ base64, mediaType, filename, figureStem, chapterName, model: requestedModel, plannerModel: requestedPlannerModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, maxAttempts = 3 }) {
+async function generateFigureWithLoop({ base64, mediaType, filename, figureStem, chapterName, model: requestedModel, plannerModel: requestedPlannerModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, maxAttempts = 3, fewShot: requestedFewShot }) {
   const resolvedFigureStem = figureStem || (filename ? path.parse(filename).name : null);
 
   if (!base64 || !mediaType || !filename || !resolvedFigureStem) {
@@ -350,7 +350,7 @@ async function generateFigureWithLoop({ base64, mediaType, filename, figureStem,
     plannerModel: plannerModelId,
     generatorModel: modelId,
     criticModel: criticModelId,
-    fewShot: FEW_SHOT,
+    fewShot: requestedFewShot || FEW_SHOT,
   });
 
   if (loopState.status === 'failed_planning') {
