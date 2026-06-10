@@ -27,6 +27,7 @@ ${OUTPUT_RULES}
 ━━━ STEP 1 — REPRODUCE THE FIGURE EXACTLY (do this before any JS) ━━━━━━━━━━━━
 This is the most important step. Build the complete, pixel-accurate SVG first.
 Interactivity is layered on top AFTER the geometry is correct.
+The first rendered frame must be a drop-in visual replacement for the source image: same crop, same apparent zoom, same whitespace, same label density, and same visual proportions.
 
   html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#fff; }
 
@@ -58,6 +59,7 @@ SVG SIZING AND PROPORTIONS:
 
 WHAT MUST MATCH THE ORIGINAL:
   ✓ ViewBox aspect ratio: set from plan.aspectRatio — matches original figure proportions
+  ✓ Crop and whitespace: preserve the original margins; do not force-fill empty space
   ✓ Node sizes: set from plan.elementSizes.nodeRadiusFraction * W — never guessed
   ✓ Node positions: fraction-based (fx*W, fy*H) from the image
   ✓ Edge angles: computed from ACTUAL node center coordinates
@@ -167,6 +169,27 @@ const THREEJS_BOILERPLATE = `
 ━━━ THREE.JS SECTION (3D figures only) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Use Three.js r171 via importmap (ESM). This version uses pointer-event capture
 so drag-to-rotate works even when the cursor leaves the iframe boundary.
+
+INLINE PDF REPLACEMENT RULES — mandatory:
+- The default view must match the original figure's size, crop, zoom, and label density.
+- Do NOT show bulky UI panels, step buttons, legends, title cards, or descriptive boxes by default.
+- You may show at most 2 compact sliders/toggles if the original figure has a meaningful parameter to manipulate; labels must be very short, controls must be visible near an edge without a filled control box, and may not cover figure geometry or labels.
+- Explanations must appear only on hover/click via lightweight tooltips or parent postMessage popups.
+- Use OrbitControls as the primary interaction: drag to rotate, scroll/pinch to zoom.
+- Prefer state changes triggered by clicking meaningful geometry. Use compact sliders/toggles only when they add real understanding.
+- The scene should match the original figure crop with white background. Do not force-fill if the source figure has whitespace.
+
+CAMERA / VIEW MATCHING REQUIREMENTS:
+- The first rendered frame must be a drop-in visual replacement for the source image.
+- Match the original camera angle, projection type, crop, zoom, object scale, and apparent perspective before adding interactions.
+- Estimate the source view from visual cues: parallel edges imply orthographic/weak perspective; converging edges imply perspective; apparent ellipses and face shapes imply azimuth/elevation.
+- Align key visual anchors (object center, axes, vanishing directions, horizon/ground plane, labels, arrow endpoints, panel boundaries) to the same relative positions in the iframe.
+- Do not choose a more dramatic, prettier, or more "3D" view if it changes the source shape, silhouette, or label placement.
+
+GENERATION ORDER:
+1. Build the static geometry and labels until the non-interactive first frame matches the source.
+2. Set camera/projection/zoom/crop to preserve the source perspective and margins.
+3. Only then add OrbitControls, hover/click explainers, and any compact parameter controls.
 
 NEVER fake 3D with CSS perspective/transform. Build real Three.js meshes.
 NEVER use <script src="...three.min.js">. Always use the importmap below.

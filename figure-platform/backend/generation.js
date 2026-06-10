@@ -51,11 +51,23 @@ What the scaffold already provides (do NOT re-declare):
 Hard constraints:
 - Do not redeclare: addLabel, _labels, _syncLabels, animate, renderer, scene, camera, controls, d, aspect
 - Do not add any import statements or importmaps.
-- Do not change camera.zoom
+- You may change camera.zoom, camera position, controls.target, object scale, and projection parameters only to match the source figure's first-frame crop and perspective. If you change camera.zoom or camera bounds, call camera.updateProjectionMatrix().
 - Keep background white (#ffffff).
 - Do NOT reproduce the figure as a texture, canvas drawing, or flat PlaneGeometry with a drawn image.
   Every visible element must be constructed as Three.js geometry (meshes, lines, points, sprites).
   Pasting the original image onto a plane is not a valid solution.
+- INLINE AUGMENTATION MODE: default output must look like a same-size replacement for the original PDF figure.
+- Do NOT put bulky controls, toolbars, step buttons, legends, title cards, or description panels in the UI marker block.
+- UI marker block should usually be empty. If controls are genuinely needed, add at most 2 compact sliders/toggles with very short labels; no buttons except hidden/internal triggers. Controls must be visible near an edge, with no filled box over the figure.
+- Do not rely on the PDF reader to fix composition after generation. The generated HTML itself must have the right default camera, framing, label scale, and minimal UI.
+- CAMERA / VIEW MATCHING REQUIREMENTS:
+  - The first rendered frame must be a drop-in visual replacement for the source image.
+  - Match the original figure's camera angle, projection type, crop, zoom, object scale, and apparent perspective. Do not invent a more dramatic 3D angle if the source is flatter, more front-facing, or orthographic.
+  - Estimate the source view from visible cues: parallel lines imply orthographic or weak perspective; converging lines imply perspective; apparent ellipse/face shapes imply camera elevation and azimuth.
+  - Align key visual anchors (main object center, axes, vanishing directions, horizon/ground plane, labels, arrow endpoints, and panel boundaries) to the same relative positions in the iframe.
+  - Frame the scene so it matches the original figure crop. Do not force-fill if the original has whitespace; preserve the source figure's margins, aspect, and label density.
+- Explanations must be hover tooltips or parent popups via window.parent.postMessage({type:'alex-popup', title, body}, '*'), not visible panels inside the figure.
+- Interactions should be intuitive direct manipulation: OrbitControls drag/rotate, click a meaningful part, hover a label/vector/surface. No decorative animations.
 
 Your task:
 1) Consider the given plan and what the figure is conceptually intended to illustrate.
@@ -67,13 +79,16 @@ Your task:
      // plane   → PlaneGeometry(4,3)  blue opacity 0.3
    Then build exactly those primitives — do not deviate from your own spec.
 3) Remember that you are converting a 2D image into a 3D, interactive figure. First infer the camera location and angle, then reason about how that viewpoint changes the shapes you should draw: where the viewer is, how high the eye point is, and whether the view is tilted, rotated, or centered.
-4) Count the visible primitives and line segments, preserve relative scale and spacing, and take note of depth ordering and occlusion. Then, recreate the figure's geometry by adding objects to the existing scene. Use projection logic to decide which edges should converge, which faces should be foreshortened, and which dimensions should compress in depth.
-5) Add ALL visible text labels using addLabel(htmlString, THREE.Vector3, options?).
+4) Build the static geometry first. Count the visible primitives and line segments, preserve relative scale and spacing, and take note of depth ordering and occlusion. Use projection logic to decide which edges should converge, which faces should be foreshortened, and which dimensions should compress in depth.
+5) Set camera/projection/zoom/crop to match the source view before adding interactions. Choose orthographic or perspective to match the original, then tune azimuth, polar/elevation, distance, target, and object scale until the first frame overlays the source image's shape and composition.
+6) Add ALL visible text labels using addLabel(htmlString, THREE.Vector3, options?).
     Missing or incorrect labels are a critical failure.  Make sure to match the font size with the original image. Treat labels and annotations as spatial cues so their placement reinforces the geometry and depth.
-6) Add interactivity:
-   - Put your controls HTML inside the UI marker block (buttons/sliders/toggles).
-   - In JS, keep ONE state object + updateScene() that renders from state.
-   - If demo_steps are provided, implement goToStep(i) that tweens the SAME state values used by the controls.
+7) Render a source-matching first frame. Only after that, add interactivity:
+   - Use direct manipulation first: OrbitControls, hover highlight, click-to-explain.
+   - Use window.parent.postMessage for popups/tooltips when explaining elements.
+   - Add compact sliders/toggles only for real figure parameters (e.g. wavelength, angle, sharpness); place them near an edge without a filled panel so they do not cover geometry, labels, or equations.
+   - Keep one state object + updateScene() if hidden states are needed.
+   - If demo_steps are provided, make them callable from clicks on meaningful scene elements, not visible toolbar buttons.
 
 Output format (return ONLY this, nothing else):
 ${UI_BEGIN_MARKER}

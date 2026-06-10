@@ -36,13 +36,27 @@
     /* ── Control panel ───────────────────────────────────────────────────── */
     #ui {
       position: absolute;
-      top: 10px;
-      left: 10px;
+      left: 6px;
+      bottom: 6px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 3px;
       font-family: sans-serif;
-      font-size: 13px;
+      font-size: 11px;
+      max-width: 190px;
+      max-height: 34%;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      opacity: 0.88;
+      transform: none;
+      transition: opacity 0.16s ease;
+      z-index: 10;
+    }
+
+    #ui:hover,
+    #ui:focus-within {
+      opacity: 1;
     }
 
     #ui button {
@@ -66,10 +80,11 @@
       display: flex;
       flex-direction: column;
       gap: 2px;
+      text-shadow: 0 1px 2px #fff;
     }
 
     #ui input[type=range] {
-      width: 140px;
+      width: 86px;
     }
   </style>
 </head>
@@ -77,7 +92,7 @@
 <body>
   <canvas id="c"></canvas>
   <div id="ui">
-    <button id="btnReset">Reset View</button>
+    <button id="btnReset" style="display:none">Reset View</button>
     <!-- @FIGURE_UI_BEGIN -->
     <!-- @FIGURE_UI_END -->
   </div>

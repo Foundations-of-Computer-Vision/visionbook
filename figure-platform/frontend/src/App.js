@@ -703,6 +703,7 @@ function CriticPassSelector({ value, onChange, compact = false, includeZero = tr
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
 function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, criticNameOptions, experimentOptions, selectedExperiment, selectedModel, selectedPlannerModel, selectedCriticModel, selectedCriticName, selectedCriticPasses, onExperimentChange, onGeneratorModelChange, onPlannerModelChange, onCriticModelChange, onCriticNameChange, onCriticPassesChange, figureType, onFigureTypeChange }) {
+  const chapterGenerationConcurrency = 2;
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
@@ -783,7 +784,8 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       onError?.('Set a generator model in the Generator tab first.');
       return;
     }
-    if (!selectedCriticName || !selectedCriticName.trim()) {
+    const has3dCandidates = chapterCandidates.some(candidate => candidate.type !== '2d');
+    if (has3dCandidates && (!selectedCriticName || !selectedCriticName.trim())) {
       onError?.('Select or type a critic version name before generating.');
       return;
     }
@@ -812,20 +814,30 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       activeMap.set(candidate.stem, { figureStem: candidate.stem, phase: 'looping' });
       updateProgress();
 
-      // The backend loop handles planning, generation, and critique internally.
+      // Candidate type comes from the auto-sort pipeline.
       try {
-        const loopResult = await runGenerationLoop({
-          base64: candidate.base64,
-          mediaType: candidate.mediaType,
-          filename: candidate.filename,
-          figureStem: candidate.stem,
-          chapterName: selectedChapter,
-          model: selectedModel || undefined,
-          plannerModel: selectedPlannerModel || undefined,
-          evalModel: selectedCriticModel || undefined,
-          criticVersion: selectedCriticName || undefined,
-          experiment: selectedExperiment || undefined,
-        });
+        const is2dCandidate = candidate.type === '2d';
+        const loopResult = is2dCandidate
+          ? await runGenerationJob2d({
+            base64: candidate.base64,
+            mediaType: candidate.mediaType,
+            filename: candidate.filename,
+            model: selectedModel || undefined,
+            plannerModel: selectedPlannerModel || undefined,
+            experiment: selectedExperiment || undefined,
+          })
+          : await runGenerationLoop({
+            base64: candidate.base64,
+            mediaType: candidate.mediaType,
+            filename: candidate.filename,
+            figureStem: candidate.stem,
+            chapterName: selectedChapter,
+            model: selectedModel || undefined,
+            plannerModel: selectedPlannerModel || undefined,
+            evalModel: selectedCriticModel || undefined,
+            criticVersion: selectedCriticName || undefined,
+            experiment: selectedExperiment || undefined,
+          });
 
         if (chapterAbortRef.current) { activeMap.delete(candidate.stem); return; }
 
@@ -851,8 +863,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
         if (candidate) await processFigure(candidate);
       }
     };
-    const CONCURRENCY = 8;
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, total) }, () => runWorker()));
+    await Promise.all(Array.from({ length: Math.min(chapterGenerationConcurrency, total) }, () => runWorker()));
 
     setChapterProgress(null);
     setChapterRunning(false);
@@ -1180,7 +1191,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                       {chapterProgress.active?.length || 0} active ({chapterProgress.completed} / {chapterProgress.total} done)
                     </span>
                     <span style={{ fontSize: 11, color: '#888' }}>
-                      Concurrency: 8
+                      Concurrency: {chapterGenerationConcurrency}
                     </span>
                   </div>
 

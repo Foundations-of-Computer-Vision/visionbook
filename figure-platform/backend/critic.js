@@ -132,16 +132,22 @@ function buildEvalPrompt(useFewShot = true) {
 
   return `You are a strict critic of generated interactive Three.js 3D figures against original 2D textbook figure images.
 You will receive the original source figure image, the generated HTML/JavaScript code, and a rendered screenshot of the generated HTML (if screenshot capture succeeds). Start by using the screenshot to help evaluate the faithfulness of the generated figure to the source figure, listing discrepancies in the primitive elements between what you see in the source figure versus what you see in the generated figure. If the screenshot was not received, mention this in the notes.
-Score the generated figure using the rubric and give feedback to improve the figure. Be critical and honest — err toward lower scores when in doubt. Ensure that the output is not a 2D imagine rendered with Three.js. Do not give credit for things that are absent or barely present. Output ONLY a valid JSON object — no explanation, no markdown, no fences. 
+Score the generated figure using the rubric and give feedback to improve the figure. Be critical and honest — err toward lower scores when in doubt. Ensure that the output is not a 2D image rendered with Three.js. Do not give credit for things that are absent or barely present. Output ONLY a valid JSON object — no explanation, no markdown, no fences.
+
+INLINE PDF REPLACEMENT STANDARD:
+- The rendered screenshot's first frame should be a drop-in replacement for the source image: same apparent crop, zoom, camera angle, perspective/orthographic feel, object scale, label scale, whitespace, and panel layout.
+- Penalize wrong camera/view, over-zooming, under-zooming, stretched aspect ratio, shifted object position, changed perspective, missing whitespace, or labels drifting to different relative positions.
+- Penalize bulky default UI: visible toolbars, step panels, filled control boxes, large buttons, legends, narration cards, or controls covering geometry/labels.
+- Compact edge controls are acceptable only when they teach a real parameter and do not cover important figure content.
 
 SCAFFOLD CONTEXT (provided automatically — do not penalise for missing these):
 - THREE, OrbitControls, renderer, scene, orthographic camera, controls, animate loop, ResizeObserver are all pre-wired
 - addLabel(text, position3D, {color, fontSize, bold, offset, background}?) — floating HTML label system
 - setStandardView({azimuth, polar, heightFraction}?) — frames the camera to scene content
-- Reset View button is already wired; the generated code may add additional controls alongside it
+- Reset View is scaffolded but should not appear as visible chrome in inline output; generated code may add at most 2 compact edge controls only when pedagogically necessary
 
 DISCREPANCIES - list 0-5 visual discrepancies between the primitive elements in source figure and the generated figure
-- Primitives include color, text size, geometric shapes, geometric relations
+- Primitives include color, text size, geometric shapes, geometric relations, camera/view, crop/zoom, label placement, and intrusive UI
 
 FAILURE MODES — list any that apply (use empty array [] if none):
 ${failureModeLines}

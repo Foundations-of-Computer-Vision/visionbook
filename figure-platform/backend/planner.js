@@ -23,7 +23,7 @@ const { inferChapterFromFilename, list3dCandidates } = require('./chapter-discov
 const ROOT_DIR = path.join(__dirname, '..', '..');
 const QMD_DIR = ROOT_DIR;                                     // .qmd files live at repo root
 
-const PLANNER_MODEL = 'gpt-4o';
+const PLANNER_MODEL = 'gemini-3.5-flash';
 const PLANNER_MAX_TOKENS = 8192;
 
 // ── Context extraction ─────────────────────────────────────────────────────────
@@ -118,11 +118,15 @@ function loadChapterText(chapterName) {
 
 function buildPlannerPrompt(useFewShot = true) { return `You are an expert at planning interactive 3D visualizations for textbook figures.
 
-Your output drives two things that must work as ONE unified system:
-  1. DISCRETE CONTROLS — sliders, toggles, and buttons the user can manipulate freely at any time.
-  2. GUIDED DEMO — a narrative walkthrough that animates the controls to preset values and explains what is happening.
+PRIMARY CONTEXT:
+The generated figure will usually be embedded INLINE on top of the original figure inside a PDF reader. It must behave as a same-size replacement, not as a standalone demo app.
 
-The demo does NOT have its own geometry or state — it drives the controls. Each demo step is a snapshot of control values plus a tutor narration sentence.
+Your output drives these interactions as ONE unified system:
+  1. DIRECT MANIPULATION — drag/rotate/orbit, hover, and click interactions on the figure itself.
+  2. EDGE-PLACED COMPACT CONTROLS — at most 2 small sliders/toggles, only when the original figure has a parameter worth manipulating. They should be visible but unobtrusive, with no filled panel over the figure.
+  3. OPTIONAL GUIDED DEMO — hidden-by-default state transitions that can be triggered by clicking meaningful elements.
+
+Do NOT plan bulky panels, toolbars, large buttons, legends, title cards, or explainer cards in the default view. Do not place a translucent/opaque control box over important geometry or labels. Any explanations should be hover/click popups posted to the parent reader, not fixed panels inside the figure.
 
 Output ONLY valid JSON (no markdown, no explanation):
 {
@@ -131,8 +135,8 @@ Output ONLY valid JSON (no markdown, no explanation):
   "interactions": [
     {
       "id": "unique_camelCase_id",
-      "type": "slider | toggle | button",
-      "label": "short UI label shown next to the control",
+      "type": "hover | click | drag | orbit | compact_slider | compact_toggle | hidden_state",
+      "label": "very short label; visible only for compact sliders/toggles",
       "range": [min, max, step],
       "default": defaultValue,
       "teaches": "one sentence: what manipulating this control demonstrates"
@@ -149,12 +153,21 @@ Output ONLY valid JSON (no markdown, no explanation):
   ],
 
   "camera_suggestion": "description of ideal initial viewpoint and zoom level",
+  "inline_constraints": {
+    "default_view": "must match the original image silhouette, size, label scale, and crop",
+    "visible_ui": "at most 2 compact sliders/toggles, visible near an edge with no filled panel, and must not cover important geometry",
+    "explainers": "hover tooltips and click popups only",
+    "framing": "match the source crop and whitespace; do not force-fill the iframe if the original has margins",
+    "camera": "infer the source camera angle/projection/zoom so the first rendered frame is a drop-in visual replacement"
+  },
   "notes": "any special Three.js or rendering considerations"
 }
 
 Rules:
 - At least 3 demo steps, at most 6.
-- Every interaction must appear in at least one demo step's control_values.
+- Prefer direct manipulation or hidden state. Use compact sliders/toggles only when they directly control a meaningful figure variable, and assume they live near an edge without a filled panel.
+- Never plan visible buttons for Next/Reset/Animate; if a sequence is needed, trigger it by clicking a meaningful part of the figure.
+- Treat the initial camera/view as part of the plan. The generator should not invent a prettier or more dramatic 3D view; it should preserve the original apparent viewpoint, crop, label density, and whitespace.
 - Narration must be specific to THIS figure — never generic like "notice how things change". Say exactly what changes and what it means physically/mathematically.
 - demo_steps must tell a coherent pedagogical story: start simple, build complexity, end with the key insight.
 

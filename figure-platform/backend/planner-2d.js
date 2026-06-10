@@ -8,7 +8,7 @@
 
 const { generateWithModel } = require('./models');
 
-const PLANNER_2D_MODEL = 'gpt-5.5';
+const PLANNER_2D_MODEL = 'gemini-3.5-flash';
 const PLANNER_2D_MAX_TOKENS = 4096;
 
 const PLAN_2D_SYSTEM_PROMPT = `You are a precision visual analyst preparing a reconstruction blueprint for an interactive web figure.
