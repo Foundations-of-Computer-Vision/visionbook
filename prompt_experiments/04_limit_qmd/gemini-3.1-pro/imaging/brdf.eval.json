@@ -1,30 +1,96 @@
 {
-    "evaluationVersions":  {
-                               "legacy":  {
-                                              "evaluationMeta":  {
-                                                                     "gpt-4o":  {
-                                                                                    "evaluatedAt":  "2026-04-04T18:49:45.689Z",
-                                                                                    "criticVersion":  "legacy"
-                                                                                }
-                                                                 },
-                                              "criticVersion":  "legacy",
-                                              "evaluationResults":  {
-                                                                        "gpt-4o":  {
-                                                                                       "failure_modes":  [
-                                                                                                             "Depth-Wrong",
-                                                                                                             "Color-Wrong",
-                                                                                                             "Scale-Wrong"
-                                                                                                         ],
-                                                                                       "geometry_accuracy":  3,
-                                                                                       "interactivity_usability":  4,
-                                                                                       "faithfulness":  3,
-                                                                                       "label_quality":  3,
-                                                                                       "concept_accuracy":  4,
-                                                                                       "notes":  "The figure captures the BRDF setup with useful controls, but the 3D interpretation, plane shape/view, and several colors/proportions differ noticeably from the textbook image.",
-                                                                                       "visual_aesthetics":  3,
-                                                                                       "overall_average":  3.4
-                                                                                   }
-                                                                    }
-                                          }
-                           }
+  "evaluationVersions": {
+    "legacy": {
+      "evaluationMeta": {
+        "gpt-4o": {
+          "evaluatedAt": "2026-04-04T18:49:45.689Z",
+          "criticVersion": "legacy"
+        }
+      },
+      "criticVersion": "legacy",
+      "evaluationResults": {
+        "gpt-4o": {
+          "failure_modes": [
+            "Depth-Wrong",
+            "Color-Wrong",
+            "Scale-Wrong"
+          ],
+          "geometry_accuracy": 3,
+          "interactivity_usability": 4,
+          "faithfulness": 3,
+          "label_quality": 3,
+          "concept_accuracy": 4,
+          "notes": "The figure captures the BRDF setup with useful controls, but the 3D interpretation, plane shape/view, and several colors/proportions differ noticeably from the textbook image.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.4
+        }
+      }
+    },
+    "few_shot_critic": {
+      "criticVersion": "few_shot_critic",
+      "evaluationResults": {
+        "gpt-4.1": {
+          "discrepancies": [
+            "Extra interactive UI (sliders, dropdown, buttons) overlays the scene, not present in source figure",
+            "More outgoing green arrows are present and less structured than in the original",
+            "Text label for l_out differs: ell_out=F(...) is less legible/formulaic than the TeX-style source",
+            "Incoming light arrow coloring is somewhat less gradient and less sharp than original",
+            "Right angle marker and circle at the base are thicker/more emphasized than in the 2D source"
+          ],
+          "failure_modes": [
+            "Hallucination",
+            "Wrong-Primitives",
+            "Interaction-Missing"
+          ],
+          "geometry_accuracy": 4,
+          "interactivity_usability": 3,
+          "faithfulness": 3,
+          "label_quality": 4,
+          "concept_accuracy": 4,
+          "notes": "The main geometry is well-captured (surface, normal, incoming/outgoing rays), but interactions and arrows diverge from the original's minimal, textbook composition.",
+          "action_items": [
+            "Reduce the number of outgoing green arrows and make their directions and lengths more closely match the specific ones in the reference image",
+            "Refine labels to match original LaTeX styling/positioning, especially for \\ell_{out} and other math symbols",
+            "Improve the incoming ray gradient to be more like the smooth yellow-to-red transition in the original"
+          ],
+          "visual_aesthetics": 3.7,
+          "overall_average": 3.6
+        },
+        "gemini-3.5-flash": {
+          "discrepancies": [
+            "The label for outgoing light is truncated to 'ℓout=F(...)' instead of the full formula 'ℓout = F(ℓin, n, λ, p, q)'",
+            "The green scatter arrows (spray) are randomly generated rather than matching the specific, clean set of symmetric arrows in the textbook figure",
+            "The right-angle indicator is slightly misaligned with the 3D plane of the normal and the coordinate axes"
+          ],
+          "failure_modes": [],
+          "geometry_accuracy": 4,
+          "interactivity_usability": 5,
+          "faithfulness": 4,
+          "label_quality": 4,
+          "concept_accuracy": 5,
+          "notes": "Excellent interactive demonstration of BRDF concepts with multiple presets, though one equation label is simplified/truncated.",
+          "action_items": [
+            "Expand the 'lout' label to display the full equation: ℓ_out = F(ℓ_in, n, λ, p, q)",
+            "Hardcode the green spray directions and lengths for the 'Textbook View' to match the neat, symmetric fan of rays in the original diagram",
+            "Align the right-angle indicator dynamically to face the camera or align perfectly with the sagittal plane of the vectors"
+          ],
+          "visual_aesthetics": 4,
+          "overall_average": 4.4
+        }
+      },
+      "evaluationMeta": {
+        "gpt-4.1": {
+          "evaluatedAt": "2026-06-08T15:08:33.028Z",
+          "criticVersion": "few_shot_critic",
+          "criticModel": "gpt-4.1"
+        },
+        "gemini-3.5-flash": {
+          "evaluatedAt": "2026-06-08T15:09:02.432Z",
+          "criticVersion": "few_shot_critic",
+          "criticModel": "gemini-3.5-flash"
+        }
+      },
+      "criticModel": "gemini-3.5-flash"
+    }
+  }
 }
