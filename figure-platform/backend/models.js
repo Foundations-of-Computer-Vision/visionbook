@@ -205,22 +205,21 @@ async function callOpenAI(apiModel, systemPrompt, userContent, maxTokens, fewSho
       messages.push({ role: 'assistant', content: ex.assistantContent });
     }
     messages.push({ role: 'user', content: userContent });
-    const stream = await getOpenAI().chat.completions.create({
-      model: apiModel,
-      max_completion_tokens: maxTokens,
-      messages,
-      stream: true,
-    });
-    let text = '';
-    for await (const chunk of stream) {
-      text += chunk.choices?.[0]?.delta?.content || '';
-    }
-    return text;
+    return withTimeout((async () => {
+      const stream = await getOpenAI().chat.completions.create({
+        model: apiModel,
+        max_completion_tokens: maxTokens,
+        messages,
+        stream: true,
+      });
+      let text = '';
+      for await (const chunk of stream) {
+        text += chunk.choices?.[0]?.delta?.content || '';
+      }
+      return text;
+    })(), `${apiModel} call`);
   };
 
-  // GPT-5.5 vision calls are slow and provider-side connection errors become
-  // common under concurrent load. Serialize them; other OpenAI models can stay parallel.
-  if (apiModel === 'gpt-5.5') return enqueueOpenAI(run);
   return run();
 }
 
@@ -340,7 +339,7 @@ async function generateWithModel(modelId, { systemPrompt, userContent, maxTokens
   if (!entry) throw new Error(`Unknown model: "${modelId}". Available: ${Object.keys(MODEL_REGISTRY).join(', ')}`);
 
   const { provider, apiModel } = entry;
-  const { randomUUID } = require('crypto');
+const { randomUUID } = require('crypto');
 
 
   const callId = randomUUID();
@@ -366,7 +365,7 @@ async function generateWithModel(modelId, { systemPrompt, userContent, maxTokens
   };
   switch (provider) {
     case 'openai':
-      return withTimeout(callOpenAI(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples), `${modelId} call`)
+      return callOpenAI(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples)
         .then((out) => { finalize(out); return out; })
         .catch((e) => { finalize(null, e); throw e; });
     case 'anthropic':

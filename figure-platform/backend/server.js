@@ -30,7 +30,6 @@ const CORS_ORIGINS = [
   .map(origin => origin.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 const generationJobs = new Map();
-let generationQueue = Promise.resolve();
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 const EXPERIMENTS_DIR = path.join(__dirname, '..', '..', 'prompt_experiments');
@@ -524,31 +523,6 @@ function updateGenerationJob(jobId, patch) {
   });
 }
 
-function enqueueGenerationJob(jobId, label, task) {
-  const run = async () => {
-    updateGenerationJob(jobId, {
-      status: 'running',
-      startedAt: new Date().toISOString(),
-    });
-    console.log(`[generation-queue] start ${label} (${jobId})`);
-    try {
-      const result = await task();
-      updateGenerationJob(jobId, { status: 'done', result });
-      console.log(`[generation-queue] done ${label} (${jobId})`);
-    } catch (err) {
-      console.error(`[generation-queue] error ${label} (${jobId}):`, err?.message || err);
-      updateGenerationJob(jobId, {
-        status: 'error',
-        error: err?.message || 'Generation failed.',
-        ...(err?.raw ? { raw: err.raw } : {}),
-      });
-    }
-  };
-
-  updateGenerationJob(jobId, { status: 'queued' });
-  generationQueue = generationQueue.then(run, run);
-}
-
 // ── POST /api/generate ────────────────────────────────────────────────────────
 app.post('/api/generate', async (req, res) => {
   try {
@@ -565,12 +539,22 @@ app.post('/api/generate-async', (req, res) => {
   const jobId = makeId();
   generationJobs.set(jobId, {
     id: jobId,
-    status: 'queued',
+    status: 'running',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
 
-  enqueueGenerationJob(jobId, req.body?.filename || 'single-figure', () => generateFigure(req.body));
+  generateFigure(req.body)
+    .then((result) => {
+      updateGenerationJob(jobId, { status: 'done', result });
+    })
+    .catch((err) => {
+      updateGenerationJob(jobId, {
+        status: 'error',
+        error: err?.message || 'Generation failed.',
+        ...(err?.raw ? { raw: err.raw } : {}),
+      });
+    });
 
   return res.status(202).json({ jobId });
 });
@@ -579,13 +563,23 @@ app.post('/api/generate-2d-async', (req, res) => {
   const jobId = makeId();
   generationJobs.set(jobId, {
     id: jobId,
-    status: 'queued',
+    status: 'running',
     type: '2d',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
 
-  enqueueGenerationJob(jobId, req.body?.filename || '2d-figure', () => generate2dFigure(req.body));
+  generate2dFigure(req.body)
+    .then((result) => {
+      updateGenerationJob(jobId, { status: 'done', result });
+    })
+    .catch((err) => {
+      updateGenerationJob(jobId, {
+        status: 'error',
+        error: err?.message || 'Generation failed.',
+        ...(err?.raw ? { raw: err.raw } : {}),
+      });
+    });
 
   return res.status(202).json({ jobId });
 });
@@ -608,12 +602,22 @@ app.post('/api/generate-loop-async', (req, res) => {
   const jobId = makeId();
   generationJobs.set(jobId, {
     id: jobId,
-    status: 'queued',
+    status: 'running',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
 
-  enqueueGenerationJob(jobId, req.body?.figureStem || req.body?.filename || 'loop-figure', () => generateFigureWithLoop(req.body));
+  generateFigureWithLoop(req.body)
+    .then((result) => {
+      updateGenerationJob(jobId, { status: 'done', result });
+    })
+    .catch((err) => {
+      updateGenerationJob(jobId, {
+        status: 'error',
+        error: err?.message || 'Loop generation failed.',
+        ...(err?.raw ? { raw: err.raw } : {}),
+      });
+    });
 
   return res.status(202).json({ jobId });
 });
