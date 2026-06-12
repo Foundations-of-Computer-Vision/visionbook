@@ -728,6 +728,13 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
   const [chapterResults, setChapterResults] = useState([]);        // accumulated { figureStem, status:'ok'|'error', figureId?, error? }
   const chapterAbortRef = React.useRef(false);
 
+  // Book-wide batch pipeline state
+  const [bookRunning, setBookRunning] = useState(false);
+  const [bookProgress, setBookProgress] = useState(null); // { completed, total, active: [{figureStem, chapterName, phase}] }
+  const [bookResults, setBookResults] = useState([]);     // [{figureStem, chapter, status:'ok'|'error', figureId?, error?}]
+  const [bookSummary, setBookSummary] = useState(null);   // set on completion
+  const bookAbortRef = React.useRef(false);
+
   // Deferred batch evaluation state
   const [batchEvalRunning, setBatchEvalRunning] = useState(false);
   const [batchEvalProgress, setBatchEvalProgress] = useState(null); // { completed, total, current }
@@ -882,6 +889,127 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 
   const handleAbortChapter = () => { chapterAbortRef.current = true; };
 
+  const handleRunBook = async () => {
+    if (!selectedModel) { onError?.('Set a generator model in the Settings first.'); return; }
+    if (!selectedCriticName || !selectedCriticName.trim()) {
+      onError?.('Select or type a critic version name before generating.');
+      return;
+    }
+    if (!selectedExperiment || !selectedExperiment.trim()) {
+      onError?.('Select or type an experiment name before generating.');
+      return;
+    }
+
+    setBookRunning(true);
+    setBookResults([]);
+    setBookSummary(null);
+    bookAbortRef.current = false;
+
+    // Fetch all chapters + their candidates in chapter order
+    let allCandidates = [];
+    try {
+      const chaptersRes = await apiFetch('/api/chapters');
+      const chaptersData = await chaptersRes.json();
+      for (const ch of chaptersData) {
+        if (bookAbortRef.current) break;
+        if ((ch.candidateCount || 0) + (ch.candidateCount2d || 0) === 0) continue;
+        const candidatesRes = await apiFetch(`/api/chapter-candidates/${encodeURIComponent(ch.name)}`);
+        const candidates = await candidatesRes.json();
+        for (const c of candidates) allCandidates.push({ ...c, chapterName: ch.name });
+      }
+    } catch (err) {
+      onError?.(`Failed to load book candidates: ${err.message}`);
+      setBookRunning(false);
+      return;
+    }
+
+    const total = allCandidates.length;
+    const startedAt = new Date().toISOString();
+    const startMs = Date.now();
+    const results = [];
+    const activeMap = new Map();
+
+    const updateBookProgress = () => {
+      setBookProgress({ completed: results.length, total, active: [...activeMap.values()] });
+    };
+    updateBookProgress();
+
+    const processBookItem = async (item) => {
+      if (bookAbortRef.current) return;
+      activeMap.set(item.stem, { figureStem: item.stem, chapterName: item.chapterName, phase: 'looping' });
+      updateBookProgress();
+      try {
+        const is2d = item.type === '2d';
+        const loopResult = is2d
+          ? await runGenerationJob2d({
+              base64: item.base64,
+              mediaType: item.mediaType,
+              filename: item.filename,
+              model: selectedModel || undefined,
+              plannerModel: selectedPlannerModel || undefined,
+              experiment: selectedExperiment || undefined,
+            })
+          : await runGenerationLoop({
+              base64: item.base64,
+              mediaType: item.mediaType,
+              filename: item.filename,
+              figureStem: item.stem,
+              chapterName: item.chapterName,
+              model: selectedModel || undefined,
+              plannerModel: selectedPlannerModel || undefined,
+              evalModel: selectedCriticModel || undefined,
+              criticVersion: selectedCriticName || undefined,
+              experiment: selectedExperiment || undefined,
+              fewShot,
+            });
+        if (bookAbortRef.current) { activeMap.delete(item.stem); return; }
+        results.push({ figureStem: item.stem, chapter: item.chapterName, status: 'ok', figureId: loopResult.figureId });
+      } catch (err) {
+        results.push({ figureStem: item.stem, chapter: item.chapterName, status: 'error', error: err.message });
+      }
+      activeMap.delete(item.stem);
+      setBookResults([...results]);
+      updateBookProgress();
+    };
+
+    const queue = [...allCandidates];
+    const runWorker = async () => {
+      while (queue.length > 0 && !bookAbortRef.current) {
+        const item = queue.shift();
+        if (item) await processBookItem(item);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(chapterGenerationConcurrency, total) }, () => runWorker()));
+
+    const completedAt = new Date().toISOString();
+    const totalTimeMs = Date.now() - startMs;
+    const errorList = results.filter(r => r.status === 'error').map(r => ({ figureStem: r.figureStem, chapter: r.chapter, error: r.error }));
+    const summary = {
+      experiment: selectedExperiment,
+      startedAt,
+      completedAt,
+      totalTimeMs,
+      totalFigures: results.length,
+      successCount: results.filter(r => r.status === 'ok').length,
+      errorCount: errorList.length,
+      errors: errorList,
+    };
+
+    try {
+      await apiFetch('/api/book-generation-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(summary),
+      });
+    } catch (_) {}
+
+    setBookSummary(summary);
+    setBookProgress(null);
+    setBookRunning(false);
+  };
+
+  const handleAbortBook = () => { bookAbortRef.current = true; };
+
   // Select a chapter candidate to load it into the figure drop zone (still works for individual)
   const handleSelectCandidate = (candidate) => {
     if (chapterRunning) return; // don't interrupt batch
@@ -907,6 +1035,10 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
           style={{ ...styles.modeBtn, ...(mode === 'chapter' ? styles.modeBtnActive : {}) }}
           onClick={() => setMode('chapter')}
         >Select Chapter</button>
+        <button
+          style={{ ...styles.modeBtn, ...(mode === 'book' ? styles.modeBtnActive : {}) }}
+          onClick={() => setMode('book')}
+        >Generate Entire Book</button>
       </div>
       <details style={styles.generatorSettingsDetails}>
         <summary style={styles.generatorSettingsSummary}>Settings</summary>
@@ -1142,7 +1274,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             {planning ? 'Planning…' : loading ? 'Generating — this may take 1-2min…' : figureType === '2d' ? 'Generate 2D Figure' : 'Generate 3D Figure'}
           </button>
         </>
-      ) : (
+      ) : mode === 'chapter' ? (
         /* Chapter mode */
         <div style={styles.chapterMode}>
           <label style={styles.chapterLabel}>Select a chapter:</label>
@@ -1332,6 +1464,95 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 
           {selectedChapter && chapterCandidates.length === 0 && !loadingChapter && (
             <p style={{ fontSize: 12, color: '#aaa', marginTop: 12 }}>No 3D candidates found for this chapter.</p>
+          )}
+        </div>
+      ) : (
+        /* Book mode */
+        <div style={styles.bookMode}>
+          <p style={{ fontSize: 13, color: '#555', marginBottom: 12 }}>
+            Generates figures for every chapter in the book concurrently (up to {chapterGenerationConcurrency} at a time), in chapter order. A summary report is written to <code>results/</code> when done.
+          </p>
+
+          {!bookRunning ? (
+            <button
+              style={{ ...styles.generateBtn, ...(!selectedModel ? styles.generateBtnDisabled : {}) }}
+              onClick={handleRunBook}
+              disabled={!selectedModel}
+            >
+              Generate Entire Book
+            </button>
+          ) : (
+            <button
+              style={{ ...styles.generateBtn, background: '#e74c3c', borderColor: '#e74c3c' }}
+              onClick={handleAbortBook}
+            >
+              Stop After Current Figures
+            </button>
+          )}
+
+          {/* Live progress */}
+          {bookProgress && (
+            <div style={{ ...styles.planPanel, marginTop: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#333' }}>
+                  {bookProgress.active?.length || 0} active ({bookProgress.completed} / {bookProgress.total} done)
+                </span>
+                <span style={{ fontSize: 11, color: '#888' }}>Concurrency: {chapterGenerationConcurrency}</span>
+              </div>
+              <div style={{ height: 4, background: '#eee', borderRadius: 2, marginBottom: 10, overflow: 'hidden' }}>
+                <div style={{ height: '100%', background: '#4caf50', borderRadius: 2, transition: 'width 0.3s', width: `${bookProgress.total > 0 ? (bookProgress.completed / bookProgress.total) * 100 : 0}%` }} />
+              </div>
+              {bookProgress.active?.map(a => (
+                <div key={a.figureStem} style={{ marginBottom: 6, padding: '6px 10px', background: '#f8faff', borderRadius: 6, border: '1px solid #e0e8f0', fontSize: 12 }}>
+                  <span style={{ fontWeight: 600, color: '#333' }}>🔄 {a.figureStem}</span>
+                  <span style={{ color: '#888', marginLeft: 8 }}>{a.chapterName}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Results list */}
+          {bookResults.length > 0 && (
+            <div style={{ ...styles.chapterPlansWrap, marginTop: 12 }}>
+              <h4 style={{ margin: '0 0 8px', fontSize: 13, color: '#333' }}>
+                Results: {bookResults.filter(r => r.status === 'ok').length}/{bookResults.length} {bookRunning ? 'so far' : 'succeeded'}
+              </h4>
+              {bookResults.map(r => (
+                <div key={`${r.chapter}/${r.figureStem}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12, borderBottom: '1px solid #f0f0f0' }}>
+                  <span style={{ color: r.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>{r.status === 'ok' ? '✓' : '✗'}</span>
+                  <span style={{ color: '#888', minWidth: 120 }}>{r.chapter}</span>
+                  <span style={{ flex: 1 }}>{r.figureStem}</span>
+                  {r.status === 'ok' && r.figureId && (
+                    <button style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
+                      onClick={() => handlePreview(r.figureId, r.figureStem)}>👁 View</button>
+                  )}
+                  {r.error && <span style={{ color: '#e74c3c', fontSize: 11 }}>{r.error}</span>}
+                </div>
+              ))}
+              {!bookRunning && <p style={{ fontSize: 11, color: '#888', marginTop: 8 }}>Also available in the Results tab.</p>}
+            </div>
+          )}
+
+          {/* Completion summary */}
+          {bookSummary && !bookRunning && (
+            <div style={{ marginTop: 12, padding: '12px 14px', background: bookSummary.errorCount === 0 ? '#f0faf0' : '#fff8f0', border: `1px solid ${bookSummary.errorCount === 0 ? '#4caf50' : '#f39c12'}`, borderRadius: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6, color: '#333' }}>Book generation complete</div>
+              <div style={{ fontSize: 12, color: '#555', lineHeight: 1.7 }}>
+                <div>Figures: {bookSummary.successCount} succeeded, {bookSummary.errorCount} failed (of {bookSummary.totalFigures} total)</div>
+                <div>Total time: {(bookSummary.totalTimeMs / 1000 / 60).toFixed(1)} min</div>
+                <div>Report saved to <code>results/book_run_{bookSummary.experiment}_….json</code></div>
+              </div>
+              {bookSummary.errors.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#e74c3c', marginBottom: 4 }}>Failed figures:</div>
+                  {bookSummary.errors.map(e => (
+                    <div key={`${e.chapter}/${e.figureStem}`} style={{ fontSize: 11, color: '#e74c3c', padding: '2px 0' }}>
+                      {e.chapter}/{e.figureStem} — {e.error}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -3554,8 +3775,9 @@ const styles = {
   modeBtn: { padding: '6px 16px', borderRadius: 6, border: '1px solid #ddd', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 13, fontWeight: 500 },
   modeBtnActive: { background: '#111', borderColor: '#111', color: '#fff' },
 
-  // Chapter mode
+  // Chapter / Book mode
   chapterMode: { width: '100%' },
+  bookMode: { width: '100%' },
   chapterLabel: { fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6, display: 'block' },
   chapterSelect: { width: '100%', fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', background: '#fff', color: '#333', cursor: 'pointer' },
   candidateGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, marginTop: 12 },

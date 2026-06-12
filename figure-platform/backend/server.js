@@ -628,6 +628,18 @@ app.post('/api/generate-loop-async', (req, res) => {
   return res.status(202).json({ jobId });
 });
 
+// ── POST /api/book-generation-report — write full-book run summary to disk ───
+app.post('/api/book-generation-report', (req, res) => {
+  const { experiment, startedAt, completedAt, totalTimeMs, totalFigures, successCount, errorCount, errors } = req.body;
+  if (!experiment) return res.status(400).json({ error: 'experiment is required.' });
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const filename = `book_run_${experiment}_${ts}.json`;
+  const filePath = path.join(RESULTS_DIR, filename);
+  const report = { experiment, startedAt, completedAt, totalTimeMs, totalFigures, successCount, errorCount, errors: errors || [] };
+  fs.writeFileSync(filePath, JSON.stringify(report, null, 2));
+  return res.json({ path: filename });
+});
+
 // ── Chapter inference ───────────────────────────────────────────────────────
 // 1. File lookup: search figures/<chDir>/<stem>.<ext>
 // 2. Name-based: chapter directory name appears as substring in figure stem
