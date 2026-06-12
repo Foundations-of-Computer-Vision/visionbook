@@ -84,6 +84,11 @@ async function runFigureLoop(opts) {
         bestScore: 0,
     };
 
+    const _generationStart = Date.now();
+    loopState.generationStartedAt = new Date(_generationStart).toISOString();
+
+    try {
+
     // ─────────────────────────────────────────────────────────────────────────
     // STEP 1: INITIAL PLAN
     // ─────────────────────────────────────────────────────────────────────────
@@ -279,6 +284,10 @@ async function runFigureLoop(opts) {
     }
 
     return loopState;
+
+    } finally {
+        loopState.generationDurationMs = Date.now() - _generationStart;
+    }
 }
 
 /**

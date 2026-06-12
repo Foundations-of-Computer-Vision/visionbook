@@ -341,6 +341,7 @@ async function generate2dFigure({ base64, mediaType, filename, plan, model: requ
 
   console.log(`[generate-2d] requested="${requestedModel}" experiment="${experimentName}" -> using="${modelId}" | file=${filename}`);
 
+  const _generationStart = Date.now();
   const html = await withRetry(() => generate2dFigureHtml({
     modelId,
     base64,
@@ -348,6 +349,7 @@ async function generate2dFigure({ base64, mediaType, filename, plan, model: requ
     plan,
     maxTokens: 16000,
   }));
+  const generationDurationMs = Date.now() - _generationStart;
 
   if (!html.trimStart().startsWith('<')) {
     const err = new Error('The model did not return a valid HTML file. Please try again.');
@@ -375,7 +377,7 @@ async function generate2dFigure({ base64, mediaType, filename, plan, model: requ
     fallbackMediaType: mediaType || 'image/png',
     sourceBase64: base64,
     sourceMediaType: mediaType,
-    extra: { type: '2d' },
+    extra: { type: '2d', generationDurationMs, generationStartedAt: new Date(_generationStart).toISOString() },
   });
 
   const recordPath = path.join(RESULTS_DIR, `${figureId}.json`);
@@ -480,6 +482,10 @@ async function generateFigureWithLoop({ base64, mediaType, filename, figureStem,
     fallbackMediaType: mediaType || 'image/png',
     sourceBase64: base64,
     sourceMediaType: mediaType,
+    extra: {
+      generationDurationMs: loopState.generationDurationMs ?? null,
+      generationStartedAt: loopState.generationStartedAt ?? null,
+    },
   });
 
   // Attach loop iteration history
@@ -679,6 +685,7 @@ function readHistoryRecord(fileName, { includeThumb = false } = {}) {
     chapter,
     // Number of loop iterations/attempts saved for this result (0 when not applicable)
     iterations: Array.isArray(parsed.attempts) ? parsed.attempts.length : 0,
+    ...(parsed.generationDurationMs != null ? { generationDurationMs: parsed.generationDurationMs } : {}),
   };
 
   if (includeThumb) {

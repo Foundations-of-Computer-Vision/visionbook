@@ -1,14 +1,665 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-06-12T15:10:30.522Z",
+  "generatedAt": "2026-06-12T16:53:08.103Z",
   "summary": {
-    "resultCount": 686,
+    "resultCount": 697,
     "experimentCount": 15,
     "experimentFigureCount": 124,
     "modelCount": 17,
     "chapterCount": 28
   },
   "results": [
+    {
+      "id": "mqb5zz86zzizl",
+      "filename": "triangularization_stereo.png",
+      "timestamp": "2026-06-12T16:52:35.478Z",
+      "source": "api",
+      "model": "gpt-5.5",
+      "experiment": "test",
+      "evaluationResults": {
+        "gpt-4.1": {
+          "discrepancies": [
+            "Bulky Reset View and step buttons+controls are visible at left, covering content area",
+            "No explicit figure panel labels (a) and (b) as in the source",
+            "The aspect/crop of the figure is not as wide as the original, with more whitespace at top and less at sides",
+            "Panel (b) (the yellow/orange triangle, pure top view with bold Z? label) is not shown as a side-by-side panel; only a single interactive 3D scene is rendered",
+            "Dashed lines and projection rays to images are in the model, but the black axes and extents are more visually cluttered than the clean style of the source"
+          ],
+          "failure_modes": [
+            "Hallucination",
+            "Camera-Wrong",
+            "Interaction-Missing"
+          ],
+          "geometry_accuracy": 4,
+          "interactivity_usability": 3,
+          "faithfulness": 3,
+          "label_quality": 3,
+          "concept_accuracy": 4,
+          "notes": "Good stereo geometry and color/label matching, but the figure is not split into two panels, UI is intrusive, and lacks the 'Z?'/side-panel context.",
+          "action_items": [
+            "Reproduce the side-by-side two-panel (a)/(b) layout as in the source, matching both perspective and top-view perspective/crop/panels.",
+            "Hide or move the UI controls so they do not overlap or intrude on the figure content; reduce size of visible UI.",
+            "Add panel labels (a) and (b) and ensure all critical label text (including 'Z?') is matching and clear.",
+            "Better match whitespace, aspect ratio, and cropping to the source.",
+            "Refine the dashed line/ray thickness and make axes visually less cluttered, mirroring the simplicity of the source style."
+          ],
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.4
+        }
+      },
+      "evaluationMeta": {
+        "gpt-4.1": {
+          "evaluatedAt": "2026-06-12T16:52:35.478Z",
+          "criticVersion": "benchmark",
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "evaluationVersions": {
+        "benchmark": {
+          "criticVersion": "benchmark",
+          "evaluationResults": {
+            "gpt-4.1": {
+              "discrepancies": [
+                "Bulky Reset View and step buttons+controls are visible at left, covering content area",
+                "No explicit figure panel labels (a) and (b) as in the source",
+                "The aspect/crop of the figure is not as wide as the original, with more whitespace at top and less at sides",
+                "Panel (b) (the yellow/orange triangle, pure top view with bold Z? label) is not shown as a side-by-side panel; only a single interactive 3D scene is rendered",
+                "Dashed lines and projection rays to images are in the model, but the black axes and extents are more visually cluttered than the clean style of the source"
+              ],
+              "failure_modes": [
+                "Hallucination",
+                "Camera-Wrong",
+                "Interaction-Missing"
+              ],
+              "geometry_accuracy": 4,
+              "interactivity_usability": 3,
+              "faithfulness": 3,
+              "label_quality": 3,
+              "concept_accuracy": 4,
+              "notes": "Good stereo geometry and color/label matching, but the figure is not split into two panels, UI is intrusive, and lacks the 'Z?'/side-panel context.",
+              "action_items": [
+                "Reproduce the side-by-side two-panel (a)/(b) layout as in the source, matching both perspective and top-view perspective/crop/panels.",
+                "Hide or move the UI controls so they do not overlap or intrude on the figure content; reduce size of visible UI.",
+                "Add panel labels (a) and (b) and ensure all critical label text (including 'Z?') is matching and clear.",
+                "Better match whitespace, aspect ratio, and cropping to the source.",
+                "Refine the dashed line/ray thickness and make axes visually less cluttered, mirroring the simplicity of the source style."
+              ],
+              "visual_aesthetics": 3.3,
+              "overall_average": 3.4
+            }
+          },
+          "evaluationMeta": {
+            "gpt-4.1": {
+              "evaluatedAt": "2026-06-12T16:52:35.478Z",
+              "criticVersion": "benchmark",
+              "criticModel": "gpt-4.1"
+            }
+          },
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "chapter": "3d_scene_understanding",
+      "iterations": 3,
+      "generationDurationMs": 544641
+    },
+    {
+      "id": "mqb5zy7qecpso",
+      "filename": "stereocnn.jpg",
+      "timestamp": "2026-06-12T16:52:34.166Z",
+      "source": "api",
+      "model": "gpt-5.5",
+      "experiment": "test",
+      "evaluationResults": {
+        "gpt-4.1": {
+          "discrepancies": [
+            "Intrusive UI elements (Reset View, 3D slice controls) are visible below figure",
+            "Labels for each stage slightly misaligned compared to source (e.g. 'Disparity Estimate' overlaps shapes)",
+            "Slight crowding in pipeline stages (source has more horizontal space between panels)",
+            "Rendered input images and disparity panel are only approximations of true photo data",
+            "Green process squares don't quite match style and proportion of original"
+          ],
+          "failure_modes": [
+            "Hallucination"
+          ],
+          "geometry_accuracy": 4,
+          "interactivity_usability": 3,
+          "faithfulness": 4,
+          "label_quality": 4,
+          "concept_accuracy": 5,
+          "notes": "Structure, composition, and flow are highly faithful, but visible UI and some misalignments detract slightly.",
+          "action_items": [
+            "Hide all visible UI below the figure (Reset View button and slice controls) unless shown inline as edge controls.",
+            "Adjust label positions, font sizes, and whitespace to better match the original image and prevent overlap.",
+            "Add a small margin between each processing block to improve visual clarity.",
+            "Further refine the graphical style of the green blocks and disparity panel to more closely match the original.",
+            "Ensure output does not crowd or collide with other elements horizontally."
+          ],
+          "visual_aesthetics": 4,
+          "overall_average": 4
+        }
+      },
+      "evaluationMeta": {
+        "gpt-4.1": {
+          "evaluatedAt": "2026-06-12T16:52:34.166Z",
+          "criticVersion": "benchmark",
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "evaluationVersions": {
+        "benchmark": {
+          "criticVersion": "benchmark",
+          "evaluationResults": {
+            "gpt-4.1": {
+              "discrepancies": [
+                "Intrusive UI elements (Reset View, 3D slice controls) are visible below figure",
+                "Labels for each stage slightly misaligned compared to source (e.g. 'Disparity Estimate' overlaps shapes)",
+                "Slight crowding in pipeline stages (source has more horizontal space between panels)",
+                "Rendered input images and disparity panel are only approximations of true photo data",
+                "Green process squares don't quite match style and proportion of original"
+              ],
+              "failure_modes": [
+                "Hallucination"
+              ],
+              "geometry_accuracy": 4,
+              "interactivity_usability": 3,
+              "faithfulness": 4,
+              "label_quality": 4,
+              "concept_accuracy": 5,
+              "notes": "Structure, composition, and flow are highly faithful, but visible UI and some misalignments detract slightly.",
+              "action_items": [
+                "Hide all visible UI below the figure (Reset View button and slice controls) unless shown inline as edge controls.",
+                "Adjust label positions, font sizes, and whitespace to better match the original image and prevent overlap.",
+                "Add a small margin between each processing block to improve visual clarity.",
+                "Further refine the graphical style of the green blocks and disparity panel to more closely match the original.",
+                "Ensure output does not crowd or collide with other elements horizontally."
+              ],
+              "visual_aesthetics": 4,
+              "overall_average": 4
+            }
+          },
+          "evaluationMeta": {
+            "gpt-4.1": {
+              "evaluatedAt": "2026-06-12T16:52:34.166Z",
+              "criticVersion": "benchmark",
+              "criticModel": "gpt-4.1"
+            }
+          },
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "chapter": "stereo",
+      "iterations": 3,
+      "generationDurationMs": 543347
+    },
+    {
+      "id": "mqb5yqmf3htg6",
+      "filename": "epipolar_3.png",
+      "timestamp": "2026-06-12T16:51:37.671Z",
+      "source": "api",
+      "model": "gpt-5.5",
+      "experiment": "test",
+      "evaluationResults": {
+        "gpt-4.1": {
+          "discrepancies": [
+            "Camera body geometry has extra wireframe lines not present in the original figure",
+            "The small rings around points are not present in the textbook figure",
+            "The screenshot crop has more whitespace at top and less below, shifting the R,T arrow down",
+            "Font weight and some label font sizes (e.g., Camera 1/2) are lighter/smaller than in the original",
+            "A slider and an unnecessary instruction are visible at bottom left"
+          ],
+          "failure_modes": [],
+          "geometry_accuracy": 5,
+          "interactivity_usability": 3,
+          "faithfulness": 4,
+          "label_quality": 4,
+          "concept_accuracy": 5,
+          "notes": "Geometry, correspondences, and color coding are highly faithful, with minor artifacts and UI intrusions; interactive slider is informative and functional.",
+          "action_items": [
+            "Remove or minimize extra wireframe lines on camera frusta to match the original's clean camera outlines",
+            "Increase font sizes and boldness for key labels such as 'Camera 1', 'Camera 2', 'p₁', and 'p₂?' to better match the figure",
+            "Tweak vertical crop/centering so the green 'R,T' arrow is at mid-height and whitespace proportions match the source"
+          ],
+          "visual_aesthetics": 4.3,
+          "overall_average": 4.2
+        }
+      },
+      "evaluationMeta": {
+        "gpt-4.1": {
+          "evaluatedAt": "2026-06-12T16:51:37.671Z",
+          "criticVersion": "benchmark",
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "evaluationVersions": {
+        "benchmark": {
+          "criticVersion": "benchmark",
+          "evaluationResults": {
+            "gpt-4.1": {
+              "discrepancies": [
+                "Camera body geometry has extra wireframe lines not present in the original figure",
+                "The small rings around points are not present in the textbook figure",
+                "The screenshot crop has more whitespace at top and less below, shifting the R,T arrow down",
+                "Font weight and some label font sizes (e.g., Camera 1/2) are lighter/smaller than in the original",
+                "A slider and an unnecessary instruction are visible at bottom left"
+              ],
+              "failure_modes": [],
+              "geometry_accuracy": 5,
+              "interactivity_usability": 3,
+              "faithfulness": 4,
+              "label_quality": 4,
+              "concept_accuracy": 5,
+              "notes": "Geometry, correspondences, and color coding are highly faithful, with minor artifacts and UI intrusions; interactive slider is informative and functional.",
+              "action_items": [
+                "Remove or minimize extra wireframe lines on camera frusta to match the original's clean camera outlines",
+                "Increase font sizes and boldness for key labels such as 'Camera 1', 'Camera 2', 'p₁', and 'p₂?' to better match the figure",
+                "Tweak vertical crop/centering so the green 'R,T' arrow is at mid-height and whitespace proportions match the source"
+              ],
+              "visual_aesthetics": 4.3,
+              "overall_average": 4.2
+            }
+          },
+          "evaluationMeta": {
+            "gpt-4.1": {
+              "evaluatedAt": "2026-06-12T16:51:37.671Z",
+              "criticVersion": "benchmark",
+              "criticModel": "gpt-4.1"
+            }
+          },
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "chapter": "3d_scene_understanding",
+      "iterations": 3,
+      "generationDurationMs": 486923
+    },
+    {
+      "id": "mqb5xvitj1678",
+      "filename": "epipolar_game_play.png",
+      "timestamp": "2026-06-12T16:50:57.365Z",
+      "source": "api",
+      "model": "gpt-5.5",
+      "experiment": "test",
+      "evaluationResults": {
+        "gpt-4.1": {
+          "discrepancies": [
+            "Extra UI controls (Reset, Show matches, Clear) are visible and intrusive in the top left, unlike the source.",
+            "The overall spacing, scaling, and crop of the panels in the screenshot is somewhat off compared to the original—figures are more compressed vertically.",
+            "Letter and number label font sizes are smaller and thinner than in the source, making them harder to read and less balanced relative to the main shapes.",
+            "Black dots at camera centers are slightly larger and more distinct than in the source.",
+            "Some lines appear slightly bolder and the box highlights are a new element absent in the original."
+          ],
+          "failure_modes": [
+            "Hallucination"
+          ],
+          "geometry_accuracy": 5,
+          "interactivity_usability": 3,
+          "faithfulness": 4,
+          "label_quality": 3,
+          "concept_accuracy": 5,
+          "notes": "Geometry and correspondence are very strong, interactivity is helpful but mismatches the source's pure static nature; some visible controls and label scaling issues.",
+          "action_items": [
+            "Remove or visually minimize the toolbar controls so the figure appears as a direct inline replacement (no extra buttons visible on load).",
+            "Increase the size and weight of the panel labels (A-F, 1-6) to better match the original textbook proportions.",
+            "Adjust vertical and horizontal scaling/crop to more closely match the aspect ratios and whitespace of the source figure."
+          ],
+          "visual_aesthetics": 4,
+          "overall_average": 4
+        }
+      },
+      "evaluationMeta": {
+        "gpt-4.1": {
+          "evaluatedAt": "2026-06-12T16:50:57.365Z",
+          "criticVersion": "benchmark",
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "evaluationVersions": {
+        "benchmark": {
+          "criticVersion": "benchmark",
+          "evaluationResults": {
+            "gpt-4.1": {
+              "discrepancies": [
+                "Extra UI controls (Reset, Show matches, Clear) are visible and intrusive in the top left, unlike the source.",
+                "The overall spacing, scaling, and crop of the panels in the screenshot is somewhat off compared to the original—figures are more compressed vertically.",
+                "Letter and number label font sizes are smaller and thinner than in the source, making them harder to read and less balanced relative to the main shapes.",
+                "Black dots at camera centers are slightly larger and more distinct than in the source.",
+                "Some lines appear slightly bolder and the box highlights are a new element absent in the original."
+              ],
+              "failure_modes": [
+                "Hallucination"
+              ],
+              "geometry_accuracy": 5,
+              "interactivity_usability": 3,
+              "faithfulness": 4,
+              "label_quality": 3,
+              "concept_accuracy": 5,
+              "notes": "Geometry and correspondence are very strong, interactivity is helpful but mismatches the source's pure static nature; some visible controls and label scaling issues.",
+              "action_items": [
+                "Remove or visually minimize the toolbar controls so the figure appears as a direct inline replacement (no extra buttons visible on load).",
+                "Increase the size and weight of the panel labels (A-F, 1-6) to better match the original textbook proportions.",
+                "Adjust vertical and horizontal scaling/crop to more closely match the aspect ratios and whitespace of the source figure."
+              ],
+              "visual_aesthetics": 4,
+              "overall_average": 4
+            }
+          },
+          "evaluationMeta": {
+            "gpt-4.1": {
+              "evaluatedAt": "2026-06-12T16:50:57.365Z",
+              "criticVersion": "benchmark",
+              "criticModel": "gpt-4.1"
+            }
+          },
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "chapter": "3d_scene_understanding",
+      "iterations": 3,
+      "generationDurationMs": 446580
+    },
+    {
+      "id": "mqb5x55iti5rl",
+      "filename": "epipolar_1.png",
+      "timestamp": "2026-06-12T16:50:23.190Z",
+      "source": "api",
+      "model": "gpt-5.5",
+      "experiment": "test",
+      "evaluationResults": {
+        "gpt-4.1": {
+          "discrepancies": [
+            "Dots on the right image plane are black with red centers, but source dots are pure red with black rim.",
+            "Generated figure omits one candidate p2 red dot visible in the source (should be four on right, only three shown).",
+            "Axes in planes are slightly bulkier than source; lengths and placements are not precisely matched.",
+            "Epipolar lines on right plane are missing (should be blue lines passing through the three p2? points).",
+            "Arrow for R,T is very similar, but text placement is slightly different and stylization is less bold than original."
+          ],
+          "failure_modes": [
+            "Wrong-Primitives",
+            "Missing-Labels"
+          ],
+          "geometry_accuracy": 4,
+          "interactivity_usability": 3,
+          "faithfulness": 4,
+          "label_quality": 4,
+          "concept_accuracy": 4,
+          "notes": "Figure composition and labeling are very faithful, with one candidate dot missing and dots not as vivid as source; interactivity is moderate but on-point.",
+          "action_items": [
+            "Add the missing fourth red dot with p2? label on the right image plane to match the source.",
+            "Make right plane dots pure red with thin black outline (not black+red or dull), and adjust thickness and style to match source.",
+            "Add explicit blue epipolar lines to the right plane through the p2? points.",
+            "Increase font boldness and precision of RT text label to match the vividness of the original diagram."
+          ],
+          "visual_aesthetics": 4,
+          "overall_average": 3.8
+        }
+      },
+      "evaluationMeta": {
+        "gpt-4.1": {
+          "evaluatedAt": "2026-06-12T16:50:23.190Z",
+          "criticVersion": "benchmark",
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "evaluationVersions": {
+        "benchmark": {
+          "criticVersion": "benchmark",
+          "evaluationResults": {
+            "gpt-4.1": {
+              "discrepancies": [
+                "Dots on the right image plane are black with red centers, but source dots are pure red with black rim.",
+                "Generated figure omits one candidate p2 red dot visible in the source (should be four on right, only three shown).",
+                "Axes in planes are slightly bulkier than source; lengths and placements are not precisely matched.",
+                "Epipolar lines on right plane are missing (should be blue lines passing through the three p2? points).",
+                "Arrow for R,T is very similar, but text placement is slightly different and stylization is less bold than original."
+              ],
+              "failure_modes": [
+                "Wrong-Primitives",
+                "Missing-Labels"
+              ],
+              "geometry_accuracy": 4,
+              "interactivity_usability": 3,
+              "faithfulness": 4,
+              "label_quality": 4,
+              "concept_accuracy": 4,
+              "notes": "Figure composition and labeling are very faithful, with one candidate dot missing and dots not as vivid as source; interactivity is moderate but on-point.",
+              "action_items": [
+                "Add the missing fourth red dot with p2? label on the right image plane to match the source.",
+                "Make right plane dots pure red with thin black outline (not black+red or dull), and adjust thickness and style to match source.",
+                "Add explicit blue epipolar lines to the right plane through the p2? points.",
+                "Increase font boldness and precision of RT text label to match the vividness of the original diagram."
+              ],
+              "visual_aesthetics": 4,
+              "overall_average": 3.8
+            }
+          },
+          "evaluationMeta": {
+            "gpt-4.1": {
+              "evaluatedAt": "2026-06-12T16:50:23.190Z",
+              "criticVersion": "benchmark",
+              "criticModel": "gpt-4.1"
+            }
+          },
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "chapter": "3d_scene_understanding",
+      "iterations": 3,
+      "generationDurationMs": 412459
+    },
+    {
+      "id": "mqb5uod6uzose",
+      "filename": "epipolar_geometry.png",
+      "timestamp": "2026-06-12T16:48:28.122Z",
+      "source": "api",
+      "model": "gpt-5.5",
+      "experiment": "test",
+      "evaluationResults": {
+        "gpt-4.1": {
+          "discrepancies": [
+            "Green and blue arrows illustrating directions are correctly present but their exact positions, style, and lengths don't perfectly match the original figure.",
+            "The figure has a control UI and reset button at the lower left, which is not present in the original image.",
+            "The yellow epipolar plane is sometimes slightly more opaque than in the reference.",
+            "Epipolar line and plane labels are present but slightly misaligned versus the original.",
+            "Camera and epipole points' proportions and colors are very close but not pixel identical to the source."
+          ],
+          "failure_modes": [],
+          "geometry_accuracy": 5,
+          "interactivity_usability": 5,
+          "faithfulness": 4,
+          "label_quality": 4,
+          "concept_accuracy": 5,
+          "notes": "All key geometry and labels present, highly interactive, but minor style/UI/placement mismatches prevent a perfect score.",
+          "action_items": [
+            "Refine positions and lengths of directional arrows to match textbook proportions and endpoints more closely.",
+            "Slightly adjust label placement, angle, and font to reduce drift from the original, especially on the epipolar lines.",
+            "Provide an option to fully hide figure UI (move instructions and checkboxes) for seamless inline drop-in.",
+            "Fine-tune the yellow epipolar plane opacity for an exact match with the reference."
+          ],
+          "visual_aesthetics": 4.3,
+          "overall_average": 4.6
+        }
+      },
+      "evaluationMeta": {
+        "gpt-4.1": {
+          "evaluatedAt": "2026-06-12T16:48:28.122Z",
+          "criticVersion": "benchmark",
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "evaluationVersions": {
+        "benchmark": {
+          "criticVersion": "benchmark",
+          "evaluationResults": {
+            "gpt-4.1": {
+              "discrepancies": [
+                "Green and blue arrows illustrating directions are correctly present but their exact positions, style, and lengths don't perfectly match the original figure.",
+                "The figure has a control UI and reset button at the lower left, which is not present in the original image.",
+                "The yellow epipolar plane is sometimes slightly more opaque than in the reference.",
+                "Epipolar line and plane labels are present but slightly misaligned versus the original.",
+                "Camera and epipole points' proportions and colors are very close but not pixel identical to the source."
+              ],
+              "failure_modes": [],
+              "geometry_accuracy": 5,
+              "interactivity_usability": 5,
+              "faithfulness": 4,
+              "label_quality": 4,
+              "concept_accuracy": 5,
+              "notes": "All key geometry and labels present, highly interactive, but minor style/UI/placement mismatches prevent a perfect score.",
+              "action_items": [
+                "Refine positions and lengths of directional arrows to match textbook proportions and endpoints more closely.",
+                "Slightly adjust label placement, angle, and font to reduce drift from the original, especially on the epipolar lines.",
+                "Provide an option to fully hide figure UI (move instructions and checkboxes) for seamless inline drop-in.",
+                "Fine-tune the yellow epipolar plane opacity for an exact match with the reference."
+              ],
+              "visual_aesthetics": 4.3,
+              "overall_average": 4.6
+            }
+          },
+          "evaluationMeta": {
+            "gpt-4.1": {
+              "evaluatedAt": "2026-06-12T16:48:28.122Z",
+              "criticVersion": "benchmark",
+              "criticModel": "gpt-4.1"
+            }
+          },
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "chapter": "3d_scene_understanding",
+      "iterations": 2,
+      "generationDurationMs": 297315
+    },
+    {
+      "id": "mqb5rqce01ffs",
+      "filename": "SIFT.jpg",
+      "timestamp": "2026-06-12T16:46:10.718Z",
+      "source": "api",
+      "model": "gpt-5.5",
+      "experiment": "test",
+      "evaluationResults": {},
+      "evaluationMeta": {},
+      "evaluationVersions": {},
+      "chapter": "stereo",
+      "iterations": 0
+    },
+    {
+      "id": "mqb5rf9z2pn60",
+      "filename": "stereolamp.jpg",
+      "timestamp": "2026-06-12T16:45:56.375Z",
+      "source": "api",
+      "model": "gpt-5.5",
+      "experiment": "test",
+      "evaluationResults": {},
+      "evaluationMeta": {},
+      "evaluationVersions": {},
+      "chapter": "stereo",
+      "iterations": 0
+    },
+    {
+      "id": "mqb5r3vmdjq3z",
+      "filename": "boats.png",
+      "timestamp": "2026-06-12T16:45:41.602Z",
+      "source": "api",
+      "model": "gpt-5.5",
+      "experiment": "test",
+      "evaluationResults": {},
+      "evaluationMeta": {},
+      "evaluationVersions": {},
+      "chapter": "3d_scene_understanding",
+      "iterations": 0
+    },
+    {
+      "id": "mqb5qgkb1meoi",
+      "filename": "random_dot_stereogram.png",
+      "timestamp": "2026-06-12T16:45:11.387Z",
+      "source": "api",
+      "model": "gpt-5.5",
+      "experiment": "test",
+      "evaluationResults": {},
+      "evaluationMeta": {},
+      "evaluationVersions": {},
+      "chapter": "3d_scene_understanding",
+      "iterations": 0
+    },
+    {
+      "id": "mqb5m986qm9he",
+      "filename": "geometry_reconstruction_12.png",
+      "timestamp": "2026-06-12T16:41:55.254Z",
+      "source": "api",
+      "model": "gpt-5.5",
+      "experiment": "test",
+      "evaluationResults": {
+        "gpt-4.1": {
+          "discrepancies": [
+            "Grey interaction UI is present at the upper left and not in the original figure",
+            "Arrowheads on curved arrows are more prominent and visible than in the source",
+            "Curve paths for transformations have slightly different shapes than in the source",
+            "Dashed lines are a bit bolder and have slightly different alignment compared to the original",
+            "Figure crop, whitespace, and label sizes are generally close but not perfectly matched"
+          ],
+          "failure_modes": [],
+          "geometry_accuracy": 5,
+          "interactivity_usability": 3,
+          "faithfulness": 4,
+          "label_quality": 4,
+          "concept_accuracy": 5,
+          "notes": "Geometry, labels, and camera/points placement closely match the source; the UI and some minor label/arrow details differ.",
+          "action_items": [
+            "Remove or minimize the upper-left UI panel so it is less intrusive for inline usage.",
+            "Refine arrow paths and arrowhead styles to be even closer in width, curve, and subtlety to the original source figure."
+          ],
+          "visual_aesthetics": 4.3,
+          "overall_average": 4.2
+        }
+      },
+      "evaluationMeta": {
+        "gpt-4.1": {
+          "evaluatedAt": "2026-06-12T16:41:55.254Z",
+          "criticVersion": "benchmark",
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "evaluationVersions": {
+        "benchmark": {
+          "criticVersion": "benchmark",
+          "evaluationResults": {
+            "gpt-4.1": {
+              "discrepancies": [
+                "Grey interaction UI is present at the upper left and not in the original figure",
+                "Arrowheads on curved arrows are more prominent and visible than in the source",
+                "Curve paths for transformations have slightly different shapes than in the source",
+                "Dashed lines are a bit bolder and have slightly different alignment compared to the original",
+                "Figure crop, whitespace, and label sizes are generally close but not perfectly matched"
+              ],
+              "failure_modes": [],
+              "geometry_accuracy": 5,
+              "interactivity_usability": 3,
+              "faithfulness": 4,
+              "label_quality": 4,
+              "concept_accuracy": 5,
+              "notes": "Geometry, labels, and camera/points placement closely match the source; the UI and some minor label/arrow details differ.",
+              "action_items": [
+                "Remove or minimize the upper-left UI panel so it is less intrusive for inline usage.",
+                "Refine arrow paths and arrowhead styles to be even closer in width, curve, and subtlety to the original source figure."
+              ],
+              "visual_aesthetics": 4.3,
+              "overall_average": 4.2
+            }
+          },
+          "evaluationMeta": {
+            "gpt-4.1": {
+              "evaluatedAt": "2026-06-12T16:41:55.254Z",
+              "criticVersion": "benchmark",
+              "criticModel": "gpt-4.1"
+            }
+          },
+          "criticModel": "gpt-4.1"
+        }
+      },
+      "chapter": "learning_3d",
+      "iterations": 3,
+      "generationDurationMs": 496662
+    },
     {
       "id": "mqb2bp42rpspa",
       "filename": "projection-revisted.png",
