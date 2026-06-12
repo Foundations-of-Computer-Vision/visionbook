@@ -2134,44 +2134,71 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
   );
 }
 
-// ── LazyThumb — fetches experiment screenshot on first render ─────────────────
+// ── LazyThumb — fetches experiment screenshot only when scrolled into view ─────
 function LazyThumb({ htmlPath, style }) {
   const [src, setSrc] = React.useState(null);
-  const [loading, setLoading] = React.useState(true);
+  const containerRef = React.useRef(null);
 
   React.useEffect(() => {
-    if (!htmlPath) { setLoading(false); return; }
+    if (!htmlPath) return;
+    const el = containerRef.current;
+    if (!el) return;
     let cancelled = false;
-    apiFetch('/api/experiments/thumb?path=' + encodeURIComponent(htmlPath))
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`);
-        if (!cancelled) setLoading(false);
-      })
-      .catch(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      apiFetch('/api/experiments/thumb?path=' + encodeURIComponent(htmlPath))
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`); })
+        .catch(() => {});
+    }, { rootMargin: '200px' });
+    observer.observe(el);
+    return () => { cancelled = true; observer.disconnect(); };
   }, [htmlPath]);
 
-  if (loading) return <div style={{ ...style, background: '#e8e8e8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 10, color: '#bbb' }}>…</span></div>;
-  if (!src) return <div style={{ ...style, background: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontSize: 10, color: '#ccc' }}>no thumb</span></div>;
-  return <img src={src} alt="" style={style} />;
+  return (
+    <div ref={containerRef} style={style}>
+      {src
+        ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        : <div style={{ width: '100%', height: '100%', background: '#e8e8e8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 10, color: '#bbb' }}>…</span>
+          </div>
+      }
+    </div>
+  );
 }
 
 function LazyApiThumb({ id, base64thumb, mediaType, style }) {
   const [src, setSrc] = React.useState(
     base64thumb ? `data:${mediaType || 'image/jpeg'};base64,${base64thumb}` : null
   );
+  const containerRef = React.useRef(null);
+
   React.useEffect(() => {
-    if (!id || base64thumb) return;
+    if (!id || base64thumb || src) return;
+    const el = containerRef.current;
+    if (!el) return;
     let cancelled = false;
-    apiFetch('/api/thumb/' + encodeURIComponent(id))
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`); })
-      .catch(() => { });
-    return () => { cancelled = true; };
-  }, [id, base64thumb]);
-  if (!src) return <div style={{ ...style, background: '#f0f0f0' }} />;
-  return <img src={src} alt="" style={style} />;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      apiFetch('/api/thumb/' + encodeURIComponent(id))
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`); })
+        .catch(() => {});
+    }, { rootMargin: '200px' });
+    observer.observe(el);
+    return () => { cancelled = true; observer.disconnect(); };
+  }, [id, base64thumb, src]);
+
+  return (
+    <div ref={containerRef} style={style}>
+      {src
+        ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        : <div style={{ width: '100%', height: '100%', background: '#f0f0f0' }} />
+      }
+    </div>
+  );
 }
 
 // ── Shared card failure-modes widget ─────────────────────────────────────────
