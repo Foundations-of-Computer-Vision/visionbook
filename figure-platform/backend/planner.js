@@ -153,6 +153,16 @@ Output ONLY valid JSON (no markdown, no explanation):
   ],
 
   "camera_suggestion": "description of ideal initial viewpoint and zoom level",
+  "camera_view": {
+    "projection": "orthographic",
+    "azimuth_deg": number,
+    "elevation_deg": number,
+    "roll_deg": number,
+    "zoom": number,
+    "target": [0, 0, 0],
+    "height_fraction": number,
+    "view_notes": "specific visual cues from the source image that justify this camera"
+  },
   "inline_constraints": {
     "default_view": "must match the original image silhouette, size, label scale, and crop",
     "visible_ui": "at most 2 compact sliders/toggles, visible near an edge with no filled panel, and must not cover important geometry",
@@ -168,6 +178,14 @@ Rules:
 - Prefer direct manipulation or hidden state. Use compact sliders/toggles only when they directly control a meaningful figure variable, and assume they live near an edge without a filled panel.
 - Never plan visible buttons for Next/Reset/Animate; if a sequence is needed, trigger it by clicking a meaningful part of the figure.
 - Treat the initial camera/view as part of the plan. The generator should not invent a prettier or more dramatic 3D view; it should preserve the original apparent viewpoint, crop, label density, and whitespace.
+- camera_view is mandatory for 3D figures. Estimate it from the source image, not from taste:
+  - azimuth_deg: rotation around vertical Y axis. Use the visible direction of axes, plane edges, rays, and object faces.
+  - elevation_deg: angle above the ground/XZ plane. Shallow textbook diagrams are often 10-30 degrees; top-down views are higher.
+  - roll_deg: usually 0 unless the original image is visibly tilted.
+  - projection: use "orthographic". If the source has perspective cues, encode the apparent view through azimuth/elevation/zoom and explain the cue in view_notes.
+  - zoom: choose an orthographic zoom that preserves the original crop and margins.
+  - height_fraction: how much of iframe height the scene occupies; lower values preserve source whitespace.
+  - view_notes must cite concrete source cues, e.g. "green plane appears as a shallow parallelogram, normal points upward, outgoing ray leans right".
 - Narration must be specific to THIS figure — never generic like "notice how things change". Say exactly what changes and what it means physically/mathematically.
 - demo_steps must tell a coherent pedagogical story: start simple, build complexity, end with the key insight.
 
@@ -243,6 +261,16 @@ Perspective projection equations derived geometrically. A 3D point P at world co
     }
   ],
   "camera_suggestion": "Side view looking along the Y-axis, slightly elevated, showing the full XZ plane with the pinhole at center-left and the projection plane to the right",
+  "camera_view": {
+    "projection": "orthographic",
+    "azimuth_deg": 0,
+    "elevation_deg": 8,
+    "roll_deg": 0,
+    "zoom": 1.1,
+    "target": [0, 0, 0],
+    "height_fraction": 0.58,
+    "view_notes": "Source is mostly a side-on XZ diagram: projection plane sits to the right, rays are visible in profile, and vertical Y depth is minimal."
+  },
   "notes": "Update the ray endpoint, projected point position, and both similar-triangle overlays reactively on every slider change. Use orthographic camera so the similar-triangle proportions remain visually accurate. Render the ray as a solid line from P through the origin and on to the projection plane; use a dashed extension beyond the plane to hint at the virtual camera plane."
 }
 
@@ -321,6 +349,16 @@ The parameter sigma adjusts the spatial extent of the Gaussian g(x; sigma) = (1 
     }
   ],
   "camera_suggestion": "Front-facing 2D orthographic view centered on the origin, x-axis spanning -4 to +4, y-axis from 0 to 1.1",
+  "camera_view": {
+    "projection": "orthographic",
+    "azimuth_deg": 90,
+    "elevation_deg": 0,
+    "roll_deg": 0,
+    "zoom": 1.0,
+    "target": [0, 0, 0],
+    "height_fraction": 0.72,
+    "view_notes": "Source is a front-facing plot, so the camera should be perpendicular to the plot plane with no dramatic 3D tilt."
+  },
   "notes": "Render the Gaussian curve as a smooth THREE.Line sampled at 200 points. For discrete stems use LineSegments from each integer sample down to y=0. Recompute all curve points reactively whenever sigma changes. For the domain toggle, keep both curves in the scene and show/hide rather than destroying geometry. The frequency-domain Gaussian has sigma_freq = 1 / (2 * pi * sigma_spatial) — for sigma in [0.5, 3] this gives sigma_freq in [0.053, 0.318], so the frequency axis must use x range [-0.5, 0.5] (Nyquist range) rather than the spatial domain's [-4, 4], otherwise the curve will be an invisible spike."
 }
 
