@@ -8,6 +8,8 @@ const CRITIC_NAME_STORAGE_KEY = 'figure-platform:selectedCriticName';
 const CRITIC_PASSES_STORAGE_KEY = 'figure-platform:selectedCriticPasses';
 const EXPERIMENT_STORAGE_KEY = 'figure-platform:selectedExperiment';
 const FIGURE_TYPE_STORAGE_KEY = 'figure-platform:selectedFigureType';
+const CHAPTERS_STORAGE_KEY = 'figure-platform:selectedChapters';
+const BATCH_GEN_TYPE_STORAGE_KEY = 'figure-platform:batchGenType';
 const CRITIC_VERSION_STORAGE_KEY = 'figure-platform:selectedCriticVersion';
 const FEW_SHOT_STORAGE_KEY = 'figure-platform:fewShot';
 const HUMAN_EVAL_MODEL = 'human:manual';
@@ -736,11 +738,17 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
   const chapterGenerationConcurrency = 10;
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [mode, setMode] = useState('figure'); // 'figure' | 'chapter'
+  const [mode, setMode] = useState('figure'); // 'figure' | 'chapter' | 'book'
   const [chapters, setChapters] = useState([]);
-  const [selectedChapter, setSelectedChapter] = useState('');
+  const [selectedChapters, setSelectedChapters] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem(CHAPTERS_STORAGE_KEY)) || []; } catch { return []; }
+  });
   const [chapterCandidates, setChapterCandidates] = useState([]);
   const [loadingChapter, setLoadingChapter] = useState(false);
+  const [batchGenType, setBatchGenType] = useState(() => {
+    const v = window.localStorage.getItem(BATCH_GEN_TYPE_STORAGE_KEY);
+    return v === '3d' || v === '2d' ? v : 'both';
+  });
 
   // Chapter batch pipeline state
   const [chapterRunning, setChapterRunning] = useState(false);     // true while batch is active
@@ -784,15 +792,28 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
     apiFetch('/api/chapters').then(r => r.json()).then(setChapters).catch(() => { });
   }, []);
 
-  // When a chapter is selected, load its 3D candidates
+  // Persist chapter selection and batch gen type
   React.useEffect(() => {
-    if (!selectedChapter) { setChapterCandidates([]); return; }
+    window.localStorage.setItem(CHAPTERS_STORAGE_KEY, JSON.stringify(selectedChapters));
+  }, [selectedChapters]);
+  React.useEffect(() => {
+    window.localStorage.setItem(BATCH_GEN_TYPE_STORAGE_KEY, batchGenType);
+  }, [batchGenType]);
+
+  // Load candidates for all selected chapters
+  React.useEffect(() => {
+    if (selectedChapters.length === 0) { setChapterCandidates([]); return; }
     setLoadingChapter(true);
-    apiFetch(`/api/chapter-candidates/${encodeURIComponent(selectedChapter)}`)
-      .then(r => r.json())
-      .then(data => { setChapterCandidates(data); setLoadingChapter(false); })
+    Promise.all(
+      selectedChapters.map(ch =>
+        apiFetch(`/api/chapter-candidates/${encodeURIComponent(ch)}`)
+          .then(r => r.json())
+          .then(data => data.map(c => ({ ...c, chapterName: ch })))
+      )
+    )
+      .then(arrays => { setChapterCandidates(arrays.flat()); setLoadingChapter(false); })
       .catch(() => setLoadingChapter(false));
-  }, [selectedChapter]);
+  }, [selectedChapters]);
 
   const processFile = (file) => {
     if (!file || !file.type.startsWith('image/')) return;
@@ -817,12 +838,18 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
   };
 
   const handleRunChapter = async () => {
-    if (!selectedChapter || chapterCandidates.length === 0) return;
+    if (selectedChapters.length === 0 || chapterCandidates.length === 0) return;
     if (!selectedModel) {
       onError?.('Set a generator model in the Generator tab first.');
       return;
     }
-    const has3dCandidates = chapterCandidates.some(candidate => candidate.type !== '2d');
+    const filteredCandidates = batchGenType === 'both' ? chapterCandidates
+      : chapterCandidates.filter(c => batchGenType === '2d' ? c.type === '2d' : c.type !== '2d');
+    if (filteredCandidates.length === 0) {
+      onError?.(`No ${batchGenType.toUpperCase()} candidates in the selected chapters.`);
+      return;
+    }
+    const has3dCandidates = filteredCandidates.some(candidate => candidate.type !== '2d');
     if (has3dCandidates && (!selectedCriticName || !selectedCriticName.trim())) {
       onError?.('Select or type a critic version name before generating.');
       return;
@@ -838,21 +865,19 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
     setBatchEvalResults({});
     chapterAbortRef.current = false;
 
-    const total = chapterCandidates.length;
-    const results = [];           // shared results array
-    const activeMap = new Map();   // stem → { figureStem, phase }
+    const total = filteredCandidates.length;
+    const results = [];
+    const activeMap = new Map();
 
     const updateProgress = () => {
       setChapterProgress({ completed: results.length, total, active: [...activeMap.values()] });
     };
 
-    // Process a single candidate through the iterative loop.
     const processFigure = async (candidate) => {
       if (chapterAbortRef.current) return;
       activeMap.set(candidate.stem, { figureStem: candidate.stem, phase: 'looping' });
       updateProgress();
 
-      // Candidate type comes from the auto-sort pipeline.
       try {
         const is2dCandidate = candidate.type === '2d';
         const loopResult = is2dCandidate
@@ -869,7 +894,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             mediaType: candidate.mediaType,
             filename: candidate.filename,
             figureStem: candidate.stem,
-            chapterName: selectedChapter,
+            chapterName: candidate.chapterName,
             model: selectedModel || undefined,
             plannerModel: selectedPlannerModel || undefined,
             evalModel: selectedCriticModel || undefined,
@@ -894,8 +919,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       updateProgress();
     };
 
-    // Run with limited concurrency — use a queue to avoid race conditions
-    const queue = [...chapterCandidates];
+    const queue = [...filteredCandidates];
     const runWorker = async () => {
       while (queue.length > 0 && !chapterAbortRef.current) {
         const candidate = queue.shift();
@@ -970,6 +994,11 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       onError?.(`Failed to load book candidates: ${err.message}`);
       setBookRunning(false);
       return;
+    }
+
+    // Filter by batch gen type
+    if (batchGenType !== 'both') {
+      allCandidates = allCandidates.filter(c => batchGenType === '2d' ? c.type === '2d' : c.type !== '2d');
     }
 
     // Separate skipped (already done) from candidates to actually run
@@ -1348,32 +1377,50 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       ) : mode === 'chapter' ? (
         /* Chapter mode */
         <div style={styles.chapterMode}>
-          <label style={styles.chapterLabel}>Select a chapter:</label>
-          <select
-            style={styles.chapterSelect}
-            value={selectedChapter}
-            onChange={e => setSelectedChapter(e.target.value)}
-          >
-            <option value="">— choose —</option>
-            {chapters.map(ch => (
-              <option key={ch.name} value={ch.name} disabled={(ch.candidateCount || 0) + (ch.candidateCount2d || 0) === 0} style={(ch.candidateCount || 0) + (ch.candidateCount2d || 0) === 0 ? { color: '#bbb' } : {}}>
-                {ch.name}{(() => { const parts = []; if (ch.candidateCount) parts.push(`${ch.candidateCount} 3D`); if (ch.candidateCount2d) parts.push(`${ch.candidateCount2d} 2D`); return parts.length ? ` (${parts.join(' · ')})` : ''; })()}
-              </option>
+          <label style={styles.chapterLabel}>Select chapters:</label>
+          <div style={{ border: '1px solid #ddd', borderRadius: 6, maxHeight: 180, overflowY: 'auto', background: '#fff' }}>
+            {chapters.map(ch => {
+              const count = (ch.candidateCount || 0) + (ch.candidateCount2d || 0);
+              const checked = selectedChapters.includes(ch.name);
+              return (
+                <label key={ch.name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', cursor: count > 0 ? 'pointer' : 'default', opacity: count > 0 ? 1 : 0.4, borderBottom: '1px solid #f0f0f0' }}>
+                  <input type="checkbox" checked={checked} disabled={count === 0}
+                    onChange={e => setSelectedChapters(prev => e.target.checked ? [...prev, ch.name] : prev.filter(c => c !== ch.name))}
+                  />
+                  <span style={{ fontSize: 13, flex: 1 }}>{ch.name}</span>
+                  {count > 0 && (() => { const parts = []; if (ch.candidateCount) parts.push(`${ch.candidateCount} 3D`); if (ch.candidateCount2d) parts.push(`${ch.candidateCount2d} 2D`); return <span style={{ fontSize: 11, color: '#888' }}>({parts.join(' · ')})</span>; })()}
+                </label>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 4, marginBottom: 4 }}>
+            <button style={styles.smallBtn} onClick={() => setSelectedChapters([])}>Clear</button>
+          </div>
+
+          {/* Generation type filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: '#555', fontWeight: 600 }}>Generate:</span>
+            {[['both', '3D + 2D'], ['3d', '3D only'], ['2d', '2D only']].map(([v, label]) => (
+              <button key={v} style={{ ...styles.smallBtn, background: batchGenType === v ? '#4a90d9' : '#fff', color: batchGenType === v ? '#fff' : '#555', borderColor: batchGenType === v ? '#4a90d9' : '#ddd', fontWeight: batchGenType === v ? 700 : 400 }} onClick={() => setBatchGenType(v)}>{label}</button>
             ))}
-          </select>
+          </div>
 
           {loadingChapter && <p style={{ fontSize: 12, color: '#888' }}>Loading candidates…</p>}
 
-          {selectedChapter && chapterCandidates.length > 0 && (
+          {selectedChapters.length > 0 && chapterCandidates.length > 0 && (() => {
+            const filteredForRender = batchGenType === 'both' ? chapterCandidates
+              : chapterCandidates.filter(c => batchGenType === '2d' ? c.type === '2d' : c.type !== '2d');
+            return (
             <>
               {/* Candidate thumbnail grid — clickable to go to single-figure mode */}
               <div style={styles.candidateGrid}>
-                {chapterCandidates.map((c, idx) => {
+                {chapterCandidates.map((c) => {
+                  const excluded = batchGenType !== 'both' && (batchGenType === '2d' ? c.type !== '2d' : c.type === '2d');
                   const done = chapterResults.find(r => r.figureStem === c.stem);
                   const isCurrent = chapterProgress?.active?.some(a => a.figureStem === c.stem);
                   const borderColor = done ? (done.status === 'ok' ? '#4caf50' : '#e74c3c') : isCurrent ? '#4a90d9' : 'transparent';
                   return (
-                    <div key={c.stem} style={{ ...styles.candidateCard, border: `2px solid ${borderColor}`, opacity: chapterRunning && !isCurrent && !done ? 0.4 : 1, position: 'relative' }}>
+                    <div key={`${c.chapterName}/${c.stem}`} style={{ ...styles.candidateCard, border: `2px solid ${borderColor}`, opacity: excluded ? 0.25 : (chapterRunning && !isCurrent && !done ? 0.4 : 1), position: 'relative' }}>
                       <img src={`data:${c.mediaType};base64,${c.base64}`} alt={c.stem} style={styles.candidateThumb}
                         onClick={() => handleSelectCandidate(c)} />
                       <div style={{ position: 'absolute', top: 4, left: 4, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: c.type === '2d' ? '#a855f7' : '#4a90d9', color: '#fff', letterSpacing: '0.5px' }}>
@@ -1401,7 +1448,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                   onClick={handleRunChapter}
                   disabled={!selectedModel}
                 >
-                  Generate All {chapterCandidates.length} Figures
+                  Generate {filteredForRender.length} Figure{filteredForRender.length !== 1 ? 's' : ''}
                 </button>
               ) : (
                 <button
@@ -1531,18 +1578,27 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                 </div>
               )}
             </>
-          )}
+            );
+          })()}
 
-          {selectedChapter && chapterCandidates.length === 0 && !loadingChapter && (
-            <p style={{ fontSize: 12, color: '#aaa', marginTop: 12 }}>No 3D candidates found for this chapter.</p>
+          {selectedChapters.length > 0 && chapterCandidates.length === 0 && !loadingChapter && (
+            <p style={{ fontSize: 12, color: '#aaa', marginTop: 12 }}>No candidates found for the selected chapters.</p>
           )}
         </div>
       ) : (
         /* Book mode */
         <div style={styles.bookMode}>
-          <p style={{ fontSize: 13, color: '#555', marginBottom: 12 }}>
+          <p style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>
             Generates figures for every chapter in the book concurrently (up to {chapterGenerationConcurrency} at a time), in chapter order. A summary report is written to <code>results/</code> when done.
           </p>
+
+          {/* Generation type filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+            <span style={{ fontSize: 12, color: '#555', fontWeight: 600 }}>Generate:</span>
+            {[['both', '3D + 2D'], ['3d', '3D only'], ['2d', '2D only']].map(([v, label]) => (
+              <button key={v} style={{ ...styles.smallBtn, background: batchGenType === v ? '#4a90d9' : '#fff', color: batchGenType === v ? '#fff' : '#555', borderColor: batchGenType === v ? '#4a90d9' : '#ddd', fontWeight: batchGenType === v ? 700 : 400 }} onClick={() => setBatchGenType(v)}>{label}</button>
+            ))}
+          </div>
 
           {bookResumeState ? (
             <div style={{ padding: '12px 14px', background: '#fffbf0', border: '1px solid #f39c12', borderRadius: 8, marginBottom: 8 }}>
@@ -3893,6 +3949,7 @@ const styles = {
   bookMode: { width: '100%' },
   chapterLabel: { fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6, display: 'block' },
   chapterSelect: { width: '100%', fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', background: '#fff', color: '#333', cursor: 'pointer' },
+  smallBtn: { fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', color: '#555', cursor: 'pointer' },
   candidateGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, marginTop: 12 },
   candidateCard: { border: '1px solid #e0e0e0', borderRadius: 6, overflow: 'hidden', cursor: 'pointer', background: '#fff', transition: 'box-shadow .15s' },
   candidateThumb: { width: '100%', height: 80, objectFit: 'contain', background: '#fafafa' },
