@@ -46,10 +46,13 @@ What the scaffold already provides (do NOT re-declare):
 - THREE + OrbitControls imports via importmap
 - renderer + <canvas id="c">, scene, orthographic camera (d, aspect), OrbitControls
 - animate() render loop and ResizeObserver
+- setCameraView({ projection, azimuthDeg, elevationDeg, rollDeg, zoom, target, heightFraction, distanceScale }) for source-matched camera setup
 - addLabel(...) + _syncLabels() floating label system
+- showPopup(title, body), hidePopup(), showTooltip(text, event), hideTooltip()
+- registerInteractive(object, { title, body, tooltip, onClick? }) with built-in raycast hover/click handling
 
 Hard constraints:
-- Do not redeclare: addLabel, _labels, _syncLabels, animate, renderer, scene, camera, controls, d, aspect
+- Do not redeclare: addLabel, _labels, _syncLabels, animate, renderer, scene, camera, controls, d, aspect, setCameraView, setStandardView, showPopup, hidePopup, showTooltip, hideTooltip, registerInteractive
 - Do not add any import statements or importmaps.
 - You may change camera.zoom, camera position, controls.target, object scale, and projection parameters only to match the source figure's first-frame crop and perspective. If you change camera.zoom or camera bounds, call camera.updateProjectionMatrix().
 - Keep background white (#ffffff).
@@ -62,11 +65,17 @@ Hard constraints:
 - Do not rely on the PDF reader to fix composition after generation. The generated HTML itself must have the right default camera, framing, label scale, and minimal UI.
 - CAMERA / VIEW MATCHING REQUIREMENTS:
   - The first rendered frame must be a drop-in visual replacement for the source image.
-  - Match the original figure's camera angle, projection type, crop, zoom, object scale, and apparent perspective. Do not invent a more dramatic 3D angle if the source is flatter, more front-facing, or orthographic.
+  - Match the original figure's camera angle, crop, zoom, object scale, and apparent perspective. The scaffold camera is orthographic; simulate weak perspective through azimuth, elevation, object scale, and line/face geometry rather than switching camera classes.
+  - If CAMERA VIEW PARAMETERS are provided below, call setCameraView(...) with those values AFTER adding all geometry and labels. Tune only if the source image clearly demands it.
+    Convert keys exactly:
+      azimuth_deg -> azimuthDeg
+      elevation_deg -> elevationDeg
+      roll_deg -> rollDeg
+      height_fraction -> heightFraction
   - Estimate the source view from visible cues: parallel lines imply orthographic or weak perspective; converging lines imply perspective; apparent ellipse/face shapes imply camera elevation and azimuth.
   - Align key visual anchors (main object center, axes, vanishing directions, horizon/ground plane, labels, arrow endpoints, and panel boundaries) to the same relative positions in the iframe.
   - Frame the scene so it matches the original figure crop. Do not force-fill if the original has whitespace; preserve the source figure's margins, aspect, and label density.
-- Explanations must be hover tooltips or parent popups via window.parent.postMessage({type:'alex-popup', title, body}, '*'), not visible panels inside the figure.
+- Explanations must use the scaffold helpers: registerInteractive(object, { title, body, tooltip }) for meaningful objects, or showPopup(title, body) for custom click flows. Do not create visible explanation panels inside the figure.
 - Interactions should be intuitive direct manipulation: OrbitControls drag/rotate, click a meaningful part, hover a label/vector/surface. No decorative animations.
 
 Your task:
@@ -80,12 +89,24 @@ Your task:
    Then build exactly those primitives — do not deviate from your own spec.
 3) Remember that you are converting a 2D image into a 3D, interactive figure. First infer the camera location and angle, then reason about how that viewpoint changes the shapes you should draw: where the viewer is, how high the eye point is, and whether the view is tilted, rotated, or centered.
 4) Build the static geometry first. Count the visible primitives and line segments, preserve relative scale and spacing, and take note of depth ordering and occlusion. Use projection logic to decide which edges should converge, which faces should be foreshortened, and which dimensions should compress in depth.
-5) Set camera/projection/zoom/crop to match the source view before adding interactions. Choose orthographic or perspective to match the original, then tune azimuth, polar/elevation, distance, target, and object scale until the first frame overlays the source image's shape and composition.
+5) Set camera view/zoom/crop to match the source view before adding interactions. Tune azimuth, elevation, distance, target, and object scale until the first frame overlays the source image's shape and composition. Use setCameraView(...) instead of manually positioning camera whenever camera_view is present in the plan. Example:
+   setCameraView({
+     projection: 'orthographic',
+     azimuthDeg: 35,
+     elevationDeg: 18,
+     rollDeg: 0,
+     zoom: 1.05,
+     target: [0, 0, 0],
+     heightFraction: 0.62
+   });
 6) Add ALL visible text labels using addLabel(htmlString, THREE.Vector3, options?).
     Missing or incorrect labels are a critical failure.  Make sure to match the font size with the original image. Treat labels and annotations as spatial cues so their placement reinforces the geometry and depth.
 7) Render a source-matching first frame. Only after that, add interactivity:
-   - Use direct manipulation first: OrbitControls, hover highlight, click-to-explain. For every direct manipulation interaction, you must add a tooltip pop up explaining the concept when the user interacts with it.
-   - Use window.parent.postMessage for popups/tooltips when explaining elements.
+   - Use direct manipulation first: OrbitControls, hover highlight, click-to-explain.
+   - Every direct manipulation interaction must explain the concept on hover/click without adding a visible explainer panel.
+   - Register every major explanatory mesh/line/group with registerInteractive(object, { title, body, tooltip }).
+   - At least one meaningful object MUST produce a click popup with 2-3 sentences explaining the concept.
+   - Use showPopup(title, body) only for custom click flows; otherwise prefer registerInteractive.
    - Add compact sliders/toggles only for real figure parameters (e.g. wavelength, angle, sharpness); place them near an edge without a filled panel so they do not cover geometry, labels, or equations.
    - Keep one state object + updateScene() if hidden states are needed.
    - If demo_steps are provided, make them callable from clicks on meaningful scene elements, not visible toolbar buttons.
@@ -183,6 +204,9 @@ function buildPlanInjection(plan) {
         }
         if (ip.demo_steps?.length) {
             sections.push(`DEMO STEPS (tween through these using goToStep(); each step drives the controls above):\n${JSON.stringify(ip.demo_steps, null, 2)}`);
+        }
+        if (ip.camera_view) {
+            sections.push(`CAMERA VIEW PARAMETERS (source-image estimate; call setCameraView with these after building geometry):\n${JSON.stringify(ip.camera_view, null, 2)}`);
         }
         if (ip.camera_suggestion) {
             sections.push(`CAMERA: ${ip.camera_suggestion}`);
@@ -331,6 +355,29 @@ function fixGeneratedHtml(html) {
                 }
             }
             fixed = fixed.slice(0, start) + '// [auto-removed conflicting updateLabels]\n' + fixed.slice(end);
+        }
+    }
+
+    // Remove duplicate scaffold interaction helpers if the model redefines them.
+    for (const helperName of ['setCameraView', 'setStandardView', 'showPopup', 'hidePopup', 'showTooltip', 'hideTooltip', 'registerInteractive']) {
+        const helperDupes = [...fixed.matchAll(new RegExp(`^[ \t]*(function ${helperName}\\b[^{]*\\{)`, 'gm'))];
+        if (helperDupes.length > 1) {
+            for (let i = helperDupes.length - 1; i >= 1; i--) {
+                const start = helperDupes[i].index;
+                let depth = 0;
+                let end = start;
+                for (let j = fixed.indexOf('{', start); j < fixed.length; j++) {
+                    if (fixed[j] === '{') depth++;
+                    if (fixed[j] === '}') {
+                        depth--;
+                        if (depth === 0) {
+                            end = j + 1;
+                            break;
+                        }
+                    }
+                }
+                fixed = fixed.slice(0, start) + `// [auto-removed duplicate ${helperName}]\n` + fixed.slice(end);
+            }
         }
     }
 
