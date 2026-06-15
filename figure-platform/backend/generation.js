@@ -84,7 +84,7 @@ Your task:
 6) Add ALL visible text labels using addLabel(htmlString, THREE.Vector3, options?).
     Missing or incorrect labels are a critical failure.  Make sure to match the font size with the original image. Treat labels and annotations as spatial cues so their placement reinforces the geometry and depth.
 7) Render a source-matching first frame. Only after that, add interactivity:
-   - Use direct manipulation first: OrbitControls, hover highlight, click-to-explain.
+   - Use direct manipulation first: OrbitControls, hover highlight, click-to-explain. For every direct manipulation interaction, you must add a tooltip pop up explaining the concept when the user interacts with it.
    - Use window.parent.postMessage for popups/tooltips when explaining elements.
    - Add compact sliders/toggles only for real figure parameters (e.g. wavelength, angle, sharpness); place them near an edge without a filled panel so they do not cover geometry, labels, or equations.
    - Keep one state object + updateScene() if hidden states are needed.

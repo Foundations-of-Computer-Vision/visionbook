@@ -226,8 +226,14 @@ async function runGenerationLoop(payload, { pollMs = 2000, maxPolls = 600 } = {}
   throw new Error('Loop generation timed out while waiting for completion.');
 }
 
+const VALID_TABS = ['generator', 'viewer', 'results', 'dashboard', 'preview'];
+const tabFromHash = () => {
+  const h = window.location.hash.slice(1);
+  return VALID_TABS.includes(h) ? h : 'generator';
+};
+
 export default function App() {
-  const [tab, setTab] = useState('generator');
+  const [tab, setTab] = useState(tabFromHash);
   const [viewerBackTab, setViewerBackTab] = useState('generator');
   const [image, setImage] = useState(null); // { base64, mediaType, filename, previewUrl }
   const [generatedHtml, setGeneratedHtml] = useState('');
@@ -245,6 +251,20 @@ export default function App() {
   const [experimentOptions, setExperimentOptions] = useState([]);
   const [selectedExperiment, setSelectedExperiment] = useState('');
   const [fewShot, setFewShot] = useState({ planner: true, critic: true, orchestrator: true });
+
+  // Sync URL hash when tab changes
+  useEffect(() => {
+    if (window.location.hash.slice(1) !== tab) {
+      window.history.pushState(null, '', `#${tab}`);
+    }
+  }, [tab]);
+
+  // Handle browser back/forward
+  useEffect(() => {
+    const onPop = () => setTab(tabFromHash());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   // Fetch the real system prompt + available models + past API/history experiment names on mount
   useEffect(() => {
@@ -733,6 +753,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
   const [bookProgress, setBookProgress] = useState(null); // { completed, total, active: [{figureStem, chapterName, phase}] }
   const [bookResults, setBookResults] = useState([]);     // [{figureStem, chapter, status:'ok'|'error', figureId?, error?}]
   const [bookSummary, setBookSummary] = useState(null);   // set on completion
+  const [bookResumeState, setBookResumeState] = useState(null); // { completedStems: [] } when resume prompt is showing
   const bookAbortRef = React.useRef(false);
 
   // Deferred batch evaluation state
@@ -900,6 +921,34 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       return;
     }
 
+    // Check for an existing checkpoint and prompt to resume if found
+    try {
+      const cpRes = await apiFetch(`/api/book-checkpoint/${encodeURIComponent(selectedExperiment)}`);
+      const cpData = await cpRes.json();
+      if (cpData.completedStems?.length > 0) {
+        setBookResumeState({ completedStems: cpData.completedStems });
+        return;
+      }
+    } catch {}
+
+    await startBookGeneration([]);
+  };
+
+  const handleResumeBook = async () => {
+    const skipStems = bookResumeState?.completedStems || [];
+    setBookResumeState(null);
+    await startBookGeneration(skipStems);
+  };
+
+  const handleFreshBook = async () => {
+    setBookResumeState(null);
+    try {
+      await apiFetch(`/api/book-checkpoint/${encodeURIComponent(selectedExperiment)}`, { method: 'DELETE' });
+    } catch {}
+    await startBookGeneration([]);
+  };
+
+  const startBookGeneration = async (skipStems) => {
     setBookRunning(true);
     setBookResults([]);
     setBookSummary(null);
@@ -923,16 +972,23 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       return;
     }
 
-    const total = allCandidates.length;
+    // Separate skipped (already done) from candidates to actually run
+    const skipSet = new Set(skipStems);
+    const skippedCandidates = skipSet.size > 0 ? allCandidates.filter(c => skipSet.has(c.stem)) : [];
+    const candidatesToRun = skipSet.size > 0 ? allCandidates.filter(c => !skipSet.has(c.stem)) : allCandidates;
+
+    const total = allCandidates.length; // full book total including skipped
     const startedAt = new Date().toISOString();
     const startMs = Date.now();
-    const results = [];
+    // Pre-populate results with skipped entries so they show immediately in the list
+    const results = skippedCandidates.map(c => ({ figureStem: c.stem, chapter: c.chapterName, status: 'ok', skipped: true }));
     const activeMap = new Map();
 
     const updateBookProgress = () => {
       setBookProgress({ completed: results.length, total, active: [...activeMap.values()] });
     };
     updateBookProgress();
+    setBookResults([...results]);
 
     const processBookItem = async (item) => {
       if (bookAbortRef.current) return;
@@ -964,6 +1020,14 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             });
         if (bookAbortRef.current) { activeMap.delete(item.stem); return; }
         results.push({ figureStem: item.stem, chapter: item.chapterName, status: 'ok', figureId: loopResult.figureId });
+        // Checkpoint successful figures so generation can be resumed if interrupted
+        try {
+          await apiFetch(`/api/book-checkpoint/${encodeURIComponent(selectedExperiment)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stem: item.stem }),
+          });
+        } catch {}
       } catch (err) {
         results.push({ figureStem: item.stem, chapter: item.chapterName, status: 'error', error: err.message });
       }
@@ -972,7 +1036,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       updateBookProgress();
     };
 
-    const queue = [...allCandidates];
+    const queue = [...candidatesToRun];
     const runWorker = async () => {
       while (queue.length > 0 && !bookAbortRef.current) {
         const item = queue.shift();
@@ -1002,6 +1066,13 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
         body: JSON.stringify(summary),
       });
     } catch (_) {}
+
+    // Delete checkpoint — run is complete, next run should start fresh
+    if (!bookAbortRef.current) {
+      try {
+        await apiFetch(`/api/book-checkpoint/${encodeURIComponent(selectedExperiment)}`, { method: 'DELETE' });
+      } catch {}
+    }
 
     setBookSummary(summary);
     setBookProgress(null);
@@ -1473,7 +1544,21 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             Generates figures for every chapter in the book concurrently (up to {chapterGenerationConcurrency} at a time), in chapter order. A summary report is written to <code>results/</code> when done.
           </p>
 
-          {!bookRunning ? (
+          {bookResumeState ? (
+            <div style={{ padding: '12px 14px', background: '#fffbf0', border: '1px solid #f39c12', borderRadius: 8, marginBottom: 8 }}>
+              <p style={{ fontSize: 13, color: '#555', margin: '0 0 10px' }}>
+                <strong>{bookResumeState.completedStems.length}</strong> figures already completed for experiment &ldquo;{selectedExperiment}&rdquo;. Resume where you left off, or start over?
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={styles.generateBtn} onClick={handleResumeBook}>
+                  Resume (skip {bookResumeState.completedStems.length} done)
+                </button>
+                <button style={{ ...styles.generateBtn, background: '#888', borderColor: '#888' }} onClick={handleFreshBook}>
+                  Start Fresh
+                </button>
+              </div>
+            </div>
+          ) : !bookRunning ? (
             <button
               style={{ ...styles.generateBtn, ...(!selectedModel ? styles.generateBtnDisabled : {}) }}
               onClick={handleRunBook}
@@ -1518,11 +1603,12 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                 Results: {bookResults.filter(r => r.status === 'ok').length}/{bookResults.length} {bookRunning ? 'so far' : 'succeeded'}
               </h4>
               {bookResults.map(r => (
-                <div key={`${r.chapter}/${r.figureStem}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12, borderBottom: '1px solid #f0f0f0' }}>
-                  <span style={{ color: r.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>{r.status === 'ok' ? '✓' : '✗'}</span>
+                <div key={`${r.chapter}/${r.figureStem}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12, borderBottom: '1px solid #f0f0f0', opacity: r.skipped ? 0.5 : 1 }}>
+                  <span style={{ color: r.skipped ? '#aaa' : r.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>{r.status === 'ok' ? '✓' : '✗'}</span>
                   <span style={{ color: '#888', minWidth: 120 }}>{r.chapter}</span>
                   <span style={{ flex: 1 }}>{r.figureStem}</span>
-                  {r.status === 'ok' && r.figureId && (
+                  {r.skipped && <span style={{ color: '#aaa', fontSize: 11 }}>skipped</span>}
+                  {!r.skipped && r.status === 'ok' && r.figureId && (
                     <button style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
                       onClick={() => handlePreview(r.figureId, r.figureStem)}>👁 View</button>
                   )}

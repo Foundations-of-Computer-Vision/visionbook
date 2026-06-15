@@ -628,6 +628,35 @@ app.post('/api/generate-loop-async', (req, res) => {
   return res.status(202).json({ jobId });
 });
 
+// ── Book checkpoint endpoints ─────────────────────────────────────────────────
+app.get('/api/book-checkpoint/:experiment', (req, res) => {
+  const filePath = path.join(RESULTS_DIR, `checkpoint_${req.params.experiment}.json`);
+  if (!fs.existsSync(filePath)) return res.json({ completedStems: [] });
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return res.json({ completedStems: data.completedStems || [] });
+  } catch { return res.json({ completedStems: [] }); }
+});
+
+app.post('/api/book-checkpoint/:experiment', (req, res) => {
+  const { stem } = req.body;
+  if (!stem) return res.status(400).json({ error: 'stem is required.' });
+  const filePath = path.join(RESULTS_DIR, `checkpoint_${req.params.experiment}.json`);
+  let completedStems = [];
+  if (fs.existsSync(filePath)) {
+    try { completedStems = JSON.parse(fs.readFileSync(filePath, 'utf8')).completedStems || []; } catch {}
+  }
+  if (!completedStems.includes(stem)) completedStems.push(stem);
+  fs.writeFileSync(filePath, JSON.stringify({ completedStems }, null, 2));
+  return res.json({ ok: true });
+});
+
+app.delete('/api/book-checkpoint/:experiment', (req, res) => {
+  const filePath = path.join(RESULTS_DIR, `checkpoint_${req.params.experiment}.json`);
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  return res.json({ ok: true });
+});
+
 // ── POST /api/book-generation-report — write full-book run summary to disk ───
 app.post('/api/book-generation-report', (req, res) => {
   const { experiment, startedAt, completedAt, totalTimeMs, totalFigures, successCount, errorCount, errors } = req.body;
