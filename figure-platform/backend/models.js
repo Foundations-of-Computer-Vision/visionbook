@@ -249,21 +249,23 @@ async function callAnthropic(apiModel, systemPrompt, userContent, maxTokens, few
   }
   messages.push({ role: 'user', content: toAnthropicContent(userContent) });
 
-  // Use streaming to avoid Anthropic's 10-minute timeout on large max_tokens
-  const stream = getAnthropic().messages.stream({
-    model: apiModel,
-    max_tokens: maxTokens,
-    system: systemPrompt,
-    messages,
-  });
+  return withTimeout((async () => {
+    // Use streaming to avoid Anthropic's 10-minute timeout on large max_tokens
+    const stream = getAnthropic().messages.stream({
+      model: apiModel,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages,
+    });
 
-  const finalMessage = await stream.finalMessage();
+    const finalMessage = await stream.finalMessage();
 
-  // Anthropic returns content as an array of blocks
-  return finalMessage.content
-    .filter(b => b.type === 'text')
-    .map(b => b.text)
-    .join('');
+    // Anthropic returns content as an array of blocks
+    return finalMessage.content
+      .filter(b => b.type === 'text')
+      .map(b => b.text)
+      .join('');
+  })(), `${apiModel} call`);
 }
 
 /**
@@ -272,27 +274,22 @@ async function callAnthropic(apiModel, systemPrompt, userContent, maxTokens, few
  * With generateContentStream, tokens arrive immediately and we accumulate them.
  */
 async function callGemini(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples = []) {
-  return enqueueGemini(async () => {
-    const waitMs = Math.max(0, GEMINI_MIN_REQUEST_INTERVAL_MS - (Date.now() - _lastGeminiRequestAt));
-    if (waitMs > 0) {
-      await new Promise(resolve => setTimeout(resolve, waitMs));
+  const client = await getGemini();
+
+  const contents = [];
+  for (const ex of fewShotExamples) {
+    contents.push({ role: 'user', parts: [{ text: ex.userText }] });
+    contents.push({ role: 'model', parts: [{ text: ex.assistantContent }] });
+  }
+  const parts = await Promise.all(userContent.map(async block => {
+    if (block.type === 'image_url') {
+      return prepareGeminiImage(block.image_url.url);
     }
+    return { text: block.text };
+  }));
+  contents.push({ role: 'user', parts });
 
-    const client = await getGemini();
-
-    const contents = [];
-    for (const ex of fewShotExamples) {
-      contents.push({ role: 'user', parts: [{ text: ex.userText }] });
-      contents.push({ role: 'model', parts: [{ text: ex.assistantContent }] });
-    }
-    const parts = await Promise.all(userContent.map(async block => {
-      if (block.type === 'image_url') {
-        return prepareGeminiImage(block.image_url.url);
-      }
-      return { text: block.text };
-    }));
-    contents.push({ role: 'user', parts });
-
+  return withTimeout((async () => {
     try {
       // Use streaming to avoid Google's ~60 s HTTP connection timeout.
       // generateContent (non-streaming) waits for full output before sending
@@ -316,10 +313,8 @@ async function callGemini(apiModel, systemPrompt, userContent, maxTokens, fewSho
       console.error(`[Gemini] ${apiModel} call failed: ${err.message}` +
         (cause ? ` | cause: ${cause.code || ''} ${cause.message || ''}` : ''));
       throw err;
-    } finally {
-      _lastGeminiRequestAt = Date.now();
     }
-  });
+  })(), `${apiModel} call`);
 }
 
 // ── Main entry point ─────────────────────────────────────────────────────────
@@ -369,11 +364,11 @@ const { randomUUID } = require('crypto');
         .then((out) => { finalize(out); return out; })
         .catch((e) => { finalize(null, e); throw e; });
     case 'anthropic':
-      return withTimeout(callAnthropic(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples), `${modelId} call`)
+      return callAnthropic(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples)
         .then((out) => { finalize(out); return out; })
         .catch((e) => { finalize(null, e); throw e; });
     case 'google':
-      return withTimeout(callGemini(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples), `${modelId} call`)
+      return callGemini(apiModel, systemPrompt, userContent, maxTokens, fewShotExamples)
         .then((out) => { finalize(out); return out; })
         .catch((e) => { finalize(null, e); throw e; });
     default:
