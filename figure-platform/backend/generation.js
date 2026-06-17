@@ -65,13 +65,15 @@ Hard constraints:
 - Do not rely on the PDF reader to fix composition after generation. The generated HTML itself must have the right default camera, framing, label scale, and minimal UI.
 - CAMERA / VIEW MATCHING REQUIREMENTS:
   - The first rendered frame must be a drop-in visual replacement for the source image.
-  - Match the original figure's camera angle, crop, zoom, object scale, and apparent perspective. The scaffold camera is orthographic; simulate weak perspective through azimuth, elevation, object scale, and line/face geometry rather than switching camera classes.
+  - Match the original figure's camera angle, crop, zoom, object scale, and apparent perspective.
   - If CAMERA VIEW PARAMETERS are provided below, call setCameraView(...) with those values AFTER adding all geometry and labels. Tune only if the source image clearly demands it.
     Convert keys exactly:
       azimuth_deg -> azimuthDeg
       elevation_deg -> elevationDeg
       roll_deg -> rollDeg
       height_fraction -> heightFraction
+  - Before calling setCameraView, sanity-check the provided azimuth/elevation against the actual world-space coordinates you placed objects at: identify the dominant baseline/axis/edge in YOUR geometry and the direction it runs in world space (e.g. along X, along Z, diagonal), then check whether the provided azimuth would view that baseline the same way it appears in the source image (roughly broadside vs. roughly along it). If your own layout doesn't match what the provided azimuth assumes, override it with the value that actually does — you built the geometry, so you are in the best position to know which number is consistent with it. Do not blindly pass the plan's numbers through if they contradict the geometry you just built.
+  - Call setCameraView(...) AFTER adding all geometry and labels, using the (possibly corrected) values.
   - Estimate the source view from visible cues: parallel lines imply orthographic or weak perspective; converging lines imply perspective; apparent ellipse/face shapes imply camera elevation and azimuth.
   - Align key visual anchors (main object center, axes, vanishing directions, horizon/ground plane, labels, arrow endpoints, and panel boundaries) to the same relative positions in the iframe.
   - Frame the scene so it matches the original figure crop. Do not force-fill if the original has whitespace; preserve the source figure's margins, aspect, and label density.
@@ -176,6 +178,8 @@ Only output an improved payload for these markers:
 
     return `${header}
 
+${GENERATION_TASK_GUIDE}
+
 CRITIC FEEDBACK ON PREVIOUS ATTEMPT:
 ${issues}
 
@@ -183,6 +187,7 @@ PREVIOUS GENERATED PAYLOAD (edit this; do NOT output full HTML):
 ${prevPayloadText}
 
 Fix all identified failure modes and improve every score. Maintain or improve what already works well.
+This includes re-checking the CAMERA / VIEW MATCHING REQUIREMENTS above even if no camera-specific failure mode was listed — a passing score on other metrics does not mean the camera/view is correct.
 Return ONLY the updated marker-wrapped payload.`;
 }
 

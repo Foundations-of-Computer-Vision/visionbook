@@ -1302,41 +1302,10 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                           {plan.chapterName && <span style={styles.planChapter}>Chapter: {plan.chapterName}</span>}
                         </div>
                         {planPayload ? (
-                          <>
-                            {planPayload.concept && (
-                              <p style={styles.planConcept}>{planPayload.concept}</p>
-                            )}
-                            {planPayload.elements?.length > 0 && (
-                              <div style={{ marginBottom: 6 }}>
-                                <span style={styles.planSubhead}>Elements:</span>
-                                <span style={styles.planList}>{planPayload.elements.join(', ')}</span>
-                              </div>
-                            )}
-                            {planPayload.interactions?.length > 0 && (
-                              <div style={{ marginBottom: 6 }}>
-                                <span style={styles.planSubhead}>Interactions:</span>
-                                {planPayload.interactions.map((inter, i) => (
-                                  <div key={i} style={styles.planInteraction}>
-                                    <span style={styles.planInterType}>{inter.type}</span>
-                                    <span style={styles.planInterLabel}>{inter.label}</span>
-                                    <span style={styles.planInterTeaches}>— {inter.teaches}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            {planPayload.demo_steps?.length > 0 && (
-                              <div style={{ marginBottom: 6 }}>
-                                <span style={styles.planSubhead}>Demo Steps:</span>
-                                {planPayload.demo_steps.map((step, i) => (
-                                  <div key={i} style={styles.planInteraction}>
-                                    <span style={styles.planInterType}>step {i + 1}</span>
-                                    <span style={styles.planInterLabel}>{step.title || `Step ${i + 1}`}</span>
-                                    <span style={styles.planInterTeaches}>— {step.narration || ''}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </>
+                          <details open style={styles.planFieldsDetails}>
+                            <summary style={styles.planFieldsSummary}>Plan details</summary>
+                            <PlanFields data={planPayload} excludeKeys={['contextChunk', 'chapterName']} />
+                          </details>
                         ) : (
                           <p style={{ fontSize: 12, color: '#c60', margin: '4px 0' }}>⚠ No interaction plan returned — generating from image only.</p>
                         )}
@@ -1825,20 +1794,10 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
                 <>
                   <p style={styles.viewerPlanTitle}>Planner Output</p>
                   {selectedPlan.chapterName && <p style={styles.viewerPlanMeta}>Chapter: {selectedPlan.chapterName}</p>}
-                  {planPayload?.concept && <p style={styles.viewerPlanConcept}>{planPayload.concept}</p>}
-                  {planPayload?.elements?.length > 0 && (
-                    <p style={styles.viewerPlanLine}>Elements: {planPayload.elements.join(', ')}</p>
-                  )}
-                  {planPayload?.interactions?.length > 0 && (
-                    <p style={styles.viewerPlanLine}>Interactions: {planPayload.interactions.map(i => i.label || i.type).join(', ')}</p>
-                  )}
-                  {planPayload?.demo_steps?.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      {planPayload.demo_steps.map((step, i) => (
-                        <p key={i} style={styles.viewerPlanLine}>Step {i + 1}: {step.title || `Step ${i + 1}`}</p>
-                      ))}
-                    </div>
-                  )}
+                  <details open style={styles.planFieldsDetails}>
+                    <summary style={styles.planFieldsSummary}>Plan details</summary>
+                    <PlanFields data={planPayload} excludeKeys={['contextChunk', 'chapterName']} />
+                  </details>
                   <details>
                     <summary style={styles.viewerPlanSummary}>Show raw plan JSON</summary>
                     <pre style={styles.viewerPlanRaw}>{JSON.stringify(selectedPlan, null, 2)}</pre>
@@ -2272,6 +2231,14 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
         <p style={styles.evalNotes}>{evaluation.notes}</p>
       )}
 
+      <details open style={styles.planFieldsDetails}>
+        <summary style={styles.planFieldsSummary}>Full evaluation details</summary>
+        <PlanFields
+          data={evaluation}
+          excludeKeys={['geometry_accuracy', 'interactivity_usability', 'faithfulness', 'label_quality', 'concept_accuracy', 'visual_aesthetics', 'overall_average', 'failure_modes', 'notes']}
+        />
+      </details>
+
     </div>
   );
 }
@@ -2372,6 +2339,76 @@ function CardFailureModes({ modes }) {
 // ── Helpers ────────────────────────────────────────────────────────────────
 function humanTitle(stem) {
   return stem.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Turns any object key (snake_case, camelCase, or plain) into a readable label.
+function formatPlanKey(key) {
+  return key
+    .replace(/_/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function isEmptyPlanValue(value) {
+  if (value == null) return true;
+  if (typeof value === 'string') return value.trim() === '';
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'object') return Object.keys(value).length === 0;
+  return false;
+}
+
+// Renders a single plan value (string/number/bool/array/object) without assuming its shape.
+function PlanValue({ value, depth = 0 }) {
+  if (isEmptyPlanValue(value)) return null;
+
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return <span style={styles.planFieldValue}>{String(value)}</span>;
+  }
+
+  if (Array.isArray(value)) {
+    const allPrimitive = value.every(v => v == null || typeof v !== 'object');
+    if (allPrimitive) {
+      return <span style={styles.planFieldValue}>{value.filter(v => v != null).join(', ')}</span>;
+    }
+    return (
+      <div style={styles.planNestedList}>
+        {value.map((item, i) => (
+          <div key={i} style={styles.planNestedItem}>
+            {item != null && typeof item === 'object'
+              ? <PlanFields data={item} depth={depth + 1} />
+              : <span style={styles.planFieldValue}>{String(item)}</span>}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (typeof value === 'object') {
+    return <PlanFields data={value} depth={depth + 1} />;
+  }
+
+  return null;
+}
+
+// Renders every key in a plan-shaped object as a labeled row, recursing into nested
+// objects/arrays so the UI never has to know the plan's schema ahead of time.
+function PlanFields({ data, depth = 0, excludeKeys = [] }) {
+  if (!data || typeof data !== 'object') return null;
+  const entries = Object.entries(data).filter(
+    ([key, value]) => !excludeKeys.includes(key) && !isEmptyPlanValue(value)
+  );
+  if (entries.length === 0) return null;
+
+  return (
+    <div style={depth === 0 ? styles.planFieldsRoot : styles.planFieldsNested}>
+      {entries.map(([key, value]) => (
+        <div key={key} style={styles.planFieldRow}>
+          <span style={styles.planFieldLabel}>{formatPlanKey(key)}:</span>
+          <PlanValue value={value} depth={depth} />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function formatDuration(ms) {
@@ -3939,6 +3976,17 @@ const styles = {
   planInterLabel: { fontSize: 12, color: '#333', fontWeight: 500 },
   planInterTeaches: { fontSize: 11, color: '#888' },
   planContext: { fontSize: 10, color: '#999', background: '#fff', border: '1px solid #e8e8e8', borderRadius: 4, padding: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 150, overflowY: 'auto', marginTop: 4 },
+
+  // Generic plan field renderer (shows every key in a plan payload, regardless of schema)
+  planFieldsRoot: { display: 'flex', flexDirection: 'column', gap: 5 },
+  planFieldsNested: { display: 'flex', flexDirection: 'column', gap: 3, marginTop: 2, marginLeft: 10, paddingLeft: 8, borderLeft: '2px solid #e3ecf7' },
+  planFieldRow: { display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap' },
+  planFieldLabel: { fontSize: 10, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' },
+  planFieldValue: { fontSize: 12, color: '#333', lineHeight: 1.4, wordBreak: 'break-word' },
+  planNestedList: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2, width: '100%' },
+  planNestedItem: { background: '#fff', border: '1px solid #e8e8e8', borderRadius: 6, padding: '6px 8px' },
+  planFieldsDetails: { width: '100%' },
+  planFieldsSummary: { fontSize: 11, color: '#888', cursor: 'pointer', userSelect: 'none', marginBottom: 4 },
 
   // Mode toggle
   modeBtn: { padding: '6px 16px', borderRadius: 6, border: '1px solid #ddd', background: 'transparent', color: '#888', cursor: 'pointer', fontSize: 13, fontWeight: 500 },

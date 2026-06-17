@@ -24,7 +24,7 @@ const ROOT_DIR = path.join(__dirname, '..', '..');
 const QMD_DIR = ROOT_DIR;                                     // .qmd files live at repo root
 
 const PLANNER_MODEL = 'gemini-3.5-flash';
-const PLANNER_MAX_TOKENS = 8192;
+const PLANNER_MAX_TOKENS = 10240;
 
 // ── Context extraction ─────────────────────────────────────────────────────────
 
@@ -116,7 +116,8 @@ function loadChapterText(chapterName) {
 
 // ── LLM interaction planner (fast, small-token call) ────────────────────────
 
-function buildPlannerPrompt(useFewShot = true) { return `You are an expert at planning interactive 3D visualizations for textbook figures.
+function buildPlannerPrompt(useFewShot = true) {
+  return `You are an expert at planning interactive 3D visualizations for textbook figures.
 
 PRIMARY CONTEXT:
 The generated figure will usually be embedded INLINE on top of the original figure inside a PDF reader. It must behave as a same-size replacement, not as a standalone demo app.
@@ -153,6 +154,7 @@ Output ONLY valid JSON (no markdown, no explanation):
   ],
 
   "camera_suggestion": "description of ideal initial viewpoint and zoom level",
+  "view_reasoning": "REQUIRED step-by-step grounding, done BEFORE picking any camera_view numbers: (1) name the dominant baseline/axis/edge/ray visible in the source image and which screen direction it runs (e.g. left-right, diagonal toward upper-right, receding into the page), (2) state what azimuth_deg that visible direction implies and why (a baseline running left-right across the image means the camera is roughly broadside to it, often near 90 deg off the default; a baseline receding into the page/foreshortened toward a vanishing point means the camera looks more along it, near 0 deg), (3) name the foreshortening/tilt cue that implies elevation_deg.",
   "camera_view": {
     "projection": "orthographic",
     "azimuth_deg": number,
@@ -178,8 +180,8 @@ Rules:
 - Prefer direct manipulation or hidden state. Use compact sliders/toggles only when they directly control a meaningful figure variable, and assume they live near an edge without a filled panel.
 - Never plan visible buttons for Next/Reset/Animate; if a sequence is needed, trigger it by clicking a meaningful part of the figure.
 - Treat the initial camera/view as part of the plan. The generator should not invent a prettier or more dramatic 3D view; it should preserve the original apparent viewpoint, crop, label density, and whitespace.
-- camera_view is mandatory for 3D figures. Estimate it from the source image, not from taste:
-  - azimuth_deg: rotation around vertical Y axis. Use the visible direction of axes, plane edges, rays, and object faces.
+- camera_view is mandatory for 3D figures. Fill in view_reasoning FIRST, then derive camera_view's numbers from that reasoning — do not pick azimuth/elevation from taste or default to a "typical textbook angle" without tying it to a specific visible cue. A wrong azimuth is still wrong even if the resulting view looks plausible in isolation.
+  - azimuth_deg: rotation around vertical Y axis. Use the visible direction of axes, plane edges, rays, and object faces. Must match the direction named in view_reasoning step (1)/(2).
   - elevation_deg: angle above the ground/XZ plane. Shallow textbook diagrams are often 10-30 degrees; top-down views are higher.
   - roll_deg: usually 0 unless the original image is visibly tilted.
   - projection: use "orthographic". If the source has perspective cues, encode the apparent view through azimuth/elevation/zoom and explain the cue in view_notes.
@@ -261,6 +263,7 @@ Perspective projection equations derived geometrically. A 3D point P at world co
     }
   ],
   "camera_suggestion": "Side view looking along the Y-axis, slightly elevated, showing the full XZ plane with the pinhole at center-left and the projection plane to the right",
+  "view_reasoning": "(1) The dominant baseline is the optical axis from the pinhole to the projection plane, and in the source image it runs left-to-right across the page with the ray receding only slightly. (2) A baseline drawn left-to-right in a flat diagram means the camera looks roughly along the depth axis, broadside to nothing — azimuth stays near 0, not rotated toward the baseline. (3) The diagram is nearly flat/side-on with only slight vertical spread, implying a shallow elevation around 5-10 deg rather than a steep top-down tilt.",
   "camera_view": {
     "projection": "orthographic",
     "azimuth_deg": 0,
@@ -349,6 +352,7 @@ The parameter sigma adjusts the spatial extent of the Gaussian g(x; sigma) = (1 
     }
   ],
   "camera_suggestion": "Front-facing 2D orthographic view centered on the origin, x-axis spanning -4 to +4, y-axis from 0 to 1.1",
+  "view_reasoning": "(1) The curve and axes lie flat in a single plane facing the reader directly, with no visible depth axis or foreshortening on the axis lines. (2) A plot facing the viewer head-on with no foreshortened baseline means the camera must look straight along the plot's normal — for a curve built in the XY plane this means azimuth near 90 deg so the view is perpendicular to it, not along it. (3) No tilt or perspective cues are visible (tick marks are evenly spaced, axis lines are straight), implying elevation 0.",
   "camera_view": {
     "projection": "orthographic",
     "azimuth_deg": 90,
@@ -362,7 +366,8 @@ The parameter sigma adjusts the spatial extent of the Gaussian g(x; sigma) = (1 
   "notes": "Render the Gaussian curve as a smooth THREE.Line sampled at 200 points. For discrete stems use LineSegments from each integer sample down to y=0. Recompute all curve points reactively whenever sigma changes. For the domain toggle, keep both curves in the scene and show/hide rather than destroying geometry. The frequency-domain Gaussian has sigma_freq = 1 / (2 * pi * sigma_spatial) — for sigma in [0.5, 3] this gives sigma_freq in [0.053, 0.318], so the frequency axis must use x range [-0.5, 0.5] (Nyquist range) rather than the spatial domain's [-4, 4], otherwise the curve will be an invisible spike."
 }
 
-=== END EXAMPLE 2 ===` : ''}`; }
+=== END EXAMPLE 2 ===` : ''}`;
+}
 
 /**
  * Call the LLM to generate a quick interaction plan for one figure.
