@@ -76,6 +76,7 @@ function upsertEvaluation(record, evalModel, evaluation, evaluatedAt = new Date(
 
     if (extraMeta.criticModel) metaEntry.criticModel = extraMeta.criticModel;
     if (extraMeta.criticPromptLabel) metaEntry.criticPromptLabel = extraMeta.criticPromptLabel;
+    if (extraMeta.source) metaEntry.source = extraMeta.source;
 
     normalized.evaluationResults[evalModel] = evaluation;
     normalized.evaluationMeta[evalModel] = metaEntry;

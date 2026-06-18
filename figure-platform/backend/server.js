@@ -12,6 +12,7 @@ const {
   evaluateRecord,
   saveRecord,
 } = require('./figure_pipeline');
+const { evaluateFigure } = require('./evaluator');
 const { planForFigure, planChapter, PLANNER_MODEL } = require('./planner');
 const { plan2dFigure } = require('./planner-2d');
 const { listChapters, list3dCandidates, list2dCandidates } = require('./chapter-discovery');
@@ -496,6 +497,7 @@ async function generateFigureWithLoop({ base64, mediaType, filename, figureStem,
     record = upsertEvaluation(record, criticModelId, loopState.currentEvaluation, timestamp, {
       criticVersion: requestedCriticVersion,
       criticModel: criticModelId,
+      source: 'loop',
     });
   }
 
@@ -1092,17 +1094,10 @@ app.post('/api/evaluate-human', (req, res) => {
 });
 
 // ── POST /api/evaluate ────────────────────────────────────────────────────────
-// Manual re-evaluation endpoint (used for existing results without scores).
+// User-triggered evaluation endpoint. Routes through evaluator.js (external source).
 app.post('/api/evaluate', async (req, res) => {
   const { id, evalModel, criticVersion } = req.body;
   if (!id) return res.status(400).json({ error: 'id is required.' });
-
-  let criticPasses;
-  try {
-    criticPasses = resolveCriticPassesFromBody(req.body);
-  } catch (err) {
-    return res.status(err.statusCode || 400).json({ error: err.message });
-  }
 
   const filePath = path.join(RESULTS_DIR, `${id}.json`);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Result not found.' });
@@ -1112,9 +1107,16 @@ app.post('/api/evaluate', async (req, res) => {
   catch { return res.status(500).json({ error: 'Failed to read result file.' }); }
 
   try {
-    const result = await runEvaluation(record, filePath, evalModel, criticVersion, criticPasses);
+    const result = await evaluateFigure({ record, evalModel, criticVersion });
+    if (!result) {
+      return res.json({ skipped: true });
+    }
     if (result.skipped) {
-      return res.json({ skipped: true, criticPasses: 0 });
+      return res.json({ skipped: true, criticPasses: result.passCount ?? 0 });
+    }
+    if (result.record && filePath) {
+      saveRecord(result.record, filePath);
+      refreshHistoryManifestSafe();
     }
     return res.json({ ...result.evaluation, criticPasses: result.passCount });
   } catch (err) {
@@ -1376,13 +1378,6 @@ app.post('/api/experiments/evaluate', async (req, res) => {
   const { htmlPath, imagePath, evalModel, criticVersion } = req.body;
   if (!htmlPath) return res.status(400).json({ error: 'htmlPath required.' });
 
-  let criticPasses;
-  try {
-    criticPasses = resolveCriticPassesFromBody(req.body);
-  } catch (err) {
-    return res.status(err.statusCode || 400).json({ error: err.message });
-  }
-
   const absHtml = path.resolve(htmlPath);
   if (!fs.existsSync(absHtml)) return res.status(404).json({ error: 'HTML file not found.' });
 
@@ -1394,21 +1389,14 @@ app.post('/api/experiments/evaluate', async (req, res) => {
   }
 
   try {
-    const usedEvalModel = evalModel || CURRENT_CRITIC_MODEL;
-    const { evaluation, criticVersion: resolvedCriticVersion, skipped, passCount } = await evaluateRecord({
-      record: {
-        html,
-        source_base64: base64thumb,
-        source_media_type: 'image/png',
-      },
-      evalModel: usedEvalModel,
-      defaultEvalModel: CURRENT_CRITIC_MODEL,
-      criticVersionOverride: criticVersion,
-      criticPasses,
-    });
+    const record = { html, source_base64: base64thumb, source_media_type: 'image/png' };
+    const result = await evaluateFigure({ record, evalModel, criticVersion });
 
-    if (skipped) {
-      return res.json({ skipped: true, criticPasses: 0 });
+    if (!result) {
+      return res.json({ skipped: true });
+    }
+    if (result.skipped) {
+      return res.json({ skipped: true, criticPasses: result.passCount ?? 0 });
     }
 
     // Cache alongside the HTML file
@@ -1417,9 +1405,11 @@ app.post('/api/experiments/evaluate', async (req, res) => {
     if (fs.existsSync(evalPath)) {
       try { cached = materializeEvaluationViews(JSON.parse(fs.readFileSync(evalPath, 'utf-8'))); } catch { cached = {}; }
     }
-    const updatedCache = upsertEvaluation(cached, usedEvalModel, evaluation, new Date().toISOString(), {
-      criticVersion: resolvedCriticVersion,
+    const usedEvalModel = result.evalModel;
+    const updatedCache = upsertEvaluation(cached, usedEvalModel, result.evaluation, new Date().toISOString(), {
+      criticVersion: result.criticVersion,
       criticModel: usedEvalModel,
+      source: 'external',
     });
     saveRecord({
       evaluationResults: updatedCache.evaluationResults,
@@ -1427,7 +1417,7 @@ app.post('/api/experiments/evaluate', async (req, res) => {
       evaluationVersions: updatedCache.evaluationVersions,
     }, evalPath);
 
-    return res.json({ ...evaluation, criticPasses: passCount });
+    return res.json({ ...result.evaluation, criticPasses: result.passCount });
   } catch (err) {
     return res.status(500).json({ error: err?.message || 'Unknown error.' });
   }
