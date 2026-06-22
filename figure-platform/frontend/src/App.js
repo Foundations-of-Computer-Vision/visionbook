@@ -5,13 +5,11 @@ const FALLBACK_PROMPT = '(Loading system prompt from server…)';
 const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
 const PLANNER_MODEL_STORAGE_KEY = 'figure-platform:selectedPlannerModel';
 const CRITIC_MODEL_STORAGE_KEY = 'figure-platform:selectedCriticModel';
-const CRITIC_NAME_STORAGE_KEY = 'figure-platform:selectedCriticName';
 const EVALUATOR_MODEL_STORAGE_KEY = 'figure-platform:selectedEvaluatorModel';
 const EXPERIMENT_STORAGE_KEY = 'figure-platform:selectedExperiment';
 const FIGURE_TYPE_STORAGE_KEY = 'figure-platform:selectedFigureType';
 const CHAPTERS_STORAGE_KEY = 'figure-platform:selectedChapters';
 const BATCH_GEN_TYPE_STORAGE_KEY = 'figure-platform:batchGenType';
-const CRITIC_VERSION_STORAGE_KEY = 'figure-platform:selectedCriticVersion';
 const FEW_SHOT_STORAGE_KEY = 'figure-platform:fewShot';
 const HUMAN_EVAL_MODEL = 'human:manual';
 const DEFAULT_GENERATION_MODEL = 'gpt-5.5';
@@ -130,49 +128,6 @@ function upsertVersionedEvaluation(record, modelId, evaluation, { criticVersion,
   return normalized;
 }
 
-function collectCriticVersionSummaries(records) {
-  const buckets = new Map();
-
-  const ensureBucket = (versionId) => {
-    if (!versionId) return;
-    const summary = buckets.get(versionId) || {
-      versionId,
-      label: versionId,
-      count: 0,
-      latestAt: 0,
-      models: new Set(),
-    };
-    buckets.set(versionId, summary);
-    return summary;
-  };
-
-  for (const record of records || []) {
-    const versioned = record?.evaluationVersions || {};
-    for (const [versionId, bucket] of Object.entries(versioned)) {
-      const summary = ensureBucket(versionId);
-      if (!summary) continue;
-      const modelIds = Object.keys(bucket?.evaluationResults || {});
-      if (modelIds.length > 0) {
-        // Count each record once per critic version to avoid overcounting multi-model evaluations.
-        summary.count += 1;
-      }
-      for (const modelId of modelIds) {
-        summary.models.add(modelId);
-        const evaluatedAt = bucket?.evaluationMeta?.[modelId]?.evaluatedAt
-          ? new Date(bucket.evaluationMeta[modelId].evaluatedAt).getTime()
-          : 0;
-        summary.latestAt = Math.max(summary.latestAt, evaluatedAt);
-      }
-    }
-  }
-
-  return Array.from(buckets.values())
-    .sort((a, b) => b.latestAt - a.latestAt)
-    .map(entry => ({
-      ...entry,
-      models: Array.from(entry.models).sort(),
-    }));
-}
 
 function apiFetch(input, init = {}) {
   return fetch(input, {
@@ -571,7 +526,7 @@ export default function App() {
     } finally {
       setEvaluating(false);
     }
-  }, [currentRecord, currentCriticVersion, selectedEvaluatorModel, viewerEvaluationModel]);
+  }, [currentRecord, selectedEvaluatorModel, viewerEvaluationModel]);
 
   const handleSaveHumanEvaluation = useCallback(async ({ evaluation: humanEvaluation }) => {
     if (!currentRecord) return;
@@ -695,23 +650,6 @@ export default function App() {
   );
 }
 
-function CriticPassSelector({ value, onChange, compact = false, includeZero = true }) {
-  const passOptions = includeZero ? [0, 1, 2, 3] : [1, 2, 3];
-  return (
-    <div style={compact ? styles.criticPassCardCompact : styles.criticPassCard}>
-      <label style={compact ? styles.criticPassLabelCompact : styles.generatorModelLabel}>Critic Passes</label>
-      <select
-        style={compact ? styles.criticPassSelectCompact : styles.generatorModelSelect}
-        value={value}
-        onChange={e => onChange?.(Number(e.target.value))}
-      >
-        {passOptions.map(n => (
-          <option key={n} value={n}>{n} pass{n === 1 ? '' : 'es'}</option>
-        ))}
-      </select>
-    </div>
-  );
-}
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
 function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, experimentOptions, selectedExperiment, selectedModel, selectedPlannerModel, selectedCriticModel, onExperimentChange, onGeneratorModelChange, onPlannerModelChange, onCriticModelChange, figureType, onFigureTypeChange, fewShot = { planner: true, critic: true, orchestrator: true }, onFewShotChange }) {
@@ -837,7 +775,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       onError?.(`No ${batchGenType.toUpperCase()} candidates in the selected chapters.`);
       return;
     }
-    const has3dCandidates = filteredCandidates.some(candidate => candidate.type !== '2d');
     if (!selectedExperiment || !selectedExperiment.trim()) {
       onError?.('Select or type an experiment name before generating.');
       return;
@@ -933,7 +870,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
         setBookResumeState({ completedStems: cpData.completedStems });
         return;
       }
-    } catch {}
+    } catch { }
 
     await startBookGeneration([]);
   };
@@ -948,7 +885,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
     setBookResumeState(null);
     try {
       await apiFetch(`/api/book-checkpoint/${encodeURIComponent(selectedExperiment)}`, { method: 'DELETE' });
-    } catch {}
+    } catch { }
     await startBookGeneration([]);
   };
 
@@ -1007,26 +944,26 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
         const is2d = item.type === '2d';
         const loopResult = is2d
           ? await runGenerationJob2d({
-              base64: item.base64,
-              mediaType: item.mediaType,
-              filename: item.filename,
-              model: selectedModel || undefined,
-              plannerModel: selectedPlannerModel || undefined,
-              experiment: selectedExperiment || undefined,
-            })
+            base64: item.base64,
+            mediaType: item.mediaType,
+            filename: item.filename,
+            model: selectedModel || undefined,
+            plannerModel: selectedPlannerModel || undefined,
+            experiment: selectedExperiment || undefined,
+          })
           : await runGenerationLoop({
-              base64: item.base64,
-              mediaType: item.mediaType,
-              filename: item.filename,
-              figureStem: item.stem,
-              chapterName: item.chapterName,
-              model: selectedModel || undefined,
-              plannerModel: selectedPlannerModel || undefined,
-              evalModel: selectedCriticModel || undefined,
-              criticVersion: 'benchmark',
-              experiment: selectedExperiment || undefined,
-              fewShot,
-            });
+            base64: item.base64,
+            mediaType: item.mediaType,
+            filename: item.filename,
+            figureStem: item.stem,
+            chapterName: item.chapterName,
+            model: selectedModel || undefined,
+            plannerModel: selectedPlannerModel || undefined,
+            evalModel: selectedCriticModel || undefined,
+            criticVersion: 'benchmark',
+            experiment: selectedExperiment || undefined,
+            fewShot,
+          });
         if (bookAbortRef.current) { activeMap.delete(item.stem); return; }
         results.push({ figureStem: item.stem, chapter: item.chapterName, status: 'ok', figureId: loopResult.figureId });
         // Checkpoint successful figures so generation can be resumed if interrupted
@@ -1036,7 +973,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ stem: item.stem }),
           });
-        } catch {}
+        } catch { }
       } catch (err) {
         results.push({ figureStem: item.stem, chapter: item.chapterName, status: 'error', error: err.message });
       }
@@ -1074,13 +1011,13 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(summary),
       });
-    } catch (_) {}
+    } catch (_) { }
 
     // Delete checkpoint — run is complete, next run should start fresh
     if (!bookAbortRef.current) {
       try {
         await apiFetch(`/api/book-checkpoint/${encodeURIComponent(selectedExperiment)}`, { method: 'DELETE' });
-      } catch {}
+      } catch { }
     }
 
     setBookSummary(summary);
@@ -1423,173 +1360,173 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             const filteredForRender = batchGenType === 'both' ? chapterCandidates
               : chapterCandidates.filter(c => batchGenType === '2d' ? c.type === '2d' : c.type !== '2d');
             return (
-            <>
-              {/* Candidate thumbnail grid — clickable to go to single-figure mode */}
-              <div style={styles.candidateGrid}>
-                {chapterCandidates.map((c) => {
-                  const excluded = batchGenType !== 'both' && (batchGenType === '2d' ? c.type !== '2d' : c.type === '2d');
-                  const done = chapterResults.find(r => r.figureStem === c.stem);
-                  const isCurrent = chapterProgress?.active?.some(a => a.figureStem === c.stem);
-                  const borderColor = done ? (done.status === 'ok' ? '#4caf50' : '#e74c3c') : isCurrent ? '#4a90d9' : 'transparent';
-                  return (
-                    <div key={`${c.chapterName}/${c.stem}`} style={{ ...styles.candidateCard, border: `2px solid ${borderColor}`, opacity: excluded ? 0.25 : (chapterRunning && !isCurrent && !done ? 0.4 : 1), position: 'relative' }}>
-                      <img src={`data:${c.mediaType};base64,${c.base64}`} alt={c.stem} style={styles.candidateThumb}
-                        onClick={() => handleSelectCandidate(c)} />
-                      <div style={{ position: 'absolute', top: 4, left: 4, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: c.type === '2d' ? '#a855f7' : '#4a90d9', color: '#fff', letterSpacing: '0.5px' }}>
-                        {c.type === '2d' ? '2D' : '3D'}
-                      </div>
-                      <p style={styles.candidateName}>
-                        {done ? (done.status === 'ok' ? '✓ ' : '✗ ') : isCurrent ? '⏳ ' : ''}
-                        {c.stem}
-                      </p>
-                      {done && done.status === 'ok' && done.figureId && (
-                        <button
-                          style={{ position: 'absolute', top: 4, right: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
-                          onClick={(e) => { e.stopPropagation(); handlePreview(done.figureId, c.stem); }}
-                        >👁 View</button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Generate All / Stop button */}
-              {!chapterRunning ? (
-                <button
-                  style={{ ...styles.generateBtn, marginTop: 12, ...(!selectedModel ? styles.generateBtnDisabled : {}) }}
-                  onClick={handleRunChapter}
-                  disabled={!selectedModel}
-                >
-                  Generate {filteredForRender.length} Figure{filteredForRender.length !== 1 ? 's' : ''}
-                </button>
-              ) : (
-                <button
-                  style={{ ...styles.generateBtn, marginTop: 12, background: '#e74c3c', borderColor: '#e74c3c' }}
-                  onClick={handleAbortChapter}
-                >
-                  Stop After Current Figures
-                </button>
-              )}
-
-              {/* Live progress: figures currently running through the iterative loop */}
-              {chapterProgress && (
-                <div style={{ ...styles.planPanel, marginTop: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#333' }}>
-                      {chapterProgress.active?.length || 0} active ({chapterProgress.completed} / {chapterProgress.total} done)
-                    </span>
-                    <span style={{ fontSize: 11, color: '#888' }}>
-                      Concurrency: {chapterGenerationConcurrency}
-                    </span>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div style={{ height: 4, background: '#eee', borderRadius: 2, marginBottom: 10, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', background: '#4caf50', borderRadius: 2, transition: 'width 0.3s', width: `${(chapterProgress.completed / chapterProgress.total) * 100}%` }} />
-                  </div>
-
-                  {/* Show each active figure */}
-                  {chapterProgress.active?.map(a => {
-                    const planPayload = a.plan?.interactionPlan || a.plan;
+              <>
+                {/* Candidate thumbnail grid — clickable to go to single-figure mode */}
+                <div style={styles.candidateGrid}>
+                  {chapterCandidates.map((c) => {
+                    const excluded = batchGenType !== 'both' && (batchGenType === '2d' ? c.type !== '2d' : c.type === '2d');
+                    const done = chapterResults.find(r => r.figureStem === c.stem);
+                    const isCurrent = chapterProgress?.active?.some(a => a.figureStem === c.stem);
+                    const borderColor = done ? (done.status === 'ok' ? '#4caf50' : '#e74c3c') : isCurrent ? '#4a90d9' : 'transparent';
                     return (
-                      <div key={a.figureStem} style={{ marginBottom: 10, padding: '8px 10px', background: '#f8faff', borderRadius: 6, border: '1px solid #e0e8f0' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>
-                            🔄 {a.figureStem} — {a.phase}
-                          </span>
+                      <div key={`${c.chapterName}/${c.stem}`} style={{ ...styles.candidateCard, border: `2px solid ${borderColor}`, opacity: excluded ? 0.25 : (chapterRunning && !isCurrent && !done ? 0.4 : 1), position: 'relative' }}>
+                        <img src={`data:${c.mediaType};base64,${c.base64}`} alt={c.stem} style={styles.candidateThumb}
+                          onClick={() => handleSelectCandidate(c)} />
+                        <div style={{ position: 'absolute', top: 4, left: 4, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: c.type === '2d' ? '#a855f7' : '#4a90d9', color: '#fff', letterSpacing: '0.5px' }}>
+                          {c.type === '2d' ? '2D' : '3D'}
                         </div>
-                        {planPayload?.concept && (
-                          <p style={styles.planConcept}>{planPayload.concept}</p>
-                        )}
-                        {planPayload?.elements?.length > 0 && (
-                          <div style={{ marginBottom: 6 }}>
-                            <span style={styles.planSubhead}>Elements:</span>
-                            <span style={styles.planList}>{planPayload.elements.join(', ')}</span>
-                          </div>
-                        )}
-                        {planPayload?.interactions?.length > 0 && (
-                          <div style={{ marginBottom: 4 }}>
-                            <span style={styles.planSubhead}>Interactions:</span>
-                            {planPayload.interactions.map((inter, i) => (
-                              <div key={i} style={styles.planInteraction}>
-                                <span style={styles.planInterType}>{inter.type}</span>
-                                <span style={styles.planInterLabel}>{inter.label}</span>
-                                <span style={styles.planInterTeaches}>— {inter.teaches}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {planPayload?.demo_steps?.length > 0 && (
-                          <p style={styles.planList}>Demo steps: {planPayload.demo_steps.length}</p>
+                        <p style={styles.candidateName}>
+                          {done ? (done.status === 'ok' ? '✓ ' : '✗ ') : isCurrent ? '⏳ ' : ''}
+                          {c.stem}
+                        </p>
+                        {done && done.status === 'ok' && done.figureId && (
+                          <button
+                            style={{ position: 'absolute', top: 4, right: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
+                            onClick={(e) => { e.stopPropagation(); handlePreview(done.figureId, c.stem); }}
+                          >👁 View</button>
                         )}
                       </div>
                     );
                   })}
                 </div>
-              )}
 
-              {/* Completed results summary — shown during AND after generation */}
-              {chapterResults.length > 0 && (
-                <div style={{ ...styles.chapterPlansWrap, marginTop: 12 }}>
-                  <h4 style={{ margin: '0 0 8px', fontSize: 13, color: '#333' }}>
-                    Results: {chapterResults.filter(r => r.status === 'ok').length}/{chapterResults.length} {chapterRunning ? 'so far' : 'succeeded'}
-                  </h4>
-                  {chapterResults.map((r, i) => (
-                    <div key={r.figureStem} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12, borderBottom: '1px solid #f0f0f0' }}>
-                      <span style={{ color: r.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>
-                        {r.status === 'ok' ? '✓' : '✗'}
+                {/* Generate All / Stop button */}
+                {!chapterRunning ? (
+                  <button
+                    style={{ ...styles.generateBtn, marginTop: 12, ...(!selectedModel ? styles.generateBtnDisabled : {}) }}
+                    onClick={handleRunChapter}
+                    disabled={!selectedModel}
+                  >
+                    Generate {filteredForRender.length} Figure{filteredForRender.length !== 1 ? 's' : ''}
+                  </button>
+                ) : (
+                  <button
+                    style={{ ...styles.generateBtn, marginTop: 12, background: '#e74c3c', borderColor: '#e74c3c' }}
+                    onClick={handleAbortChapter}
+                  >
+                    Stop After Current Figures
+                  </button>
+                )}
+
+                {/* Live progress: figures currently running through the iterative loop */}
+                {chapterProgress && (
+                  <div style={{ ...styles.planPanel, marginTop: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#333' }}>
+                        {chapterProgress.active?.length || 0} active ({chapterProgress.completed} / {chapterProgress.total} done)
                       </span>
-                      <span style={{ flex: 1 }}>{r.figureStem}</span>
-                      {r.status === 'ok' && r.figureId && (
-                        <button
-                          style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
-                          onClick={() => handlePreview(r.figureId, r.figureStem)}
-                        >👁 View</button>
-                      )}
-                      {r.error && <span style={{ color: '#e74c3c', fontSize: 11 }}>{r.error}</span>}
+                      <span style={{ fontSize: 11, color: '#888' }}>
+                        Concurrency: {chapterGenerationConcurrency}
+                      </span>
                     </div>
-                  ))}
-                  {/* Auto-evaluation progress — shown while evaluating */}
-                  {batchEvalRunning && (
-                    <div style={{ marginTop: 10, padding: '8px 0' }}>
-                      <div style={{ fontSize: 12, color: '#6c5ce7', fontWeight: 600, marginBottom: 4 }}>
-                        🧪 Evaluating… {batchEvalProgress?.completed || 0}/{batchEvalProgress?.total || '?'}
-                        {batchEvalProgress?.current && <span style={{ fontWeight: 400, color: '#888' }}> — {batchEvalProgress.current}</span>}
-                      </div>
-                      <div style={{ height: 4, background: '#eee', borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', background: '#6c5ce7', borderRadius: 2, transition: 'width 0.3s', width: `${((batchEvalProgress?.completed || 0) / (batchEvalProgress?.total || 1)) * 100}%` }} />
-                      </div>
-                    </div>
-                  )}
 
-                  {/* Show eval scores inline */}
-                  {Object.keys(batchEvalResults).length > 0 && (
-                    <div style={{ marginTop: 8, padding: '6px 0', borderTop: '1px solid #e0e0e0' }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#6c5ce7' }}>Evaluation Scores:</span>
-                      {chapterResults.filter(r => r.status === 'ok' && batchEvalResults[r.figureId]).map(r => {
-                        const ev = batchEvalResults[r.figureId];
-                        return (
-                          <div key={r.figureId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 11, color: '#555' }}>
-                            <span style={{ color: ev.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>
-                              {ev.status === 'ok' ? '✓' : '✗'}
+                    {/* Progress bar */}
+                    <div style={{ height: 4, background: '#eee', borderRadius: 2, marginBottom: 10, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', background: '#4caf50', borderRadius: 2, transition: 'width 0.3s', width: `${(chapterProgress.completed / chapterProgress.total) * 100}%` }} />
+                    </div>
+
+                    {/* Show each active figure */}
+                    {chapterProgress.active?.map(a => {
+                      const planPayload = a.plan?.interactionPlan || a.plan;
+                      return (
+                        <div key={a.figureStem} style={{ marginBottom: 10, padding: '8px 10px', background: '#f8faff', borderRadius: 6, border: '1px solid #e0e8f0' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>
+                              🔄 {a.figureStem} — {a.phase}
                             </span>
-                            <span style={{ flex: 1 }}>{r.figureStem}</span>
-                            {ev.evaluation?.overall_average != null && (
-                              <span style={{ fontWeight: 700, color: ev.evaluation.overall_average >= 4 ? '#4caf50' : ev.evaluation.overall_average >= 3 ? '#f39c12' : '#e74c3c' }}>
-                                {ev.evaluation.overall_average.toFixed(1)}/5
-                              </span>
-                            )}
-                            {ev.error && <span style={{ color: '#e74c3c' }}>{ev.error}</span>}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          {planPayload?.concept && (
+                            <p style={styles.planConcept}>{planPayload.concept}</p>
+                          )}
+                          {planPayload?.elements?.length > 0 && (
+                            <div style={{ marginBottom: 6 }}>
+                              <span style={styles.planSubhead}>Elements:</span>
+                              <span style={styles.planList}>{planPayload.elements.join(', ')}</span>
+                            </div>
+                          )}
+                          {planPayload?.interactions?.length > 0 && (
+                            <div style={{ marginBottom: 4 }}>
+                              <span style={styles.planSubhead}>Interactions:</span>
+                              {planPayload.interactions.map((inter, i) => (
+                                <div key={i} style={styles.planInteraction}>
+                                  <span style={styles.planInterType}>{inter.type}</span>
+                                  <span style={styles.planInterLabel}>{inter.label}</span>
+                                  <span style={styles.planInterTeaches}>— {inter.teaches}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {planPayload?.demo_steps?.length > 0 && (
+                            <p style={styles.planList}>Demo steps: {planPayload.demo_steps.length}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-                  {!chapterRunning && <p style={{ fontSize: 11, color: '#888', marginTop: 8 }}>Also available in the Results tab.</p>}
-                </div>
-              )}
-            </>
+                {/* Completed results summary — shown during AND after generation */}
+                {chapterResults.length > 0 && (
+                  <div style={{ ...styles.chapterPlansWrap, marginTop: 12 }}>
+                    <h4 style={{ margin: '0 0 8px', fontSize: 13, color: '#333' }}>
+                      Results: {chapterResults.filter(r => r.status === 'ok').length}/{chapterResults.length} {chapterRunning ? 'so far' : 'succeeded'}
+                    </h4>
+                    {chapterResults.map((r, i) => (
+                      <div key={r.figureStem} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12, borderBottom: '1px solid #f0f0f0' }}>
+                        <span style={{ color: r.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>
+                          {r.status === 'ok' ? '✓' : '✗'}
+                        </span>
+                        <span style={{ flex: 1 }}>{r.figureStem}</span>
+                        {r.status === 'ok' && r.figureId && (
+                          <button
+                            style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
+                            onClick={() => handlePreview(r.figureId, r.figureStem)}
+                          >👁 View</button>
+                        )}
+                        {r.error && <span style={{ color: '#e74c3c', fontSize: 11 }}>{r.error}</span>}
+                      </div>
+                    ))}
+                    {/* Auto-evaluation progress — shown while evaluating */}
+                    {batchEvalRunning && (
+                      <div style={{ marginTop: 10, padding: '8px 0' }}>
+                        <div style={{ fontSize: 12, color: '#6c5ce7', fontWeight: 600, marginBottom: 4 }}>
+                          🧪 Evaluating… {batchEvalProgress?.completed || 0}/{batchEvalProgress?.total || '?'}
+                          {batchEvalProgress?.current && <span style={{ fontWeight: 400, color: '#888' }}> — {batchEvalProgress.current}</span>}
+                        </div>
+                        <div style={{ height: 4, background: '#eee', borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', background: '#6c5ce7', borderRadius: 2, transition: 'width 0.3s', width: `${((batchEvalProgress?.completed || 0) / (batchEvalProgress?.total || 1)) * 100}%` }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Show eval scores inline */}
+                    {Object.keys(batchEvalResults).length > 0 && (
+                      <div style={{ marginTop: 8, padding: '6px 0', borderTop: '1px solid #e0e0e0' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#6c5ce7' }}>Evaluation Scores:</span>
+                        {chapterResults.filter(r => r.status === 'ok' && batchEvalResults[r.figureId]).map(r => {
+                          const ev = batchEvalResults[r.figureId];
+                          return (
+                            <div key={r.figureId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 11, color: '#555' }}>
+                              <span style={{ color: ev.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>
+                                {ev.status === 'ok' ? '✓' : '✗'}
+                              </span>
+                              <span style={{ flex: 1 }}>{r.figureStem}</span>
+                              {ev.evaluation?.overall_average != null && (
+                                <span style={{ fontWeight: 700, color: ev.evaluation.overall_average >= 4 ? '#4caf50' : ev.evaluation.overall_average >= 3 ? '#f39c12' : '#e74c3c' }}>
+                                  {ev.evaluation.overall_average.toFixed(1)}/5
+                                </span>
+                              )}
+                              {ev.error && <span style={{ color: '#e74c3c' }}>{ev.error}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {!chapterRunning && <p style={{ fontSize: 11, color: '#888', marginTop: 8 }}>Also available in the Results tab.</p>}
+                  </div>
+                )}
+              </>
             );
           })()}
 
@@ -2422,7 +2359,7 @@ function LazyThumb({ htmlPath, style }) {
       apiFetch('/api/experiments/thumb?path=' + encodeURIComponent(htmlPath))
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`); })
-        .catch(() => {});
+        .catch(() => { });
     }, { rootMargin: '200px' });
     observer.observe(el);
     return () => { cancelled = true; observer.disconnect(); };
@@ -2433,8 +2370,8 @@ function LazyThumb({ htmlPath, style }) {
       {src
         ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         : <div style={{ width: '100%', height: '100%', background: '#e8e8e8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 10, color: '#bbb' }}>…</span>
-          </div>
+          <span style={{ fontSize: 10, color: '#bbb' }}>…</span>
+        </div>
       }
     </div>
   );
@@ -2457,7 +2394,7 @@ function LazyApiThumb({ id, base64thumb, mediaType, style }) {
       apiFetch('/api/thumb/' + encodeURIComponent(id))
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`); })
-        .catch(() => {});
+        .catch(() => { });
     }, { rootMargin: '200px' });
     observer.observe(el);
     return () => { cancelled = true; observer.disconnect(); };
@@ -3650,7 +3587,7 @@ function DashboardTab({ currentCriticVersion }) {
   const [view, setView] = React.useState('models');
   React.useEffect(() => {
     Promise.all([
-      apiFetch('/api/history').then(r => r.json()),
+      apiFetch('/api/history-index').then(r => r.json()),
       apiFetch('/api/experiments').then(r => r.json()),
     ])
       .then(([api, exp]) => { setApiRecords(api); setExpTree(exp); setLoading(false); })
