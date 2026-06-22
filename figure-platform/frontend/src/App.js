@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import BENCHMARK_FIGURES from './benchmarkFigures';
 
 const FALLBACK_PROMPT = '(Loading system prompt from server…)';
 const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
@@ -768,6 +769,14 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
   const [bookResumeState, setBookResumeState] = useState(null); // { completedStems: [] } when resume prompt is showing
   const bookAbortRef = React.useRef(false);
 
+  // Benchmark batch pipeline state
+  const benchmarkAbortRef = React.useRef(false);
+  const [benchmarkCandidates, setBenchmarkCandidates] = useState([]);
+  const [benchmarkLoading, setBenchmarkLoading] = useState(false);
+  const [benchmarkRunning, setBenchmarkRunning] = useState(false);
+  const [benchmarkProgress, setBenchmarkProgress] = useState(null);
+  const [benchmarkResults, setBenchmarkResults] = useState([]);
+
   // Deferred batch evaluation state
   const [batchEvalRunning, setBatchEvalRunning] = useState(false);
   const [batchEvalProgress, setBatchEvalProgress] = useState(null); // { completed, total, current }
@@ -1114,6 +1123,92 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 
   const handleAbortBook = () => { bookAbortRef.current = true; };
 
+  // Load benchmark candidates when switching to benchmark mode
+  React.useEffect(() => {
+    if (mode !== 'benchmark') return;
+    setBenchmarkLoading(true);
+    const byChapter = {};
+    for (const { chapter, stem } of BENCHMARK_FIGURES) {
+      if (!byChapter[chapter]) byChapter[chapter] = new Set();
+      byChapter[chapter].add(stem);
+    }
+    Promise.all(
+      Object.entries(byChapter).map(([ch, stems]) =>
+        apiFetch(`/api/chapter-candidates/${encodeURIComponent(ch)}`)
+          .then(r => r.json())
+          .then(data => data.filter(c => stems.has(c.stem)).map(c => ({ ...c, chapterName: ch })))
+          .catch(() => [])
+      )
+    ).then(arrays => {
+      const stemOrder = BENCHMARK_FIGURES.map(f => f.stem);
+      const flat = arrays.flat();
+      flat.sort((a, b) => stemOrder.indexOf(a.stem) - stemOrder.indexOf(b.stem));
+      setBenchmarkCandidates(flat);
+      setBenchmarkLoading(false);
+    });
+  }, [mode]);
+
+  const handleRunBenchmark = async () => {
+    if (benchmarkCandidates.length === 0) return;
+    if (!selectedModel) { onError?.('Set a generator model in Settings first.'); return; }
+    if (!selectedCriticName?.trim()) { onError?.('Select or type a critic version name before generating.'); return; }
+    if (!selectedExperiment?.trim()) { onError?.('Select or type an experiment name before generating.'); return; }
+
+    setBenchmarkRunning(true);
+    setBenchmarkResults([]);
+    benchmarkAbortRef.current = false;
+
+    const total = benchmarkCandidates.length;
+    const results = [];
+    const activeMap = new Map();
+
+    const updateProgress = () => {
+      setBenchmarkProgress({ completed: results.length, total, active: [...activeMap.values()] });
+    };
+
+    const processFigure = async (candidate) => {
+      if (benchmarkAbortRef.current) return;
+      activeMap.set(candidate.stem, { figureStem: candidate.stem, phase: 'looping' });
+      updateProgress();
+      try {
+        const loopResult = await runGenerationLoop({
+          base64: candidate.base64,
+          mediaType: candidate.mediaType,
+          filename: candidate.filename,
+          figureStem: candidate.stem,
+          chapterName: candidate.chapterName,
+          model: selectedModel || undefined,
+          plannerModel: selectedPlannerModel || undefined,
+          evalModel: selectedCriticModel || undefined,
+          criticVersion: selectedCriticName || undefined,
+          experiment: selectedExperiment || undefined,
+          fewShot,
+        });
+        if (benchmarkAbortRef.current) { activeMap.delete(candidate.stem); return; }
+        results.push({ figureStem: candidate.stem, status: 'ok', figureId: loopResult.figureId });
+      } catch (err) {
+        results.push({ figureStem: candidate.stem, status: 'error', error: err.message });
+      }
+      activeMap.delete(candidate.stem);
+      setBenchmarkResults([...results]);
+      updateProgress();
+    };
+
+    const queue = [...benchmarkCandidates];
+    const runWorker = async () => {
+      while (queue.length > 0 && !benchmarkAbortRef.current) {
+        const candidate = queue.shift();
+        if (candidate) await processFigure(candidate);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(chapterGenerationConcurrency, total) }, () => runWorker()));
+
+    setBenchmarkProgress(null);
+    setBenchmarkRunning(false);
+  };
+
+  const handleAbortBenchmark = () => { benchmarkAbortRef.current = true; };
+
   // Select a chapter candidate to load it into the figure drop zone (still works for individual)
   const handleSelectCandidate = (candidate) => {
     if (chapterRunning) return; // don't interrupt batch
@@ -1143,6 +1238,10 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
           style={{ ...styles.modeBtn, ...(mode === 'book' ? styles.modeBtnActive : {}) }}
           onClick={() => setMode('book')}
         >Generate Entire Book</button>
+        <button
+          style={{ ...styles.modeBtn, ...(mode === 'benchmark' ? styles.modeBtnActive : {}) }}
+          onClick={() => setMode('benchmark')}
+        >Benchmark (30)</button>
       </div>
       <details style={styles.generatorSettingsDetails}>
         <summary style={styles.generatorSettingsSummary}>Settings</summary>
@@ -1557,7 +1656,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             <p style={{ fontSize: 12, color: '#aaa', marginTop: 12 }}>No candidates found for the selected chapters.</p>
           )}
         </div>
-      ) : (
+      ) : mode === 'book' ? (
         /* Book mode */
         <div style={styles.bookMode}>
           <p style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>
@@ -1667,6 +1766,123 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
                 </div>
               )}
             </div>
+          )}
+        </div>
+      ) : (
+        /* Benchmark mode */
+        <div style={styles.chapterMode}>
+          <p style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>
+            Runs the fixed benchmark set of {BENCHMARK_FIGURES.length} figures concurrently (up to {chapterGenerationConcurrency} at a time). Edit <code>src/benchmarkFigures.js</code> to change the list.
+          </p>
+
+          {benchmarkLoading && <p style={{ fontSize: 12, color: '#888' }}>Loading benchmark candidates…</p>}
+
+          {!benchmarkLoading && benchmarkCandidates.length > 0 && (
+            <>
+              <div style={styles.candidateGrid}>
+                {benchmarkCandidates.map((c) => {
+                  const done = benchmarkResults.find(r => r.figureStem === c.stem);
+                  const isCurrent = benchmarkProgress?.active?.some(a => a.figureStem === c.stem);
+                  const borderColor = done ? (done.status === 'ok' ? '#4caf50' : '#e74c3c') : isCurrent ? '#4a90d9' : 'transparent';
+                  return (
+                    <div key={`${c.chapterName}/${c.stem}`} style={{ ...styles.candidateCard, border: `2px solid ${borderColor}`, opacity: benchmarkRunning && !isCurrent && !done ? 0.4 : 1, position: 'relative' }}>
+                      <img src={`data:${c.mediaType};base64,${c.base64}`} alt={c.stem} style={styles.candidateThumb}
+                        onClick={() => handleSelectCandidate(c)} />
+                      <p style={styles.candidateName}>
+                        {done ? (done.status === 'ok' ? '✓ ' : '✗ ') : isCurrent ? '⏳ ' : ''}
+                        {c.stem}
+                      </p>
+                      <p style={{ fontSize: 9, color: '#aaa', margin: '-4px 0 0', padding: '0 4px', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.chapterName}</p>
+                      {done && done.status === 'ok' && done.figureId && (
+                        <button
+                          style={{ position: 'absolute', top: 4, right: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={(e) => { e.stopPropagation(); handlePreview(done.figureId, c.stem); }}
+                        >👁 View</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {!benchmarkRunning ? (
+                <button
+                  style={{ ...styles.generateBtn, marginTop: 12, ...(!selectedModel ? styles.generateBtnDisabled : {}) }}
+                  onClick={handleRunBenchmark}
+                  disabled={!selectedModel}
+                >
+                  Run Benchmark ({benchmarkCandidates.length} figures)
+                </button>
+              ) : (
+                <button
+                  style={{ ...styles.generateBtn, marginTop: 12, background: '#e74c3c', borderColor: '#e74c3c' }}
+                  onClick={handleAbortBenchmark}
+                >
+                  Stop After Current Figures
+                </button>
+              )}
+
+              {benchmarkProgress && (
+                <div style={{ ...styles.planPanel, marginTop: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#333' }}>
+                      {benchmarkProgress.active?.length || 0} active ({benchmarkProgress.completed} / {benchmarkProgress.total} done)
+                    </span>
+                    <span style={{ fontSize: 11, color: '#888' }}>Concurrency: {chapterGenerationConcurrency}</span>
+                  </div>
+                  <div style={{ height: 4, background: '#eee', borderRadius: 2, marginBottom: 8, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: '#4caf50', borderRadius: 2, transition: 'width 0.3s', width: `${(benchmarkProgress.completed / benchmarkProgress.total) * 100}%` }} />
+                  </div>
+                  {benchmarkProgress.active?.map(a => (
+                    <div key={a.figureStem} style={{ marginBottom: 4, padding: '4px 8px', background: '#f8faff', borderRadius: 4, border: '1px solid #e0e8f0', fontSize: 12 }}>
+                      <span style={{ fontWeight: 600 }}>⏳ {a.figureStem}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {benchmarkResults.length > 0 && (
+                <div style={{ ...styles.chapterPlansWrap, marginTop: 12 }}>
+                  <h4 style={{ margin: '0 0 8px', fontSize: 13, color: '#333' }}>
+                    Results: {benchmarkResults.filter(r => r.status === 'ok').length}/{benchmarkResults.length} {benchmarkRunning ? 'so far' : 'succeeded'}
+                  </h4>
+                  {benchmarkResults.map((r) => (
+                    <div key={r.figureStem} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12, borderBottom: '1px solid #f0f0f0' }}>
+                      <span style={{ color: r.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>
+                        {r.status === 'ok' ? '✓' : '✗'}
+                      </span>
+                      <span style={{ flex: 1 }}>{r.figureStem}</span>
+                      {r.status === 'ok' && r.figureId && (
+                        <button
+                          style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={() => handlePreview(r.figureId, r.figureStem)}
+                        >👁 View</button>
+                      )}
+                      {r.error && <span style={{ color: '#e74c3c', fontSize: 11 }}>{r.error}</span>}
+                    </div>
+                  ))}
+                  {!benchmarkRunning && <p style={{ fontSize: 11, color: '#888', marginTop: 8 }}>Also available in the Results tab.</p>}
+                </div>
+              )}
+
+              {benchmarkCandidates.length < BENCHMARK_FIGURES.length && (() => {
+                const foundStems = new Set(benchmarkCandidates.map(c => c.stem));
+                const missing = BENCHMARK_FIGURES.filter(f => !foundStems.has(f.stem));
+                return (
+                  <div style={{ fontSize: 11, color: '#c60', marginTop: 8 }}>
+                    <span style={{ fontWeight: 700 }}>Warning: {missing.length} figure(s) not found in chapter candidates:</span>
+                    {missing.map(f => (
+                      <div key={`${f.chapter}/${f.stem}`} style={{ paddingLeft: 8, marginTop: 2 }}>
+                        {f.chapter} / {f.stem}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </>
+          )}
+
+          {!benchmarkLoading && benchmarkCandidates.length === 0 && (
+            <p style={{ fontSize: 12, color: '#aaa', marginTop: 12 }}>No benchmark candidates loaded. Check that chapter candidates are available on the server.</p>
           )}
         </div>
       )}
