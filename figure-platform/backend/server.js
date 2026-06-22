@@ -402,7 +402,7 @@ async function generate2dFigure({ base64, mediaType, filename, plan, model: requ
  * Generate figure using auto-iterative loop
  * Runs plan → generate → critique → decide cycle, saving all iterations
  */
-async function generateFigureWithLoop({ base64, mediaType, filename, figureStem, chapterName, model: requestedModel, plannerModel: requestedPlannerModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, maxAttempts = 3, fewShot: requestedFewShot }) {
+async function generateFigureWithLoop({ base64, mediaType, filename, figureStem, chapterName, model: requestedModel, plannerModel: requestedPlannerModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, maxAttempts = 1, fewShot: requestedFewShot }) {
   const resolvedFigureStem = figureStem || (filename ? path.parse(filename).name : null);
 
   if (!base64 || !mediaType || !filename || !resolvedFigureStem) {
@@ -646,7 +646,7 @@ app.post('/api/book-checkpoint/:experiment', (req, res) => {
   const filePath = path.join(RESULTS_DIR, `checkpoint_${req.params.experiment}.json`);
   let completedStems = [];
   if (fs.existsSync(filePath)) {
-    try { completedStems = JSON.parse(fs.readFileSync(filePath, 'utf8')).completedStems || []; } catch {}
+    try { completedStems = JSON.parse(fs.readFileSync(filePath, 'utf8')).completedStems || []; } catch { }
   }
   if (!completedStems.includes(stem)) completedStems.push(stem);
   fs.writeFileSync(filePath, JSON.stringify({ completedStems }, null, 2));
