@@ -1,4 +1,67 @@
+const fs = require('fs');
+const path = require('path');
 const { generateWithModel } = require('./models');
+
+// ── Context extraction (moved from planner.js) ─────────────────────────────
+const QMD_DIR = path.join(__dirname, '..', '..');
+
+function findQmdFile(chapterName) {
+    if (!chapterName) return null;
+    const direct = path.join(QMD_DIR, `${chapterName}.qmd`);
+    if (fs.existsSync(direct)) return direct;
+    const candidates = fs.readdirSync(QMD_DIR).filter(f => f.endsWith('.qmd'));
+    const normalised = chapterName.toLowerCase().replace(/[-_ ]/g, '');
+    for (const c of candidates) {
+        const stem = c.replace(/\.qmd$/, '').toLowerCase().replace(/[-_ ]/g, '');
+        if (stem === normalised) return path.join(QMD_DIR, c);
+    }
+    for (const c of candidates) {
+        const stem = c.replace(/\.qmd$/, '').toLowerCase();
+        if (stem.includes(chapterName.toLowerCase()) || chapterName.toLowerCase().includes(stem)) {
+            return path.join(QMD_DIR, c);
+        }
+    }
+    return null;
+}
+
+function extractFigureContext(qmdContent, figureStem) {
+    const lines = qmdContent.split('\n');
+    const stemLower = figureStem.toLowerCase().replace(/\.[^.]+$/, '');
+    const contextRadius = 15;
+    const collected = new Set();
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].toLowerCase();
+        if (line.includes(stemLower) || line.includes(`/${stemLower}.`) || line.includes(`/${stemLower})`)) {
+            const start = Math.max(0, i - contextRadius);
+            const end = Math.min(lines.length - 1, i + contextRadius);
+            for (let j = start; j <= end; j++) collected.add(j);
+        }
+    }
+    if (collected.size === 0) return lines.slice(0, 40).join('\n');
+    const sortedIndices = [...collected].sort((a, b) => a - b);
+    const chunks = [];
+    let chunkStart = sortedIndices[0];
+    let chunkEnd = sortedIndices[0];
+    for (let k = 1; k < sortedIndices.length; k++) {
+        if (sortedIndices[k] <= chunkEnd + 3) {
+            chunkEnd = sortedIndices[k];
+        } else {
+            chunks.push(lines.slice(chunkStart, chunkEnd + 1).join('\n'));
+            chunkStart = sortedIndices[k];
+            chunkEnd = sortedIndices[k];
+        }
+    }
+    chunks.push(lines.slice(chunkStart, chunkEnd + 1).join('\n'));
+    return chunks.join('\n\n[...]\n\n');
+}
+
+function getContextChunk(figureStem, chapterName) {
+    if (!figureStem || !chapterName) return null;
+    const qmdPath = findQmdFile(chapterName);
+    if (!qmdPath) return null;
+    const qmdContent = fs.readFileSync(qmdPath, 'utf-8');
+    return extractFigureContext(qmdContent, figureStem);
+}
 
 // === Code Divider =============================================================
 const BASE_ROLE = 'You are an expert Three.js developer who converts 2D textbook figures into interactive 3D web visualizations.';
@@ -224,9 +287,12 @@ function buildPlanInjection(plan) {
     return parts.join('\n\n');
 }
 
-function buildGenerationUserText(plan) {
-    if (!plan) {
+function buildGenerationUserText(plan, contextChunk) {
+    if (!plan && !contextChunk) {
         return 'Analyse this figure carefully. Then output ONLY the scaffold fill-in payload using the required markers. No explanation, no markdown, no fences.';
+    }
+    if (!plan && contextChunk) {
+        return `CONTEXT FROM TEXTBOOK:\n${contextChunk.slice(0, 3000)}\n\nAnalyse this figure carefully. Then output ONLY the scaffold fill-in payload using the required markers. No explanation, no markdown, no fences.`;
     }
     return `${buildPlanInjection(plan)}\n\nFollow the interaction plan above. Output ONLY the scaffold fill-in payload using the required markers. No explanation, no markdown, no fences.`;
 }
@@ -405,6 +471,8 @@ async function generateFigureHtml({
     mediaType,
     base64,
     plan,
+    figureStem,
+    chapterName,
     userText,
     maxTokens = 16384,
     applyFixes = true,
@@ -412,7 +480,8 @@ async function generateFigureHtml({
     if (!modelId) throw new Error('modelId is required.');
     if (!scaffold) throw new Error('scaffold is required.');
     if (!mediaType || !base64) throw new Error('mediaType and base64 are required.');
-    const resolvedUserText = userText || buildGenerationUserText(plan);
+    const contextChunk = !plan ? getContextChunk(figureStem, chapterName) : null;
+    const resolvedUserText = userText || buildGenerationUserText(plan, contextChunk);
 
     if (!resolvedUserText) throw new Error('Could not resolve userText for generation.');
 
@@ -512,6 +581,8 @@ async function generateCode(opts) {
         modelId,
         mediaType,
         base64,
+        figureStem,
+        chapterName,
         userText,
         maxTokens = 16384,
         applyFixes = true,
@@ -523,7 +594,8 @@ async function generateCode(opts) {
 
     // REFINEMENT MODE: previous generation + evaluation feedback
     if (prevHtml && evaluation) {
-        const refinementUserText = userText || buildGenerationUserText(plan);
+        const contextChunk = !plan ? getContextChunk(figureStem, chapterName) : null;
+        const refinementUserText = userText || buildGenerationUserText(plan, contextChunk);
         return generateRefinedFigureHtml({
             modelId,
             scaffold,
@@ -538,14 +610,15 @@ async function generateCode(opts) {
     }
 
     // FRESH GENERATION MODE
-    const generationUserText = userText || buildGenerationUserText(plan);
     return generateFigureHtml({
         modelId,
         scaffold,
         mediaType,
         base64,
         plan,
-        userText: generationUserText,
+        figureStem,
+        chapterName,
+        userText,
         maxTokens,
         applyFixes,
     });
@@ -554,6 +627,7 @@ async function generateCode(opts) {
 module.exports = {
     buildGenerationSystemPrompt,
     buildGenerationUserText,
+    getContextChunk,
     generateFigureHtml,
     generateRefinedFigureHtml,
     generateCode,

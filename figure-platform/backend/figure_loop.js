@@ -1,17 +1,15 @@
 /**
- * figure_loop.js — orchestrates the complete plan → generate → critique → feedback loop
+ * figure_loop.js — orchestrates the generate → critique → feedback loop
  *
  * Implements an auto-iterative workflow:
- *   1. PLAN: Generate interaction blueprint
- *   2. GENERATE: Create 3D code from plan
- *   3. CRITIQUE: Evaluate with critic (5 metrics + failure modes + feedback)
- *   4. DECIDE: Use orchestrator to route fix_plan vs. refine_generation
- *   5. LOOP or EXIT
+ *   1. GENERATE: Create 3D code from figure image + textbook context
+ *   2. CRITIQUE: Evaluate with critic (5 metrics + failure modes + feedback)
+ *   3. DECIDE: Use orchestrator to route pass vs. refine_generation
+ *   4. LOOP or EXIT
  *
  * Tracks all iterations for audit trail and debugging.
  */
 
-const { planForFigure, refinePlan } = require('./planner');
 const { generateCode } = require('./generation');
 const { evaluateHtmlWithCritic } = require('./critic');
 const { decideFigureRefinement } = require('./orchestrator');
@@ -44,7 +42,6 @@ async function withRetry(label, fn, { retries = 3, baseDelay = 2500 } = {}) {
  * @param {string} opts.sourceMediaType - "image/png"
  * @param {number} [opts.maxAttempts=3] - max iterations before giving up
  * @param {number} [opts.passThreshold=4.0] - overall_average score needed to pass
- * @param {string} [opts.plannerModel='gpt-4o']
  * @param {string} [opts.generatorModel='gpt-4o']
  * @param {string} [opts.criticModel='claude-opus-4.7']
  * @returns {object} - complete loop state and results
@@ -59,10 +56,9 @@ async function runFigureLoop(opts) {
         sourceMediaType = 'image/png',
         maxAttempts = 3,
         passThreshold = 4.0,
-        plannerModel = 'gpt-4o',
         generatorModel = 'gpt-4o',
         criticModel = 'claude-opus-4.7',
-        fewShot = { planner: true, critic: true, orchestrator: true },
+        fewShot = { critic: true, orchestrator: true },
     } = opts;
 
     if (!figureStem) throw new Error('figureStem is required');
@@ -74,8 +70,7 @@ async function runFigureLoop(opts) {
     const loopState = {
         figureStem,
         chapterName: chapterName || null,
-        status: 'planning',                    // planning | generating | critiquing | reviewing | passed | failed_max_attempts | failed_unrecoverable
-        currentPlan: null,
+        status: 'generating',                  // generating | critiquing | reviewing | passed | failed_max_attempts | failed_unrecoverable
         currentHtml: null,
         currentEvaluation: null,
         currentFeedback: null,
@@ -90,36 +85,13 @@ async function runFigureLoop(opts) {
     try {
 
     // ─────────────────────────────────────────────────────────────────────────
-    // STEP 1: INITIAL PLAN
-    // ─────────────────────────────────────────────────────────────────────────
-    console.log(`Starting loop for ${figureStem}`);
-    loopState.status = 'planning';
-
-    try {
-        loopState.currentPlan = await withRetry(`plan:${figureStem}`, () =>
-            planForFigure(figureStem, chapterName, imageData, plannerModel, fewShot.planner !== false)
-        );
-        console.log(`Plan created`, { elements: loopState.currentPlan.interactionPlan?.elements?.length || 0 });
-    } catch (e) {
-        loopState.status = 'failed_planning';
-        loopState.attempts.push({
-            iteration: 0,
-            step: 'plan',
-            status: 'error',
-            error: e.message,
-        });
-        console.log(`PLAN FAILED: ${e.message}`);
-        return loopState;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
     // MAIN LOOP: GENERATE → CRITIQUE → REVIEW → DECIDE
     // ─────────────────────────────────────────────────────────────────────────
+    console.log(`Starting loop for ${figureStem}`);
     for (let attemptNum = 1; attemptNum <= maxAttempts; attemptNum++) {
         const attempt = {
             iteration: attemptNum,
             step: null,
-            plan: loopState.currentPlan,
             html: null,
             evaluation: null,
             feedback: null,
@@ -134,7 +106,8 @@ async function runFigureLoop(opts) {
         try {
             loopState.currentHtml = await withRetry(`generate:${figureStem}:attempt${attemptNum}`, () => generateCode({
                 scaffold,
-                plan: loopState.currentPlan,
+                figureStem,
+                chapterName,
                 prevHtml: loopState.attempts[attemptNum - 2]?.html || null,
                 evaluation: loopState.attempts[attemptNum - 2]?.evaluation || null,
                 modelId: generatorModel,
@@ -242,29 +215,7 @@ async function runFigureLoop(opts) {
         // ───── DECIDE & REFINE ─────
         console.log(`\nDeciding on refinement strategy: ${loopState.currentFeedback.next_step}`);
 
-        if (loopState.currentFeedback.next_step === 'fix_plan') {
-            console.log(`Refining plan...`);
-            attempt.refinement_type = 'plan';
-
-            try {
-                loopState.currentPlan = await withRetry(`refine-plan:${figureStem}:attempt${attemptNum}`, () => refinePlan(
-                    loopState.currentPlan,
-                    loopState.currentEvaluation,
-                    loopState.currentFeedback,
-                    figureStem,
-                    plannerModel,
-                    fewShot.planner !== false
-                ));
-                console.log(`Plan refined`);
-            } catch (e) {
-                attempt.status = 'plan_refinement_error';
-                attempt.error = e.message;
-                loopState.attempts.push(attempt);
-                console.log(`PLAN REFINEMENT FAILED: ${e.message}`);
-                loopState.status = 'failed_plan_refinement';
-                break;
-            }
-        } else if (loopState.currentFeedback.next_step === 'refine_generation') {
+        if (loopState.currentFeedback.next_step === 'refine_generation' || loopState.currentFeedback.next_step === 'fix_plan') {
             console.log(`Will refine generation on next iteration (using critic feedback)`);
             attempt.refinement_type = 'generation';
         }
