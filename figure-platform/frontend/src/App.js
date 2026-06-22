@@ -259,8 +259,6 @@ export default function App() {
   const [selectedPlannerModel, setSelectedPlannerModel] = useState('');
   const [selectedCriticModel, setSelectedCriticModel] = useState('');
   const [selectedEvaluatorModel, setSelectedEvaluatorModel] = useState('');
-  const [criticNameOptions, setCriticNameOptions] = useState([]);
-  const [selectedCriticName, setSelectedCriticName] = useState('');
   const [experimentOptions, setExperimentOptions] = useState([]);
   const [selectedExperiment, setSelectedExperiment] = useState('');
   const [fewShot, setFewShot] = useState({ planner: true, critic: true, orchestrator: true });
@@ -295,11 +293,6 @@ export default function App() {
       if (storedExperiment) setSelectedExperiment(storedExperiment);
       else if (newestExperiment) setSelectedExperiment(newestExperiment);
 
-      const storedCriticName = window.localStorage.getItem(CRITIC_NAME_STORAGE_KEY);
-      const newestCriticName = collectCriticVersionSummaries(historyRecords || [])[0]?.versionId || '';
-      if (storedCriticName) setSelectedCriticName(storedCriticName);
-      else if (newestCriticName) setSelectedCriticName(newestCriticName);
-
       const storedFigureType = window.localStorage.getItem(FIGURE_TYPE_STORAGE_KEY);
       if (storedFigureType === '2d' || storedFigureType === '3d') setFigureType(storedFigureType);
 
@@ -307,17 +300,11 @@ export default function App() {
       if (storedFewShot) { try { setFewShot(JSON.parse(storedFewShot)); } catch { } }
 
       const experimentSet = new Set();
-      const criticNameSet = new Set();
       for (const record of historyRecords || []) {
         if (record?.experiment) experimentSet.add(record.experiment);
-        for (const versionKey of Object.keys(record?.evaluationVersions || {})) {
-          if (versionKey) criticNameSet.add(versionKey);
-        }
       }
       const mergedExperiments = Array.from(experimentSet).sort();
-      const mergedCriticNames = Array.from(criticNameSet).sort();
       setExperimentOptions(mergedExperiments);
-      setCriticNameOptions(mergedCriticNames);
 
       if (list.length === 0) return;
 
@@ -362,10 +349,6 @@ export default function App() {
   useEffect(() => {
     if (selectedEvaluatorModel) window.localStorage.setItem(EVALUATOR_MODEL_STORAGE_KEY, selectedEvaluatorModel);
   }, [selectedEvaluatorModel]);
-  useEffect(() => {
-    if (selectedCriticName) window.localStorage.setItem(CRITIC_NAME_STORAGE_KEY, selectedCriticName);
-    else window.localStorage.removeItem(CRITIC_NAME_STORAGE_KEY);
-  }, [selectedCriticName]);
   useEffect(() => {
     if (selectedExperiment) window.localStorage.setItem(EXPERIMENT_STORAGE_KEY, selectedExperiment);
   }, [selectedExperiment]);
@@ -417,10 +400,6 @@ export default function App() {
       setError('Set a generator model in the Generator tab first.');
       return;
     }
-    if (!selectedCriticName || !selectedCriticName.trim()) {
-      setError('Select or type a critic version name before generating.');
-      return;
-    }
     if (!selectedExperiment || !selectedExperiment.trim()) {
       setError('Select or type an experiment name before generating.');
       return;
@@ -435,7 +414,7 @@ export default function App() {
       const jobFn = is2d ? runGenerationJob2d : runGenerationLoop;
       const payload = is2d
         ? { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined }
-        : { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined, evalModel: selectedCriticModel || undefined, criticVersion: selectedCriticName || undefined, criticPasses: 1, experiment: selectedExperiment || undefined, fewShot };
+        : { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined, evalModel: selectedCriticModel || undefined, criticVersion: 'benchmark', criticPasses: 1, experiment: selectedExperiment || undefined, fewShot };
       const data = await jobFn(payload);
       const generatedEvaluationResults = data.evaluationResults || {};
       const generatedEvaluationMeta = data.evaluationMeta || {};
@@ -468,7 +447,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [image, selectedCriticModel, selectedCriticName, selectedExperiment, selectedModel, selectedPlannerModel, tab, figureType, fewShot]);
+  }, [image, selectedCriticModel, selectedExperiment, selectedModel, selectedPlannerModel, tab, figureType, fewShot]);
   const handleLoadFromHistory = useCallback((record) => {
     const normalizedRecord = {
       ...record,
@@ -559,7 +538,7 @@ export default function App() {
             htmlPath: currentRecord.htmlPath,
             imagePath: currentRecord.imagePath,
             evalModel: evalModelToUse,
-            criticVersion: selectedCriticName || undefined,
+            criticVersion: 'benchmark',
           }),
         });
         data = await res.json();
@@ -570,7 +549,7 @@ export default function App() {
           body: JSON.stringify({
             id: currentRecord.id,
             evalModel: evalModelToUse,
-            criticVersion: selectedCriticName || undefined,
+            criticVersion: 'benchmark',
           }),
         });
         data = await res.json();
@@ -584,7 +563,7 @@ export default function App() {
       setCurrentRecord(prev => prev ? {
         ...prev,
         ...upsertVersionedEvaluation(prev, modelId || 'unknown', data, {
-          criticVersion: selectedCriticName || currentCriticVersion,
+          criticVersion: 'benchmark',
         }),
       } : prev);
     } catch (err) {
@@ -592,7 +571,7 @@ export default function App() {
     } finally {
       setEvaluating(false);
     }
-  }, [currentRecord, currentCriticVersion, selectedEvaluatorModel, selectedCriticName, viewerEvaluationModel]);
+  }, [currentRecord, currentCriticVersion, selectedEvaluatorModel, viewerEvaluationModel]);
 
   const handleSaveHumanEvaluation = useCallback(async ({ evaluation: humanEvaluation }) => {
     if (!currentRecord) return;
@@ -659,19 +638,15 @@ export default function App() {
             error={error}
             systemPrompt={systemPrompt}
             models={models}
-            criticNameOptions={criticNameOptions}
             experimentOptions={experimentOptions}
             selectedExperiment={selectedExperiment}
             selectedModel={selectedModel}
             selectedPlannerModel={selectedPlannerModel}
             selectedCriticModel={selectedCriticModel}
-            selectedCriticName={selectedCriticName}
-            currentCriticVersion={currentCriticVersion}
             onExperimentChange={setSelectedExperiment}
             onGeneratorModelChange={setSelectedModel}
             onPlannerModelChange={setSelectedPlannerModel}
             onCriticModelChange={setSelectedCriticModel}
-            onCriticNameChange={setSelectedCriticName}
             figureType={figureType}
             onFigureTypeChange={setFigureType}
             fewShot={fewShot}
@@ -739,7 +714,7 @@ function CriticPassSelector({ value, onChange, compact = false, includeZero = tr
 }
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, criticNameOptions, experimentOptions, selectedExperiment, selectedModel, selectedPlannerModel, selectedCriticModel, selectedCriticName, onExperimentChange, onGeneratorModelChange, onPlannerModelChange, onCriticModelChange, onCriticNameChange, figureType, onFigureTypeChange, fewShot = { planner: true, critic: true, orchestrator: true }, onFewShotChange }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, experimentOptions, selectedExperiment, selectedModel, selectedPlannerModel, selectedCriticModel, onExperimentChange, onGeneratorModelChange, onPlannerModelChange, onCriticModelChange, figureType, onFigureTypeChange, fewShot = { planner: true, critic: true, orchestrator: true }, onFewShotChange }) {
   const chapterGenerationConcurrency = 10;
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -863,10 +838,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
       return;
     }
     const has3dCandidates = filteredCandidates.some(candidate => candidate.type !== '2d');
-    if (has3dCandidates && (!selectedCriticName || !selectedCriticName.trim())) {
-      onError?.('Select or type a critic version name before generating.');
-      return;
-    }
     if (!selectedExperiment || !selectedExperiment.trim()) {
       onError?.('Select or type an experiment name before generating.');
       return;
@@ -911,7 +882,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
             model: selectedModel || undefined,
             plannerModel: selectedPlannerModel || undefined,
             evalModel: selectedCriticModel || undefined,
-            criticVersion: selectedCriticName || undefined,
+            criticVersion: 'benchmark',
             experiment: selectedExperiment || undefined,
             fewShot,
           });
@@ -949,10 +920,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
 
   const handleRunBook = async () => {
     if (!selectedModel) { onError?.('Set a generator model in the Settings first.'); return; }
-    if (!selectedCriticName || !selectedCriticName.trim()) {
-      onError?.('Select or type a critic version name before generating.');
-      return;
-    }
     if (!selectedExperiment || !selectedExperiment.trim()) {
       onError?.('Select or type an experiment name before generating.');
       return;
@@ -1056,7 +1023,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
               model: selectedModel || undefined,
               plannerModel: selectedPlannerModel || undefined,
               evalModel: selectedCriticModel || undefined,
-              criticVersion: selectedCriticName || undefined,
+              criticVersion: 'benchmark',
               experiment: selectedExperiment || undefined,
               fewShot,
             });
@@ -1151,7 +1118,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
   const handleRunBenchmark = async () => {
     if (benchmarkCandidates.length === 0) return;
     if (!selectedModel) { onError?.('Set a generator model in Settings first.'); return; }
-    if (!selectedCriticName?.trim()) { onError?.('Select or type a critic version name before generating.'); return; }
     if (!selectedExperiment?.trim()) { onError?.('Select or type an experiment name before generating.'); return; }
 
     setBenchmarkRunning(true);
@@ -1180,7 +1146,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
           model: selectedModel || undefined,
           plannerModel: selectedPlannerModel || undefined,
           evalModel: selectedCriticModel || undefined,
-          criticVersion: selectedCriticName || undefined,
+          criticVersion: 'benchmark',
           experiment: selectedExperiment || undefined,
           fewShot,
         });
@@ -1301,31 +1267,6 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, pl
               </div>
             </div>
             <div style={styles.generatorModelStack}>
-              <div style={styles.generatorControlCard}>
-                <label style={styles.generatorModelLabel}>Critic Version</label>
-                <div style={styles.generatorExperimentControls}>
-                  <select
-                    style={styles.generatorModelSelect}
-                    value={criticNameOptions.includes(selectedCriticName) ? selectedCriticName : ''}
-                    onChange={e => onCriticNameChange?.(e.target.value)}
-                    disabled={criticNameOptions.length === 0}
-                  >
-                    <option value="">Select a past critic name...</option>
-                    {criticNameOptions.map(name => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                  <input
-                    style={styles.generatorTextInput}
-                    value={selectedCriticName}
-                    onChange={e => onCriticNameChange?.(e.target.value)}
-                    placeholder="Or type a new critic name"
-                  />
-                </div>
-                <p style={styles.generatorHint}>
-                  Pick an existing name from the dropdown, or type a new one to create a fresh critic bucket.
-                </p>
-              </div>
               <div style={styles.generatorControlCard}>
                 <label style={styles.generatorModelLabel}>Critic Model</label>
                 <select
@@ -2670,9 +2611,6 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
   const [loadingAgent, setLoadingAgent] = React.useState(false);
   const [loadedApi, setLoadedApi] = React.useState(false);
   const [loadedAgent, setLoadedAgent] = React.useState(false);
-  const [selectedCriticVersion, setSelectedCriticVersion] = React.useState('');
-  const criticVersionInitializedRef = React.useRef(false);
-
   const loadApiRecords = React.useCallback(async ({ force = false } = {}) => {
     if (loadedApi && !force) return;
     setLoadingApi(true);
@@ -2770,40 +2708,13 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
     setLoading(activeTab === 'api' ? loadingApi : loadingAgent);
   }, [activeTab, loadingApi, loadingAgent]);
 
-  const criticVersionOptions = React.useMemo(() => {
-    const allRecords = [
-      ...apiRecords,
-      ...expTree.flatMap(exp => exp.models.flatMap(model => model.figures)),
-    ];
-    const options = collectCriticVersionSummaries(allRecords);
-    // Filter out 'default_critic' from the list
-    return options.filter(option => option.versionId !== 'default_critic');
-  }, [apiRecords, expTree]);
-
-  React.useEffect(() => {
-    if (criticVersionInitializedRef.current) return;
-    if (criticVersionOptions.length > 0) {
-      setSelectedCriticVersion(criticVersionOptions[0].versionId);
-      criticVersionInitializedRef.current = true;
-      return;
-    }
-    if (!loading && currentCriticVersion) {
-      setSelectedCriticVersion(currentCriticVersion);
-      criticVersionInitializedRef.current = true;
-    }
-  }, [criticVersionOptions, currentCriticVersion, loading]);
-
-  const selectedVersionLabel = React.useMemo(() => {
-    return selectedCriticVersion || '';
-  }, [selectedCriticVersion]);
-
   const evaluationCriticVersion = React.useMemo(() => {
-    return (selectedCriticVersion || currentCriticVersion || '').trim();
-  }, [selectedCriticVersion, currentCriticVersion]);
+    return (currentCriticVersion || '').trim();
+  }, [currentCriticVersion]);
 
   const selectedRecordView = React.useCallback(
-    (record) => getVersionedEvaluationState(record, selectedCriticVersion),
-    [selectedCriticVersion]
+    (record) => getVersionedEvaluationState(record, ''),
+    []
   );
 
   const hasSelectedEvaluation = React.useCallback(
@@ -3136,38 +3047,6 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
-      <div style={styles.criticVersionBar}>
-        <span style={styles.criticVersionBarLabel}>Critic version</span>
-        <div style={styles.criticVersionRail}>
-          {criticVersionOptions.length === 0 ? (
-            <span style={styles.criticVersionEmpty}>No critic versions yet</span>
-          ) : criticVersionOptions.map(option => {
-            const isActive = option.versionId === selectedCriticVersion;
-            return (
-              <button
-                key={option.versionId}
-                style={{
-                  ...styles.criticVersionPill,
-                  ...(isActive ? styles.criticVersionPillActive : {}),
-                }}
-                onClick={() => setSelectedCriticVersion(option.versionId)}
-                title={option.versionId}
-              >
-                <span>{option.label || option.versionId}</span>
-                <span style={styles.criticVersionCount}>{option.count}</span>
-              </button>
-            );
-          })}
-        </div>
-        <input
-          style={styles.criticVersionInput}
-          value={selectedCriticVersion}
-          onChange={e => setSelectedCriticVersion(e.target.value)}
-          placeholder="Type version for new evals"
-        />
-        <span style={styles.criticVersionMeta}>{selectedVersionLabel}</span>
-      </div>
-
       {/* Evaluator model selector */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderBottom: '1px solid #e8e8e8', background: '#fafafa' }}>
         <span style={{ fontSize: 10, color: '#888', whiteSpace: 'nowrap', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Eval model</span>
@@ -3769,17 +3648,6 @@ function DashboardTab({ currentCriticVersion }) {
   const [expTree, setExpTree] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [view, setView] = React.useState('models');
-  const [selectedCriticVersion, setSelectedCriticVersion] = React.useState('');
-  const criticVersionInitializedRef = React.useRef(false);
-
-  React.useEffect(() => {
-    const storedCriticVersion = window.localStorage.getItem(CRITIC_VERSION_STORAGE_KEY);
-    if (storedCriticVersion) {
-      setSelectedCriticVersion(storedCriticVersion);
-      criticVersionInitializedRef.current = true;
-    }
-  }, []);
-
   React.useEffect(() => {
     Promise.all([
       apiFetch('/api/history').then(r => r.json()),
@@ -3812,112 +3680,17 @@ function DashboardTab({ currentCriticVersion }) {
     return { agentRecords: agent, copilotRecords: copilot };
   }, [apiRecords, expTree]);
 
-  const criticVersionOptions = React.useMemo(() => {
-    const allRecords = [
-      ...apiRecords,
-      ...expTree.flatMap(exp => exp.models.flatMap(model => model.figures)),
-    ];
-    const options = collectCriticVersionSummaries(allRecords);
-    if (currentCriticVersion && !options.some(option => option.versionId === currentCriticVersion)) {
-      options.unshift({
-        versionId: currentCriticVersion,
-        label: currentCriticVersion,
-        count: 0,
-        latestAt: 0,
-        models: [],
-      });
-    }
-    return options;
-  }, [apiRecords, expTree, currentCriticVersion]);
-
-  React.useEffect(() => {
-    if (criticVersionInitializedRef.current) return;
-    if (criticVersionOptions.length > 0) {
-      setSelectedCriticVersion(criticVersionOptions[0].versionId);
-      criticVersionInitializedRef.current = true;
-      return;
-    }
-    if (!loading && currentCriticVersion) {
-      setSelectedCriticVersion(currentCriticVersion);
-      criticVersionInitializedRef.current = true;
-    }
-  }, [criticVersionOptions, currentCriticVersion, loading]);
-
-  React.useEffect(() => {
-    if (selectedCriticVersion) window.localStorage.setItem(CRITIC_VERSION_STORAGE_KEY, selectedCriticVersion);
-    else window.localStorage.removeItem(CRITIC_VERSION_STORAGE_KEY);
-  }, [selectedCriticVersion]);
-
-  const selectedVersionLabel = React.useMemo(() => {
-    return selectedCriticVersion || currentCriticVersion || '';
-  }, [currentCriticVersion, selectedCriticVersion]);
-
   const totalEval = [...agentRecords, ...copilotRecords]
-    .filter(r => hasAnyEvaluation(getVersionedEvaluationState(r, selectedCriticVersion))).length;
+    .filter(r => hasAnyEvaluation(getVersionedEvaluationState(r, ''))).length;
 
   if (loading) return <div style={styles.empty}>Loading…</div>;
   if (totalEval === 0)
-    return (
-      <div>
-        <div style={styles.criticVersionBar}>
-          <span style={styles.criticVersionBarLabel}>Critic version</span>
-          <div style={styles.criticVersionRail}>
-            {criticVersionOptions.length === 0 ? (
-              <span style={styles.criticVersionEmpty}>No critic versions yet</span>
-            ) : criticVersionOptions.map(option => {
-              const isActive = option.versionId === selectedCriticVersion;
-              return (
-                <button
-                  key={option.versionId}
-                  style={{
-                    ...styles.criticVersionPill,
-                    ...(isActive ? styles.criticVersionPillActive : {}),
-                  }}
-                  onClick={() => setSelectedCriticVersion(option.versionId)}
-                  title={option.versionId}
-                >
-                  <span>{option.label || option.versionId}</span>
-                  <span style={styles.criticVersionCount}>{option.count}</span>
-                </button>
-              );
-            })}
-          </div>
-          <span style={styles.criticVersionMeta}>{selectedVersionLabel}</span>
-        </div>
-        <div style={styles.empty}>No evaluated figures for this critic version yet.</div>
-      </div>
-    );
+    return <div style={styles.empty}>No evaluated figures yet.</div>;
 
   const groupKey = view === 'models' ? 'model' : 'experiment';
 
   return (
     <div>
-      <div style={{ ...styles.criticVersionBar, marginBottom: 12, borderRadius: 8 }}>
-        <span style={styles.criticVersionBarLabel}>Critic version</span>
-        <div style={styles.criticVersionRail}>
-          {criticVersionOptions.length === 0 ? (
-            <span style={styles.criticVersionEmpty}>No critic versions yet</span>
-          ) : criticVersionOptions.map(option => {
-            const isActive = option.versionId === selectedCriticVersion;
-            return (
-              <button
-                key={option.versionId}
-                style={{
-                  ...styles.criticVersionPill,
-                  ...(isActive ? styles.criticVersionPillActive : {}),
-                }}
-                onClick={() => setSelectedCriticVersion(option.versionId)}
-                title={option.versionId}
-              >
-                <span>{option.label || option.versionId}</span>
-                <span style={styles.criticVersionCount}>{option.count}</span>
-              </button>
-            );
-          })}
-        </div>
-        <span style={styles.criticVersionMeta}>{selectedVersionLabel}</span>
-      </div>
-
       {/* Tab bar */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18, borderBottom: '1px solid #e8e8e8' }}>
         {[['models', 'Compare Models'], ['experiments', 'Compare Experiments']].map(([id, label]) => (
@@ -3934,8 +3707,8 @@ function DashboardTab({ currentCriticVersion }) {
         </span>
       </div>
 
-      <SourceSection title="Agent" color="agent" records={agentRecords} groupKey={groupKey} criticVersion={selectedCriticVersion} />
-      <SourceSection title="Copilot" color="copilot" records={copilotRecords} groupKey={groupKey} criticVersion={selectedCriticVersion} />
+      <SourceSection title="Agent" color="agent" records={agentRecords} groupKey={groupKey} criticVersion="" />
+      <SourceSection title="Copilot" color="copilot" records={copilotRecords} groupKey={groupKey} criticVersion="" />
     </div>
   );
 }
