@@ -13,6 +13,7 @@ const {
   saveRecord,
 } = require('./figure_pipeline');
 const { evaluateFigure } = require('./evaluator');
+const { planForFigure, planChapter, PLANNER_MODEL } = require('./planner');
 const { plan2dFigure } = require('./planner-2d');
 const { listChapters, list3dCandidates, list2dCandidates } = require('./chapter-discovery');
 const { getAvailableModels } = require('./models');
@@ -44,7 +45,7 @@ const CURRENT_CRITIC_MODEL = 'gpt-4o';       // model used by evaluator by defau
 // CURRENT_EXPERIMENT is set below, after the system prompt is built.
 
 // ── Few-shot config — set each to false to ablate that component's examples ──
-const FEW_SHOT = { critic: false, orchestrator: false };
+const FEW_SHOT = { planner: false, critic: false, orchestrator: false };
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(cors({
@@ -107,6 +108,7 @@ app.get('/api/prompt', (req, res) => {
     experiment: CURRENT_EXPERIMENT,
     model: CURRENT_MODEL,
     criticModel: CURRENT_CRITIC_MODEL,
+    plannerModel: PLANNER_MODEL,
     criticVersion: CURRENT_CRITIC_VERSION,
   });
 });
@@ -146,6 +148,24 @@ app.get('/api/chapter-candidates/:chapter', (req, res) => {
   }
 });
 
+// ── POST /api/plan — plan for a single figure (fast, returns before generation) ──
+app.post('/api/plan', async (req, res) => {
+  const { filename, chapterHint, base64, mediaType, plannerModel } = req.body;
+  if (!filename) return res.status(400).json({ error: 'filename is required.' });
+
+  const stem = filename.replace(/\.[^.]+$/, '');
+  const chapter = chapterHint || null;
+  const imageData = base64 && mediaType ? { base64, mediaType } : undefined;
+
+  try {
+    const plan = await planForFigure(stem, chapter, imageData, plannerModel);
+    return res.json(plan);
+  } catch (err) {
+    console.error('Plan error:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'Planning failed.' });
+  }
+});
+
 // ── POST /api/plan-2d — image-first plan for inline ActiveReader overlays ────
 app.post('/api/plan-2d', async (req, res) => {
   const { filename, chapterHint, base64, mediaType } = req.body;
@@ -159,6 +179,20 @@ app.post('/api/plan-2d', async (req, res) => {
   } catch (err) {
     console.error('Plan-2d error:', err?.message || err);
     return res.status(500).json({ error: err?.message || '2D planning failed.' });
+  }
+});
+
+// ── POST /api/plan-chapter — plan all 3D candidates in a chapter ─────────────
+app.post('/api/plan-chapter', async (req, res) => {
+  const { chapter, plannerModel } = req.body;
+  if (!chapter) return res.status(400).json({ error: 'chapter is required.' });
+
+  try {
+    const plans = await planChapter(chapter, {}, plannerModel);
+    return res.json(plans);
+  } catch (err) {
+    console.error('Plan-chapter error:', err?.message || err);
+    return res.status(500).json({ error: err?.message || 'Chapter planning failed.' });
   }
 });
 
@@ -196,7 +230,7 @@ function resolveCriticPassesFromBody(body) {
   return resolveCriticPasses(value);
 }
 
-async function generateFigure({ base64, mediaType, filename, figureStem, chapterName, plan, model: requestedModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, evaluate = true, criticPasses: requestedCriticPasses, passes: requestedPasses }) {
+async function generateFigure({ base64, mediaType, filename, plan, model: requestedModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, evaluate = true, criticPasses: requestedCriticPasses, passes: requestedPasses }) {
   if (!base64 || !mediaType || !filename) {
     const err = new Error('base64, mediaType, and filename are required.');
     err.statusCode = 400;
@@ -223,15 +257,12 @@ async function generateFigure({ base64, mediaType, filename, figureStem, chapter
   }
   console.log(`[generate] requested="${requestedModel}" experiment="${requestedExperiment}" → using="${modelId}" | file=${filename}`);
 
-  const resolvedFigureStem = figureStem || (filename ? path.parse(filename).name : null);
   const html = await withRetry(() => generateFigureHtml({
     modelId,
     scaffold: BASE_SCAFFOLD,
     mediaType,
     base64,
     plan,
-    figureStem: resolvedFigureStem,
-    chapterName: chapterName || null,
     maxTokens: 16384,
     applyFixes: true,
   }));
@@ -371,7 +402,7 @@ async function generate2dFigure({ base64, mediaType, filename, plan, model: requ
  * Generate figure using auto-iterative loop
  * Runs plan → generate → critique → decide cycle, saving all iterations
  */
-async function generateFigureWithLoop({ base64, mediaType, filename, figureStem, chapterName, model: requestedModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, maxAttempts = 3, fewShot: requestedFewShot }) {
+async function generateFigureWithLoop({ base64, mediaType, filename, figureStem, chapterName, model: requestedModel, plannerModel: requestedPlannerModel, evalModel: requestedEvalModel, criticVersion: requestedCriticVersion, experiment: requestedExperiment, maxAttempts = 1, fewShot: requestedFewShot }) {
   const resolvedFigureStem = figureStem || (filename ? path.parse(filename).name : null);
 
   if (!base64 || !mediaType || !filename || !resolvedFigureStem) {
@@ -393,6 +424,7 @@ async function generateFigureWithLoop({ base64, mediaType, filename, figureStem,
   }
 
   const modelId = requestedModel || CURRENT_MODEL;
+  const plannerModelId = requestedPlannerModel || PLANNER_MODEL;
   const criticModelId = requestedEvalModel || CURRENT_CRITIC_MODEL;
   const experimentName = requestedExperiment.trim();
 
@@ -411,10 +443,17 @@ async function generateFigureWithLoop({ base64, mediaType, filename, figureStem,
     sourceMediaType: mediaType,
     maxAttempts,
     passThreshold: 4.0,
+    plannerModel: plannerModelId,
     generatorModel: modelId,
     criticModel: criticModelId,
     fewShot: requestedFewShot || FEW_SHOT,
   });
+
+  if (loopState.status === 'failed_planning') {
+    const err = new Error(`Failed to generate plan for ${resolvedFigureStem}`);
+    err.statusCode = 502;
+    throw err;
+  }
 
   // Use best HTML from loop
   const html = loopState.currentHtml || '';
@@ -437,6 +476,7 @@ async function generateFigureWithLoop({ base64, mediaType, filename, figureStem,
     source: 'api',
     model: modelId,
     experiment: experimentName,
+    plan: loopState.currentPlan || null,
     previewBase64: shot ? shot.data : null,
     previewMediaType: shot ? shot.mediaType : null,
     fallbackBase64: base64,
@@ -474,6 +514,7 @@ async function generateFigureWithLoop({ base64, mediaType, filename, figureStem,
     loopStatus: loopState.status,
     attempts: loopState.attempts.length,
     bestScore: loopState.bestScore,
+    plan: loopState.currentPlan || null,
     evaluationResults: record.evaluationResults || {},
     evaluationMeta: record.evaluationMeta || {},
     evaluationVersions: record.evaluationVersions || {},

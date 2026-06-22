@@ -3,6 +3,7 @@ import BENCHMARK_FIGURES from './benchmarkFigures';
 
 const FALLBACK_PROMPT = '(Loading system prompt from server…)';
 const MODEL_STORAGE_KEY = 'figure-platform:selectedModel';
+const PLANNER_MODEL_STORAGE_KEY = 'figure-platform:selectedPlannerModel';
 const CRITIC_MODEL_STORAGE_KEY = 'figure-platform:selectedCriticModel';
 const CRITIC_NAME_STORAGE_KEY = 'figure-platform:selectedCriticName';
 const EVALUATOR_MODEL_STORAGE_KEY = 'figure-platform:selectedEvaluatorModel';
@@ -255,11 +256,12 @@ export default function App() {
   // Model selection
   const [models, setModels] = useState([]);       // available models from backend
   const [selectedModel, setSelectedModel] = useState(''); // '' = server default
+  const [selectedPlannerModel, setSelectedPlannerModel] = useState('');
   const [selectedCriticModel, setSelectedCriticModel] = useState('');
   const [selectedEvaluatorModel, setSelectedEvaluatorModel] = useState('');
   const [experimentOptions, setExperimentOptions] = useState([]);
   const [selectedExperiment, setSelectedExperiment] = useState('');
-  const [fewShot, setFewShot] = useState({ critic: true, orchestrator: true });
+  const [fewShot, setFewShot] = useState({ planner: true, critic: true, orchestrator: true });
 
   // Sync URL hash when tab changes
   useEffect(() => {
@@ -312,6 +314,12 @@ export default function App() {
 
       if (preferredModel) setSelectedModel(preferredModel);
 
+      const storedPlannerModel = window.localStorage.getItem(PLANNER_MODEL_STORAGE_KEY);
+      const preferredPlannerModel = [storedPlannerModel, promptData.plannerModel, list[0]?.id]
+        .find(modelId => modelId && list.some(m => m.id === modelId));
+
+      if (preferredPlannerModel) setSelectedPlannerModel(preferredPlannerModel);
+
       const storedCriticModel = window.localStorage.getItem(CRITIC_MODEL_STORAGE_KEY);
       const preferredCriticModel = [storedCriticModel, promptData.criticModel, list[0]?.id]
         .find(modelId => modelId && list.some(m => m.id === modelId));
@@ -333,6 +341,9 @@ export default function App() {
     if (selectedModel) window.localStorage.setItem(MODEL_STORAGE_KEY, selectedModel);
   }, [selectedModel]);
   useEffect(() => {
+    if (selectedPlannerModel) window.localStorage.setItem(PLANNER_MODEL_STORAGE_KEY, selectedPlannerModel);
+  }, [selectedPlannerModel]);
+  useEffect(() => {
     if (selectedCriticModel) window.localStorage.setItem(CRITIC_MODEL_STORAGE_KEY, selectedCriticModel);
   }, [selectedCriticModel]);
   useEffect(() => {
@@ -347,6 +358,8 @@ export default function App() {
   const [error, setError] = useState('');
   const [evaluation, setEvaluation] = useState(null);
   const [evaluating, setEvaluating] = useState(false);
+  const [plan, setPlan] = useState(null);        // planner output for current figure
+  const [planning] = useState(false); // true while planner is running
 
   useEffect(() => {
     if (figureType) window.localStorage.setItem(FIGURE_TYPE_STORAGE_KEY, figureType);
@@ -376,6 +389,7 @@ export default function App() {
   // Called by Uploader when a file is selected
   const handleImageSelected = useCallback((imgData) => {
     setImage(imgData);
+    setPlan(null);
     setError('');
   }, []);
 
@@ -399,8 +413,8 @@ export default function App() {
       // For 3D (non-2d) generations use the iterative loop endpoint to preserve attempts
       const jobFn = is2d ? runGenerationJob2d : runGenerationLoop;
       const payload = is2d
-        ? { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined }
-        : { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined, evalModel: selectedCriticModel || undefined, criticVersion: 'benchmark', criticPasses: 1, experiment: selectedExperiment || undefined, fewShot };
+        ? { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined }
+        : { base64: image.base64, mediaType: image.mediaType, filename: image.filename, model: selectedModel || undefined, plannerModel: selectedPlannerModel || undefined, evalModel: selectedCriticModel || undefined, criticVersion: 'benchmark', criticPasses: 1, experiment: selectedExperiment || undefined, fewShot };
       const data = await jobFn(payload);
       const generatedEvaluationResults = data.evaluationResults || {};
       const generatedEvaluationMeta = data.evaluationMeta || {};
@@ -409,6 +423,7 @@ export default function App() {
         evaluationMeta: generatedEvaluationMeta,
       }, null);
       setGeneratedHtml(data.html);
+      setPlan(data.plan || null);
       setEvaluation(getRecordEvaluation({ evaluationResults: generatedEvaluationResults }, generatedModel));
       setCurrentRecord({
         id: data.figureId,
@@ -422,6 +437,7 @@ export default function App() {
         evaluationResults: generatedEvaluationResults,
         evaluationMeta: generatedEvaluationMeta,
         evaluationVersions: data.evaluationVersions || {},
+        plan: data.plan || null,
       });
       setViewerEvaluationModel(generatedModel);
       setViewerBackTab(tab);
@@ -431,7 +447,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [image, selectedCriticModel, selectedExperiment, selectedModel, tab, figureType, fewShot]);
+  }, [image, selectedCriticModel, selectedExperiment, selectedModel, selectedPlannerModel, tab, figureType, fewShot]);
   const handleLoadFromHistory = useCallback((record) => {
     const normalizedRecord = {
       ...record,
@@ -617,15 +633,19 @@ export default function App() {
             onGenerate={handleGenerate}
             onError={setError}
             loading={loading}
+            planning={planning}
+            plan={plan}
             error={error}
             systemPrompt={systemPrompt}
             models={models}
             experimentOptions={experimentOptions}
             selectedExperiment={selectedExperiment}
             selectedModel={selectedModel}
+            selectedPlannerModel={selectedPlannerModel}
             selectedCriticModel={selectedCriticModel}
             onExperimentChange={setSelectedExperiment}
             onGeneratorModelChange={setSelectedModel}
+            onPlannerModelChange={setSelectedPlannerModel}
             onCriticModelChange={setSelectedCriticModel}
             figureType={figureType}
             onFigureTypeChange={setFigureType}
@@ -694,7 +714,7 @@ function CriticPassSelector({ value, onChange, compact = false, includeZero = tr
 }
 
 // ── Generator Tab ─────────────────────────────────────────────────────────────
-function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, error, systemPrompt, models, experimentOptions, selectedExperiment, selectedModel, selectedCriticModel, onExperimentChange, onGeneratorModelChange, onCriticModelChange, figureType, onFigureTypeChange, fewShot = { critic: true, orchestrator: true }, onFewShotChange }) {
+function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, planning, plan, error, systemPrompt, models, experimentOptions, selectedExperiment, selectedModel, selectedPlannerModel, selectedCriticModel, onExperimentChange, onGeneratorModelChange, onPlannerModelChange, onCriticModelChange, figureType, onFigureTypeChange, fewShot = { planner: true, critic: true, orchestrator: true }, onFewShotChange }) {
   const chapterGenerationConcurrency = 10;
   const [promptOpen, setPromptOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -850,6 +870,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
             mediaType: candidate.mediaType,
             filename: candidate.filename,
             model: selectedModel || undefined,
+            plannerModel: selectedPlannerModel || undefined,
             experiment: selectedExperiment || undefined,
           })
           : await runGenerationLoop({
@@ -859,6 +880,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
             figureStem: candidate.stem,
             chapterName: candidate.chapterName,
             model: selectedModel || undefined,
+            plannerModel: selectedPlannerModel || undefined,
             evalModel: selectedCriticModel || undefined,
             criticVersion: 'benchmark',
             experiment: selectedExperiment || undefined,
@@ -911,7 +933,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
         setBookResumeState({ completedStems: cpData.completedStems });
         return;
       }
-    } catch { }
+    } catch {}
 
     await startBookGeneration([]);
   };
@@ -926,7 +948,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
     setBookResumeState(null);
     try {
       await apiFetch(`/api/book-checkpoint/${encodeURIComponent(selectedExperiment)}`, { method: 'DELETE' });
-    } catch { }
+    } catch {}
     await startBookGeneration([]);
   };
 
@@ -985,24 +1007,26 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
         const is2d = item.type === '2d';
         const loopResult = is2d
           ? await runGenerationJob2d({
-            base64: item.base64,
-            mediaType: item.mediaType,
-            filename: item.filename,
-            model: selectedModel || undefined,
-            experiment: selectedExperiment || undefined,
-          })
+              base64: item.base64,
+              mediaType: item.mediaType,
+              filename: item.filename,
+              model: selectedModel || undefined,
+              plannerModel: selectedPlannerModel || undefined,
+              experiment: selectedExperiment || undefined,
+            })
           : await runGenerationLoop({
-            base64: item.base64,
-            mediaType: item.mediaType,
-            filename: item.filename,
-            figureStem: item.stem,
-            chapterName: item.chapterName,
-            model: selectedModel || undefined,
-            evalModel: selectedCriticModel || undefined,
-            criticVersion: 'benchmark',
-            experiment: selectedExperiment || undefined,
-            fewShot,
-          });
+              base64: item.base64,
+              mediaType: item.mediaType,
+              filename: item.filename,
+              figureStem: item.stem,
+              chapterName: item.chapterName,
+              model: selectedModel || undefined,
+              plannerModel: selectedPlannerModel || undefined,
+              evalModel: selectedCriticModel || undefined,
+              criticVersion: 'benchmark',
+              experiment: selectedExperiment || undefined,
+              fewShot,
+            });
         if (bookAbortRef.current) { activeMap.delete(item.stem); return; }
         results.push({ figureStem: item.stem, chapter: item.chapterName, status: 'ok', figureId: loopResult.figureId });
         // Checkpoint successful figures so generation can be resumed if interrupted
@@ -1012,7 +1036,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ stem: item.stem }),
           });
-        } catch { }
+        } catch {}
       } catch (err) {
         results.push({ figureStem: item.stem, chapter: item.chapterName, status: 'error', error: err.message });
       }
@@ -1050,13 +1074,13 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(summary),
       });
-    } catch (_) { }
+    } catch (_) {}
 
     // Delete checkpoint — run is complete, next run should start fresh
     if (!bookAbortRef.current) {
       try {
         await apiFetch(`/api/book-checkpoint/${encodeURIComponent(selectedExperiment)}`, { method: 'DELETE' });
-      } catch { }
+      } catch {}
     }
 
     setBookSummary(summary);
@@ -1120,6 +1144,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
           figureStem: candidate.stem,
           chapterName: candidate.chapterName,
           model: selectedModel || undefined,
+          plannerModel: selectedPlannerModel || undefined,
           evalModel: selectedCriticModel || undefined,
           criticVersion: 'benchmark',
           experiment: selectedExperiment || undefined,
@@ -1227,6 +1252,19 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
                   ))}
                 </select>
               </div>
+              <div style={styles.generatorControlCard}>
+                <label style={styles.generatorModelLabel}>Planner Model</label>
+                <select
+                  style={styles.generatorModelSelect}
+                  value={selectedPlannerModel}
+                  onChange={e => onPlannerModelChange?.(e.target.value)}
+                  disabled={models.length === 0}
+                >
+                  {models.map(m => (
+                    <option key={m.id} value={m.id}>{m.label} ({m.provider})</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div style={styles.generatorModelStack}>
               <div style={styles.generatorControlCard}>
@@ -1244,7 +1282,7 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
               </div>
               <div style={styles.generatorControlCard}>
                 <label style={styles.generatorModelLabel}>Few-shot Prompts</label>
-                {['critic', 'orchestrator'].map(key => (
+                {['planner', 'critic', 'orchestrator'].map(key => (
                   <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151', cursor: 'pointer', padding: '2px 0' }}>
                     <input
                       type="checkbox"
@@ -1290,6 +1328,44 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
 
           {image && <p style={styles.filename}>{image.filename}</p>}
 
+          {/* Plan preview panel — shown automatically once planning completes */}
+          {(planning || plan) && (
+            <div style={styles.planPanel}>
+              {planning && !plan && (
+                <p style={{ fontSize: 12, color: '#4a90d9', margin: 0 }}>⏳ Planning interactions…</p>
+              )}
+              {plan && (
+                <>
+                  {(() => {
+                    const planPayload = plan.interactionPlan || plan;
+                    return (
+                      <>
+                        <div style={styles.planHeader}>
+                          <span style={styles.planTitle}>📋 Interaction Plan</span>
+                          {plan.chapterName && <span style={styles.planChapter}>Chapter: {plan.chapterName}</span>}
+                        </div>
+                        {planPayload ? (
+                          <details open style={styles.planFieldsDetails}>
+                            <summary style={styles.planFieldsSummary}>Plan details</summary>
+                            <PlanFields data={planPayload} excludeKeys={['contextChunk', 'chapterName']} />
+                          </details>
+                        ) : (
+                          <p style={{ fontSize: 12, color: '#c60', margin: '4px 0' }}>⚠ No interaction plan returned — generating from image only.</p>
+                        )}
+                        {plan.contextChunk && (
+                          <details style={{ marginTop: 8 }}>
+                            <summary style={{ fontSize: 11, color: '#aaa', cursor: 'pointer', userSelect: 'none' }}>Show textbook context</summary>
+                            <pre style={styles.planContext}>{plan.contextChunk.slice(0, 1500)}</pre>
+                          </details>
+                        )}
+                      </>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          )}
+
           {/* Collapsible system prompt */}
           <div style={styles.promptSection}>
             <button style={styles.promptToggle} onClick={() => setPromptOpen((v) => !v)}>
@@ -1303,11 +1379,11 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
           {error && <p style={styles.errorMsg}>{error}</p>}
 
           <button
-            style={{ ...styles.generateBtn, ...(loading || !image || !selectedModel ? styles.generateBtnDisabled : {}) }}
+            style={{ ...styles.generateBtn, ...(loading || planning || !image || !selectedModel ? styles.generateBtnDisabled : {}) }}
             onClick={onGenerate}
-            disabled={loading || !image || !selectedModel}
+            disabled={loading || planning || !image || !selectedModel}
           >
-            {loading ? 'Generating — this may take 1-2min…' : figureType === '2d' ? 'Generate 2D Figure' : 'Generate 3D Figure'}
+            {planning ? 'Planning…' : loading ? 'Generating — this may take 1-2min…' : figureType === '2d' ? 'Generate 2D Figure' : 'Generate 3D Figure'}
           </button>
         </>
       ) : mode === 'chapter' ? (
@@ -1347,144 +1423,173 @@ function GeneratorTab({ image, onImageSelected, onGenerate, onError, loading, er
             const filteredForRender = batchGenType === 'both' ? chapterCandidates
               : chapterCandidates.filter(c => batchGenType === '2d' ? c.type === '2d' : c.type !== '2d');
             return (
-              <>
-                {/* Candidate thumbnail grid — clickable to go to single-figure mode */}
-                <div style={styles.candidateGrid}>
-                  {chapterCandidates.map((c) => {
-                    const excluded = batchGenType !== 'both' && (batchGenType === '2d' ? c.type !== '2d' : c.type === '2d');
-                    const done = chapterResults.find(r => r.figureStem === c.stem);
-                    const isCurrent = chapterProgress?.active?.some(a => a.figureStem === c.stem);
-                    const borderColor = done ? (done.status === 'ok' ? '#4caf50' : '#e74c3c') : isCurrent ? '#4a90d9' : 'transparent';
+            <>
+              {/* Candidate thumbnail grid — clickable to go to single-figure mode */}
+              <div style={styles.candidateGrid}>
+                {chapterCandidates.map((c) => {
+                  const excluded = batchGenType !== 'both' && (batchGenType === '2d' ? c.type !== '2d' : c.type === '2d');
+                  const done = chapterResults.find(r => r.figureStem === c.stem);
+                  const isCurrent = chapterProgress?.active?.some(a => a.figureStem === c.stem);
+                  const borderColor = done ? (done.status === 'ok' ? '#4caf50' : '#e74c3c') : isCurrent ? '#4a90d9' : 'transparent';
+                  return (
+                    <div key={`${c.chapterName}/${c.stem}`} style={{ ...styles.candidateCard, border: `2px solid ${borderColor}`, opacity: excluded ? 0.25 : (chapterRunning && !isCurrent && !done ? 0.4 : 1), position: 'relative' }}>
+                      <img src={`data:${c.mediaType};base64,${c.base64}`} alt={c.stem} style={styles.candidateThumb}
+                        onClick={() => handleSelectCandidate(c)} />
+                      <div style={{ position: 'absolute', top: 4, left: 4, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: c.type === '2d' ? '#a855f7' : '#4a90d9', color: '#fff', letterSpacing: '0.5px' }}>
+                        {c.type === '2d' ? '2D' : '3D'}
+                      </div>
+                      <p style={styles.candidateName}>
+                        {done ? (done.status === 'ok' ? '✓ ' : '✗ ') : isCurrent ? '⏳ ' : ''}
+                        {c.stem}
+                      </p>
+                      {done && done.status === 'ok' && done.figureId && (
+                        <button
+                          style={{ position: 'absolute', top: 4, right: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={(e) => { e.stopPropagation(); handlePreview(done.figureId, c.stem); }}
+                        >👁 View</button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Generate All / Stop button */}
+              {!chapterRunning ? (
+                <button
+                  style={{ ...styles.generateBtn, marginTop: 12, ...(!selectedModel ? styles.generateBtnDisabled : {}) }}
+                  onClick={handleRunChapter}
+                  disabled={!selectedModel}
+                >
+                  Generate {filteredForRender.length} Figure{filteredForRender.length !== 1 ? 's' : ''}
+                </button>
+              ) : (
+                <button
+                  style={{ ...styles.generateBtn, marginTop: 12, background: '#e74c3c', borderColor: '#e74c3c' }}
+                  onClick={handleAbortChapter}
+                >
+                  Stop After Current Figures
+                </button>
+              )}
+
+              {/* Live progress: figures currently running through the iterative loop */}
+              {chapterProgress && (
+                <div style={{ ...styles.planPanel, marginTop: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#333' }}>
+                      {chapterProgress.active?.length || 0} active ({chapterProgress.completed} / {chapterProgress.total} done)
+                    </span>
+                    <span style={{ fontSize: 11, color: '#888' }}>
+                      Concurrency: {chapterGenerationConcurrency}
+                    </span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div style={{ height: 4, background: '#eee', borderRadius: 2, marginBottom: 10, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: '#4caf50', borderRadius: 2, transition: 'width 0.3s', width: `${(chapterProgress.completed / chapterProgress.total) * 100}%` }} />
+                  </div>
+
+                  {/* Show each active figure */}
+                  {chapterProgress.active?.map(a => {
+                    const planPayload = a.plan?.interactionPlan || a.plan;
                     return (
-                      <div key={`${c.chapterName}/${c.stem}`} style={{ ...styles.candidateCard, border: `2px solid ${borderColor}`, opacity: excluded ? 0.25 : (chapterRunning && !isCurrent && !done ? 0.4 : 1), position: 'relative' }}>
-                        <img src={`data:${c.mediaType};base64,${c.base64}`} alt={c.stem} style={styles.candidateThumb}
-                          onClick={() => handleSelectCandidate(c)} />
-                        <div style={{ position: 'absolute', top: 4, left: 4, fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: c.type === '2d' ? '#a855f7' : '#4a90d9', color: '#fff', letterSpacing: '0.5px' }}>
-                          {c.type === '2d' ? '2D' : '3D'}
+                      <div key={a.figureStem} style={{ marginBottom: 10, padding: '8px 10px', background: '#f8faff', borderRadius: 6, border: '1px solid #e0e8f0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>
+                            🔄 {a.figureStem} — {a.phase}
+                          </span>
                         </div>
-                        <p style={styles.candidateName}>
-                          {done ? (done.status === 'ok' ? '✓ ' : '✗ ') : isCurrent ? '⏳ ' : ''}
-                          {c.stem}
-                        </p>
-                        {done && done.status === 'ok' && done.figureId && (
-                          <button
-                            style={{ position: 'absolute', top: 4, right: 4, fontSize: 10, padding: '2px 6px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
-                            onClick={(e) => { e.stopPropagation(); handlePreview(done.figureId, c.stem); }}
-                          >👁 View</button>
+                        {planPayload?.concept && (
+                          <p style={styles.planConcept}>{planPayload.concept}</p>
+                        )}
+                        {planPayload?.elements?.length > 0 && (
+                          <div style={{ marginBottom: 6 }}>
+                            <span style={styles.planSubhead}>Elements:</span>
+                            <span style={styles.planList}>{planPayload.elements.join(', ')}</span>
+                          </div>
+                        )}
+                        {planPayload?.interactions?.length > 0 && (
+                          <div style={{ marginBottom: 4 }}>
+                            <span style={styles.planSubhead}>Interactions:</span>
+                            {planPayload.interactions.map((inter, i) => (
+                              <div key={i} style={styles.planInteraction}>
+                                <span style={styles.planInterType}>{inter.type}</span>
+                                <span style={styles.planInterLabel}>{inter.label}</span>
+                                <span style={styles.planInterTeaches}>— {inter.teaches}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {planPayload?.demo_steps?.length > 0 && (
+                          <p style={styles.planList}>Demo steps: {planPayload.demo_steps.length}</p>
                         )}
                       </div>
                     );
                   })}
                 </div>
+              )}
 
-                {/* Generate All / Stop button */}
-                {!chapterRunning ? (
-                  <button
-                    style={{ ...styles.generateBtn, marginTop: 12, ...(!selectedModel ? styles.generateBtnDisabled : {}) }}
-                    onClick={handleRunChapter}
-                    disabled={!selectedModel}
-                  >
-                    Generate {filteredForRender.length} Figure{filteredForRender.length !== 1 ? 's' : ''}
-                  </button>
-                ) : (
-                  <button
-                    style={{ ...styles.generateBtn, marginTop: 12, background: '#e74c3c', borderColor: '#e74c3c' }}
-                    onClick={handleAbortChapter}
-                  >
-                    Stop After Current Figures
-                  </button>
-                )}
-
-                {/* Live progress: figures currently running through the iterative loop */}
-                {chapterProgress && (
-                  <div style={{ ...styles.planPanel, marginTop: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#333' }}>
-                        {chapterProgress.active?.length || 0} active ({chapterProgress.completed} / {chapterProgress.total} done)
+              {/* Completed results summary — shown during AND after generation */}
+              {chapterResults.length > 0 && (
+                <div style={{ ...styles.chapterPlansWrap, marginTop: 12 }}>
+                  <h4 style={{ margin: '0 0 8px', fontSize: 13, color: '#333' }}>
+                    Results: {chapterResults.filter(r => r.status === 'ok').length}/{chapterResults.length} {chapterRunning ? 'so far' : 'succeeded'}
+                  </h4>
+                  {chapterResults.map((r, i) => (
+                    <div key={r.figureStem} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12, borderBottom: '1px solid #f0f0f0' }}>
+                      <span style={{ color: r.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>
+                        {r.status === 'ok' ? '✓' : '✗'}
                       </span>
-                      <span style={{ fontSize: 11, color: '#888' }}>
-                        Concurrency: {chapterGenerationConcurrency}
-                      </span>
+                      <span style={{ flex: 1 }}>{r.figureStem}</span>
+                      {r.status === 'ok' && r.figureId && (
+                        <button
+                          style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
+                          onClick={() => handlePreview(r.figureId, r.figureStem)}
+                        >👁 View</button>
+                      )}
+                      {r.error && <span style={{ color: '#e74c3c', fontSize: 11 }}>{r.error}</span>}
                     </div>
-
-                    {/* Progress bar */}
-                    <div style={{ height: 4, background: '#eee', borderRadius: 2, marginBottom: 10, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', background: '#4caf50', borderRadius: 2, transition: 'width 0.3s', width: `${(chapterProgress.completed / chapterProgress.total) * 100}%` }} />
+                  ))}
+                  {/* Auto-evaluation progress — shown while evaluating */}
+                  {batchEvalRunning && (
+                    <div style={{ marginTop: 10, padding: '8px 0' }}>
+                      <div style={{ fontSize: 12, color: '#6c5ce7', fontWeight: 600, marginBottom: 4 }}>
+                        🧪 Evaluating… {batchEvalProgress?.completed || 0}/{batchEvalProgress?.total || '?'}
+                        {batchEvalProgress?.current && <span style={{ fontWeight: 400, color: '#888' }}> — {batchEvalProgress.current}</span>}
+                      </div>
+                      <div style={{ height: 4, background: '#eee', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', background: '#6c5ce7', borderRadius: 2, transition: 'width 0.3s', width: `${((batchEvalProgress?.completed || 0) / (batchEvalProgress?.total || 1)) * 100}%` }} />
+                      </div>
                     </div>
+                  )}
 
-                    {/* Show each active figure */}
-                    {chapterProgress.active?.map(a => (
-                      <div key={a.figureStem} style={{ marginBottom: 10, padding: '8px 10px', background: '#f8faff', borderRadius: 6, border: '1px solid #e0e8f0' }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#333' }}>
-                          🔄 {a.figureStem} — {a.phase}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Completed results summary — shown during AND after generation */}
-                {chapterResults.length > 0 && (
-                  <div style={{ ...styles.chapterPlansWrap, marginTop: 12 }}>
-                    <h4 style={{ margin: '0 0 8px', fontSize: 13, color: '#333' }}>
-                      Results: {chapterResults.filter(r => r.status === 'ok').length}/{chapterResults.length} {chapterRunning ? 'so far' : 'succeeded'}
-                    </h4>
-                    {chapterResults.map((r, i) => (
-                      <div key={r.figureStem} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 12, borderBottom: '1px solid #f0f0f0' }}>
-                        <span style={{ color: r.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>
-                          {r.status === 'ok' ? '✓' : '✗'}
-                        </span>
-                        <span style={{ flex: 1 }}>{r.figureStem}</span>
-                        {r.status === 'ok' && r.figureId && (
-                          <button
-                            style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid #4caf50', background: '#fff', color: '#4caf50', cursor: 'pointer', fontWeight: 600 }}
-                            onClick={() => handlePreview(r.figureId, r.figureStem)}
-                          >👁 View</button>
-                        )}
-                        {r.error && <span style={{ color: '#e74c3c', fontSize: 11 }}>{r.error}</span>}
-                      </div>
-                    ))}
-                    {/* Auto-evaluation progress — shown while evaluating */}
-                    {batchEvalRunning && (
-                      <div style={{ marginTop: 10, padding: '8px 0' }}>
-                        <div style={{ fontSize: 12, color: '#6c5ce7', fontWeight: 600, marginBottom: 4 }}>
-                          🧪 Evaluating… {batchEvalProgress?.completed || 0}/{batchEvalProgress?.total || '?'}
-                          {batchEvalProgress?.current && <span style={{ fontWeight: 400, color: '#888' }}> — {batchEvalProgress.current}</span>}
-                        </div>
-                        <div style={{ height: 4, background: '#eee', borderRadius: 2, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', background: '#6c5ce7', borderRadius: 2, transition: 'width 0.3s', width: `${((batchEvalProgress?.completed || 0) / (batchEvalProgress?.total || 1)) * 100}%` }} />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Show eval scores inline */}
-                    {Object.keys(batchEvalResults).length > 0 && (
-                      <div style={{ marginTop: 8, padding: '6px 0', borderTop: '1px solid #e0e0e0' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#6c5ce7' }}>Evaluation Scores:</span>
-                        {chapterResults.filter(r => r.status === 'ok' && batchEvalResults[r.figureId]).map(r => {
-                          const ev = batchEvalResults[r.figureId];
-                          return (
-                            <div key={r.figureId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 11, color: '#555' }}>
-                              <span style={{ color: ev.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>
-                                {ev.status === 'ok' ? '✓' : '✗'}
+                  {/* Show eval scores inline */}
+                  {Object.keys(batchEvalResults).length > 0 && (
+                    <div style={{ marginTop: 8, padding: '6px 0', borderTop: '1px solid #e0e0e0' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#6c5ce7' }}>Evaluation Scores:</span>
+                      {chapterResults.filter(r => r.status === 'ok' && batchEvalResults[r.figureId]).map(r => {
+                        const ev = batchEvalResults[r.figureId];
+                        return (
+                          <div key={r.figureId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 11, color: '#555' }}>
+                            <span style={{ color: ev.status === 'ok' ? '#4caf50' : '#e74c3c', fontWeight: 700 }}>
+                              {ev.status === 'ok' ? '✓' : '✗'}
+                            </span>
+                            <span style={{ flex: 1 }}>{r.figureStem}</span>
+                            {ev.evaluation?.overall_average != null && (
+                              <span style={{ fontWeight: 700, color: ev.evaluation.overall_average >= 4 ? '#4caf50' : ev.evaluation.overall_average >= 3 ? '#f39c12' : '#e74c3c' }}>
+                                {ev.evaluation.overall_average.toFixed(1)}/5
                               </span>
-                              <span style={{ flex: 1 }}>{r.figureStem}</span>
-                              {ev.evaluation?.overall_average != null && (
-                                <span style={{ fontWeight: 700, color: ev.evaluation.overall_average >= 4 ? '#4caf50' : ev.evaluation.overall_average >= 3 ? '#f39c12' : '#e74c3c' }}>
-                                  {ev.evaluation.overall_average.toFixed(1)}/5
-                                </span>
-                              )}
-                              {ev.error && <span style={{ color: '#e74c3c' }}>{ev.error}</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                            )}
+                            {ev.error && <span style={{ color: '#e74c3c' }}>{ev.error}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
-                    {!chapterRunning && <p style={{ fontSize: 11, color: '#888', marginTop: 8 }}>Also available in the Results tab.</p>}
-                  </div>
-                )}
-              </>
+                  {!chapterRunning && <p style={{ fontSize: 11, color: '#888', marginTop: 8 }}>Also available in the Results tab.</p>}
+                </div>
+              )}
+            </>
             );
           })()}
 
@@ -1805,6 +1910,7 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
     : (record?.base64thumb
       ? `data:${mediaType};base64,${record.base64thumb}`
       : null);
+  const viewerPlan = record?.plan || null;
   const hasAttemptHistory = attempts.length > 0;
   const selectedAttempt = hasAttemptHistory
     ? attempts[Math.min(Math.max(selectedAttemptIndex, 0), attempts.length - 1)]
@@ -1815,6 +1921,7 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
   const previewHtml = selectedAttempt?.html || html;
   const selectedFeedback = selectedAttempt?.feedback || null;
   const selectedEvaluation = selectedAttempt?.evaluation || null;
+  const selectedPlan = selectedAttempt?.plan || viewerPlan;
   return (
     <div style={styles.viewerWrap}>
       {/* Left panel */}
@@ -1840,6 +1947,32 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
         {record?.generationDurationMs != null && (
           <p style={styles.viewerMeta}>Generation time: {formatDuration(record.generationDurationMs)}</p>
         )}
+        {selectedPlan ? (
+          <div style={styles.viewerPlanWrap}>
+            {(() => {
+              const planPayload = selectedPlan.interactionPlan || selectedPlan;
+              return (
+                <>
+                  <p style={styles.viewerPlanTitle}>Planner Output</p>
+                  {selectedPlan.chapterName && <p style={styles.viewerPlanMeta}>Chapter: {selectedPlan.chapterName}</p>}
+                  <details open style={styles.planFieldsDetails}>
+                    <summary style={styles.planFieldsSummary}>Plan details</summary>
+                    <PlanFields data={planPayload} excludeKeys={['contextChunk', 'chapterName']} />
+                  </details>
+                  <details>
+                    <summary style={styles.viewerPlanSummary}>Show raw plan JSON</summary>
+                    <pre style={styles.viewerPlanRaw}>{JSON.stringify(selectedPlan, null, 2)}</pre>
+                  </details>
+                </>
+              );
+            })()}
+          </div>
+        ) : (
+          <div style={styles.viewerPlanPlaceholder}>
+            No planner output available for this figure.
+          </div>
+        )}
+
         <div style={styles.viewerHistoryWrap}>
           <div style={styles.viewerHistoryHeader}>
             <span style={styles.viewerPlanTitle}>Iterations</span>
@@ -2209,7 +2342,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
       {modeToggle}
       {selector}
       <div style={styles.evalHeader}>
-        <span style={styles.evalTitle}>Evaluator Scores</span>
+        <span style={styles.evalTitle}>Critic feedback</span>
         <span style={{ ...styles.evalOverall, color: scoreTextColor(evaluation.overall_average) }}>
           {evaluation.overall_average}/5
         </span>
@@ -2289,7 +2422,7 @@ function LazyThumb({ htmlPath, style }) {
       apiFetch('/api/experiments/thumb?path=' + encodeURIComponent(htmlPath))
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`); })
-        .catch(() => { });
+        .catch(() => {});
     }, { rootMargin: '200px' });
     observer.observe(el);
     return () => { cancelled = true; observer.disconnect(); };
@@ -2300,8 +2433,8 @@ function LazyThumb({ htmlPath, style }) {
       {src
         ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         : <div style={{ width: '100%', height: '100%', background: '#e8e8e8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontSize: 10, color: '#bbb' }}>…</span>
-        </div>
+            <span style={{ fontSize: 10, color: '#bbb' }}>…</span>
+          </div>
       }
     </div>
   );
@@ -2324,7 +2457,7 @@ function LazyApiThumb({ id, base64thumb, mediaType, style }) {
       apiFetch('/api/thumb/' + encodeURIComponent(id))
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (!cancelled && d?.data) setSrc(`data:${d.mediaType};base64,${d.data}`); })
-        .catch(() => { });
+        .catch(() => {});
     }, { rootMargin: '200px' });
     observer.observe(el);
     return () => { cancelled = true; observer.disconnect(); };

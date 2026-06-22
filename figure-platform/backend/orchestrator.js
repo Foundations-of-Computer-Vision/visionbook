@@ -4,18 +4,21 @@ const ORCHESTRATOR_DEFAULT_MODEL = 'gpt-4o';
 const ORCHESTRATOR_MAX_TOKENS = 1024;
 
 function buildOrchestratorPrompt(useFewShot = true) {
-    return `You are the orchestration agent for an iterative figure-generation loop. Generation works by taking an original 2D figure, generating an interactive 3D figure from it, and evaluating the result.
+    return `You are the orchestration agent for an iterative figure-generation loop. Generation works by taking an original 2D figure, making a generation plan, generating an interactive 3D figure, and evaluating it.
 
 You will receive the critic evaluation, including failure modes, scores, notes, and action items.
-Your job is to decide the next action:
-- pass: the figure is good enough to stop iterating
-- refine_generation: the implementation has concrete issues (labels, geometry, color, interactivity, camera) that the generator can fix given the critic feedback
+Your job is to decide which part of the system is most responsible for the problem:
+- planner: the interaction plan or conceptual decomposition is wrong, incomplete, or missing the right elements
+- generator: the plan is close to right, but the rendered implementation, labels, layout, interactivity, or execution is broken
+- none: the figure is good enough to stop iterating
 
 Use the failure modes and action items as the primary evidence. Do not decide from raw score thresholds alone.
+Prefer planner when the critic indicates concept misunderstanding, missing core elements, wrong primitives, or the wrong overall interaction structure.
+Prefer generator when the concept is right but the execution needs concrete implementation fixes like labels, wiring, geometry details, styling, or broken controls.
 
 Return ONLY valid JSON with this exact shape:
 {
-	"next_step": "pass | refine_generation",
+	"next_step": "pass | fix_plan | refine_generation",
 	"rationale": "one concise sentence explaining the decision"
 }
 
@@ -29,7 +32,12 @@ Decision: {"next_step": "pass", "rationale": "Scores are consistently high (most
 Example 2 — correct decision: refine_generation
 Evaluation:
 ${JSON.stringify({ discrepancies: ["Text overlaps in 3D rendering causing poor readability", "Projection plane opacity misaligned with original", "Axis colors do not match original", "Incorrect perspective lengths for arrows and lines", "3D object has different shade/color than 2D"], failure_modes: ["Color-Wrong", "Scale-Wrong", "Interaction-Missing", "Camera-Wrong"], geometry_accuracy: 3, interactivity_usability: 3, faithfulness: 3, label_quality: 3, concept_accuracy: 3, notes: "The rendering contains overlapping text, varying colors, and lacks precise interactivity, making it somewhat difficult to grasp the 3D representation.", action_items: ["Fix text overlap by adjusting label positions and scaling.", "Align colors and transparency with source to enhance visual consistency.", "Improve 3D element proportions and viewpoint to better simulate depth."], overall_average: 3.0 }, null, 2)}
-Decision: {"next_step": "refine_generation", "rationale": "The concept is present but execution has multiple implementation-level issues — color mismatches, missing interactions, wrong camera angle, scale errors — all fixable by the generator."}` : ''}`;
+Decision: {"next_step": "refine_generation", "rationale": "The concept is present but execution has multiple implementation-level issues — color mismatches, missing interactions, wrong camera angle, scale errors — all fixable by the generator without changing the plan."}
+
+Example 3 — correct decision: fix_plan
+Evaluation:
+${JSON.stringify({ discrepancies: ["The pinhole and projection elements are missing in the first scene.", "The tree proportions and positions are different.", "Labels are not in the same positions or orientations as the original image.", "Colors of the tree and rays vary slightly.", "The pinhole setup in Step 2 is incomplete or incorrect."], failure_modes: ["Missing-Labels", "Interaction-Missing", "Camera-Wrong", "Color-Wrong", "Concept-Misunderstood"], geometry_accuracy: 2, interactivity_usability: 2, faithfulness: 2, label_quality: 2, concept_accuracy: 2, notes: "Discrepancies in elements and labels, with limited interactivity and conceptual errors.", action_items: ["Add the pinhole and projection elements to match the second diagram.", "Adjust tree proportions and ray directions to better align with the source.", "Provide accurate labels for the pinhole scene and ensure all are correctly placed."], overall_average: 2.0 }, null, 2)}
+Decision: {"next_step": "fix_plan", "rationale": "Concept-Misunderstood failure mode and all scores at 2/5 indicate the plan failed to correctly decompose the figure — the generator cannot fix a fundamentally wrong conceptual structure."}` : ''}`;
 }
 
 function normalizeStringArray(value) {
@@ -38,7 +46,7 @@ function normalizeStringArray(value) {
 }
 
 function finalizeDecision(decision, evaluation) {
-    const nextStep = ['pass', 'refine_generation'].includes(decision?.next_step)
+    const nextStep = ['pass', 'fix_plan', 'refine_generation'].includes(decision?.next_step)
         ? decision.next_step
         : 'refine_generation';
 
@@ -71,7 +79,7 @@ async function decideFigureRefinement(opts) {
 
     const userContent = [{
         type: 'text',
-        text: `Critic evaluation JSON:\n${JSON.stringify(evaluation, null, 2)}\n\nDecide whether the next iteration should pass or refine the generation. Output only the JSON object described in the system prompt.`,
+        text: `Critic evaluation JSON:\n${JSON.stringify(evaluation, null, 2)}\n\nDecide whether the next iteration should pass, fix the plan, or refine the generation. Output only the JSON object described in the system prompt.`,
     }];
 
     let content = await generateWithModel(model || ORCHESTRATOR_DEFAULT_MODEL, {
