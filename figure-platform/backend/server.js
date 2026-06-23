@@ -1377,16 +1377,16 @@ app.get('/api/experiments', (req, res) => {
 app.post('/api/experiments/evaluate', async (req, res) => {
   const { htmlPath, imagePath, evalModel, criticVersion } = req.body;
   if (!htmlPath) return res.status(400).json({ error: 'htmlPath required.' });
+  if (!imagePath) return res.status(400).json({ error: 'imagePath required.' });
 
   const absHtml = path.resolve(htmlPath);
   if (!fs.existsSync(absHtml)) return res.status(404).json({ error: 'HTML file not found.' });
 
+  const absImg = path.resolve(imagePath);
+  if (!fs.existsSync(absImg)) return res.status(404).json({ error: 'Source image not found.' });
+
   const html = fs.readFileSync(absHtml, 'utf-8');
-  let base64thumb = null;
-  if (imagePath) {
-    const absImg = path.resolve(imagePath);
-    if (fs.existsSync(absImg)) base64thumb = fs.readFileSync(absImg).toString('base64');
-  }
+  const base64thumb = fs.readFileSync(absImg).toString('base64');
 
   try {
     const record = { html, source_base64: base64thumb, source_media_type: 'image/png' };
