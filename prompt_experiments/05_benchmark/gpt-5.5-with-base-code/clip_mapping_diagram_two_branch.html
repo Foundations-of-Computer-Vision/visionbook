@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>CLIP Two-Branch Mapping Diagram</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #c {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        .lbl {
+            position: absolute;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            font-family: sans-serif;
+            font-size: 13px;
+            line-height: 1.1;
+            color: #111;
+            text-shadow: 0 1px 2px #fff, 0 -1px 2px #fff, 1px 0 2px #fff, -1px 0 2px #fff;
+        }
+
+        #ui {
+            position: absolute;
+            left: 6px;
+            bottom: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-family: sans-serif;
+            font-size: 11px;
+            max-width: 120px;
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            opacity: 0.88;
+            transition: opacity 0.16s ease;
+            z-index: 10;
+        }
+
+        #ui:hover,
+        #ui:focus-within {
+            opacity: 1;
+        }
+
+        #ui button {
+            padding: 4px 9px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            background: rgba(245, 245, 245, 0.92);
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        #ui button:hover,
+        #ui button.active {
+            background: #dff0ff;
+            border-color: #5aabf0;
+        }
+
+        #figTooltip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: none;
+            max-width: 230px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.62);
+            color: #fff;
+            font: 11px/1.35 sans-serif;
+            pointer-events: none;
+            white-space: normal;
+            z-index: 20;
+        }
+
+        #clickNote {
+            position: fixed;
+            right: 8px;
+            bottom: 8px;
+            display: none;
+            max-width: 310px;
+            padding: 7px 10px;
+            border: 1px solid #bbb;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.94);
+            color: #111;
+            font: 12px/1.35 sans-serif;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+            z-index: 15;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+    <div id="figTooltip"></div>
+    <div id="clickNote"></div>
+    <div id="ui">
+        <button id="btnReset" style="display:none">Reset</button>
+        <button id="btnPaths" class="active">Paths</button>
+        <button id="btnCue">Cue</button>
+    </div>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    }
+  }
+  </script>
+
+    <div id="err-overlay" style="display:none;position:fixed;inset:0;background:#fff;z-index:999;
+       flex-direction:column;align-items:center;justify-content:center;
+       font-family:sans-serif;font-size:13px;color:#555;gap:10px;">
+        <span id="err-msg">Figure failed to load</span>
+        <button onclick="location.reload()" style="padding:5px 14px;border:1px solid #aaa;
+        border-radius:5px;background:#f5f5f5;cursor:pointer;font-size:12px;">Reload</button>
+    </div>
+
+    <script>
+        let _rendered = false;
+        const _errOverlay = document.getElementById('err-overlay');
+        window.__markRendered = () => { _rendered = true; _errOverlay.style.display = 'none'; };
+        window.addEventListener('error', (e) => {
+            if (!_rendered) {
+                document.getElementById('err-msg').textContent = e.message || 'Figure failed to load';
+                _errOverlay.style.display = 'flex';
+            }
+        });
+        setTimeout(() => {
+            if (!_rendered) _errOverlay.style.display = 'flex';
+        }, 12000);
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const canvas = document.getElementById('c');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const d = 3;
+        let aspect = (canvas.clientWidth || window.innerWidth) / Math.max(canvas.clientHeight || window.innerHeight, 1);
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+        camera.position.set(4, 4, 4);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.rotateSpeed = 0.55;
+        controls.zoomSpeed = 0.8;
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.95);
+        scene.add(ambient);
+        const key = new THREE.DirectionalLight(0xffffff, 0.65);
+        key.position.set(2, 5, 4);
+        scene.add(key);
+
+        const HOME_POS = new THREE.Vector3();
+        const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+        let HOME_ZOOM = 0.75;
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            camera.position.copy(HOME_POS);
+            controls.target.copy(HOME_TARGET);
+            camera.zoom = HOME_ZOOM;
+            camera.updateProjectionMatrix();
+            controls.update();
+        });
+
+        const FRAME_HALF_HEIGHT = d;
+        const MIN_ZOOM = 0.2;
+        const MAX_ZOOM = 5;
+
+        function computeSceneBounds() {
+            const box = new THREE.Box3().setFromObject(scene);
+            if (box.isEmpty()) {
+                box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2 * d, 2 * d, 2 * d));
+            }
+            const center = new THREE.Vector3();
+            const size = new THREE.Vector3();
+            box.getCenter(center);
+            box.getSize(size);
+            return { box, center, size };
+        }
+
+        function setCameraView({
+            projection = 'orthographic',
+            azimuthDeg = 45,
+            elevationDeg = 28,
+            rollDeg = 0,
+            zoom = null,
+            target = null,
+            heightFraction = 0.88,
+            distanceScale = 1.2
+        } = {}) {
+            const { center, size } = computeSceneBounds();
+            const viewTarget = Array.isArray(target)
+                ? new THREE.Vector3(target[0] || 0, target[1] || 0, target[2] || 0)
+                : center;
+            const contentHeight = Math.max(size.y, 1e-6);
+            const desiredViewHeight = contentHeight / Math.max(heightFraction, 0.01);
+            let resolvedZoom = Number.isFinite(zoom) ? zoom : (2 * FRAME_HALF_HEIGHT) / desiredViewHeight;
+            resolvedZoom = Math.min(Math.max(resolvedZoom, MIN_ZOOM), MAX_ZOOM);
+            camera.zoom = resolvedZoom;
+
+            const radius = Math.max(size.length() * distanceScale, FRAME_HALF_HEIGHT * 2);
+            const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+            const elevation = THREE.MathUtils.degToRad(elevationDeg);
+            const cosElev = Math.cos(elevation);
+            camera.position.set(
+                viewTarget.x + radius * Math.cos(azimuth) * cosElev,
+                viewTarget.y + radius * Math.sin(elevation),
+                viewTarget.z + radius * Math.sin(azimuth) * cosElev
+            );
+            controls.target.copy(viewTarget);
+            camera.up.set(0, 1, 0);
+            if (Number.isFinite(rollDeg) && rollDeg !== 0) {
+                const viewDir = new THREE.Vector3().subVectors(viewTarget, camera.position).normalize();
+                camera.up.applyAxisAngle(viewDir, THREE.MathUtils.degToRad(rollDeg));
+            }
+            camera.updateProjectionMatrix();
+            controls.update();
+            HOME_POS.copy(camera.position);
+            HOME_TARGET.copy(controls.target);
+            HOME_ZOOM = camera.zoom;
+            window.__figureCameraView = {
+                projection, azimuthDeg, elevationDeg, rollDeg, zoom: camera.zoom,
+                target: [controls.target.x, controls.target.y, controls.target.z]
+            };
+        }
+
+        const _labels = [];
+        const _v = new THREE.Vector3();
+
+        function addLabel(text, position, options = {}) {
+            const div = document.createElement('div');
+            div.className = 'lbl';
+            div.innerHTML = text;
+            if (options.color) div.style.color = options.color;
+            if (options.fontSize) div.style.fontSize = options.fontSize;
+            if (options.bold) div.style.fontWeight = 'bold';
+            if (options.fontFamily) div.style.fontFamily = options.fontFamily;
+            if (options.background) div.style.background = options.background;
+            if (options.padding) div.style.padding = options.padding;
+            if (options.border) div.style.border = options.border;
+            if (options.borderRadius) div.style.borderRadius = options.borderRadius;
+            if (options.textShadow === false) div.style.textShadow = 'none';
+            if (options.lineHeight) div.style.lineHeight = options.lineHeight;
+            document.body.appendChild(div);
+            const entry = {
+                div,
+                pos: position.clone(),
+                offset: options.offset || [0, 0],
+                rotateDeg: options.rotateDeg || 0,
+                minScale: options.minScale || 0.45,
+                maxScale: options.maxScale || 4.2
+            };
+            _labels.push(entry);
+            return entry;
+        }
+
+        const _referenceDistance = 8;
+        function _syncLabels() {
+            for (const { div, pos, offset, rotateDeg, minScale, maxScale } of _labels) {
+                _v.copy(pos).project(camera);
+                if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
+                    div.style.display = 'none';
+                    continue;
+                }
+                div.style.display = '';
+                const ox = offset && offset[0] ? offset[0] : 0;
+                const oy = offset && offset[1] ? offset[1] : 0;
+                const canvasWidth = canvas.clientWidth || window.innerWidth;
+                const canvasHeight = canvas.clientHeight || window.innerHeight;
+                const x = (_v.x * 0.5 + 0.5) * canvasWidth + ox;
+                const y = (-_v.y * 0.5 + 0.5) * canvasHeight + oy;
+                const distance = Math.max(camera.position.distanceTo(pos), 1e-4);
+                const scale = Math.max(minScale, Math.min((_referenceDistance / distance) * (camera.zoom || 1), maxScale));
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                div.style.transform = `translate(-50%, -50%) rotate(${rotateDeg}deg) scale(${scale})`;
+            }
+        }
+
+        const _tooltip = document.getElementById('figTooltip');
+        const _clickNote = document.getElementById('clickNote');
+        const _raycaster = new THREE.Raycaster();
+        const _pointer = new THREE.Vector2();
+        const _interactiveObjects = [];
+        let _hoveredInteractive = null;
+        let _clickTimer = null;
+
+        function showPopup(title, body) {
+            window.parent.postMessage({ type: 'alex-popup', title, body }, '*');
+            _clickNote.innerHTML = `<b>${title}</b><br>${body}`;
+            _clickNote.style.display = 'block';
+            clearTimeout(_clickTimer);
+            _clickTimer = setTimeout(() => { _clickNote.style.display = 'none'; }, 4200);
+        }
+
+        function hidePopup() {
+            window.parent.postMessage({ type: 'alex-popup', title: null }, '*');
+            _clickNote.style.display = 'none';
+        }
+
+        function showTooltip(text, event) {
+            if (!_tooltip || !text) return;
+            _tooltip.textContent = text;
+            _tooltip.style.display = 'block';
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            if (!_tooltip || _tooltip.style.display === 'none') return;
+            const pad = 12;
+            const x = Math.min(event.clientX + pad, window.innerWidth - _tooltip.offsetWidth - pad);
+            const y = Math.max(pad, event.clientY - _tooltip.offsetHeight - pad);
+            _tooltip.style.left = x + 'px';
+            _tooltip.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            if (_tooltip) _tooltip.style.display = 'none';
+        }
+
+        function _setPointerFromEvent(event) {
+            const rect = canvas.getBoundingClientRect();
+            _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function _firstInteractiveHit(event) {
+            if (!_interactiveObjects.length) return null;
+            _setPointerFromEvent(event);
+            _raycaster.setFromCamera(_pointer, camera);
+            const hits = _raycaster.intersectObjects(_interactiveObjects.map(entry => entry.object), true);
+            for (const hit of hits) {
+                let obj = hit.object;
+                while (obj) {
+                    const entry = _interactiveObjects.find(item => item.object === obj);
+                    if (entry) return { ...entry, hit };
+                    obj = obj.parent;
+                }
+            }
+            return null;
+        }
+
+        function registerInteractive(object, info = {}) {
+            if (!object) return object;
+            object.userData = object.userData || {};
+            object.userData.interactive = true;
+            _interactiveObjects.push({ object, info });
+            return object;
+        }
+
+        function setHover(entry) {
+            if (_hoveredInteractive && _hoveredInteractive.info.setHover) {
+                _hoveredInteractive.info.setHover(false);
+            }
+            _hoveredInteractive = entry;
+            if (_hoveredInteractive && _hoveredInteractive.info.setHover) {
+                _hoveredInteractive.info.setHover(true);
+            }
+        }
+
+        canvas.addEventListener('pointermove', (event) => {
+            moveTooltip(event);
+            const entry = _firstInteractiveHit(event);
+            if (entry) {
+                if (!_hoveredInteractive || _hoveredInteractive.object !== entry.object) setHover(entry);
+                canvas.style.cursor = 'pointer';
+                showTooltip(entry.info.tooltip || entry.info.title || 'Click to explain', event);
+            } else {
+                setHover(null);
+                canvas.style.cursor = controls.enabled ? 'grab' : 'default';
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('pointerleave', () => {
+            setHover(null);
+            canvas.style.cursor = 'default';
+            hideTooltip();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            const entry = _firstInteractiveHit(event) || _hoveredInteractive;
+            if (!entry) {
+                hidePopup();
+                return;
+            }
+            const title = entry.info.title || entry.info.tooltip || 'Figure element';
+            const body = entry.info.body || entry.info.description || 'This part is interactive.';
+            showPopup(title, body);
+            if (typeof entry.info.onClick === 'function') entry.info.onClick(entry.hit, entry.object);
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hidePopup();
+                hideTooltip();
+                setHover(null);
+            }
+        });
+
+        const branchLeftX = -1.55;
+        const branchRightX = 1.55;
+        const layerY = [-2.15, -1.12, -0.09, 0.94, 1.97];
+        const planeWidth = 1.42;
+        const planeDepth = 0.78;
+        const planes = [];
+        const allMarkers = [];
+        const pathLines = [];
+
+        const palette = {
+            red: '#ed6f61',
+            pink: '#ff7bd0',
+            orange: '#f5a24b',
+            blue: '#55b9da',
+            purple: '#9b7be4',
+            green: '#66bd79'
+        };
+
+        const examples = [
+            { color: 'red', shape: 'circle', text: 'red circle' },
+            { color: 'pink', shape: 'circle', text: 'pink circle' },
+            { color: 'orange', shape: 'circle', text: 'orange circle' },
+            { color: 'blue', shape: 'circle', text: 'blue circle' },
+            { color: 'purple', shape: 'circle', text: 'purple circle' },
+            { color: 'green', shape: 'square', text: 'green square' },
+            { color: 'pink', shape: 'square', text: 'pink square' },
+            { color: 'red', shape: 'square', text: 'red square' },
+            { color: 'blue', shape: 'triangle', text: 'blue triangle' },
+            { color: 'purple', shape: 'triangle', text: 'purple triangle' }
+        ];
+
+        const jitter = [
+            [-0.035, 0.018], [0.025, -0.022], [0.048, 0.026], [-0.032, -0.024],
+            [0.015, 0.032], [-0.025, 0.042], [0.035, -0.012], [-0.046, -0.034],
+            [0.016, -0.045], [0.052, 0.004]
+        ];
+
+        const colorCenters = {
+            red: [-0.42, 0.22],
+            pink: [0.20, 0.27],
+            orange: [0.43, 0.16],
+            blue: [-0.47, -0.20],
+            purple: [0.06, -0.26],
+            green: [0.37, -0.10]
+        };
+
+        const shapeCenters = {
+            circle: [-0.38, 0.12],
+            square: [0.08, 0.23],
+            triangle: [0.38, -0.16]
+        };
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function localEmbeddingPosition(example, itemIndex, layerIndex, branch) {
+            const colorP = colorCenters[example.color];
+            const shapeP = shapeCenters[example.shape];
+            const t = layerIndex / (layerY.length - 1);
+            // The 2D source encodes the key lesson: image layers drift from color clusters
+            // toward shape clusters, while text layers do the reverse.
+            const blend = branch === 'image' ? t : 1 - t;
+            const swirl = Math.sin((layerIndex + 1) * (itemIndex + 2) * 0.77) * 0.055;
+            const j = jitter[itemIndex % jitter.length];
+            return {
+                x: lerp(colorP[0], shapeP[0], blend) + j[0] + swirl,
+                z: lerp(colorP[1], shapeP[1], blend) + j[1] - swirl * 0.45
+            };
+        }
+
+        function worldPoint(branchX, layerIndex, local) {
+            return new THREE.Vector3(branchX + local.x, layerY[layerIndex] + 0.038, local.z);
+        }
+
+        function createGridPlane(branch, x, y, layerIndex) {
+            const group = new THREE.Group();
+            group.position.set(x, y, 0);
+            scene.add(group);
+
+            const planeGeo = new THREE.PlaneGeometry(planeWidth, planeDepth);
+            planeGeo.rotateX(-Math.PI / 2);
+            const fill = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.18,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const plane = new THREE.Mesh(planeGeo, fill);
+            group.add(plane);
+
+            const edgeMat = new THREE.LineBasicMaterial({ color: 0x444444, linewidth: 1 });
+            const edge = new THREE.LineSegments(new THREE.EdgesGeometry(planeGeo), edgeMat);
+            group.add(edge);
+
+            const gridGeo = new THREE.BufferGeometry();
+            const pts = [];
+            for (let i = 1; i < 4; i++) {
+                const gx = -planeWidth / 2 + (planeWidth * i) / 4;
+                pts.push(gx, 0.002, -planeDepth / 2, gx, 0.002, planeDepth / 2);
+            }
+            for (let i = 1; i < 3; i++) {
+                const gz = -planeDepth / 2 + (planeDepth * i) / 3;
+                pts.push(-planeWidth / 2, 0.002, gz, planeWidth / 2, 0.002, gz);
+            }
+            gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+            const grid = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ color: 0xd7d7d7, transparent: true, opacity: 0.72 }));
+            group.add(grid);
+
+            planes.push({ branch, layerIndex, group, edge, grid, fill });
+            registerInteractive(plane, {
+                title: `${branch === 'image' ? 'Image' : 'Text'} encoder layer ${layerIndex + 1}`,
+                tooltip: `${branch === 'image' ? 'Image' : 'Text'} layer ${layerIndex + 1}: hover/click to inspect grouping`,
+                body: branch === 'image'
+                    ? 'In the image branch, lower planes keep visually similar colors together; upper planes increasingly organize by object shape.'
+                    : 'In the text branch, early sentence embeddings reflect easy word-level grouping, then move toward the shared CLIP space.',
+                setHover: (on) => {
+                    edge.material.color.set(on ? 0x1685d9 : 0x444444);
+                    grid.material.opacity = on ? 0.95 : 0.72;
+                }
+            });
+        }
+
+        layerY.forEach((y, i) => {
+            createGridPlane('image', branchLeftX, y, i);
+            createGridPlane('text', branchRightX, y, i);
+        });
+
+        function markerGeometry(shape) {
+            if (shape === 'circle') return new THREE.SphereGeometry(0.045, 18, 12);
+            if (shape === 'square') return new THREE.BoxGeometry(0.082, 0.044, 0.082);
+            const geo = new THREE.ConeGeometry(0.058, 0.095, 3);
+            geo.rotateY(Math.PI / 6);
+            return geo;
+        }
+
+        function createImageMarker(example, itemIndex, layerIndex) {
+            const local = localEmbeddingPosition(example, itemIndex, layerIndex, 'image');
+            const pos = worldPoint(branchLeftX, layerIndex, local);
+            const mat = new THREE.MeshLambertMaterial({ color: palette[example.color], transparent: true, opacity: 0.86 });
+            const marker = new THREE.Mesh(markerGeometry(example.shape), mat);
+            marker.position.copy(pos);
+            marker.userData.baseScale = marker.scale.clone();
+            marker.userData.example = example;
+            marker.userData.material = mat;
+            scene.add(marker);
+
+            const haloGeo = new THREE.TorusGeometry(0.07, 0.006, 6, 24);
+            haloGeo.rotateX(Math.PI / 2);
+            const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0 }));
+            marker.add(halo);
+            marker.userData.halo = halo;
+            allMarkers.push(marker);
+
+            registerInteractive(marker, {
+                title: `${example.color} ${example.shape}`,
+                tooltip: `${example.color} ${example.shape} image token`,
+                body: `This image-side marker is one training example. Its path shows how visual features move through the ViT blocks before entering the shared embedding space.`,
+                setHover: (on) => {
+                    marker.scale.setScalar(on ? 1.75 : 1);
+                    halo.material.opacity = on ? 0.85 : marker.userData.cueOpacity || 0;
+                }
+            });
+            return marker.position.clone();
+        }
+
+        function createTextMarker(example, itemIndex, layerIndex) {
+            const local = localEmbeddingPosition(example, itemIndex, layerIndex, 'text');
+            const pos = worldPoint(branchRightX, layerIndex, local);
+            const dot = new THREE.Mesh(
+                new THREE.SphereGeometry(0.025, 10, 8),
+                new THREE.MeshBasicMaterial({ color: 0x202020, transparent: true, opacity: 0.58 })
+            );
+            dot.position.copy(pos);
+            dot.userData.example = example;
+            scene.add(dot);
+            allMarkers.push(dot);
+            const textLabel = addLabel(example.text, pos, {
+                fontSize: '8.5px',
+                color: '#111',
+                offset: [18, itemIndex % 2 ? -4 : 3],
+                minScale: 0.32,
+                maxScale: 1.6
+            });
+            dot.userData.textLabel = textLabel;
+
+            registerInteractive(dot, {
+                title: example.text,
+                tooltip: `text token: ${example.text}`,
+                body: `This text-side marker represents the phrase "${example.text}". CLIP training makes it land near the matching image embedding in the final space.`,
+                setHover: (on) => {
+                    dot.scale.setScalar(on ? 2.3 : 1);
+                    textLabel.div.style.fontWeight = on ? 'bold' : '';
+                    textLabel.div.style.background = on ? 'rgba(255,255,210,0.95)' : '';
+                }
+            });
+            return dot.position.clone();
+        }
+
+        function makeDashedPath(points, color, opacity, dashSize = 0.075, gapSize = 0.055) {
+            const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.35);
+            const sampled = curve.getPoints(72);
+            const geom = new THREE.BufferGeometry().setFromPoints(sampled);
+            const mat = new THREE.LineDashedMaterial({
+                color,
+                transparent: true,
+                opacity,
+                dashSize,
+                gapSize,
+                depthWrite: false
+            });
+            const line = new THREE.Line(geom, mat);
+            line.computeLineDistances();
+            line.frustumCulled = false;
+            scene.add(line);
+            pathLines.push(line);
+            return line;
+        }
+
+        examples.forEach((example, itemIndex) => {
+            const imagePts = [];
+            const textPts = [];
+            for (let layerIndex = 0; layerIndex < layerY.length; layerIndex++) {
+                imagePts.push(createImageMarker(example, itemIndex, layerIndex));
+                textPts.push(createTextMarker(example, itemIndex, layerIndex));
+            }
+            makeDashedPath(imagePts, palette[example.color], 0.38, 0.06, 0.045);
+            makeDashedPath(textPts, 0x4f4f4f, 0.34, 0.055, 0.052);
+        });
+
+        function addArrow(start, end, color = 0x111111, headLength = 0.13, headWidth = 0.07) {
+            const s = new THREE.Vector3(...start);
+            const e = new THREE.Vector3(...end);
+            const dir = new THREE.Vector3().subVectors(e, s);
+            const len = dir.length();
+            dir.normalize();
+            const arrow = new THREE.ArrowHelper(dir, s, len, color, headLength, headWidth);
+            scene.add(arrow);
+            return arrow;
+        }
+
+        // Side arrows and labels recreate the repeated ViT/transformer blocks in the source.
+        for (let i = 0; i < layerY.length - 1; i++) {
+            const mid = (layerY[i] + layerY[i + 1]) / 2;
+            addArrow([-2.74, mid - 0.31, 0], [-2.74, mid + 0.31, 0], 0x111111, 0.12, 0.07);
+            addArrow([2.74, mid - 0.31, 0], [2.74, mid + 0.31, 0], 0x111111, 0.12, 0.07);
+            addLabel('ViT block x3', new THREE.Vector3(-2.74, mid, 0), {
+                fontSize: '13px',
+                fontFamily: 'monospace',
+                background: 'rgba(255,255,255,0.96)',
+                border: '1px solid #111',
+                borderRadius: '8px',
+                padding: '2px 8px',
+                textShadow: false,
+                minScale: 0.45,
+                maxScale: 1.7
+            });
+            addLabel('transformer block x3', new THREE.Vector3(2.74, mid, 0), {
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                background: 'rgba(255,255,255,0.96)',
+                border: '1px solid #111',
+                borderRadius: '8px',
+                padding: '2px 8px',
+                textShadow: false,
+                minScale: 0.42,
+                maxScale: 1.55
+            });
+        }
+
+        const bracketMat = new THREE.LineBasicMaterial({ color: 0x111111 });
+        function addVerticalLine(x, y0, y1) {
+            const geom = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(x, y0, 0),
+                new THREE.Vector3(x, y1, 0)
+            ]);
+            const line = new THREE.Line(geom, bracketMat);
+            scene.add(line);
+        }
+        addVerticalLine(-3.32, layerY[0] - 0.43, layerY[layerY.length - 1] + 0.45);
+        addVerticalLine(3.32, layerY[0] - 0.43, layerY[layerY.length - 1] + 0.45);
+        addLabel('Image encoder', new THREE.Vector3(-3.38, -0.08, 0), {
+            fontSize: '16px',
+            fontFamily: 'serif',
+            rotateDeg: -90,
+            minScale: 0.42,
+            maxScale: 1.5
+        });
+        addLabel('Text encoder', new THREE.Vector3(3.38, -0.08, 0), {
+            fontSize: '16px',
+            fontFamily: 'serif',
+            rotateDeg: -90,
+            minScale: 0.42,
+            maxScale: 1.5
+        });
+
+        // The shared circle from the source is modeled as the final joint embedding target.
+        const jointGroup = new THREE.Group();
+        jointGroup.position.set(0, 2.93, 0);
+        scene.add(jointGroup);
+        const jointSphere = new THREE.Mesh(
+            new THREE.SphereGeometry(0.34, 48, 32),
+            new THREE.MeshLambertMaterial({ color: 0xffa783 })
+        );
+        jointGroup.add(jointSphere);
+        const jointRing = new THREE.Mesh(
+            new THREE.TorusGeometry(0.345, 0.017, 8, 80),
+            new THREE.MeshBasicMaterial({ color: 0x111111 })
+        );
+        jointGroup.add(jointRing);
+        registerInteractive(jointSphere, {
+            title: 'Joint embedding space',
+            tooltip: 'shared CLIP embedding space',
+            body: 'Both encoders output vectors in the same space. Matching image/text pairs should have small angular distance after normalization.',
+            setHover: (on) => {
+                jointSphere.scale.setScalar(on ? 1.08 : 1);
+                jointRing.scale.setScalar(on ? 1.08 : 1);
+            }
+        });
+        addLabel('Joint embedding space', new THREE.Vector3(0, 3.39, 0), {
+            fontSize: '18px',
+            fontFamily: 'serif',
+            minScale: 0.5,
+            maxScale: 1.6
+        });
+        addArrow([branchLeftX + 0.52, layerY[layerY.length - 1] + 0.36, 0.03], [-0.32, 2.75, 0.03], 0x111111, 0.13, 0.075);
+        addArrow([branchRightX - 0.52, layerY[layerY.length - 1] + 0.36, 0.03], [0.32, 2.75, 0.03], 0x111111, 0.13, 0.075);
+
+        const btnPaths = document.getElementById('btnPaths');
+        btnPaths.addEventListener('click', () => {
+            const show = !btnPaths.classList.contains('active');
+            btnPaths.classList.toggle('active', show);
+            pathLines.forEach(line => { line.visible = show; });
+        });
+
+        const btnCue = document.getElementById('btnCue');
+        let cueMode = 0;
+        btnCue.addEventListener('click', () => {
+            cueMode = (cueMode + 1) % 3;
+            btnCue.classList.toggle('active', cueMode !== 0);
+            btnCue.textContent = cueMode === 0 ? 'Cue' : cueMode === 1 ? 'Color' : 'Shape';
+            updateCue();
+        });
+
+        function updateCue() {
+            for (const marker of allMarkers) {
+                const ex = marker.userData.example;
+                if (!ex) continue;
+                const isText = !!marker.userData.textLabel;
+                const halo = marker.userData.halo;
+                const material = marker.userData.material || marker.material;
+                marker.scale.setScalar(1);
+                marker.userData.cueOpacity = 0;
+                if (material && material.opacity !== undefined) material.opacity = isText ? 0.58 : 0.86;
+                if (halo) halo.material.opacity = 0;
+                if (marker.userData.textLabel) {
+                    marker.userData.textLabel.div.style.color = '#111';
+                    marker.userData.textLabel.div.style.fontWeight = '';
+                    marker.userData.textLabel.div.style.background = '';
+                }
+
+                if (cueMode === 1) {
+                    if (material && material.color) material.color.set(palette[ex.color] || 0x111111);
+                    if (halo) {
+                        halo.material.color.set(palette[ex.color] || 0x111111);
+                        halo.material.opacity = 0.36;
+                        marker.userData.cueOpacity = 0.36;
+                    }
+                    if (marker.userData.textLabel) marker.userData.textLabel.div.style.color = palette[ex.color] || '#111';
+                } else if (cueMode === 2) {
+                    const shapeColor = ex.shape === 'circle' ? '#111111' : ex.shape === 'square' ? '#1f7a45' : '#7a3bc4';
+                    if (halo) {
+                        halo.material.color.set(shapeColor);
+                        halo.material.opacity = 0.54;
+                        marker.userData.cueOpacity = 0.54;
+                    }
+                    if (marker.userData.textLabel) {
+                        marker.userData.textLabel.div.style.fontWeight = 'bold';
+                        marker.userData.textLabel.div.style.background = ex.shape === 'triangle' ? 'rgba(238,230,255,0.78)' : ex.shape === 'square' ? 'rgba(226,248,232,0.78)' : 'rgba(245,245,245,0.82)';
+                    }
+                }
+            }
+        }
+
+        const resize = () => {
+            const w = canvas.clientWidth || window.innerWidth;
+            const h = canvas.clientHeight || window.innerHeight;
+            aspect = w / Math.max(h, 1);
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.top = d;
+            camera.bottom = -d;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h, false);
+        };
+        new ResizeObserver(resize).observe(canvas);
+        resize();
+
+        // This orthographic first frame is tuned to match the source crop and isometric slant.
+        setCameraView({
+            projection: 'orthographic',
+            azimuthDeg: 45,
+            elevationDeg: 24,
+            rollDeg: 0,
+            zoom: 0.89,
+            target: [0, 0.38, 0],
+            heightFraction: 0.91
+        });
+
+        let _firstFrame = true;
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            jointRing.quaternion.copy(camera.quaternion);
+            renderer.render(scene, camera);
+            _syncLabels();
+            if (_firstFrame) {
+                _firstFrame = false;
+                window.__markRendered?.();
+            }
+        }
+        animate();
+    </script>
+</body>
+
+</html>

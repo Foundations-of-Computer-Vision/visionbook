@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>DFT Laplacians</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    #c {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .lbl {
+      position: absolute;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      white-space: nowrap;
+      font-family: "Times New Roman", Times, serif;
+      font-size: 20px;
+      color: #050505;
+    }
+
+    #ui {
+      position: absolute;
+      left: 8px;
+      bottom: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-family: sans-serif;
+      font-size: 11px;
+      max-width: 190px;
+      max-height: 34%;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      opacity: 0.86;
+      transform: none;
+      transition: opacity 0.16s ease;
+      z-index: 10;
+    }
+
+    #ui:hover,
+    #ui:focus-within {
+      opacity: 1;
+    }
+
+    #ui button {
+      padding: 4px 9px;
+      cursor: pointer;
+      border: 1px solid #aaa;
+      background: #f7f7f7;
+      border-radius: 4px;
+      font-size: 11px;
+      line-height: 1.1;
+    }
+
+    #ui button:hover {
+      background: #e7e7e7;
+    }
+
+    #ui button.active {
+      background: #d9efff;
+      border-color: #5aabf0;
+    }
+
+    #figTooltip {
+      position: fixed;
+      left: 0;
+      top: 0;
+      display: none;
+      max-width: 240px;
+      padding: 5px 8px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.62);
+      color: #fff;
+      font: 11px/1.35 sans-serif;
+      pointer-events: none;
+      white-space: normal;
+      z-index: 20;
+    }
+
+    #note {
+      position: absolute;
+      right: 10px;
+      bottom: 8px;
+      max-width: 260px;
+      padding: 5px 8px;
+      font: 11px/1.35 sans-serif;
+      color: #111;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      border-radius: 4px;
+      display: none;
+      z-index: 9;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="c"></canvas>
+  <div id="figTooltip"></div>
+  <div id="note"></div>
+  <div id="ui">
+    <button id="btnReset" style="display:none">Reset View</button>
+    <button id="btnRings" title="Toggle peak-frequency guides">rings</button>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <div id="err-overlay" style="display:none;position:fixed;inset:0;background:#fff;z-index:999;
+       flex-direction:column;align-items:center;justify-content:center;
+       font-family:sans-serif;font-size:13px;color:#555;gap:10px;">
+    <span id="err-msg">Figure failed to load</span>
+    <button onclick="location.reload()" style="padding:5px 14px;border:1px solid #aaa;
+        border-radius:5px;background:#f5f5f5;cursor:pointer;font-size:12px;">Reload</button>
+  </div>
+
+  <script>
+    let _rendered = false;
+    const _errOverlay = document.getElementById('err-overlay');
+    window.__markRendered = () => { _rendered = true; _errOverlay.style.display = 'none'; };
+    window.addEventListener('error', (e) => {
+      if (!_rendered) {
+        document.getElementById('err-msg').textContent = e.message || 'Figure failed to load';
+        _errOverlay.style.display = 'flex';
+      }
+    });
+    setTimeout(() => {
+      if (!_rendered) { _errOverlay.style.display = 'flex'; }
+    }, 12000);
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const canvas = document.getElementById('c');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+
+    const d = 3;
+    let aspect = canvas.clientWidth / canvas.clientHeight;
+    let camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+    camera.position.set(4, 4, 4);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    const HOME_POS = new THREE.Vector3();
+    const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+    let HOME_ZOOM = 0.75;
+
+    document.getElementById('btnReset').addEventListener('click', () => {
+      camera.position.copy(HOME_POS);
+      controls.target.copy(HOME_TARGET);
+      camera.zoom = HOME_ZOOM;
+      camera.updateProjectionMatrix();
+      controls.update();
+    });
+
+    const FRAME_HALF_HEIGHT = d;
+    const MIN_ZOOM = 0.2;
+    const MAX_ZOOM = 5;
+
+    function computeSceneBounds() {
+      const box = new THREE.Box3().setFromObject(scene);
+      if (box.isEmpty()) {
+        box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2 * d, 2 * d, 2 * d));
+      }
+      const center = new THREE.Vector3();
+      box.getCenter(center);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      return { box, center, size };
+    }
+
+    function setCameraView({
+      projection = 'orthographic',
+      azimuthDeg = 45,
+      elevationDeg = 35,
+      rollDeg = 0,
+      zoom = null,
+      target = null,
+      heightFraction = 0.5,
+      distanceScale = 1.2
+    } = {}) {
+      const { center, size } = computeSceneBounds();
+      const viewTarget = Array.isArray(target)
+        ? new THREE.Vector3(target[0] || 0, target[1] || 0, target[2] || 0)
+        : center;
+      const contentHeight = Math.max(size.y, 1e-6);
+      const desiredViewHeight = contentHeight / Math.max(heightFraction, 0.01);
+      let resolvedZoom = Number.isFinite(zoom) ? zoom : (2 * FRAME_HALF_HEIGHT) / desiredViewHeight;
+      resolvedZoom = Math.min(Math.max(resolvedZoom, MIN_ZOOM), MAX_ZOOM);
+      camera.zoom = resolvedZoom;
+
+      const radius = Math.max(size.length() * distanceScale, FRAME_HALF_HEIGHT * 2);
+      const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+      const elevation = THREE.MathUtils.degToRad(elevationDeg);
+      const cosElev = Math.cos(elevation);
+      camera.position.set(
+        viewTarget.x + radius * Math.cos(azimuth) * cosElev,
+        viewTarget.y + radius * Math.sin(elevation),
+        viewTarget.z + radius * Math.sin(azimuth) * cosElev
+      );
+
+      controls.target.copy(viewTarget);
+      camera.up.set(0, 1, 0);
+      if (Number.isFinite(rollDeg) && rollDeg !== 0) {
+        const viewDir = new THREE.Vector3().subVectors(viewTarget, camera.position).normalize();
+        camera.up.applyAxisAngle(viewDir, THREE.MathUtils.degToRad(rollDeg));
+      }
+      camera.updateProjectionMatrix();
+      controls.update();
+
+      HOME_POS.copy(camera.position);
+      HOME_TARGET.copy(controls.target);
+      HOME_ZOOM = camera.zoom;
+      window.__figureCameraView = {
+        projection,
+        azimuthDeg,
+        elevationDeg,
+        rollDeg,
+        zoom: camera.zoom,
+        target: [controls.target.x, controls.target.y, controls.target.z],
+      };
+    }
+
+    function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.5 } = {}) {
+      const azimuthDeg = THREE.MathUtils.radToDeg(azimuth);
+      const elevationDeg = 90 - THREE.MathUtils.radToDeg(polar);
+      setCameraView({ azimuthDeg, elevationDeg, heightFraction });
+    }
+
+    setStandardView();
+
+    const _labels = [];
+    const _v = new THREE.Vector3();
+
+    function addLabel(text, position, options = {}) {
+      const div = document.createElement('div');
+      div.className = 'lbl';
+      div.innerHTML = text;
+      if (options.color) div.style.color = options.color;
+      if (options.fontSize) div.style.fontSize = options.fontSize;
+      if (options.bold) div.style.fontWeight = 'bold';
+      if (options.background) {
+        div.style.background = options.background;
+        div.style.padding = '1px 4px';
+        div.style.borderRadius = '3px';
+      }
+      document.body.appendChild(div);
+      const entry = { div, pos: position.clone(), offset: options.offset || [0, 0] };
+      _labels.push(entry);
+      return entry;
+    }
+
+    const _referenceDistance = 22;
+
+    function _syncLabels() {
+      for (const { div, pos, offset } of _labels) {
+        _v.copy(pos).project(camera);
+        if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
+          div.style.display = 'none';
+          continue;
+        }
+        div.style.display = '';
+        const ox = offset && offset[0] ? offset[0] : 0;
+        const oy = offset && offset[1] ? offset[1] : 0;
+        const x = (_v.x * 0.5 + 0.5) * canvas.clientWidth + ox;
+        const y = (-_v.y * 0.5 + 0.5) * canvas.clientHeight + oy;
+        const distance = Math.max(camera.position.distanceTo(pos), 1e-4);
+        let scale = (_referenceDistance / distance) * (camera.zoom || 1);
+        scale = Math.max(0.55, Math.min(scale, 4.2));
+        div.style.left = x + 'px';
+        div.style.top = y + 'px';
+        div.style.transform = `translate(-50%, -50%) scale(${scale})`;
+      }
+    }
+
+    const _tooltip = document.getElementById('figTooltip');
+    const _raycaster = new THREE.Raycaster();
+    const _pointer = new THREE.Vector2();
+    const _interactiveObjects = [];
+    let _hoveredInteractive = null;
+
+    function showTooltip(text, event) {
+      if (!_tooltip || !text) return;
+      _tooltip.textContent = text;
+      _tooltip.style.display = 'block';
+      moveTooltip(event);
+    }
+
+    function moveTooltip(event) {
+      if (!_tooltip || _tooltip.style.display === 'none') return;
+      const pad = 12;
+      const x = Math.min(event.clientX + pad, window.innerWidth - _tooltip.offsetWidth - pad);
+      const y = Math.max(pad, event.clientY - _tooltip.offsetHeight - pad);
+      _tooltip.style.left = x + 'px';
+      _tooltip.style.top = y + 'px';
+    }
+
+    function hideTooltip() {
+      if (_tooltip) _tooltip.style.display = 'none';
+    }
+
+    function _setPointerFromEvent(event) {
+      const rect = canvas.getBoundingClientRect();
+      _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    function _firstInteractiveHit(event) {
+      if (!_interactiveObjects.length) return null;
+      _setPointerFromEvent(event);
+      _raycaster.setFromCamera(_pointer, camera);
+      const hits = _raycaster.intersectObjects(_interactiveObjects.map(entry => entry.object), true);
+      for (const hit of hits) {
+        let obj = hit.object;
+        while (obj) {
+          const entry = _interactiveObjects.find(item => item.object === obj);
+          if (entry) return { ...entry, hit };
+          obj = obj.parent;
+        }
+      }
+      return null;
+    }
+
+    function registerInteractive(object, info = {}) {
+      if (!object) return object;
+      object.userData = object.userData || {};
+      object.userData.interactive = true;
+      _interactiveObjects.push({ object, info });
+      return object;
+    }
+
+    canvas.addEventListener('pointermove', (event) => {
+      moveTooltip(event);
+      const entry = _firstInteractiveHit(event);
+      if (entry) {
+        if (_hoveredInteractive && _hoveredInteractive.info.onLeave && _hoveredInteractive.object !== entry.object) {
+          _hoveredInteractive.info.onLeave();
+        }
+        _hoveredInteractive = entry;
+        canvas.style.cursor = 'pointer';
+        if (entry.info.onHover) entry.info.onHover();
+        showTooltip(entry.info.tooltip || entry.info.title || 'Click to explain', event);
+      } else {
+        if (_hoveredInteractive && _hoveredInteractive.info.onLeave) _hoveredInteractive.info.onLeave();
+        _hoveredInteractive = null;
+        canvas.style.cursor = controls.enabled ? 'grab' : 'default';
+        hideTooltip();
+      }
+    });
+
+    canvas.addEventListener('pointerleave', () => {
+      if (_hoveredInteractive && _hoveredInteractive.info.onLeave) _hoveredInteractive.info.onLeave();
+      _hoveredInteractive = null;
+      canvas.style.cursor = 'default';
+      hideTooltip();
+    });
+
+    canvas.addEventListener('click', (event) => {
+      const entry = _firstInteractiveHit(event) || _hoveredInteractive;
+      if (!entry) return;
+      if (typeof entry.info.onClick === 'function') entry.info.onClick(entry.hit, entry.object);
+    });
+
+    window.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        hideTooltip();
+        selectPanel(null);
+      }
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+      _syncLabels();
+      if (animate.firstFrame) { animate.firstFrame = false; window.__markRendered?.(); }
+    }
+    animate.firstFrame = true;
+    animate();
+
+    new ResizeObserver(() => {
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      aspect = w / h;
+      camera.left = -d * aspect;
+      camera.right = d * aspect;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
+    }).observe(canvas);
+
+    const panels = [];
+    const ringGroup = new THREE.Group();
+    ringGroup.visible = false;
+    scene.add(ringGroup);
+
+    const note = document.getElementById('note');
+    const activeColor = new THREE.Color(0xff2a00);
+    const axisMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 1 });
+    const panelSpacing = 5.2;
+    const xOffsets = [-7.8, -2.6, 2.6, 7.8];
+
+    function colorForHeight(value) {
+      const t = THREE.MathUtils.clamp(value, 0, 1);
+      const hue = 0.66 * (1 - t);
+      return new THREE.Color().setHSL(hue, 1.0, 0.52);
+    }
+
+    function laplacianGaussianMagnitude(u, v, sigma) {
+      const r2 = u * u + v * v;
+      return r2 * Math.exp(-0.5 * sigma * sigma * r2);
+    }
+
+    function fivePointMagnitude(u, v) {
+      return Math.abs(4 - 2 * Math.cos(u) - 2 * Math.cos(v));
+    }
+
+    function surfaceGeometry(sample, options = {}) {
+      const segments = options.segments || 46;
+      const extent = Math.PI;
+      const positions = [];
+      const colors = [];
+      let maxValue = 0;
+      const values = [];
+      for (let iz = 0; iz <= segments; iz++) {
+        const v = -extent + (2 * extent * iz) / segments;
+        for (let ix = 0; ix <= segments; ix++) {
+          const u = -extent + (2 * extent * ix) / segments;
+          const raw = sample(u, v);
+          values.push(raw);
+          maxValue = Math.max(maxValue, raw);
+        }
+      }
+
+      const heightScale = options.heightScale || 2.35;
+      const xyScale = options.xyScale || 0.45;
+      let index = 0;
+      for (let iz = 0; iz <= segments; iz++) {
+        const v = -extent + (2 * extent * iz) / segments;
+        for (let ix = 0; ix <= segments; ix++) {
+          const u = -extent + (2 * extent * ix) / segments;
+          const normalized = maxValue > 0 ? values[index++] / maxValue : 0;
+          const shaped = Math.pow(normalized, options.gamma || 0.72);
+          positions.push(u * xyScale, shaped * heightScale, v * xyScale);
+          const color = colorForHeight(shaped);
+          colors.push(color.r, color.g, color.b);
+        }
+      }
+
+      const indices = [];
+      for (let iz = 0; iz < segments; iz++) {
+        for (let ix = 0; ix < segments; ix++) {
+          const a = iz * (segments + 1) + ix;
+          const b = a + 1;
+          const c = a + (segments + 1);
+          const dd = c + 1;
+          indices.push(a, c, b, b, c, dd);
+        }
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+
+    function makeArrow(start, end, options = {}) {
+      const group = new THREE.Group();
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const length = direction.length();
+      const unit = direction.clone().normalize();
+      const shaftEnd = start.clone().addScaledVector(unit, length - (options.headLength || 0.25));
+      const shaftLength = Math.max(start.distanceTo(shaftEnd), 0.001);
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(options.shaftRadius || 0.022, options.shaftRadius || 0.022, shaftLength, 12),
+        new THREE.MeshBasicMaterial({ color: options.color || 0x000000 })
+      );
+      shaft.position.copy(start.clone().add(shaftEnd).multiplyScalar(0.5));
+      shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), unit);
+      group.add(shaft);
+
+      const cone = new THREE.Mesh(
+        new THREE.ConeGeometry(options.headRadius || 0.075, options.headLength || 0.25, 18),
+        new THREE.MeshBasicMaterial({ color: options.color || 0x000000 })
+      );
+      cone.position.copy(shaftEnd.clone().addScaledVector(unit, (options.headLength || 0.25) * 0.5));
+      cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), unit);
+      group.add(cone);
+      return group;
+    }
+
+    function makeAxes(center) {
+      const group = new THREE.Group();
+      const x0 = new THREE.Vector3(center.x - 1.55, 0, center.z);
+      const x1 = new THREE.Vector3(center.x + 1.8, 0, center.z);
+      const z0 = new THREE.Vector3(center.x, 0, center.z - 1.48);
+      const z1 = new THREE.Vector3(center.x, 0, center.z + 1.32);
+      const y0 = new THREE.Vector3(center.x, 0, center.z);
+      const y1 = new THREE.Vector3(center.x, 2.9, center.z);
+      group.add(makeArrow(x0, x1, { headLength: 0.23, headRadius: 0.075 }));
+      group.add(makeArrow(z0, z1, { headLength: 0.23, headRadius: 0.075 }));
+      group.add(makeArrow(y0, y1, { headLength: 0.26, headRadius: 0.085 }));
+      return group;
+    }
+
+    function makeRing(center, radius, color) {
+      const points = [];
+      const steps = 96;
+      for (let i = 0; i <= steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        points.push(new THREE.Vector3(center.x + radius * Math.cos(a), 0.045, center.z + radius * Math.sin(a)));
+      }
+      return new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(points),
+        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.62 })
+      );
+    }
+
+    function makePlateauLift(geometry, amount, radius, centerX) {
+      const position = geometry.attributes.position;
+      for (let i = 0; i < position.count; i++) {
+        const x = position.getX(i) - centerX;
+        const z = position.getZ(i);
+        const r = Math.sqrt(x * x + z * z);
+        if (r < radius) {
+          const lift = amount * (1 + Math.cos(Math.PI * r / radius)) * 0.5;
+          position.setY(i, position.getY(i) + lift);
+        }
+      }
+      position.needsUpdate = true;
+      geometry.computeVertexNormals();
+    }
+
+    function createPanel(definition, index) {
+      const center = new THREE.Vector3(xOffsets[index], 0, 0);
+      const group = new THREE.Group();
+      scene.add(group);
+
+      const geometry = surfaceGeometry(definition.sample, definition.surfaceOptions || {});
+      if (definition.plateauLift) makePlateauLift(geometry, definition.plateauLift.amount, definition.plateauLift.radius, 0);
+      geometry.translate(center.x, 0, center.z);
+
+      const surfaceMaterial = new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.98,
+        side: THREE.DoubleSide
+      });
+      const surface = new THREE.Mesh(geometry, surfaceMaterial);
+      surface.userData.defaultOpacity = surfaceMaterial.opacity;
+      group.add(surface);
+
+      const invisiblePick = new THREE.Mesh(
+        geometry.clone(),
+        new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false })
+      );
+      group.add(invisiblePick);
+
+      const axes = makeAxes(center);
+      group.add(axes);
+
+      // The ring marks the radial frequency where the continuous LoG spectrum peaks.
+      if (definition.ringRadius) {
+        const ring = makeRing(center, definition.ringRadius, 0xff5a00);
+        ringGroup.add(ring);
+      }
+
+      addLabel('u', new THREE.Vector3(center.x + 1.92, -0.05, center.z + 0.08), { fontSize: '34px', bold: true, offset: [0, 0] });
+      addLabel('v', new THREE.Vector3(center.x + 0.58, 0.3, center.z + 1.08), { fontSize: '34px', bold: true, offset: [0, 0] });
+      addLabel(`${definition.letter})`, new THREE.Vector3(center.x - 1.92, -0.55, center.z - 0.25), { fontSize: '36px', bold: false });
+
+      const panel = { definition, group, surface, surfaceMaterial, axes, center, selected: false };
+      panels.push(panel);
+
+      registerInteractive(invisiblePick, {
+        title: definition.title,
+        tooltip: definition.tooltip,
+        onHover: () => highlightPanel(panel, true),
+        onLeave: () => highlightPanel(panel, false),
+        onClick: () => selectPanel(panel)
+      });
+    }
+
+    function highlightPanel(panel, active) {
+      if (panel.selected) return;
+      panel.surfaceMaterial.opacity = active ? 1 : panel.surface.userData.defaultOpacity;
+      const scale = active ? 1.025 : 1;
+      panel.group.scale.set(scale, scale, scale);
+    }
+
+    function selectPanel(panel) {
+      panels.forEach((item) => {
+        item.selected = item === panel;
+        item.surfaceMaterial.opacity = item.selected ? 1 : item.surface.userData.defaultOpacity;
+        item.group.scale.set(item.selected ? 1.035 : 1, item.selected ? 1.035 : 1, item.selected ? 1.035 : 1);
+      });
+      if (!panel) {
+        note.style.display = 'none';
+        return;
+      }
+      note.textContent = panel.definition.note;
+      note.style.display = 'block';
+    }
+
+    const defs = [
+      {
+        letter: 'a',
+        title: 'sigma = 1/2',
+        tooltip: 'sigma = 1/2: the DFT magnitude is broad and keeps high frequencies.',
+        note: 'sigma = 1/2 samples a very narrow spatial kernel, so its spectrum spreads broadly across frequency.',
+        sample: (u, v) => laplacianGaussianMagnitude(u, v, 0.5),
+        ringRadius: Math.min(1.414 / 0.5 * 0.45, Math.PI * 0.45),
+        surfaceOptions: { gamma: 0.92, heightScale: 2.15 }
+      },
+      {
+        letter: 'b',
+        title: 'sigma = 1',
+        tooltip: 'sigma = 1: the Gaussian Laplacian becomes a clear band-pass annulus.',
+        note: 'sigma = 1 gives the textbook Mexican-hat spectrum: zero at DC and strongest at a middle radius.',
+        sample: (u, v) => laplacianGaussianMagnitude(u, v, 1),
+        ringRadius: 1.414 / 1 * 0.45,
+        surfaceOptions: { gamma: 0.66, heightScale: 2.55 }
+      },
+      {
+        letter: 'c',
+        title: 'sigma = 2',
+        tooltip: 'sigma = 2: smoothing moves the pass band inward and narrows it.',
+        note: 'As sigma increases, the spatial Gaussian is wider and the DFT peak moves toward lower spatial frequency.',
+        sample: (u, v) => laplacianGaussianMagnitude(u, v, 2),
+        ringRadius: 1.414 / 2 * 0.45,
+        surfaceOptions: { gamma: 0.48, heightScale: 2.85 }
+      },
+      {
+        letter: 'd',
+        title: 'five-point Laplacian',
+        tooltip: 'Five-point approximation: a discrete Laplacian, not perfectly rotationally invariant.',
+        note: 'The five-point kernel has zero DC response but rises toward the grid-aligned high frequencies, revealing discrete anisotropy.',
+        sample: (u, v) => fivePointMagnitude(u, v),
+        ringRadius: null,
+        surfaceOptions: { gamma: 0.78, heightScale: 2.25 },
+        plateauLift: { amount: 0.4, radius: 0.9 }
+      }
+    ];
+
+    defs.forEach(createPanel);
+
+    const btnRings = document.getElementById('btnRings');
+    btnRings.addEventListener('click', () => {
+      ringGroup.visible = !ringGroup.visible;
+      btnRings.classList.toggle('active', ringGroup.visible);
+      note.textContent = ringGroup.visible
+        ? 'Orange rings mark the radial frequency of strongest response; larger sigma pulls the ring inward.'
+        : '';
+      note.style.display = ringGroup.visible ? 'block' : (panels.some(p => p.selected) ? 'block' : 'none');
+      if (!ringGroup.visible) {
+        const selected = panels.find(p => p.selected);
+        if (selected) note.textContent = selected.definition.note;
+      }
+    });
+
+    // Match the source image: a long, low orthographic strip with four separated 3D frequency plots.
+    setCameraView({
+      projection: 'orthographic',
+      azimuthDeg: 23,
+      elevationDeg: 17,
+      rollDeg: -0.5,
+      zoom: 0.63,
+      target: [0, 0.95, 0.05],
+      heightFraction: 0.58,
+      distanceScale: 1.05
+    });
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>BRDF Figure</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #c {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        .lbl {
+            position: absolute;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 13px;
+            color: #111;
+            line-height: 0.95;
+        }
+
+        .mathLabel {
+            font-style: italic;
+            letter-spacing: 0;
+        }
+
+        .vecLabel {
+            font-weight: 700;
+            font-style: normal;
+        }
+
+        #ui {
+            position: absolute;
+            left: 6px;
+            bottom: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-family: sans-serif;
+            font-size: 11px;
+            max-width: 190px;
+            max-height: 34%;
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            opacity: 0.88;
+            transform: none;
+            transition: opacity 0.16s ease;
+            z-index: 10;
+        }
+
+        #ui:hover,
+        #ui:focus-within {
+            opacity: 1;
+        }
+
+        #ui button {
+            padding: 4px 10px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        #ui button:hover {
+            background: #e0e0e0;
+        }
+
+        #ui button.active {
+            background: #c8e6ff;
+            border-color: #5aabf0;
+        }
+
+        #ui label {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            color: #111;
+            text-shadow: 0 1px 2px #fff;
+        }
+
+        #ui .checkLabel {
+            flex-direction: row;
+            align-items: center;
+            gap: 4px;
+        }
+
+        #ui input[type=range] {
+            width: 86px;
+        }
+
+        #figTooltip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: none;
+            max-width: 220px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.58);
+            color: #fff;
+            font: 11px/1.35 sans-serif;
+            pointer-events: none;
+            white-space: normal;
+            z-index: 20;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+    <div id="figTooltip"></div>
+    <div id="ui">
+        <button id="btnReset" style="display:none">Reset View</button>
+        <label>&lambda;<input id="lambdaSlider" type="range" min="0" max="1" step="0.01" value="0.72"></label>
+        <label class="checkLabel"><input id="diffuseToggle" type="checkbox" checked>diffuse</label>
+    </div>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    }
+  }
+  </script>
+
+    <div id="err-overlay"
+        style="display:none;position:fixed;inset:0;background:#fff;z-index:999;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;font-size:13px;color:#555;gap:10px;">
+        <span id="err-msg">Figure failed to load</span>
+        <button onclick="location.reload()"
+            style="padding:5px 14px;border:1px solid #aaa;border-radius:5px;background:#f5f5f5;cursor:pointer;font-size:12px;">Reload</button>
+    </div>
+
+    <script>
+        let _rendered = false;
+        const _errOverlay = document.getElementById('err-overlay');
+        window.__markRendered = () => { _rendered = true; _errOverlay.style.display = 'none'; };
+        window.addEventListener('error', (e) => {
+            if (!_rendered) {
+                document.getElementById('err-msg').textContent = e.message || 'Figure failed to load';
+                _errOverlay.style.display = 'flex';
+            }
+        });
+        setTimeout(() => {
+            if (!_rendered) { _errOverlay.style.display = 'flex'; }
+        }, 12000);
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const canvas = document.getElementById('c');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const d = 3;
+        function viewportSize() {
+            return {
+                w: canvas.clientWidth || window.innerWidth || canvas.width || 1,
+                h: canvas.clientHeight || window.innerHeight || canvas.height || 1
+            };
+        }
+
+        let { w: initialWidth, h: initialHeight } = viewportSize();
+        let aspect = initialWidth / initialHeight;
+        let camera = new THREE.OrthographicCamera(
+            -d * aspect, d * aspect, d, -d, 0.1, 100
+        );
+        camera.position.set(4, 4, 4);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const HOME_POS = new THREE.Vector3();
+        const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+        let HOME_ZOOM = 0.75;
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            camera.position.copy(HOME_POS);
+            controls.target.copy(HOME_TARGET);
+            camera.zoom = HOME_ZOOM;
+            camera.updateProjectionMatrix();
+            controls.update();
+        });
+
+        const FRAME_HALF_HEIGHT = d;
+        const MIN_ZOOM = 0.2;
+        const MAX_ZOOM = 5;
+
+        function computeSceneBounds() {
+            const box = new THREE.Box3().setFromObject(scene);
+            if (box.isEmpty()) {
+                box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2 * d, 2 * d, 2 * d));
+            }
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            return { box, center, size };
+        }
+
+        function setCameraView({
+            projection = 'orthographic',
+            azimuthDeg = 45,
+            elevationDeg = 35,
+            rollDeg = 0,
+            zoom = null,
+            target = null,
+            heightFraction = 0.5,
+            distanceScale = 1.2
+        } = {}) {
+            const { center, size } = computeSceneBounds();
+            const viewTarget = Array.isArray(target)
+                ? new THREE.Vector3(target[0] || 0, target[1] || 0, target[2] || 0)
+                : center;
+
+            const contentHeight = Math.max(size.y, 1e-6);
+            const desiredViewHeight = contentHeight / Math.max(heightFraction, 0.01);
+            let resolvedZoom = Number.isFinite(zoom) ? zoom : (2 * FRAME_HALF_HEIGHT) / desiredViewHeight;
+            resolvedZoom = Math.min(Math.max(resolvedZoom, MIN_ZOOM), MAX_ZOOM);
+            camera.zoom = resolvedZoom;
+
+            const radius = Math.max(size.length() * distanceScale, FRAME_HALF_HEIGHT * 2);
+            const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+            const elevation = THREE.MathUtils.degToRad(elevationDeg);
+            const cosElev = Math.cos(elevation);
+            const x = viewTarget.x + radius * Math.cos(azimuth) * cosElev;
+            const y = viewTarget.y + radius * Math.sin(elevation);
+            const z = viewTarget.z + radius * Math.sin(azimuth) * cosElev;
+            camera.position.set(x, y, z);
+
+            controls.target.copy(viewTarget);
+            camera.up.set(0, 1, 0);
+            if (Number.isFinite(rollDeg) && rollDeg !== 0) {
+                const viewDir = new THREE.Vector3().subVectors(viewTarget, camera.position).normalize();
+                camera.up.applyAxisAngle(viewDir, THREE.MathUtils.degToRad(rollDeg));
+            }
+            camera.updateProjectionMatrix();
+            controls.update();
+
+            HOME_POS.copy(camera.position);
+            HOME_TARGET.copy(controls.target);
+            HOME_ZOOM = camera.zoom;
+
+            window.__figureCameraView = {
+                projection,
+                azimuthDeg,
+                elevationDeg,
+                rollDeg,
+                zoom: camera.zoom,
+                target: [controls.target.x, controls.target.y, controls.target.z]
+            };
+        }
+
+        function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.5 } = {}) {
+            const azimuthDeg = THREE.MathUtils.radToDeg(azimuth);
+            const elevationDeg = 90 - THREE.MathUtils.radToDeg(polar);
+            setCameraView({ azimuthDeg, elevationDeg, heightFraction });
+        }
+
+        setStandardView();
+
+        const _labels = [];
+        const _v = new THREE.Vector3();
+
+        function addLabel(text, position, options = {}) {
+            const div = document.createElement('div');
+            div.className = 'lbl';
+            div.innerHTML = text;
+            if (options.color) div.style.color = options.color;
+            if (options.fontSize) div.style.fontSize = options.fontSize;
+            if (options.bold) div.style.fontWeight = 'bold';
+            if (options.background) {
+                div.style.background = options.background;
+                div.style.padding = '1px 4px';
+                div.style.borderRadius = '3px';
+            }
+            document.body.appendChild(div);
+            const entry = { div, pos: position.clone(), offset: options.offset || [0, 0] };
+            _labels.push(entry);
+            return entry;
+        }
+
+        const _referenceDistance = 8;
+
+        function _syncLabels() {
+            for (const { div, pos, offset } of _labels) {
+                _v.copy(pos).project(camera);
+                if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
+                    div.style.display = 'none';
+                    continue;
+                }
+                div.style.display = '';
+
+                const ox = offset && offset[0] ? offset[0] : 0;
+                const oy = offset && offset[1] ? offset[1] : 0;
+                const { w, h } = viewportSize();
+                const x = (_v.x * 0.5 + 0.5) * w + ox;
+                const y = (-_v.y * 0.5 + 0.5) * h + oy;
+
+                const distance = Math.max(camera.position.distanceTo(pos), 1e-4);
+                let scale = (_referenceDistance / distance) * (camera.zoom || 1);
+                scale = Math.max(0.5, Math.min(scale, 6));
+
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                div.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            }
+        }
+
+        const _tooltip = document.getElementById('figTooltip');
+        const _raycaster = new THREE.Raycaster();
+        const _pointer = new THREE.Vector2();
+        const _interactiveObjects = [];
+        let _hoveredInteractive = null;
+
+        function showPopup(title, body) {
+            window.parent.postMessage({ type: 'alex-popup', title, body }, '*');
+        }
+
+        function hidePopup() {
+            window.parent.postMessage({ type: 'alex-popup', title: null }, '*');
+        }
+
+        function showTooltip(text, event) {
+            if (!_tooltip || !text) return;
+            _tooltip.textContent = text;
+            _tooltip.style.display = 'block';
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            if (!_tooltip || _tooltip.style.display === 'none') return;
+            const pad = 12;
+            const x = Math.min(event.clientX + pad, window.innerWidth - _tooltip.offsetWidth - pad);
+            const y = Math.max(pad, event.clientY - _tooltip.offsetHeight - pad);
+            _tooltip.style.left = x + 'px';
+            _tooltip.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            if (_tooltip) _tooltip.style.display = 'none';
+        }
+
+        function _setPointerFromEvent(event) {
+            const rect = canvas.getBoundingClientRect();
+            _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function _firstInteractiveHit(event) {
+            if (!_interactiveObjects.length) return null;
+            _setPointerFromEvent(event);
+            _raycaster.setFromCamera(_pointer, camera);
+            const hits = _raycaster.intersectObjects(_interactiveObjects.map(entry => entry.object), true);
+            for (const hit of hits) {
+                let obj = hit.object;
+                while (obj) {
+                    const entry = _interactiveObjects.find(item => item.object === obj);
+                    if (entry) return { ...entry, hit };
+                    obj = obj.parent;
+                }
+            }
+            return null;
+        }
+
+        function registerInteractive(object, info = {}) {
+            if (!object) return object;
+            object.userData = object.userData || {};
+            object.userData.interactive = true;
+            _interactiveObjects.push({ object, info });
+            return object;
+        }
+
+        canvas.addEventListener('pointermove', (event) => {
+            moveTooltip(event);
+            const entry = _firstInteractiveHit(event);
+            if (entry) {
+                _hoveredInteractive = entry;
+                canvas.style.cursor = 'pointer';
+                showTooltip(entry.info.tooltip || entry.info.title || 'Click to explain', event);
+            } else {
+                _hoveredInteractive = null;
+                canvas.style.cursor = controls.enabled ? 'grab' : 'default';
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('pointerleave', () => {
+            _hoveredInteractive = null;
+            canvas.style.cursor = 'default';
+            hideTooltip();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            const entry = _firstInteractiveHit(event) || _hoveredInteractive;
+            if (!entry) {
+                hidePopup();
+                return;
+            }
+            const title = entry.info.title || entry.info.tooltip || 'Figure element';
+            const body = entry.info.body || entry.info.description || 'This part is interactive.';
+            showPopup(title, body);
+            if (typeof entry.info.onClick === 'function') entry.info.onClick(entry.hit, entry.object);
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hidePopup();
+                hideTooltip();
+            }
+        });
+
+        const black = new THREE.MeshBasicMaterial({ color: 0x050505 });
+        const planeMat = new THREE.MeshBasicMaterial({ color: 0x66ff00, side: THREE.DoubleSide });
+        const hitMat = new THREE.MeshBasicMaterial({ color: 0x050505, side: THREE.DoubleSide });
+        const qMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+        const nMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+        const pMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+        const loutMat = new THREE.MeshBasicMaterial({ color: 0x108a00 });
+        const diffuseMat = new THREE.MeshBasicMaterial({ color: 0x49c900, transparent: true, opacity: 0.55, depthWrite: false });
+        const diffuseFaintMat = new THREE.MeshBasicMaterial({ color: 0x49c900, transparent: true, opacity: 0.24, depthWrite: false });
+        const incidentGlowMat = new THREE.MeshBasicMaterial({ color: 0xffe600, transparent: true, opacity: 0.92 });
+        const incidentCoreMat = new THREE.MeshBasicMaterial({ color: 0xff8b12 });
+        const incidentHeadMat = new THREE.MeshBasicMaterial({ color: 0xff2c24 });
+
+        function cylinderBetween(start, end, radius, material, radialSegments = 24) {
+            const direction = new THREE.Vector3().subVectors(end, start);
+            const length = direction.length();
+            const geometry = new THREE.CylinderGeometry(radius, radius, length, radialSegments);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(start).addScaledVector(direction, 0.5);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+            return mesh;
+        }
+
+        function coneWithTip(tip, direction, radius, length, material, radialSegments = 36) {
+            const unit = direction.clone().normalize();
+            const geometry = new THREE.ConeGeometry(radius, length, radialSegments);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(tip).addScaledVector(unit, -length / 2);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), unit);
+            return mesh;
+        }
+
+        function makeArrow(start, end, options = {}) {
+            const group = new THREE.Group();
+            const material = options.material || black;
+            const radius = options.radius || 0.035;
+            const headRadius = options.headRadius || radius * 4.0;
+            const headLength = options.headLength || 0.28;
+            const direction = new THREE.Vector3().subVectors(end, start);
+            const length = direction.length();
+            const unit = direction.clone().normalize();
+            const shaftEnd = start.clone().addScaledVector(unit, Math.max(0.001, length - headLength));
+            group.add(cylinderBetween(start, shaftEnd, radius, material, options.radialSegments || 24));
+            group.add(coneWithTip(end, unit, headRadius, headLength, material, options.radialSegments || 36));
+            group.userData.baseScale = group.scale.clone();
+            return group;
+        }
+
+        function pulseObject(object) {
+            const baseScale = object.userData.baseScale || new THREE.Vector3(1, 1, 1);
+            object.scale.copy(baseScale).multiplyScalar(1.12);
+            setTimeout(() => object.scale.copy(baseScale), 260);
+        }
+
+        function wavelengthColor(t) {
+            const stops = [
+                { at: 0.00, color: new THREE.Color(0x4866ff) },
+                { at: 0.33, color: new THREE.Color(0x20b850) },
+                { at: 0.67, color: new THREE.Color(0xffe000) },
+                { at: 1.00, color: new THREE.Color(0xff3d24) }
+            ];
+            for (let i = 0; i < stops.length - 1; i++) {
+                const a = stops[i];
+                const b = stops[i + 1];
+                if (t >= a.at && t <= b.at) {
+                    const local = (t - a.at) / (b.at - a.at);
+                    return a.color.clone().lerp(b.color, local);
+                }
+            }
+            return stops[stops.length - 1].color.clone();
+        }
+
+        function updateLightColor(t) {
+            const spectral = wavelengthColor(t);
+            incidentCoreMat.color.copy(spectral);
+            incidentGlowMat.color.copy(spectral.clone().lerp(new THREE.Color(0xffffff), 0.18));
+            incidentHeadMat.color.copy(spectral.clone().lerp(new THREE.Color(0xff2020), 0.38));
+            loutMat.color.copy(spectral.clone().lerp(new THREE.Color(0x0d8f00), 0.72));
+        }
+
+        // The bright green rectangle is the physical surface patch; its black rim matches the 2D silhouette.
+        const planeWidth = 8.7;
+        const planeDepth = 2.55;
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(planeWidth, planeDepth), planeMat);
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.y = -0.015;
+        scene.add(plane);
+
+        const xMin = -planeWidth / 2;
+        const xMax = planeWidth / 2;
+        const zMin = -planeDepth / 2;
+        const zMax = planeDepth / 2;
+        const rimY = 0.018;
+        const rim = new THREE.Group();
+        rim.add(cylinderBetween(new THREE.Vector3(xMin, rimY, zMin), new THREE.Vector3(xMax, rimY, zMin), 0.028, black, 12));
+        rim.add(cylinderBetween(new THREE.Vector3(xMax, rimY, zMin), new THREE.Vector3(xMax, rimY, zMax), 0.028, black, 12));
+        rim.add(cylinderBetween(new THREE.Vector3(xMax, rimY, zMax), new THREE.Vector3(xMin, rimY, zMax), 0.028, black, 12));
+        rim.add(cylinderBetween(new THREE.Vector3(xMin, rimY, zMax), new THREE.Vector3(xMin, rimY, zMin), 0.028, black, 12));
+        scene.add(rim);
+
+        const origin = new THREE.Vector3(0, 0.04, 0.06);
+        const pDir = new THREE.Vector3(-0.62, 0.72, 0.31).normalize();
+        const qDir = new THREE.Vector3(0.82, 0.55, -0.16).normalize();
+        const nDir = new THREE.Vector3(0, 1, 0);
+
+        // The small contact ellipse anchors all vectors at the same surface point.
+        const hitRing = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.018, 12, 64), hitMat);
+        hitRing.rotation.x = Math.PI / 2;
+        hitRing.position.copy(origin).setY(0.035);
+        scene.add(hitRing);
+
+        const hitDisk = new THREE.Mesh(new THREE.CircleGeometry(0.13, 48), new THREE.MeshBasicMaterial({ color: 0x66ff00, side: THREE.DoubleSide }));
+        hitDisk.rotation.x = -Math.PI / 2;
+        hitDisk.position.copy(origin).setY(0.038);
+        scene.add(hitDisk);
+
+        // Colored incoming power travels down the p line; the black p vector points back toward the source.
+        const incidentGroup = new THREE.Group();
+        const incidentStart = origin.clone().addScaledVector(pDir, 4.6);
+        const incidentTip = origin.clone().addScaledVector(pDir, 0.05);
+        incidentGroup.add(cylinderBetween(incidentStart, origin.clone().addScaledVector(pDir, 0.55), 0.070, incidentGlowMat, 28));
+        incidentGroup.add(cylinderBetween(incidentStart.clone().addScaledVector(pDir, -0.12), origin.clone().addScaledVector(pDir, 0.50), 0.043, incidentCoreMat, 28));
+        incidentGroup.add(coneWithTip(incidentTip, pDir.clone().multiplyScalar(-1), 0.23, 0.55, incidentHeadMat, 36));
+        scene.add(incidentGroup);
+
+        const pArrow = makeArrow(origin.clone().add(new THREE.Vector3(-0.02, 0.06, 0.02)), origin.clone().addScaledVector(pDir, 1.02), {
+            material: pMat,
+            radius: 0.040,
+            headRadius: 0.18,
+            headLength: 0.32
+        });
+        scene.add(pArrow);
+
+        const nArrow = makeArrow(origin, origin.clone().addScaledVector(nDir, 1.28), {
+            material: nMat,
+            radius: 0.040,
+            headRadius: 0.18,
+            headLength: 0.31
+        });
+        scene.add(nArrow);
+
+        const qArrow = makeArrow(origin.clone().add(new THREE.Vector3(0.03, 0.02, -0.01)), origin.clone().addScaledVector(qDir, 1.35), {
+            material: qMat,
+            radius: 0.040,
+            headRadius: 0.18,
+            headLength: 0.31
+        });
+        scene.add(qArrow);
+
+        // The dark green outgoing ray is the selected camera/view direction q whose power is the BRDF output.
+        const loutArrow = makeArrow(origin.clone().addScaledVector(qDir, 0.24), origin.clone().addScaledVector(qDir, 2.72), {
+            material: loutMat,
+            radius: 0.035,
+            headRadius: 0.20,
+            headLength: 0.36
+        });
+        loutArrow.renderOrder = -1;
+        scene.add(loutArrow);
+
+        // Faint outgoing arrows sample the Lambertian diffuse hemisphere; they show that many directions can leave the same point.
+        const diffuseGroup = new THREE.Group();
+        const diffuseDirections = [
+            new THREE.Vector3(-1.00, 0.18, -0.18),
+            new THREE.Vector3(-0.72, 0.16, 0.52),
+            new THREE.Vector3(-0.22, 0.18, 0.88),
+            new THREE.Vector3(0.36, 0.16, 0.86),
+            new THREE.Vector3(0.88, 0.18, 0.36),
+            new THREE.Vector3(1.02, 0.20, -0.28),
+            new THREE.Vector3(-0.34, 0.86, -0.22)
+        ];
+        diffuseDirections.forEach((dir, index) => {
+            const unit = dir.normalize();
+            const mat = index === diffuseDirections.length - 1 ? diffuseMat : diffuseFaintMat;
+            const arrow = makeArrow(origin.clone().addScaledVector(unit, 0.16), origin.clone().addScaledVector(unit, index === diffuseDirections.length - 1 ? 1.55 : 1.26), {
+                material: mat,
+                radius: index === diffuseDirections.length - 1 ? 0.034 : 0.026,
+                headRadius: index === diffuseDirections.length - 1 ? 0.18 : 0.15,
+                headLength: index === diffuseDirections.length - 1 ? 0.31 : 0.27
+            });
+            diffuseGroup.add(arrow);
+        });
+        scene.add(diffuseGroup);
+
+        // The little right-angle marker makes the normal reference explicit for measuring incoming and outgoing angles.
+        const tangentMarker = new THREE.Group();
+        tangentMarker.add(cylinderBetween(new THREE.Vector3(0.23, 0.05, -0.02), new THREE.Vector3(0.23, 0.43, -0.02), 0.017, black, 10));
+        tangentMarker.add(cylinderBetween(new THREE.Vector3(0.23, 0.43, -0.02), new THREE.Vector3(0.48, 0.43, -0.02), 0.017, black, 10));
+        tangentMarker.add(cylinderBetween(new THREE.Vector3(0.48, 0.43, -0.02), new THREE.Vector3(0.48, 0.05, -0.02), 0.017, black, 10));
+        scene.add(tangentMarker);
+
+        const lInLabel = addLabel('<span class="mathLabel">&#8467;<sub>in</sub>(&lambda;)</span>', origin.clone().addScaledVector(pDir, 3.70).add(new THREE.Vector3(0.15, 0.20, 0.00)), { fontSize: '44px' });
+        const pLabel = addLabel('<span class="vecLabel">p</span>', origin.clone().addScaledVector(pDir, 0.88).add(new THREE.Vector3(-0.34, 0.00, 0.02)), { fontSize: '46px' });
+        const nLabel = addLabel('<span class="vecLabel">n</span>', origin.clone().addScaledVector(nDir, 1.12).add(new THREE.Vector3(-0.34, 0.00, 0.01)), { fontSize: '44px' });
+        const qLabel = addLabel('<span class="vecLabel">q</span>', origin.clone().addScaledVector(qDir, 1.20).add(new THREE.Vector3(0.32, -0.03, 0.04)), { fontSize: '46px' });
+        const lOutLabel = addLabel('<span class="mathLabel">&#8467;<sub>out</sub>=F(&#8467;<sub>in</sub>,<span class="vecLabel">n</span>,&lambda;,<span class="vecLabel">p</span>,<span class="vecLabel">q</span>)</span>', origin.clone().addScaledVector(qDir, 3.05).add(new THREE.Vector3(0.95, 0.34, -0.06)), { fontSize: '40px' });
+
+        registerInteractive(incidentGroup, {
+            title: 'Incident power',
+            tooltip: 'Incoming spectrum l_in(lambda)',
+            body: 'This ray carries wavelength-dependent power toward the surface. The lambda slider changes its spectral color.',
+            onClick: () => pulseObject(incidentGroup)
+        });
+        registerInteractive(pArrow, {
+            title: 'Incoming direction p',
+            tooltip: 'p points toward the light source',
+            body: 'The BRDF uses p as the direction from the surface point back toward the incident source, even though the light travels toward the point.',
+            onClick: () => pulseObject(pArrow)
+        });
+        registerInteractive(nArrow, {
+            title: 'Surface normal n',
+            tooltip: 'n is the local surface orientation',
+            body: 'The angle between n and p controls the Lambertian brightness through the dot product n dot p.',
+            onClick: () => pulseObject(nArrow)
+        });
+        registerInteractive(qArrow, {
+            title: 'Outgoing direction q',
+            tooltip: 'q is the viewed reflected direction',
+            body: 'A general BRDF can vary with q, so two cameras looking from different directions can receive different outgoing power.',
+            onClick: () => pulseObject(qArrow)
+        });
+        registerInteractive(loutArrow, {
+            title: 'Outgoing power',
+            tooltip: 'l_out is determined by F',
+            body: 'The outgoing power is modeled as F(l_in, n, lambda, p, q). The selected green ray marks the outgoing direction in the equation.',
+            onClick: () => pulseObject(loutArrow)
+        });
+        registerInteractive(diffuseGroup, {
+            title: 'Diffuse reflection',
+            tooltip: 'Lambertian rays leave in many directions',
+            body: 'For a Lambertian surface, the brightness depends on n dot p and not on which outgoing direction q is selected.',
+            onClick: () => pulseObject(diffuseGroup)
+        });
+        registerInteractive(plane, {
+            title: 'Surface patch',
+            tooltip: 'Reflecting surface with albedo a',
+            body: 'The green patch represents a small local surface whose BRDF maps incoming illumination to outgoing radiance.',
+            onClick: () => pulseObject(plane)
+        });
+
+        document.getElementById('lambdaSlider').addEventListener('input', (event) => {
+            updateLightColor(Number(event.target.value));
+            lInLabel.div.style.color = '#' + incidentCoreMat.color.getHexString();
+        });
+
+        document.getElementById('diffuseToggle').addEventListener('change', (event) => {
+            diffuseGroup.visible = event.target.checked;
+        });
+
+        updateLightColor(Number(document.getElementById('lambdaSlider').value));
+
+        setCameraView({
+            projection: 'orthographic',
+            azimuthDeg: 88,
+            elevationDeg: 18,
+            rollDeg: 0,
+            zoom: 1.03,
+            target: [0.26, 0.72, 0.16],
+            heightFraction: 0.62,
+            distanceScale: 1.35
+        });
+
+        let _firstFrame = true;
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            _syncLabels();
+            if (_firstFrame) { _firstFrame = false; window.__markRendered?.(); }
+        }
+        animate();
+
+        new ResizeObserver(() => {
+            const { w, h } = viewportSize();
+            aspect = w / h;
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.top = d;
+            camera.bottom = -d;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h, false);
+        }).observe(canvas);
+    </script>
+</body>
+
+</html>

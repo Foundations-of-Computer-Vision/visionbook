@@ -36,7 +36,7 @@ async function screenshotHtmlOnce(html, waitMs = 3500) {
         page = await browser.newPage();
         await page.setViewport({ width: 900, height: 600 });
         // 'networkidle2' waits for CDN scripts to finish loading (critical for Three.js modules)
-        await page.setContent(html, { waitUntil: isModule ? 'networkidle2' : 'domcontentloaded', timeout: 30000 });
+        await page.setContent(html, { waitUntil: isModule ? 'networkidle2' : 'domcontentloaded', timeout: 50000 });
         await new Promise(r => setTimeout(r, effectiveWait));
         const shot = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 82 });
         return { data: shot, mediaType: 'image/jpeg' };

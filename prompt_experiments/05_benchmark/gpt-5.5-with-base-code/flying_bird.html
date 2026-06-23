@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flying Bird Vanishing Point</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #c {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .lbl {
+            position: absolute;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 18px;
+            color: #111;
+            line-height: 1;
+        }
+
+        #ui {
+            position: absolute;
+            left: 6px;
+            bottom: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-family: sans-serif;
+            font-size: 11px;
+            max-width: 190px;
+            max-height: 34%;
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            opacity: 0.88;
+            transform: none;
+            transition: opacity 0.16s ease;
+            z-index: 10;
+        }
+
+        #ui:hover,
+        #ui:focus-within {
+            opacity: 1;
+        }
+
+        #ui button {
+            padding: 4px 10px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            background: #f5f5f5;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        #ui button:hover {
+            background: #e0e0e0;
+        }
+
+        #ui button.active {
+            background: #c8e6ff;
+            border-color: #5aabf0;
+        }
+
+        #ui label {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            text-shadow: 0 1px 2px #fff;
+        }
+
+        #ui input[type=range] {
+            width: 86px;
+        }
+
+        #figTooltip,
+        #figPopup {
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: none;
+            max-width: 245px;
+            padding: 5px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.62);
+            color: #fff;
+            font: 11px/1.35 sans-serif;
+            pointer-events: none;
+            white-space: normal;
+            z-index: 20;
+        }
+
+        #figPopup {
+            left: 12px;
+            top: 12px;
+            pointer-events: none;
+            background: rgba(255, 255, 255, 0.94);
+            color: #111;
+            border: 1px solid #c8c8c8;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+        }
+
+        #figPopup strong {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+    <div id="figTooltip"></div>
+    <div id="figPopup"></div>
+    <div id="ui">
+        <button id="btnReset" style="display:none">Reset View</button>
+        <button id="btnTrace" title="Emphasize the common vanishing direction">Trace</button>
+    </div>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    }
+  }
+  </script>
+
+    <div id="err-overlay" style="display:none;position:fixed;inset:0;background:#fff;z-index:999;
+       flex-direction:column;align-items:center;justify-content:center;
+       font-family:sans-serif;font-size:13px;color:#555;gap:10px;">
+        <span id="err-msg">Figure failed to load</span>
+        <button onclick="location.reload()" style="padding:5px 14px;border:1px solid #aaa;
+        border-radius:5px;background:#f5f5f5;cursor:pointer;font-size:12px;">Reload</button>
+    </div>
+
+    <script>
+        let _rendered = false;
+        const _errOverlay = document.getElementById('err-overlay');
+        window.__markRendered = () => { _rendered = true; _errOverlay.style.display = 'none'; };
+        window.addEventListener('error', (event) => {
+            if (!_rendered) {
+                document.getElementById('err-msg').textContent = event.message || 'Figure failed to load';
+                _errOverlay.style.display = 'flex';
+            }
+        });
+        setTimeout(() => {
+            if (!_rendered) _errOverlay.style.display = 'flex';
+        }, 12000);
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const canvas = document.getElementById('c');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const d = 3;
+        let aspect = Math.max(canvas.clientWidth / Math.max(canvas.clientHeight, 1), 1e-3);
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+        camera.position.set(4, 4, 4);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const HOME_POS = new THREE.Vector3();
+        const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+        let HOME_ZOOM = 0.75;
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            camera.position.copy(HOME_POS);
+            controls.target.copy(HOME_TARGET);
+            camera.zoom = HOME_ZOOM;
+            camera.updateProjectionMatrix();
+            controls.update();
+        });
+
+        const FRAME_HALF_HEIGHT = d;
+        const MIN_ZOOM = 0.2;
+        const MAX_ZOOM = 8;
+
+        function computeSceneBounds() {
+            const box = new THREE.Box3().setFromObject(scene);
+            if (box.isEmpty()) {
+                box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2 * d, 2 * d, 2 * d));
+            }
+            const center = new THREE.Vector3();
+            const size = new THREE.Vector3();
+            box.getCenter(center);
+            box.getSize(size);
+            return { box, center, size };
+        }
+
+        function setCameraView({
+            projection = 'orthographic',
+            azimuthDeg = 45,
+            elevationDeg = 35,
+            rollDeg = 0,
+            zoom = null,
+            target = null,
+            heightFraction = 0.5,
+            distanceScale = 1.2
+        } = {}) {
+            const { center, size } = computeSceneBounds();
+            const viewTarget = Array.isArray(target)
+                ? new THREE.Vector3(target[0] || 0, target[1] || 0, target[2] || 0)
+                : center;
+
+            const contentHeight = Math.max(size.y, 1e-6);
+            const desiredViewHeight = contentHeight / Math.max(heightFraction, 0.01);
+            let resolvedZoom = Number.isFinite(zoom) ? zoom : (2 * FRAME_HALF_HEIGHT) / desiredViewHeight;
+            resolvedZoom = Math.min(Math.max(resolvedZoom, MIN_ZOOM), MAX_ZOOM);
+            camera.zoom = resolvedZoom;
+
+            const radius = Math.max(size.length() * distanceScale, FRAME_HALF_HEIGHT * 2);
+            const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+            const elevation = THREE.MathUtils.degToRad(elevationDeg);
+            const cosElev = Math.cos(elevation);
+            const x = viewTarget.x + radius * Math.cos(azimuth) * cosElev;
+            const y = viewTarget.y + radius * Math.sin(elevation);
+            const z = viewTarget.z + radius * Math.sin(azimuth) * cosElev;
+            camera.position.set(x, y, z);
+
+            controls.target.copy(viewTarget);
+            camera.up.set(0, 1, 0);
+            if (Number.isFinite(rollDeg) && rollDeg !== 0) {
+                const viewDir = new THREE.Vector3().subVectors(viewTarget, camera.position).normalize();
+                camera.up.applyAxisAngle(viewDir, THREE.MathUtils.degToRad(rollDeg));
+            }
+            camera.updateProjectionMatrix();
+            controls.update();
+
+            HOME_POS.copy(camera.position);
+            HOME_TARGET.copy(controls.target);
+            HOME_ZOOM = camera.zoom;
+
+            window.__figureCameraView = {
+                projection,
+                azimuthDeg,
+                elevationDeg,
+                rollDeg,
+                zoom: camera.zoom,
+                target: [controls.target.x, controls.target.y, controls.target.z]
+            };
+        }
+
+        function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.5 } = {}) {
+            const azimuthDeg = THREE.MathUtils.radToDeg(azimuth);
+            const elevationDeg = 90 - THREE.MathUtils.radToDeg(polar);
+            setCameraView({ azimuthDeg, elevationDeg, heightFraction });
+        }
+
+        setStandardView();
+
+        const _labels = [];
+        const _v = new THREE.Vector3();
+
+        function addLabel(text, position, options = {}) {
+            const div = document.createElement('div');
+            div.className = 'lbl';
+            div.innerHTML = text;
+            if (options.color) div.style.color = options.color;
+            if (options.fontSize) div.style.fontSize = options.fontSize;
+            if (options.bold) div.style.fontWeight = 'bold';
+            if (options.fontFamily) div.style.fontFamily = options.fontFamily;
+            if (options.background) {
+                div.style.background = options.background;
+                div.style.padding = '1px 4px';
+                div.style.borderRadius = '3px';
+            }
+            document.body.appendChild(div);
+            const entry = { div, pos: position.clone(), offset: options.offset || [0, 0], scale: options.scale || 1 };
+            _labels.push(entry);
+            return entry;
+        }
+
+        const _referenceDistance = 8;
+
+        function _syncLabels() {
+            for (const { div, pos, offset, scale: labelScale } of _labels) {
+                _v.copy(pos).project(camera);
+                if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
+                    div.style.display = 'none';
+                    continue;
+                }
+                div.style.display = '';
+
+                const ox = offset && offset[0] ? offset[0] : 0;
+                const oy = offset && offset[1] ? offset[1] : 0;
+                const x = (_v.x * 0.5 + 0.5) * canvas.clientWidth + ox;
+                const y = (-_v.y * 0.5 + 0.5) * canvas.clientHeight + oy;
+
+                const distance = Math.max(camera.position.distanceTo(pos), 1e-4);
+                let scale = (_referenceDistance / distance) * (camera.zoom || 1) * labelScale;
+                scale = Math.max(0.45, Math.min(scale, 5.5));
+
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                div.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            }
+        }
+
+        const _tooltip = document.getElementById('figTooltip');
+        const _popup = document.getElementById('figPopup');
+        const _raycaster = new THREE.Raycaster();
+        const _pointer = new THREE.Vector2();
+        const _interactiveObjects = [];
+        let _hoveredInteractive = null;
+
+        function showPopup(title, body) {
+            if (_popup) {
+                _popup.innerHTML = `<strong>${title}</strong>${body}`;
+                _popup.style.display = 'block';
+                clearTimeout(showPopup._timer);
+                showPopup._timer = setTimeout(() => { _popup.style.display = 'none'; }, 5200);
+            }
+            window.parent.postMessage({ type: 'alex-popup', title, body }, '*');
+        }
+
+        function hidePopup() {
+            if (_popup) _popup.style.display = 'none';
+            window.parent.postMessage({ type: 'alex-popup', title: null }, '*');
+        }
+
+        function showTooltip(text, event) {
+            if (!_tooltip || !text) return;
+            _tooltip.textContent = text;
+            _tooltip.style.display = 'block';
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            if (!_tooltip || _tooltip.style.display === 'none') return;
+            const pad = 12;
+            const x = Math.min(event.clientX + pad, window.innerWidth - _tooltip.offsetWidth - pad);
+            const y = Math.max(pad, event.clientY - _tooltip.offsetHeight - pad);
+            _tooltip.style.left = x + 'px';
+            _tooltip.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            if (_tooltip) _tooltip.style.display = 'none';
+        }
+
+        function _setPointerFromEvent(event) {
+            const rect = canvas.getBoundingClientRect();
+            _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function _firstInteractiveHit(event) {
+            if (!_interactiveObjects.length) return null;
+            _setPointerFromEvent(event);
+            _raycaster.setFromCamera(_pointer, camera);
+            const hits = _raycaster.intersectObjects(_interactiveObjects.map(entry => entry.object), true);
+            for (const hit of hits) {
+                let obj = hit.object;
+                while (obj) {
+                    const entry = _interactiveObjects.find(item => item.object === obj);
+                    if (entry) return { ...entry, hit };
+                    obj = obj.parent;
+                }
+            }
+            return null;
+        }
+
+        function registerInteractive(object, info = {}) {
+            if (!object) return object;
+            object.userData = object.userData || {};
+            object.userData.interactive = true;
+            _interactiveObjects.push({ object, info });
+            return object;
+        }
+
+        canvas.addEventListener('pointermove', (event) => {
+            moveTooltip(event);
+            const entry = _firstInteractiveHit(event);
+            if (entry) {
+                _hoveredInteractive = entry;
+                canvas.style.cursor = 'pointer';
+                showTooltip(entry.info.tooltip || entry.info.title || 'Click to explain', event);
+            } else {
+                _hoveredInteractive = null;
+                canvas.style.cursor = controls.enabled ? 'grab' : 'default';
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('pointerleave', () => {
+            _hoveredInteractive = null;
+            canvas.style.cursor = 'default';
+            hideTooltip();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            const entry = _firstInteractiveHit(event) || _hoveredInteractive;
+            if (!entry) {
+                hidePopup();
+                return;
+            }
+            const title = entry.info.title || entry.info.tooltip || 'Figure element';
+            const body = entry.info.body || entry.info.description || 'This part is interactive.';
+            showPopup(title, body);
+            if (typeof entry.info.onClick === 'function') entry.info.onClick(entry.hit, entry.object);
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hidePopup();
+                hideTooltip();
+            }
+        });
+
+        const mat = {
+            black: new THREE.MeshBasicMaterial({ color: 0x050505 }),
+            white: new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
+            planeFill: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }),
+            planeEdge: new THREE.LineBasicMaterial({ color: 0x3f4448, linewidth: 2 }),
+            planeEdgeHi: new THREE.LineBasicMaterial({ color: 0x111111, linewidth: 3 }),
+            green: new THREE.LineBasicMaterial({ color: 0x13e600, transparent: true, opacity: 0.92 }),
+            greenFaint: new THREE.LineBasicMaterial({ color: 0x13e600, transparent: true, opacity: 0.14 }),
+            greenHi: new THREE.LineBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 1 }),
+            red: new THREE.MeshBasicMaterial({ color: 0xff0000 }),
+            redLine: new THREE.LineBasicMaterial({ color: 0xff0000 }),
+            hit: new THREE.MeshBasicMaterial({ color: 0x5aabf0, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false })
+        };
+
+        const highlightables = [];
+        let traceOn = false;
+
+        function lineBetween(a, b, material, group = scene) {
+            const geometry = new THREE.BufferGeometry().setFromPoints([a, b]);
+            const line = new THREE.Line(geometry, material);
+            group.add(line);
+            return line;
+        }
+
+        function lineStrip(points, material, group = scene) {
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, material);
+            group.add(line);
+            return line;
+        }
+
+        function cylinderBetween(a, b, radius, material, radialSegments = 12) {
+            const direction = new THREE.Vector3().subVectors(b, a);
+            const length = direction.length();
+            const geometry = new THREE.CylinderGeometry(radius, radius, length, radialSegments);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(a).add(b).multiplyScalar(0.5);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+            scene.add(mesh);
+            return mesh;
+        }
+
+        function makeArrow(start, end, color = 0xff0000, shaftRadius = 0.018, headRadius = 0.07, headLength = 0.22) {
+            const material = new THREE.MeshBasicMaterial({ color });
+            const direction = new THREE.Vector3().subVectors(end, start);
+            const length = direction.length();
+            const unit = direction.clone().normalize();
+            const headBase = end.clone().addScaledVector(unit, -Math.min(headLength, length * 0.45));
+            const group = new THREE.Group();
+
+            const shaftLength = Math.max(start.distanceTo(headBase), 0.001);
+            const shaftGeometry = new THREE.CylinderGeometry(shaftRadius, shaftRadius, shaftLength, 10);
+            const shaft = new THREE.Mesh(shaftGeometry, material);
+            shaft.position.copy(start).add(headBase).multiplyScalar(0.5);
+            shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), unit);
+            group.add(shaft);
+
+            const headGeometry = new THREE.ConeGeometry(headRadius, Math.min(headLength, length * 0.45), 18);
+            const head = new THREE.Mesh(headGeometry, material);
+            head.position.copy(headBase).add(end).multiplyScalar(0.5);
+            head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), unit);
+            group.add(head);
+
+            scene.add(group);
+            return group;
+        }
+
+        function birdShapeGeometry() {
+            const shape = new THREE.Shape();
+            const pts = [
+                [-0.56, -0.42], [-0.46, -0.12], [-0.34, 0.08], [-0.25, 0.11], [-0.17, 0.06],
+                [-0.06, -0.01], [0.04, 0.05], [0.14, 0.18], [0.26, 0.45], [0.31, 0.35],
+                [0.30, 0.15], [0.24, 0.00], [0.36, -0.04], [0.50, 0.00], [0.59, -0.06],
+                [0.47, -0.13], [0.30, -0.17], [0.18, -0.23], [0.05, -0.43], [-0.04, -0.64],
+                [-0.13, -0.68], [-0.18, -0.47], [-0.18, -0.24], [-0.30, -0.24], [-0.44, -0.33]
+            ];
+            shape.moveTo(pts[0][0], pts[0][1]);
+            for (let index = 1; index < pts.length; index++) shape.lineTo(pts[index][0], pts[index][1]);
+            shape.closePath();
+            return new THREE.ShapeGeometry(shape);
+        }
+
+        const birdGeometry = birdShapeGeometry();
+        const birdOutlinePoints = birdGeometry.attributes.position
+            ? null
+            : null;
+
+        function makeBird(center, scale, angleRad, options = {}) {
+            const group = new THREE.Group();
+            const fill = new THREE.Mesh(birdGeometry, mat.white.clone());
+            fill.renderOrder = 2;
+            const outlinePts2 = [
+                [-0.56, -0.42], [-0.46, -0.12], [-0.34, 0.08], [-0.25, 0.11], [-0.17, 0.06],
+                [-0.06, -0.01], [0.04, 0.05], [0.14, 0.18], [0.26, 0.45], [0.31, 0.35],
+                [0.30, 0.15], [0.24, 0.00], [0.36, -0.04], [0.50, 0.00], [0.59, -0.06],
+                [0.47, -0.13], [0.30, -0.17], [0.18, -0.23], [0.05, -0.43], [-0.04, -0.64],
+                [-0.13, -0.68], [-0.18, -0.47], [-0.18, -0.24], [-0.30, -0.24], [-0.44, -0.33], [-0.56, -0.42]
+            ].map(point => new THREE.Vector3(point[0], point[1], 0.012));
+            const outline = lineStrip(outlinePts2, new THREE.LineBasicMaterial({ color: 0x202326, linewidth: 2 }), group);
+            group.add(fill);
+            group.position.copy(center);
+            group.scale.setScalar(scale);
+            group.rotation.z = angleRad;
+            group.renderOrder = options.renderOrder || 1;
+            scene.add(group);
+            if (options.name) group.name = options.name;
+            return { group, fill, outline };
+        }
+
+        function addHitPlane(center, width, height, rotationZ, info) {
+            const geometry = new THREE.PlaneGeometry(width, height);
+            const mesh = new THREE.Mesh(geometry, mat.hit);
+            mesh.position.copy(center);
+            mesh.rotation.z = rotationZ;
+            scene.add(mesh);
+            registerInteractive(mesh, info);
+            return mesh;
+        }
+
+        const focalLength = 1.55;
+        const origin = new THREE.Vector3(0, 0, 0);
+        const planeMin = new THREE.Vector2(-0.58, -0.92);
+        const planeMax = new THREE.Vector2(1.65, 1.30);
+        const planeZ = focalLength;
+
+        // The image plane is the gray rectangle in the original sketch. Projection birds live on this plane.
+        const planeCorners = [
+            new THREE.Vector3(planeMin.x, planeMin.y, planeZ),
+            new THREE.Vector3(planeMax.x, planeMin.y, planeZ),
+            new THREE.Vector3(planeMax.x, planeMax.y, planeZ),
+            new THREE.Vector3(planeMin.x, planeMax.y, planeZ),
+            new THREE.Vector3(planeMin.x, planeMin.y, planeZ)
+        ];
+        const planeShape = new THREE.Shape();
+        planeShape.moveTo(planeMin.x, planeMin.y);
+        planeShape.lineTo(planeMax.x, planeMin.y);
+        planeShape.lineTo(planeMax.x, planeMax.y);
+        planeShape.lineTo(planeMin.x, planeMax.y);
+        planeShape.closePath();
+        const planeMesh = new THREE.Mesh(new THREE.ShapeGeometry(planeShape), mat.planeFill);
+        planeMesh.position.z = planeZ;
+        scene.add(planeMesh);
+        const planeOutline = lineStrip(planeCorners, mat.planeEdge);
+        highlightables.push({ object: planeOutline, normal: mat.planeEdge, highlight: mat.planeEdgeHi });
+        addHitPlane(new THREE.Vector3((planeMin.x + planeMax.x) / 2, (planeMin.y + planeMax.y) / 2, planeZ + 0.01), planeMax.x - planeMin.x, planeMax.y - planeMin.y, 0, {
+            title: 'Image plane',
+            tooltip: 'The camera plane where 3D motion becomes an image motion path.',
+            body: 'Each small bird is the central projection of a larger 3D bird onto this plane.',
+            onClick: () => setHighlight(planeOutline)
+        });
+
+        const originSphere = new THREE.Mesh(new THREE.SphereGeometry(0.105, 32, 18), mat.black);
+        originSphere.position.copy(origin);
+        scene.add(originSphere);
+        registerInteractive(originSphere, {
+            title: 'Camera center O',
+            tooltip: 'All green projection rays start at O.',
+            body: 'The camera center sends rays through the image plane. Where a ray meets the plane is the image position of the 3D bird.'
+        });
+
+        const velocity = new THREE.Vector3(1.28, 0.28, 1.45);
+        const start3D = new THREE.Vector3(-0.52, 0.58, 1.95);
+        const times = [0, 0.55, 1.25, 2.1, 3.05, 4.1, 5.25, 6.5];
+
+        function projectToPlane(point) {
+            const scale = focalLength / point.z;
+            return new THREE.Vector3(point.x * scale, point.y * scale, planeZ);
+        }
+
+        const worldBirds = times.map(time => start3D.clone().addScaledVector(velocity, time));
+        const imageBirds = worldBirds.map(projectToPlane);
+        const vanishPoint = new THREE.Vector3(
+            focalLength * velocity.x / velocity.z,
+            focalLength * velocity.y / velocity.z,
+            planeZ
+        );
+        const vanishingRayEnd = vanishPoint.clone().multiplyScalar(3.35);
+
+        // Green rays show central projection; the ray parallel to V through O hits the vanishing point.
+        const rays = [];
+        worldBirds.forEach((bird, index) => {
+            const material = index < 2 ? mat.greenFaint : mat.green;
+            const ray = lineBetween(origin, bird, material);
+            rays.push(ray);
+            highlightables.push({ object: ray, normal: material, highlight: mat.greenHi });
+        });
+        const vanishDirectionLine = lineBetween(origin, vanishingRayEnd, mat.green);
+        highlightables.push({ object: vanishDirectionLine, normal: mat.green, highlight: mat.greenHi });
+
+        const trajectoryLine = lineBetween(worldBirds[0], worldBirds[worldBirds.length - 1].clone().addScaledVector(velocity.clone().normalize(), 0.72), new THREE.LineBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.0 }));
+
+        // Red arrows are the shared 3D velocity direction. The same direction determines the vanishing point.
+        const trajectoryArrows = [];
+        for (let index = 0; index < worldBirds.length - 1; index += 2) {
+            const start = worldBirds[index].clone().add(new THREE.Vector3(0.05, 0.18, 0.02));
+            const end = start.clone().addScaledVector(velocity.clone().normalize(), 0.74);
+            trajectoryArrows.push(makeArrow(start, end, 0xff0000, 0.018, 0.075, 0.23));
+        }
+        const vpArrowStart = vanishPoint.clone().addScaledVector(velocity.clone().normalize(), 0.04);
+        const vpArrowEnd = vanishPoint.clone().addScaledVector(velocity.clone().normalize(), 0.86);
+        const imageVelocityArrow = makeArrow(vpArrowStart, vpArrowEnd, 0xff0000, 0.014, 0.06, 0.18);
+
+        const birdAngle = Math.atan2(velocity.y, velocity.x) - 0.12;
+        const worldBirdGroups = [];
+        worldBirds.forEach((bird, index) => {
+            const size = 0.18 + index * 0.014;
+            const made = makeBird(bird, size, birdAngle, { name: '3D bird' });
+            worldBirdGroups.push(made.group);
+            registerInteractive(made.group, {
+                title: 'Bird in 3D',
+                tooltip: 'A bird moves along one straight 3D velocity direction.',
+                body: 'Although the bird stays the same physical size, its image projection gets smaller as depth increases.',
+                onClick: () => emphasizeTrace(true)
+            });
+        });
+
+        const imageBirdGroups = [];
+        imageBirds.forEach((bird, index) => {
+            const depthScale = THREE.MathUtils.lerp(0.18, 0.045, index / (imageBirds.length - 1));
+            const made = makeBird(bird.clone().add(new THREE.Vector3(0, 0, 0.018)), depthScale, birdAngle, { name: 'projected bird' });
+            imageBirdGroups.push(made.group);
+            registerInteractive(made.group, {
+                title: 'Image of the bird',
+                tooltip: 'Projected birds shrink and approach the same point.',
+                body: 'The image position follows x(t)=f(X+Vx t)/(Z+Vz t), so increasing depth makes the sequence converge.',
+                onClick: () => emphasizeTrace(true)
+            });
+        });
+
+        const vanishDot = new THREE.Mesh(new THREE.SphereGeometry(0.032, 24, 12), mat.black);
+        vanishDot.position.copy(vanishPoint.clone().add(new THREE.Vector3(0, 0, 0.04)));
+        scene.add(vanishDot);
+        registerInteractive(vanishDot, {
+            title: 'Vanishing point',
+            tooltip: 'The projected sequence converges here.',
+            body: 'This point equals p_infinity=(f Vx/Vz, f Vy/Vz). It depends on velocity, not on the bird location at t=0.',
+            onClick: () => emphasizeTrace(true)
+        });
+
+        const vpHit = new THREE.Mesh(new THREE.SphereGeometry(0.13, 24, 12), mat.hit);
+        vpHit.position.copy(vanishPoint);
+        scene.add(vpHit);
+        registerInteractive(vpHit, {
+            title: 'Vanishing point',
+            tooltip: 'The projected sequence converges here.',
+            body: 'A line through O parallel to the 3D velocity intersects the camera plane at the vanishing point.',
+            onClick: () => emphasizeTrace(true)
+        });
+
+        const worldPathHit = cylinderBetween(worldBirds[0], worldBirds[worldBirds.length - 1], 0.08, mat.hit, 10);
+        registerInteractive(worldPathHit, {
+            title: 'Shared 3D velocity V',
+            tooltip: 'Click to highlight the direction that sets the vanishing point.',
+            body: 'All positions on this straight 3D path have the same velocity. The limit of their image motion is fixed by V.',
+            onClick: () => emphasizeTrace(true)
+        });
+
+        const vpRayHit = cylinderBetween(origin, vanishingRayEnd, 0.045, mat.hit, 10);
+        registerInteractive(vpRayHit, {
+            title: 'Velocity ray through O',
+            tooltip: 'This ray marks where the motion direction pierces the image plane.',
+            body: 'The vanishing point is the intersection of the image plane with the ray from O parallel to the 3D velocity vector.',
+            onClick: () => emphasizeTrace(true)
+        });
+
+        function setHighlight(object) {
+            highlightables.forEach(item => {
+                item.object.material = item.object === object ? item.highlight : item.normal;
+            });
+        }
+
+        function emphasizeTrace(force = null) {
+            traceOn = force === null ? !traceOn : force;
+            document.getElementById('btnTrace').classList.toggle('active', traceOn);
+            rays.forEach((ray, index) => {
+                ray.material = traceOn || index >= 2 ? mat.greenHi : (index < 2 ? mat.greenFaint : mat.green);
+            });
+            vanishDirectionLine.material = traceOn ? mat.greenHi : mat.green;
+            vanishDot.scale.setScalar(traceOn ? 1.65 : 1);
+            imageBirdGroups.forEach((group, index) => {
+                const amount = traceOn ? 1.16 : 1;
+                const base = THREE.MathUtils.lerp(0.18, 0.045, index / (imageBirdGroups.length - 1));
+                group.scale.setScalar(base * amount);
+            });
+            showPopup(
+                'Common convergence',
+                'The green rays meet the image plane at shrinking bird images. Their limit is the black vanishing point determined by V.'
+            );
+        }
+
+        document.getElementById('btnTrace').addEventListener('click', () => emphasizeTrace());
+
+        addLabel('O', origin.clone().add(new THREE.Vector3(-0.09, -0.29, 0)), { fontSize: '26px', offset: [-4, 4], scale: 1.0 });
+        addLabel('Vanishing point', vanishPoint.clone().add(new THREE.Vector3(0.0, -0.28, 0.02)), { fontSize: '24px', offset: [0, 18], scale: 0.9 });
+        addLabel('V', worldBirds[3].clone().add(new THREE.Vector3(0.42, 0.39, 0.02)), { fontSize: '28px', bold: true, offset: [0, -8], scale: 0.9 });
+        addLabel('V', vpArrowStart.clone().lerp(vpArrowEnd, 0.48).add(new THREE.Vector3(-0.06, 0.15, 0.02)), { fontSize: '28px', bold: true, offset: [0, -7], scale: 0.9 });
+
+        // Extra far-left and far-right velocity fragments match the cropped red path in the source figure.
+        makeArrow(worldBirds[0].clone().addScaledVector(velocity.clone().normalize(), -1.05), worldBirds[0].clone().addScaledVector(velocity.clone().normalize(), -0.22), 0xff0000, 0.018, 0.075, 0.23);
+        makeArrow(worldBirds[worldBirds.length - 1].clone().addScaledVector(velocity.clone().normalize(), 0.18), worldBirds[worldBirds.length - 1].clone().addScaledVector(velocity.clone().normalize(), 1.03), 0xff0000, 0.018, 0.075, 0.23);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            _syncLabels();
+            if (animate._firstFrame !== false) {
+                animate._firstFrame = false;
+                window.__markRendered?.();
+            }
+        }
+        animate._firstFrame = true;
+        animate();
+
+        new ResizeObserver(() => {
+            const w = canvas.clientWidth;
+            const h = canvas.clientHeight;
+            aspect = w / Math.max(h, 1);
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h, false);
+        }).observe(canvas);
+
+        // Source-matched first frame: a shallow orthographic view preserves the textbook crop while exposing 3D depth for orbiting.
+        setCameraView({
+            projection: 'orthographic',
+            azimuthDeg: 4,
+            elevationDeg: 4,
+            rollDeg: -6,
+            zoom: 1.28,
+            target: [2.58, 0.74, 4.72],
+            heightFraction: 0.62,
+            distanceScale: 1.1
+        });
+    </script>
+</body>
+
+</html>

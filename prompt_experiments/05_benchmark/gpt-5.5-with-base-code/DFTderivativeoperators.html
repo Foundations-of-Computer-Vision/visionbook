@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>DFT Derivative Operators</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #c {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .lbl {
+            position: absolute;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 13px;
+            color: #111;
+        }
+
+        #ui {
+            position: absolute;
+            right: 8px;
+            bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11px;
+            background: rgba(255, 255, 255, 0.62);
+            border: 0;
+            box-shadow: none;
+            opacity: 0.84;
+            z-index: 10;
+            padding: 3px 5px;
+            border-radius: 4px;
+        }
+
+        #ui:hover,
+        #ui:focus-within {
+            opacity: 1;
+        }
+
+        #ui button {
+            padding: 3px 8px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            background: #f5f5f5;
+            border-radius: 4px;
+            font-size: 11px;
+            line-height: 1.2;
+        }
+
+        #ui button:hover {
+            background: #e8e8e8;
+        }
+
+        #ui button.active {
+            background: #ffe1e1;
+            border-color: #d45b5b;
+        }
+
+        #ui label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-direction: row;
+            text-shadow: 0 1px 2px #fff;
+        }
+
+        #ui input[type=range] {
+            width: 74px;
+        }
+
+        #figTooltip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: none;
+            max-width: 230px;
+            padding: 5px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.66);
+            color: #fff;
+            font: 11px/1.35 Arial, Helvetica, sans-serif;
+            pointer-events: none;
+            white-space: normal;
+            z-index: 20;
+        }
+
+        #infoPopup {
+            position: fixed;
+            right: 10px;
+            top: 10px;
+            display: none;
+            width: min(260px, calc(100vw - 20px));
+            padding: 8px 10px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(0, 0, 0, 0.18);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+            color: #111;
+            font: 12px/1.35 Arial, Helvetica, sans-serif;
+            z-index: 19;
+        }
+
+        #infoTitle {
+            font-weight: 700;
+            margin-bottom: 3px;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+    <div id="figTooltip"></div>
+    <div id="infoPopup">
+        <div id="infoTitle"></div>
+        <div id="infoBody"></div>
+    </div>
+    <div id="ui">
+        <button id="btnReset" style="display:none">Reset View</button>
+        <button id="btnSlice" title="Show frequency cross-sections">slice</button>
+        <label id="sliceWrap" title="Move the v-frequency section" style="display:none">v
+            <input id="sliceV" type="range" min="-100" max="100" value="0" />
+        </label>
+    </div>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    }
+  }
+  </script>
+
+    <div id="err-overlay" style="display:none;position:fixed;inset:0;background:#fff;z-index:999;
+       flex-direction:column;align-items:center;justify-content:center;
+       font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#555;gap:10px;">
+        <span id="err-msg">Figure failed to load</span>
+        <button onclick="location.reload()" style="padding:5px 14px;border:1px solid #aaa;
+        border-radius:5px;background:#f5f5f5;cursor:pointer;font-size:12px;">Reload</button>
+    </div>
+
+    <script>
+        let _rendered = false;
+        const _errOverlay = document.getElementById('err-overlay');
+        window.__markRendered = () => { _rendered = true; _errOverlay.style.display = 'none'; };
+        window.addEventListener('error', (event) => {
+            if (!_rendered) {
+                document.getElementById('err-msg').textContent = event.message || 'Figure failed to load';
+                _errOverlay.style.display = 'flex';
+            }
+        });
+        setTimeout(() => {
+            if (!_rendered) { _errOverlay.style.display = 'flex'; }
+        }, 12000);
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const canvas = document.getElementById('c');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const d = 3;
+        let aspect = Math.max(canvas.clientWidth, 1) / Math.max(canvas.clientHeight, 1);
+        let camera = new THREE.OrthographicCamera(
+            -d * aspect, d * aspect, d, -d, 0.1, 100
+        );
+        camera.position.set(4, 4, 4);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const HOME_POS = new THREE.Vector3();
+        const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+        let HOME_ZOOM = 0.75;
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            camera.position.copy(HOME_POS);
+            controls.target.copy(HOME_TARGET);
+            camera.zoom = HOME_ZOOM;
+            camera.updateProjectionMatrix();
+            controls.update();
+        });
+
+        const FRAME_HALF_HEIGHT = d;
+        const MIN_ZOOM = 0.2;
+        const MAX_ZOOM = 5;
+
+        function computeSceneBounds() {
+            const box = new THREE.Box3().setFromObject(scene);
+            if (box.isEmpty()) {
+                box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2 * d, 2 * d, 2 * d));
+            }
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            return { box, center, size };
+        }
+
+        function setCameraView({
+            projection = 'orthographic',
+            azimuthDeg = 45,
+            elevationDeg = 18,
+            rollDeg = 0,
+            zoom = null,
+            target = null,
+            heightFraction = 0.62,
+            distanceScale = 1.2
+        } = {}) {
+            const { center, size } = computeSceneBounds();
+            const viewTarget = Array.isArray(target)
+                ? new THREE.Vector3(target[0] || 0, target[1] || 0, target[2] || 0)
+                : center;
+
+            const contentHeight = Math.max(size.y, 1e-6);
+            const desiredViewHeight = contentHeight / Math.max(heightFraction, 0.01);
+            let resolvedZoom = Number.isFinite(zoom) ? zoom : (2 * FRAME_HALF_HEIGHT) / desiredViewHeight;
+            resolvedZoom = Math.min(Math.max(resolvedZoom, MIN_ZOOM), MAX_ZOOM);
+            camera.zoom = resolvedZoom;
+
+            const radius = Math.max(size.length() * distanceScale, FRAME_HALF_HEIGHT * 2);
+            const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+            const elevation = THREE.MathUtils.degToRad(elevationDeg);
+            const cosElev = Math.cos(elevation);
+            const x = viewTarget.x + radius * Math.cos(azimuth) * cosElev;
+            const y = viewTarget.y + radius * Math.sin(elevation);
+            const z = viewTarget.z + radius * Math.sin(azimuth) * cosElev;
+            camera.position.set(x, y, z);
+
+            controls.target.copy(viewTarget);
+            camera.up.set(0, 1, 0);
+            if (Number.isFinite(rollDeg) && rollDeg !== 0) {
+                const viewDir = new THREE.Vector3().subVectors(viewTarget, camera.position).normalize();
+                camera.up.applyAxisAngle(viewDir, THREE.MathUtils.degToRad(rollDeg));
+            }
+            camera.updateProjectionMatrix();
+            controls.update();
+
+            HOME_POS.copy(camera.position);
+            HOME_TARGET.copy(controls.target);
+            HOME_ZOOM = camera.zoom;
+
+            window.__figureCameraView = {
+                projection,
+                azimuthDeg,
+                elevationDeg,
+                rollDeg,
+                zoom: camera.zoom,
+                target: [controls.target.x, controls.target.y, controls.target.z]
+            };
+        }
+
+        function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.5 } = {}) {
+            const azimuthDeg = THREE.MathUtils.radToDeg(azimuth);
+            const elevationDeg = 90 - THREE.MathUtils.radToDeg(polar);
+            setCameraView({ azimuthDeg, elevationDeg, heightFraction });
+        }
+
+        setStandardView();
+
+        const _labels = [];
+        const _v = new THREE.Vector3();
+
+        function addLabel(text, position, options = {}) {
+            const div = document.createElement('div');
+            div.className = 'lbl';
+            div.innerHTML = text;
+            if (options.color) div.style.color = options.color;
+            if (options.fontSize) div.style.fontSize = options.fontSize;
+            if (options.bold) div.style.fontWeight = 'bold';
+            if (options.background) {
+                div.style.background = options.background;
+                div.style.padding = '1px 4px';
+                div.style.borderRadius = '3px';
+            }
+            if (options.fontFamily) div.style.fontFamily = options.fontFamily;
+            if (options.fontStyle) div.style.fontStyle = options.fontStyle;
+            document.body.appendChild(div);
+            const entry = { div, pos: position.clone(), offset: options.offset || [0, 0] };
+            _labels.push(entry);
+            return entry;
+        }
+
+        const _referenceDistance = 8;
+
+        function _syncLabels() {
+            for (const { div, pos, offset } of _labels) {
+                _v.copy(pos).project(camera);
+                if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
+                    div.style.display = 'none';
+                    continue;
+                }
+                div.style.display = '';
+
+                const ox = offset && offset[0] ? offset[0] : 0;
+                const oy = offset && offset[1] ? offset[1] : 0;
+                const x = (_v.x * 0.5 + 0.5) * canvas.clientWidth + ox;
+                const y = (-_v.y * 0.5 + 0.5) * canvas.clientHeight + oy;
+
+                const distance = Math.max(camera.position.distanceTo(pos), 1e-4);
+                let scale = (_referenceDistance / distance) * (camera.zoom || 1);
+                scale = Math.max(0.5, Math.min(scale, 6));
+
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                div.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            }
+        }
+
+        const _tooltip = document.getElementById('figTooltip');
+        const _infoPopup = document.getElementById('infoPopup');
+        const _infoTitle = document.getElementById('infoTitle');
+        const _infoBody = document.getElementById('infoBody');
+        const _raycaster = new THREE.Raycaster();
+        const _pointer = new THREE.Vector2();
+        const _interactiveObjects = [];
+        let _hoveredInteractive = null;
+
+        function showPopup(title, body) {
+            _infoTitle.textContent = title || '';
+            _infoBody.textContent = body || '';
+            _infoPopup.style.display = title ? 'block' : 'none';
+            window.parent.postMessage({ type: 'alex-popup', title, body }, '*');
+        }
+
+        function hidePopup() {
+            _infoPopup.style.display = 'none';
+            window.parent.postMessage({ type: 'alex-popup', title: null }, '*');
+        }
+
+        function showTooltip(text, event) {
+            if (!_tooltip || !text) return;
+            _tooltip.textContent = text;
+            _tooltip.style.display = 'block';
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            if (!_tooltip || _tooltip.style.display === 'none') return;
+            const pad = 12;
+            const x = Math.min(event.clientX + pad, window.innerWidth - _tooltip.offsetWidth - pad);
+            const y = Math.max(pad, event.clientY - _tooltip.offsetHeight - pad);
+            _tooltip.style.left = x + 'px';
+            _tooltip.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            if (_tooltip) _tooltip.style.display = 'none';
+        }
+
+        function _setPointerFromEvent(event) {
+            const rect = canvas.getBoundingClientRect();
+            _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function _firstInteractiveHit(event) {
+            if (!_interactiveObjects.length) return null;
+            _setPointerFromEvent(event);
+            _raycaster.setFromCamera(_pointer, camera);
+            const hits = _raycaster.intersectObjects(_interactiveObjects.map(entry => entry.object), true);
+            for (const hit of hits) {
+                let obj = hit.object;
+                while (obj) {
+                    const entry = _interactiveObjects.find(item => item.object === obj);
+                    if (entry) return { ...entry, hit };
+                    obj = obj.parent;
+                }
+            }
+            return null;
+        }
+
+        function registerInteractive(object, info = {}) {
+            if (!object) return object;
+            object.userData = object.userData || {};
+            object.userData.interactive = true;
+            _interactiveObjects.push({ object, info });
+            return object;
+        }
+
+        function setHover(entry, active) {
+            if (entry && entry.info && typeof entry.info.setHover === 'function') {
+                entry.info.setHover(active);
+            }
+        }
+
+        canvas.addEventListener('pointermove', (event) => {
+            moveTooltip(event);
+            const entry = _firstInteractiveHit(event);
+            if (entry) {
+                if (!_hoveredInteractive || _hoveredInteractive.object !== entry.object) {
+                    setHover(_hoveredInteractive, false);
+                    setHover(entry, true);
+                }
+                _hoveredInteractive = entry;
+                canvas.style.cursor = 'pointer';
+                showTooltip(entry.info.tooltip || entry.info.title || 'Click to explain', event);
+            } else {
+                setHover(_hoveredInteractive, false);
+                _hoveredInteractive = null;
+                canvas.style.cursor = controls.enabled ? 'grab' : 'default';
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('pointerleave', () => {
+            setHover(_hoveredInteractive, false);
+            _hoveredInteractive = null;
+            canvas.style.cursor = 'default';
+            hideTooltip();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            const entry = _firstInteractiveHit(event) || _hoveredInteractive;
+            if (!entry) {
+                hidePopup();
+                return;
+            }
+            const title = entry.info.title || entry.info.tooltip || 'Figure element';
+            const body = entry.info.body || entry.info.description || 'This part is interactive.';
+            showPopup(title, body);
+            if (typeof entry.info.onClick === 'function') entry.info.onClick(entry.hit, entry.object);
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hidePopup();
+                hideTooltip();
+            }
+        });
+
+        function spectralColor(t) {
+            const stops = [
+                { t: 0.00, color: new THREE.Color(0x0c20ff) },
+                { t: 0.27, color: new THREE.Color(0x1fb8ff) },
+                { t: 0.52, color: new THREE.Color(0x31f06e) },
+                { t: 0.78, color: new THREE.Color(0xeaff00) },
+                { t: 1.00, color: new THREE.Color(0xffa000) }
+            ];
+            const x = Math.max(0, Math.min(1, t));
+            for (let i = 0; i < stops.length - 1; i++) {
+                const a = stops[i];
+                const b = stops[i + 1];
+                if (x >= a.t && x <= b.t) {
+                    const k = (x - a.t) / (b.t - a.t);
+                    return a.color.clone().lerp(b.color, k);
+                }
+            }
+            return stops[stops.length - 1].color.clone();
+        }
+
+        const axisMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+        function makeCylinderBetween(start, end, radius, material) {
+            const direction = new THREE.Vector3().subVectors(end, start);
+            const length = direction.length();
+            const geometry = new THREE.CylinderGeometry(radius, radius, length, 16, 1);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(start).add(end).multiplyScalar(0.5);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+            return mesh;
+        }
+
+        function makeArrow(start, end, radius = 0.022, headLength = 0.20, headRadius = 0.075) {
+            const group = new THREE.Group();
+            const direction = new THREE.Vector3().subVectors(end, start);
+            const length = direction.length();
+            const unit = direction.clone().normalize();
+            const shaftEnd = end.clone().addScaledVector(unit, -headLength);
+            const shaft = makeCylinderBetween(start, shaftEnd, radius, axisMaterial);
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(headRadius, headLength, 18), axisMaterial);
+            cone.position.copy(shaftEnd).add(end).multiplyScalar(0.5);
+            cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), unit);
+            group.add(shaft, cone);
+            scene.add(group);
+            return group;
+        }
+
+        function addAxes(offsetX, showMagnitudeLabel, magnitudeLabel, letter) {
+            const origin = new THREE.Vector3(offsetX, 0, 0);
+            makeArrow(new THREE.Vector3(offsetX - 1.85, 0, 0), new THREE.Vector3(offsetX + 2.08, 0, 0), 0.026, 0.22, 0.085);
+            makeArrow(origin.clone(), new THREE.Vector3(offsetX, 2.28, 0), 0.026, 0.24, 0.088);
+            makeArrow(origin.clone(), new THREE.Vector3(offsetX, 0, -1.55), 0.026, 0.21, 0.083);
+
+            addMathLabel('<i>u</i>', new THREE.Vector3(offsetX + 2.18, 0.02, 0), '58px', [14, 2]);
+            addMathLabel('<i>v</i>', new THREE.Vector3(offsetX, 0.03, -1.67), '54px', [10, 3]);
+            addMathLabel(letter, new THREE.Vector3(offsetX - 2.22, -0.30, 0.26), '66px', [-8, 8]);
+            if (showMagnitudeLabel) {
+                addMathLabel(magnitudeLabel, new THREE.Vector3(offsetX, 2.55, 0.03), '78px', [0, -6]);
+            }
+        }
+
+        function addMathLabel(html, position, fontSize, offset) {
+            return addLabel(html, position, {
+                fontSize,
+                offset,
+                fontFamily: 'Georgia, "Times New Roman", serif',
+                fontStyle: 'normal',
+                color: '#050505'
+            });
+        }
+
+        const uScale = 1.40;
+        const vScale = 1.08;
+        const heightScale = 1.20;
+        const gridN = 54;
+        const panels = [];
+
+        const operators = [
+            {
+                key: 'd0',
+                offsetX: -6.75,
+                letter: 'a)',
+                label: '|<i>D</i><sub>0</sub>(<i>u,v</i>)|',
+                showMagnitudeLabel: true,
+                max: 2.0,
+                title: 'd0: compact one-pixel derivative',
+                tooltip: 'd0 varies only with u; drag or click for the 1D DFT idea.',
+                body: 'This sheet is constant along v because the filter is one-dimensional. Its magnitude rises toward high horizontal frequency, so it preserves sharp detail but passes more noise.',
+                fn: (u, v) => 0.08 + 1.72 * Math.abs(Math.sin(u / 2))
+            },
+            {
+                key: 'd1',
+                offsetX: -2.25,
+                letter: 'b)',
+                label: '|<i>D</i><sub>1</sub>(<i>u,v</i>)|',
+                showMagnitudeLabel: true,
+                max: 2.0,
+                title: 'd1: centered derivative',
+                tooltip: 'd1 is also a 1D response, with two band-pass lobes along u.',
+                body: 'The centered derivative has zero response at DC and at the Nyquist edge, producing two lobes in frequency. Nothing changes along v because the kernel is separable and one-dimensional here.',
+                fn: (u, v) => 0.05 + 1.80 * Math.abs(Math.sin(u))
+            },
+            {
+                key: 'roberts',
+                offsetX: 2.25,
+                letter: 'c)',
+                label: '',
+                showMagnitudeLabel: false,
+                max: 2.0,
+                title: 'Roberts cross: diagonal derivative',
+                tooltip: 'Roberts cross rotates the derivative response onto a diagonal frequency direction.',
+                body: 'The diagonal ridges show that this operator responds to changes along a 45 degree direction. It is derivative-like, but its frequency response is tied to the image diagonal rather than a pure u or v axis.',
+                fn: (u, v) => 0.06 + 1.72 * Math.abs(Math.sin((u + v) / 2))
+            },
+            {
+                key: 'sobel',
+                offsetX: 6.75,
+                letter: 'd)',
+                label: '',
+                showMagnitudeLabel: false,
+                max: 2.0,
+                title: 'Sobel-Feldman: derivative times smoothing',
+                tooltip: 'Sobel combines D1 along u with B2 smoothing along v.',
+                body: 'The two d1 lobes are strongest near v = 0 and fade as |v| grows. This band-pass shape explains why Sobel is more tolerant to noise while giving blurrier edges.',
+                fn: (u, v) => 0.04 + 1.78 * Math.abs(Math.sin(u)) * (0.18 + 0.82 * Math.pow((1 + Math.cos(v)) / 2, 1.1))
+            }
+        ];
+
+        function worldPoint(offsetX, u, v, y) {
+            return new THREE.Vector3(offsetX + (u / Math.PI) * uScale, y, -(v / Math.PI) * vScale);
+        }
+
+        function createSurface(operator) {
+            const positions = [];
+            const colors = [];
+            const indices = [];
+            const linePositions = [];
+            const lineColors = [];
+            const samples = [];
+
+            for (let i = 0; i <= gridN; i++) {
+                const u = -Math.PI + (2 * Math.PI * i) / gridN;
+                samples[i] = [];
+                for (let j = 0; j <= gridN; j++) {
+                    const v = -Math.PI + (2 * Math.PI * j) / gridN;
+                    const raw = operator.fn(u, v);
+                    const y = raw * heightScale;
+                    const point = worldPoint(operator.offsetX, u, v, y);
+                    samples[i][j] = { u, v, point, raw };
+                    positions.push(point.x, point.y, point.z);
+                    const color = spectralColor(raw / operator.max);
+                    colors.push(color.r, color.g, color.b);
+                }
+            }
+
+            for (let i = 0; i < gridN; i++) {
+                for (let j = 0; j < gridN; j++) {
+                    const a = i * (gridN + 1) + j;
+                    const b = (i + 1) * (gridN + 1) + j;
+                    const c = (i + 1) * (gridN + 1) + (j + 1);
+                    const d2 = i * (gridN + 1) + (j + 1);
+                    indices.push(a, b, d2, b, c, d2);
+                }
+            }
+
+            function pushLinePoint(sample) {
+                const p = sample.point;
+                linePositions.push(p.x, p.y + 0.012, p.z);
+                const color = spectralColor(sample.raw / operator.max);
+                lineColors.push(color.r, color.g, color.b);
+            }
+
+            for (let i = 0; i <= gridN; i++) {
+                for (let j = 0; j < gridN; j++) {
+                    pushLinePoint(samples[i][j]);
+                    pushLinePoint(samples[i][j + 1]);
+                }
+            }
+            for (let j = 0; j <= gridN; j++) {
+                for (let i = 0; i < gridN; i++) {
+                    pushLinePoint(samples[i][j]);
+                    pushLinePoint(samples[i + 1][j]);
+                }
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.setIndex(indices);
+            geometry.computeVertexNormals();
+
+            const meshMaterial = new THREE.MeshBasicMaterial({
+                vertexColors: true,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 0.78,
+                depthWrite: false
+            });
+            const mesh = new THREE.Mesh(geometry, meshMaterial);
+            scene.add(mesh);
+
+            const lineGeometry = new THREE.BufferGeometry();
+            lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+            lineGeometry.setAttribute('color', new THREE.Float32BufferAttribute(lineColors, 3));
+            const lineMaterial = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.96
+            });
+            const wire = new THREE.LineSegments(lineGeometry, lineMaterial);
+            scene.add(wire);
+
+            const panel = { operator, mesh, wire, meshMaterial, lineMaterial, sliceLine: null };
+            panels.push(panel);
+
+            registerInteractive(mesh, {
+                title: operator.title,
+                tooltip: operator.tooltip,
+                body: operator.body,
+                setHover: (active) => {
+                    meshMaterial.opacity = active ? 0.96 : 0.78;
+                    lineMaterial.opacity = active ? 1.0 : 0.96;
+                }
+            });
+
+            return panel;
+        }
+
+        function makeSliceLine(panel) {
+            const geometry = new THREE.BufferGeometry();
+            const material = new THREE.LineBasicMaterial({ color: 0xd00000, transparent: true, opacity: 0.98 });
+            const line = new THREE.Line(geometry, material);
+            line.visible = false;
+            scene.add(line);
+            panel.sliceLine = line;
+        }
+
+        function updateSlices() {
+            const active = document.getElementById('btnSlice').classList.contains('active');
+            const slider = document.getElementById('sliceV');
+            const vValue = (Number(slider.value) / 100) * Math.PI;
+            for (const panel of panels) {
+                if (!panel.sliceLine) makeSliceLine(panel);
+                const positions = [];
+                for (let i = 0; i <= 160; i++) {
+                    const u = -Math.PI + (2 * Math.PI * i) / 160;
+                    const y = panel.operator.fn(u, vValue) * heightScale + 0.035;
+                    const p = worldPoint(panel.operator.offsetX, u, vValue, y);
+                    positions.push(p.x, p.y, p.z);
+                }
+                panel.sliceLine.geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                panel.sliceLine.geometry.computeBoundingSphere();
+                panel.sliceLine.visible = active;
+            }
+        }
+
+        document.getElementById('btnSlice').addEventListener('click', () => {
+            const button = document.getElementById('btnSlice');
+            button.classList.toggle('active');
+            document.getElementById('sliceWrap').style.display = button.classList.contains('active') ? 'flex' : 'none';
+            updateSlices();
+            showPopup('v slice', 'The red curves are constant-v cross-sections. They reveal which operators are truly one-dimensional and how Sobel damps high vertical frequencies.');
+        });
+
+        document.getElementById('sliceV').addEventListener('input', updateSlices);
+
+        // The four panels map the textbook comparison directly: d0, d1, Roberts cross,
+        // and Sobel-Feldman magnitude responses over the DFT coordinates u and v.
+        for (const operator of operators) {
+            addAxes(operator.offsetX, operator.showMagnitudeLabel, operator.label, operator.letter);
+            createSurface(operator);
+        }
+
+        // Thin black base lines help the axes read like the original low-elevation textbook rendering.
+        const baselineMaterial = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 });
+        const baselinePoints = [];
+        for (const operator of operators) {
+            baselinePoints.push(new THREE.Vector3(operator.offsetX - 1.8, -0.01, 0.02));
+            baselinePoints.push(new THREE.Vector3(operator.offsetX + 1.95, -0.01, 0.02));
+        }
+        const baselineGeometry = new THREE.BufferGeometry().setFromPoints(baselinePoints);
+        scene.add(new THREE.LineSegments(baselineGeometry, baselineMaterial));
+
+        function sourceMatchedZoom() {
+            return Math.min(1.24, Math.max(0.44, 0.35 * aspect));
+        }
+
+        function applySourceCameraView() {
+            // Source-matched first frame: wide orthographic crop, low elevation, u to the right and v diagonally back.
+            setCameraView({
+                projection: 'orthographic',
+                azimuthDeg: 45,
+                elevationDeg: 18,
+                rollDeg: 0,
+                zoom: sourceMatchedZoom(),
+                target: [0.05, 0.92, -0.12],
+                heightFraction: 0.66,
+                distanceScale: 1.18
+            });
+        }
+
+        function resizeRenderer() {
+            const w = Math.max(canvas.clientWidth, 1);
+            const h = Math.max(canvas.clientHeight, 1);
+            aspect = w / h;
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.top = d;
+            camera.bottom = -d;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h, false);
+        }
+
+        new ResizeObserver(resizeRenderer).observe(canvas);
+        resizeRenderer();
+        applySourceCameraView();
+        updateSlices();
+
+        let _firstFrame = true;
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            _syncLabels();
+            if (_firstFrame) { _firstFrame = false; window.__markRendered?.(); }
+        }
+        animate();
+    </script>
+</body>
+
+</html>

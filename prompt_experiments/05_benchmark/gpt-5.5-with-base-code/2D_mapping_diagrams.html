@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>2D Mapping Diagrams</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #c {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        .lbl {
+            position: absolute;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 13px;
+            color: #111;
+            text-shadow: 0 1px 3px #fff, 0 -1px 3px #fff, 1px 0 3px #fff, -1px 0 3px #fff;
+        }
+
+        #ui {
+            position: absolute;
+            left: 6px;
+            bottom: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-family: sans-serif;
+            font-size: 11px;
+            max-width: 190px;
+            max-height: 34%;
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            opacity: 0.88;
+            transform: none;
+            transition: opacity 0.16s ease;
+            z-index: 10;
+        }
+
+        #ui:hover,
+        #ui:focus-within {
+            opacity: 1;
+        }
+
+        #ui button {
+            padding: 4px 10px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            background: #f5f5f5;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        #ui button:hover {
+            background: #e0e0e0;
+        }
+
+        #ui button.active {
+            background: #c8e6ff;
+            border-color: #5aabf0;
+        }
+
+        #ui label {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            text-shadow: 0 1px 2px #fff;
+        }
+
+        #figTooltip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: none;
+            max-width: 230px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.62);
+            color: #fff;
+            font: 11px/1.35 sans-serif;
+            pointer-events: none;
+            white-space: normal;
+            z-index: 20;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+    <div id="figTooltip"></div>
+    <div id="ui">
+        <button id="btnReset" style="display:none">Reset View</button>
+        <button id="btnTrace" class="active" title="Toggle input-to-output correspondences">traces</button>
+        <button id="btnFocus" title="Cycle a single layer emphasis">focus</button>
+    </div>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    }
+  }
+  </script>
+
+    <div id="err-overlay" style="display:none;position:fixed;inset:0;background:#fff;z-index:999;
+       flex-direction:column;align-items:center;justify-content:center;
+       font-family:sans-serif;font-size:13px;color:#555;gap:10px;">
+        <span id="err-msg">Figure failed to load</span>
+        <button onclick="location.reload()" style="padding:5px 14px;border:1px solid #aaa;
+        border-radius:5px;background:#f5f5f5;cursor:pointer;font-size:12px;">Reload</button>
+    </div>
+
+    <script>
+        let _rendered = false;
+        const _errOverlay = document.getElementById('err-overlay');
+        window.__markRendered = () => { _rendered = true; _errOverlay.style.display = 'none'; };
+        window.addEventListener('error', (event) => {
+            if (!_rendered) {
+                document.getElementById('err-msg').textContent = event.message || 'Figure failed to load';
+                _errOverlay.style.display = 'flex';
+            }
+        });
+        setTimeout(() => {
+            if (!_rendered) _errOverlay.style.display = 'flex';
+        }, 12000);
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const canvas = document.getElementById('c');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const d = 3;
+        function viewportSize() {
+            const rect = canvas.getBoundingClientRect();
+            const width = rect.width || window.innerWidth || canvas.width || 1;
+            const height = rect.height || window.innerHeight || canvas.height || 1;
+            return { width, height };
+        }
+
+        let initialSize = viewportSize();
+        let aspect = initialSize.width / Math.max(initialSize.height, 1);
+        const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+        camera.position.set(4, 4, 4);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const HOME_POS = new THREE.Vector3();
+        const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+        let HOME_ZOOM = 0.75;
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            camera.position.copy(HOME_POS);
+            controls.target.copy(HOME_TARGET);
+            camera.zoom = HOME_ZOOM;
+            camera.updateProjectionMatrix();
+            controls.update();
+        });
+
+        const FRAME_HALF_HEIGHT = d;
+        const MIN_ZOOM = 0.2;
+        const MAX_ZOOM = 5;
+
+        function computeSceneBounds() {
+            const box = new THREE.Box3().setFromObject(scene);
+            if (box.isEmpty()) {
+                box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2 * d, 2 * d, 2 * d));
+            }
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            return { box, center, size };
+        }
+
+        function setCameraView({
+            projection = 'orthographic',
+            azimuthDeg = 45,
+            elevationDeg = 35,
+            rollDeg = 0,
+            zoom = null,
+            target = null,
+            heightFraction = 0.5,
+            distanceScale = 1.2
+        } = {}) {
+            const { center, size } = computeSceneBounds();
+            const viewTarget = Array.isArray(target)
+                ? new THREE.Vector3(target[0] || 0, target[1] || 0, target[2] || 0)
+                : center;
+
+            const contentHeight = Math.max(size.y, 1e-6);
+            const desiredViewHeight = contentHeight / Math.max(heightFraction, 0.01);
+            let resolvedZoom = Number.isFinite(zoom) ? zoom : (2 * FRAME_HALF_HEIGHT) / desiredViewHeight;
+            resolvedZoom = Math.min(Math.max(resolvedZoom, MIN_ZOOM), MAX_ZOOM);
+            camera.zoom = resolvedZoom;
+
+            const radius = Math.max(size.length() * distanceScale, FRAME_HALF_HEIGHT * 2);
+            const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+            const elevation = THREE.MathUtils.degToRad(elevationDeg);
+            const cosElev = Math.cos(elevation);
+            const x = viewTarget.x + radius * Math.cos(azimuth) * cosElev;
+            const y = viewTarget.y + radius * Math.sin(elevation);
+            const z = viewTarget.z + radius * Math.sin(azimuth) * cosElev;
+            camera.position.set(x, y, z);
+
+            controls.target.copy(viewTarget);
+            camera.up.set(0, 1, 0);
+            if (Number.isFinite(rollDeg) && rollDeg !== 0) {
+                const viewDir = new THREE.Vector3().subVectors(viewTarget, camera.position).normalize();
+                camera.up.applyAxisAngle(viewDir, THREE.MathUtils.degToRad(rollDeg));
+            }
+            camera.updateProjectionMatrix();
+            controls.update();
+
+            HOME_POS.copy(camera.position);
+            HOME_TARGET.copy(controls.target);
+            HOME_ZOOM = camera.zoom;
+
+            window.__figureCameraView = {
+                projection,
+                azimuthDeg,
+                elevationDeg,
+                rollDeg,
+                zoom: camera.zoom,
+                target: [controls.target.x, controls.target.y, controls.target.z],
+            };
+        }
+
+        function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.5 } = {}) {
+            const azimuthDeg = THREE.MathUtils.radToDeg(azimuth);
+            const elevationDeg = 90 - THREE.MathUtils.radToDeg(polar);
+            setCameraView({ azimuthDeg, elevationDeg, heightFraction });
+        }
+
+        setStandardView();
+
+        const _labels = [];
+        const _v = new THREE.Vector3();
+
+        function addLabel(text, position, options = {}) {
+            const div = document.createElement('div');
+            div.className = 'lbl';
+            div.innerHTML = text;
+            if (options.color) div.style.color = options.color;
+            if (options.fontSize) div.style.fontSize = options.fontSize;
+            if (options.bold) div.style.fontWeight = 'bold';
+            if (options.background) {
+                div.style.background = options.background;
+                div.style.padding = '1px 4px';
+                div.style.borderRadius = '3px';
+            }
+            document.body.appendChild(div);
+            const entry = { div, pos: position.clone(), offset: options.offset || [0, 0] };
+            _labels.push(entry);
+            return entry;
+        }
+
+        const _referenceDistance = 8;
+
+        function _syncLabels() {
+            for (const { div, pos, offset } of _labels) {
+                _v.copy(pos).project(camera);
+                if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
+                    div.style.display = 'none';
+                    continue;
+                }
+                div.style.display = '';
+                const ox = offset && offset[0] ? offset[0] : 0;
+                const oy = offset && offset[1] ? offset[1] : 0;
+                const { width, height } = viewportSize();
+                const x = (_v.x * 0.5 + 0.5) * width + ox;
+                const y = (-_v.y * 0.5 + 0.5) * height + oy;
+                let scale = (_referenceDistance / Math.max(camera.position.distanceTo(pos), 1e-4)) * (camera.zoom || 1);
+                scale = Math.max(0.48, Math.min(scale, 5.5));
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                div.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            }
+        }
+
+        const _tooltip = document.getElementById('figTooltip');
+        const _raycaster = new THREE.Raycaster();
+        const _pointer = new THREE.Vector2();
+        const _interactiveObjects = [];
+        let _hoveredInteractive = null;
+
+        function showPopup(title, body) {
+            window.parent.postMessage({ type: 'alex-popup', title, body }, '*');
+            showTooltip(`${title}: ${body}`, { clientX: window.innerWidth * 0.5, clientY: window.innerHeight * 0.12 });
+        }
+
+        function hidePopup() {
+            window.parent.postMessage({ type: 'alex-popup', title: null }, '*');
+        }
+
+        function showTooltip(text, event) {
+            if (!_tooltip || !text) return;
+            _tooltip.textContent = text;
+            _tooltip.style.display = 'block';
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            if (!_tooltip || _tooltip.style.display === 'none') return;
+            const pad = 12;
+            const x = Math.min(event.clientX + pad, window.innerWidth - _tooltip.offsetWidth - pad);
+            const y = Math.max(pad, event.clientY - _tooltip.offsetHeight - pad);
+            _tooltip.style.left = x + 'px';
+            _tooltip.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            if (_tooltip) _tooltip.style.display = 'none';
+        }
+
+        function _setPointerFromEvent(event) {
+            const rect = canvas.getBoundingClientRect();
+            _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function _firstInteractiveHit(event) {
+            if (!_interactiveObjects.length) return null;
+            _setPointerFromEvent(event);
+            _raycaster.setFromCamera(_pointer, camera);
+            const hits = _raycaster.intersectObjects(_interactiveObjects.map(entry => entry.object), true);
+            for (const hit of hits) {
+                let obj = hit.object;
+                while (obj) {
+                    const entry = _interactiveObjects.find(item => item.object === obj);
+                    if (entry) return { ...entry, hit };
+                    obj = obj.parent;
+                }
+            }
+            return null;
+        }
+
+        function registerInteractive(object, info = {}) {
+            if (!object) return object;
+            object.userData = object.userData || {};
+            object.userData.interactive = true;
+            _interactiveObjects.push({ object, info });
+            return object;
+        }
+
+        canvas.addEventListener('pointermove', (event) => {
+            moveTooltip(event);
+            const entry = _firstInteractiveHit(event);
+            if (entry) {
+                _hoveredInteractive = entry;
+                canvas.style.cursor = 'pointer';
+                showTooltip(entry.info.tooltip || entry.info.title || 'Click to explain', event);
+            } else {
+                _hoveredInteractive = null;
+                canvas.style.cursor = controls.enabled ? 'grab' : 'default';
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('pointerleave', () => {
+            _hoveredInteractive = null;
+            canvas.style.cursor = 'default';
+            hideTooltip();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            const entry = _firstInteractiveHit(event) || _hoveredInteractive;
+            if (!entry) {
+                hidePopup();
+                return;
+            }
+            const title = entry.info.title || entry.info.tooltip || 'Figure element';
+            const body = entry.info.body || entry.info.description || 'This part is interactive.';
+            showPopup(title, body);
+            if (typeof entry.info.onClick === 'function') entry.info.onClick(entry.hit, entry.object);
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hidePopup();
+                hideTooltip();
+            }
+        });
+
+        const root = new THREE.Group();
+        scene.add(root);
+
+        const ink = 0x4a4a4a;
+        const paleInk = 0xbdbdbd;
+        const red = 0xff2f2f;
+        const panelSpacing = 4.1;
+        const bottomY = -0.95;
+        const topY = 1.05;
+        const planeSize = 1.75;
+        const pointCount = 170;
+        const rngSeed = 9;
+
+        function mulberry32(seed) {
+            return function () {
+                let t = seed += 0x6D2B79F5;
+                t = Math.imul(t ^ t >>> 15, t | 1);
+                t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            };
+        }
+
+        const rand = mulberry32(rngSeed);
+        function gaussian() {
+            const u = Math.max(rand(), 1e-6);
+            const v = Math.max(rand(), 1e-6);
+            return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        }
+
+        const samples = Array.from({ length: pointCount }, () => {
+            const x = THREE.MathUtils.clamp(gaussian() * 0.47, -1.25, 1.25);
+            const z = THREE.MathUtils.clamp(gaussian() * 0.47, -1.25, 1.25);
+            return new THREE.Vector2(x, z);
+        });
+
+        function linearMap(p) {
+            return new THREE.Vector2(0.82 * p.x - 0.34 * p.y + 0.02, 0.28 * p.x + 0.55 * p.y + 0.10);
+        }
+
+        function reluMap(p) {
+            return new THREE.Vector2(Math.max(0, p.x), Math.max(0, p.y));
+        }
+
+        function l2Map(p) {
+            const len = Math.max(Math.hypot(p.x, p.y), 1e-6);
+            return new THREE.Vector2(p.x / len * 0.92, p.y / len * 0.92);
+        }
+
+        function createLine(points, color, opacity = 1, dashed = false, linewidth = 1) {
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = dashed
+                ? new THREE.LineDashedMaterial({ color, transparent: opacity < 1, opacity, dashSize: 0.055, gapSize: 0.045 })
+                : new THREE.LineBasicMaterial({ color, transparent: opacity < 1, opacity, linewidth });
+            const line = new THREE.Line(geometry, material);
+            if (dashed) line.computeLineDistances();
+            return line;
+        }
+
+        function createRectangle(width, depth, y, color, opacity, dashed = false) {
+            const hw = width / 2;
+            const hd = depth / 2;
+            const points = [
+                new THREE.Vector3(-hw, y, -hd),
+                new THREE.Vector3(hw, y, -hd),
+                new THREE.Vector3(hw, y, hd),
+                new THREE.Vector3(-hw, y, hd),
+                new THREE.Vector3(-hw, y, -hd)
+            ];
+            return createLine(points, color, opacity, dashed);
+        }
+
+        function createGrid(size, y) {
+            const group = new THREE.Group();
+            const half = size / 2;
+            for (const value of [-half, 0, half]) {
+                group.add(createLine([new THREE.Vector3(-half, y, value), new THREE.Vector3(half, y, value)], paleInk, value === 0 ? 0.34 : 0.22, true));
+                group.add(createLine([new THREE.Vector3(value, y, -half), new THREE.Vector3(value, y, half)], paleInk, value === 0 ? 0.34 : 0.22, true));
+            }
+            return group;
+        }
+
+        function makePointMaterial(opacity = 0.82, size = 0.035) {
+            return new THREE.MeshBasicMaterial({ color: red, transparent: opacity < 1, opacity, depthWrite: false });
+        }
+
+        function addPoint(parent, position, radius, material) {
+            const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 10, 8), material.clone());
+            mesh.position.copy(position);
+            parent.add(mesh);
+            return mesh;
+        }
+
+        const traceGroups = [];
+        const panelGroups = [];
+        const panelFrames = [];
+        const pointMaterials = {
+            lower: makePointMaterial(0.78),
+            upper: makePointMaterial(0.78),
+            faint: makePointMaterial(0.24, 0.03),
+            strong: makePointMaterial(0.96, 0.047)
+        };
+
+        function addPanel({ title, label, x, map, rotateTop = 0, topGuide = 'square', topSize = planeSize }) {
+            const group = new THREE.Group();
+            group.position.x = x;
+            root.add(group);
+            panelGroups.push(group);
+
+            // Each textbook panel is a 2D-to-2D mapping: the lower sheet is x_in,
+            // the upper sheet is x_out, and red vertical traces pair corresponding points.
+            const lowerFrame = createRectangle(planeSize, planeSize, bottomY, ink, 0.92);
+            lowerFrame.rotation.y = 0;
+            const upperFrame = topGuide === 'circle'
+                ? createCircleFrame(topSize * 0.53, topY, ink)
+                : createRectangle(topSize, topSize, topY, ink, 0.92);
+            upperFrame.rotation.y = rotateTop;
+            lowerFrame.userData.panelLabel = label;
+            upperFrame.userData.panelLabel = label;
+            group.add(lowerFrame, upperFrame);
+            panelFrames.push(lowerFrame, upperFrame);
+
+            const guides = new THREE.Group();
+            const lowerGrid = createGrid(planeSize, bottomY + 0.001);
+            const upperGrid = topGuide === 'circle' ? createCircularGuide(topSize * 0.53, topY + 0.001) : createGrid(topSize, topY + 0.001);
+            upperGrid.rotation.y = rotateTop;
+            guides.add(lowerGrid, upperGrid);
+            guides.add(createLine([new THREE.Vector3(-planeSize / 2, bottomY, -planeSize / 2), new THREE.Vector3(-topSize / 2, topY, -topSize / 2)], paleInk, 0.55, true));
+            guides.add(createLine([new THREE.Vector3(planeSize / 2, bottomY, -planeSize / 2), new THREE.Vector3(topSize / 2, topY, -topSize / 2)], paleInk, 0.35, true));
+            guides.add(createLine([new THREE.Vector3(planeSize / 2, bottomY, planeSize / 2), new THREE.Vector3(topSize / 2, topY, topSize / 2)], paleInk, 0.35, true));
+            guides.add(createLine([new THREE.Vector3(-planeSize / 2, bottomY, planeSize / 2), new THREE.Vector3(-topSize / 2, topY, topSize / 2)], paleInk, 0.35, true));
+            group.add(guides);
+
+            const traces = new THREE.Group();
+            traceGroups.push(traces);
+            group.add(traces);
+
+            const lowerPoints = new THREE.Group();
+            const upperPoints = new THREE.Group();
+            group.add(lowerPoints, upperPoints);
+
+            for (let i = 0; i < samples.length; i++) {
+                const input = samples[i];
+                const output = map(input);
+                const lower = new THREE.Vector3(input.x, bottomY, input.y);
+                const upper = new THREE.Vector3(output.x, topY, output.y);
+                const trace = createLine([lower, upper], red, 0.23, true);
+                traces.add(trace);
+
+                const useStrong = label === 'relu' && (output.x === 0 || output.y === 0) && i % 2 === 0;
+                addPoint(lowerPoints, lower, 0.026, pointMaterials.lower);
+                addPoint(upperPoints, upper, useStrong ? 0.035 : 0.028, useStrong ? pointMaterials.strong : pointMaterials.upper);
+            }
+
+            addLabel(title, new THREE.Vector3(x, topY + 1.18, -0.12), { fontSize: '30px', bold: true, offset: [0, -10] });
+            addLabel('x<sub>out</sub>', new THREE.Vector3(x - 1.34, topY + 0.24, -0.80), { fontSize: '24px', bold: true, offset: [-4, 0] });
+            addLabel('x<sub>in</sub>', new THREE.Vector3(x - 1.30, bottomY - 0.22, -0.74), { fontSize: '24px', bold: true, offset: [-8, 6] });
+
+            registerInteractive(upperFrame, {
+                title,
+                tooltip: `${title}: click for the mapping idea`,
+                body: mappingText[label],
+                onClick: () => emphasizePanel(label)
+            });
+            registerInteractive(lowerFrame, {
+                title: 'Input distribution',
+                tooltip: 'Gaussian input blob p_data',
+                body: 'All three panels begin with the same two-dimensional Gaussian blob centered at the origin.',
+                onClick: () => emphasizePanel(label)
+            });
+
+            group.userData = { label, traces, lowerPoints, upperPoints, lowerFrame, upperFrame, guides };
+            return group;
+        }
+
+        function createCircleFrame(radius, y, color) {
+            const curve = new THREE.EllipseCurve(0, 0, radius, radius, 0, Math.PI * 2, false, 0);
+            const pts = curve.getPoints(96).map(p => new THREE.Vector3(p.x, y, p.y));
+            return createLine(pts, color, 0.92);
+        }
+
+        function createCircularGuide(radius, y) {
+            const group = new THREE.Group();
+            group.add(createCircleFrame(radius * 0.5, y, paleInk));
+            group.children[0].material.opacity = 0.24;
+            group.children[0].material.transparent = true;
+            group.add(createLine([new THREE.Vector3(-radius, y, 0), new THREE.Vector3(radius, y, 0)], paleInk, 0.25, true));
+            group.add(createLine([new THREE.Vector3(0, y, -radius), new THREE.Vector3(0, y, radius)], paleInk, 0.25, true));
+            return group;
+        }
+
+        const mappingText = {
+            linear: 'A linear layer shifts, stretches, shears, and rotates the cloud while preserving straight correspondences between input and output points.',
+            relu: 'ReLU clips negative coordinates to zero, so many outputs collapse onto the positive axes instead of filling the whole output plane.',
+            l2: 'L2 normalization keeps only direction: every nonzero input is projected outward or inward onto the unit circle.'
+        };
+
+        const linearPanel = addPanel({ title: 'linear', label: 'linear', x: -panelSpacing, map: linearMap, rotateTop: -0.04, topSize: 1.56 });
+        const reluPanel = addPanel({ title: 'relu', label: 'relu', x: 0, map: reluMap, rotateTop: 0.0, topSize: 1.75 });
+        const l2Panel = addPanel({ title: 'L2-norm', label: 'l2', x: panelSpacing, map: l2Map, rotateTop: 0.0, topGuide: 'circle', topSize: 1.88 });
+
+        // ReLU axes are drawn boldly because the pedagogical point is density piling up
+        // where negative coordinates snap to zero.
+        const reluAxes = new THREE.Group();
+        reluAxes.add(createLine([new THREE.Vector3(0, topY + 0.01, 0), new THREE.Vector3(0.88, topY + 0.01, 0)], red, 0.62));
+        reluAxes.add(createLine([new THREE.Vector3(0, topY + 0.01, 0), new THREE.Vector3(0, topY + 0.01, 0.88)], red, 0.62));
+        reluPanel.add(reluAxes);
+
+        // L2-normalized outputs live on a ring; this makes the circle visible as a 3D locus,
+        // not a pasted image annotation.
+        const l2Ring = createCircleFrame(0.92, topY + 0.012, red);
+        l2Ring.material.opacity = 0.54;
+        l2Ring.material.transparent = true;
+        l2Panel.add(l2Ring);
+
+        let tracesVisible = true;
+        let focusIndex = -1;
+        const focusOrder = ['linear', 'relu', 'l2'];
+
+        document.getElementById('btnTrace').addEventListener('click', () => {
+            tracesVisible = !tracesVisible;
+            for (const traces of traceGroups) traces.visible = tracesVisible;
+            document.getElementById('btnTrace').classList.toggle('active', tracesVisible);
+        });
+
+        document.getElementById('btnFocus').addEventListener('click', () => {
+            focusIndex = (focusIndex + 1) % (focusOrder.length + 1);
+            const label = focusIndex < focusOrder.length ? focusOrder[focusIndex] : null;
+            emphasizePanel(label);
+            document.getElementById('btnFocus').classList.toggle('active', !!label);
+        });
+
+        function setObjectOpacity(object, opacity) {
+            object.traverse(child => {
+                if (!child.material) return;
+                child.material.transparent = opacity < 1;
+                child.material.opacity = opacity;
+            });
+        }
+
+        function emphasizePanel(label) {
+            for (const group of panelGroups) {
+                const active = !label || group.userData.label === label;
+                setObjectOpacity(group, active ? 1 : 0.22);
+            }
+            if (!label) hidePopup();
+        }
+
+        setCameraView({
+            projection: 'orthographic',
+            azimuthDeg: 42,
+            elevationDeg: 20,
+            rollDeg: 0,
+            zoom: 0.72,
+            target: [0, 0.08, 0.02],
+            heightFraction: 0.64
+        });
+
+        let _firstFrame = true;
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            _syncLabels();
+            if (_firstFrame) { _firstFrame = false; window.__markRendered?.(); }
+        }
+        animate();
+
+        function resizeRenderer() {
+            const size = viewportSize();
+            const w = Math.max(Math.floor(size.width), 1);
+            const h = Math.max(Math.floor(size.height), 1);
+            aspect = w / h;
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.top = d;
+            camera.bottom = -d;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h, false);
+        }
+
+        resizeRenderer();
+        new ResizeObserver(resizeRenderer).observe(document.body);
+        window.addEventListener('resize', resizeRenderer);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Box Filter Kernel</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #c {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .lbl {
+            position: absolute;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            font-family: sans-serif;
+            font-size: 13px;
+            color: #111;
+        }
+
+        #ui {
+            position: absolute;
+            right: 6px;
+            top: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-family: sans-serif;
+            font-size: 11px;
+            max-width: 190px;
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            opacity: 0.82;
+            transform: none;
+            transition: opacity 0.16s ease;
+            z-index: 10;
+        }
+
+        #ui:hover,
+        #ui:focus-within {
+            opacity: 1;
+        }
+
+        #ui button {
+            padding: 3px 8px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            background: rgba(245, 245, 245, 0.9);
+            border-radius: 4px;
+            font-size: 11px;
+            line-height: 1.2;
+        }
+
+        #ui button:hover {
+            background: #e7e7e7;
+        }
+
+        #ui button.active {
+            background: #c8e6ff;
+            border-color: #5aabf0;
+        }
+
+        #figTooltip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: none;
+            max-width: 220px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.62);
+            color: #fff;
+            font: 11px/1.35 sans-serif;
+            pointer-events: none;
+            white-space: normal;
+            z-index: 20;
+        }
+
+        #infoPopup {
+            position: fixed;
+            left: 8px;
+            top: 8px;
+            display: none;
+            max-width: 225px;
+            padding: 6px 8px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid #b8b8b8;
+            color: #111;
+            font: 11px/1.35 sans-serif;
+            z-index: 15;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        #infoPopup strong {
+            display: block;
+            margin-bottom: 2px;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+    <div id="figTooltip"></div>
+    <div id="infoPopup"></div>
+    <div id="ui">
+        <button id="btnReset" style="display:none">Reset</button>
+        <button id="btnNormalize" title="Toggle unit DC gain">1/9</button>
+    </div>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    }
+  }
+  </script>
+
+    <div id="err-overlay"
+        style="display:none;position:fixed;inset:0;background:#fff;z-index:999;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;font-size:13px;color:#555;gap:10px;">
+        <span id="err-msg">Figure failed to load</span>
+        <button onclick="location.reload()"
+            style="padding:5px 14px;border:1px solid #aaa;border-radius:5px;background:#f5f5f5;cursor:pointer;font-size:12px;">Reload</button>
+    </div>
+
+    <script>
+        let _rendered = false;
+        const _errOverlay = document.getElementById('err-overlay');
+        window.__markRendered = () => { _rendered = true; _errOverlay.style.display = 'none'; };
+        window.addEventListener('error', (e) => {
+            if (!_rendered) {
+                document.getElementById('err-msg').textContent = e.message || 'Figure failed to load';
+                _errOverlay.style.display = 'flex';
+            }
+        });
+        setTimeout(() => {
+            if (!_rendered) { _errOverlay.style.display = 'flex'; }
+        }, 12000);
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const canvas = document.getElementById('c');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const d = 3;
+        let aspect = canvas.clientWidth / canvas.clientHeight;
+        let camera = new THREE.OrthographicCamera(
+            -d * aspect, d * aspect, d, -d, 0.1, 100
+        );
+        camera.position.set(4, 4, 4);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const HOME_POS = new THREE.Vector3();
+        const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+        let HOME_ZOOM = 0.75;
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            camera.position.copy(HOME_POS);
+            controls.target.copy(HOME_TARGET);
+            camera.zoom = HOME_ZOOM;
+            camera.updateProjectionMatrix();
+            controls.update();
+        });
+
+        const FRAME_HALF_HEIGHT = d;
+        const MIN_ZOOM = 0.2;
+        const MAX_ZOOM = 5;
+
+        function computeSceneBounds() {
+            const box = new THREE.Box3().setFromObject(scene);
+            if (box.isEmpty()) {
+                box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2 * d, 2 * d, 2 * d));
+            }
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            return { box, center, size };
+        }
+
+        function setCameraView({
+            projection = 'orthographic',
+            azimuthDeg = 45,
+            elevationDeg = 35,
+            rollDeg = 0,
+            zoom = null,
+            target = null,
+            heightFraction = 0.5,
+            distanceScale = 1.2
+        } = {}) {
+            const { center, size } = computeSceneBounds();
+            const viewTarget = Array.isArray(target)
+                ? new THREE.Vector3(target[0] || 0, target[1] || 0, target[2] || 0)
+                : center;
+
+            const contentHeight = Math.max(size.y, 1e-6);
+            const desiredViewHeight = contentHeight / Math.max(heightFraction, 0.01);
+            let resolvedZoom = Number.isFinite(zoom) ? zoom : (2 * FRAME_HALF_HEIGHT) / desiredViewHeight;
+            resolvedZoom = Math.min(Math.max(resolvedZoom, MIN_ZOOM), MAX_ZOOM);
+            camera.zoom = resolvedZoom;
+
+            const radius = Math.max(size.length() * distanceScale, FRAME_HALF_HEIGHT * 2);
+            const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+            const elevation = THREE.MathUtils.degToRad(elevationDeg);
+            const cosElev = Math.cos(elevation);
+            const x = viewTarget.x + radius * Math.cos(azimuth) * cosElev;
+            const y = viewTarget.y + radius * Math.sin(elevation);
+            const z = viewTarget.z + radius * Math.sin(azimuth) * cosElev;
+            camera.position.set(x, y, z);
+
+            controls.target.copy(viewTarget);
+            camera.up.set(0, 1, 0);
+            if (Number.isFinite(rollDeg) && rollDeg !== 0) {
+                const viewDir = new THREE.Vector3().subVectors(viewTarget, camera.position).normalize();
+                camera.up.applyAxisAngle(viewDir, THREE.MathUtils.degToRad(rollDeg));
+            }
+            camera.updateProjectionMatrix();
+            controls.update();
+
+            HOME_POS.copy(camera.position);
+            HOME_TARGET.copy(controls.target);
+            HOME_ZOOM = camera.zoom;
+
+            window.__figureCameraView = {
+                projection,
+                azimuthDeg,
+                elevationDeg,
+                rollDeg,
+                zoom: camera.zoom,
+                target: [controls.target.x, controls.target.y, controls.target.z],
+            };
+        }
+
+        function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.5 } = {}) {
+            const azimuthDeg = THREE.MathUtils.radToDeg(azimuth);
+            const elevationDeg = 90 - THREE.MathUtils.radToDeg(polar);
+            setCameraView({ azimuthDeg, elevationDeg, heightFraction });
+        }
+
+        setStandardView();
+
+        const _labels = [];
+        const _v = new THREE.Vector3();
+
+        function addLabel(text, position, options = {}) {
+            const div = document.createElement('div');
+            div.className = 'lbl';
+            div.innerHTML = text;
+            if (options.color) div.style.color = options.color;
+            if (options.fontSize) div.style.fontSize = options.fontSize;
+            if (options.bold) div.style.fontWeight = 'bold';
+            if (options.fontFamily) div.style.fontFamily = options.fontFamily;
+            if (options.background) {
+                div.style.background = options.background;
+                div.style.padding = '1px 4px';
+                div.style.borderRadius = '3px';
+            }
+            document.body.appendChild(div);
+            const entry = {
+                div,
+                pos: position.clone(),
+                offset: options.offset || [0, 0],
+                rotateDeg: options.rotateDeg || 0,
+                fixedSize: options.fixedSize !== false,
+                hidden: !!options.hidden
+            };
+            _labels.push(entry);
+            return entry;
+        }
+
+        const _referenceDistance = 8;
+
+        function _syncLabels() {
+            for (const entry of _labels) {
+                const { div, pos, offset } = entry;
+                if (entry.hidden) {
+                    div.style.display = 'none';
+                    continue;
+                }
+
+                _v.copy(pos).project(camera);
+                if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
+                    div.style.display = 'none';
+                    continue;
+                }
+                div.style.display = '';
+
+                const ox = offset && offset[0] ? offset[0] : 0;
+                const oy = offset && offset[1] ? offset[1] : 0;
+                const x = (_v.x * 0.5 + 0.5) * canvas.clientWidth + ox;
+                const y = (-_v.y * 0.5 + 0.5) * canvas.clientHeight + oy;
+
+                let scale = 1;
+                if (!entry.fixedSize) {
+                    const distance = Math.max(camera.position.distanceTo(pos), 1e-4);
+                    scale = (_referenceDistance / distance) * (camera.zoom || 1);
+                    scale = Math.max(0.5, Math.min(scale, 6));
+                }
+
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                div.style.transform = `translate(-50%, -50%) rotate(${entry.rotateDeg}deg) scale(${scale})`;
+            }
+        }
+
+        const _tooltip = document.getElementById('figTooltip');
+        const _infoPopup = document.getElementById('infoPopup');
+        const _raycaster = new THREE.Raycaster();
+        const _pointer = new THREE.Vector2();
+        const _interactiveObjects = [];
+        let _hoveredInteractive = null;
+
+        function showPopup(title, body) {
+            if (_infoPopup) {
+                _infoPopup.innerHTML = `<strong>${title}</strong>${body}`;
+                _infoPopup.style.display = 'block';
+            }
+            window.parent.postMessage({ type: 'alex-popup', title, body }, '*');
+        }
+
+        function hidePopup() {
+            if (_infoPopup) _infoPopup.style.display = 'none';
+            window.parent.postMessage({ type: 'alex-popup', title: null }, '*');
+        }
+
+        function showTooltip(text, event) {
+            if (!_tooltip || !text) return;
+            _tooltip.textContent = text;
+            _tooltip.style.display = 'block';
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            if (!_tooltip || _tooltip.style.display === 'none') return;
+            const pad = 12;
+            const x = Math.min(event.clientX + pad, window.innerWidth - _tooltip.offsetWidth - pad);
+            const y = Math.max(pad, event.clientY - _tooltip.offsetHeight - pad);
+            _tooltip.style.left = x + 'px';
+            _tooltip.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            if (_tooltip) _tooltip.style.display = 'none';
+        }
+
+        function _setPointerFromEvent(event) {
+            const rect = canvas.getBoundingClientRect();
+            _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function _firstInteractiveHit(event) {
+            if (!_interactiveObjects.length) return null;
+            _setPointerFromEvent(event);
+            _raycaster.setFromCamera(_pointer, camera);
+            const hits = _raycaster.intersectObjects(_interactiveObjects.map(entry => entry.object), true);
+            for (const hit of hits) {
+                let obj = hit.object;
+                while (obj) {
+                    const entry = _interactiveObjects.find(item => item.object === obj);
+                    if (entry) return { ...entry, hit };
+                    obj = obj.parent;
+                }
+            }
+            return null;
+        }
+
+        function registerInteractive(object, info = {}) {
+            if (!object) return object;
+            object.userData = object.userData || {};
+            object.userData.interactive = true;
+            _interactiveObjects.push({ object, info });
+            return object;
+        }
+
+        function setHover(entry, enabled) {
+            if (entry && entry.info && typeof entry.info.setHover === 'function') {
+                entry.info.setHover(enabled);
+            }
+        }
+
+        canvas.addEventListener('pointermove', (event) => {
+            moveTooltip(event);
+            const entry = _firstInteractiveHit(event);
+            if (entry) {
+                if (!_hoveredInteractive || _hoveredInteractive.info !== entry.info) {
+                    setHover(_hoveredInteractive, false);
+                    setHover(entry, true);
+                }
+                _hoveredInteractive = entry;
+                canvas.style.cursor = 'pointer';
+                showTooltip(entry.info.tooltip || entry.info.title || 'Click to explain', event);
+            } else {
+                setHover(_hoveredInteractive, false);
+                _hoveredInteractive = null;
+                canvas.style.cursor = controls.enabled ? 'grab' : 'default';
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('pointerleave', () => {
+            setHover(_hoveredInteractive, false);
+            _hoveredInteractive = null;
+            canvas.style.cursor = 'default';
+            hideTooltip();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            const entry = _firstInteractiveHit(event) || _hoveredInteractive;
+            if (!entry) {
+                hidePopup();
+                return;
+            }
+            const title = entry.info.title || entry.info.tooltip || 'Figure element';
+            const body = entry.info.body || entry.info.description || 'This part is interactive.';
+            showPopup(title, body);
+            if (typeof entry.info.onClick === 'function') entry.info.onClick(entry.hit, entry.object);
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hidePopup();
+                hideTooltip();
+            }
+        });
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.78);
+        scene.add(ambient);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.58);
+        keyLight.position.set(2.5, 4, 3);
+        scene.add(keyLight);
+
+        const axisBlack = 0x111111;
+        const gridGray = 0xc9c9c9;
+        const blue = 0x001ed6;
+        const hoverBlue = 0x00a3ff;
+        const xMin = -1.35;
+        const xMax = 1.35;
+        const zMin = -1.35;
+        const zMax = 1.35;
+        const yTop = 1.08;
+
+        function line(points, color = gridGray, opacity = 1) {
+            const geom = new THREE.BufferGeometry().setFromPoints(points);
+            const mat = new THREE.LineBasicMaterial({ color, transparent: opacity < 1, opacity });
+            const obj = new THREE.Line(geom, mat);
+            scene.add(obj);
+            return obj;
+        }
+
+        // The source drawing is a 3D stem plot: n and m form the discrete image grid,
+        // while the vertical coordinate is the box-filter coefficient value.
+        for (const x of [-1, 0, 1]) {
+            line([new THREE.Vector3(x, 0, zMin), new THREE.Vector3(x, 0, zMax)], gridGray, 0.95);
+            line([new THREE.Vector3(x, 0, zMax), new THREE.Vector3(x, yTop, zMax)], gridGray, 0.55);
+        }
+        for (const z of [-1, 0, 1]) {
+            line([new THREE.Vector3(xMin, 0, z), new THREE.Vector3(xMax, 0, z)], gridGray, 0.95);
+            line([new THREE.Vector3(xMax, 0, z), new THREE.Vector3(xMax, yTop, z)], gridGray, 0.55);
+        }
+        line([new THREE.Vector3(xMin, yTop, zMax), new THREE.Vector3(xMax, yTop, zMax)], gridGray, 0.5);
+        line([new THREE.Vector3(xMax, yTop, zMin), new THREE.Vector3(xMax, yTop, zMax)], gridGray, 0.5);
+
+        line([new THREE.Vector3(xMin, 0, zMin), new THREE.Vector3(xMax, 0, zMin)], axisBlack, 1);
+        line([new THREE.Vector3(xMin, 0, zMin), new THREE.Vector3(xMin, 0, zMax)], axisBlack, 1);
+        line([new THREE.Vector3(xMin, 0, zMin), new THREE.Vector3(xMin, yTop, zMin)], axisBlack, 1);
+
+        for (const x of [-1, 0, 1]) {
+            line([new THREE.Vector3(x, 0, zMin), new THREE.Vector3(x, -0.035, zMin)], axisBlack, 1);
+        }
+        for (const z of [-1, 0, 1]) {
+            line([new THREE.Vector3(xMin, 0, z), new THREE.Vector3(xMin - 0.035, 0, z)], axisBlack, 1);
+        }
+        for (const y of [0, 1]) {
+            line([new THREE.Vector3(xMin, y, zMin), new THREE.Vector3(xMin - 0.08, y, zMin)], axisBlack, 1);
+        }
+
+        const sampleRoot = new THREE.Group();
+        scene.add(sampleRoot);
+        const samples = [];
+        const stemGeometry = new THREE.CylinderGeometry(0.012, 0.012, 1, 10);
+        const dotGeometry = new THREE.SphereGeometry(0.085, 24, 16);
+
+        function addBoxSample(n, m) {
+            const stemMat = new THREE.MeshBasicMaterial({ color: blue });
+            const dotMat = new THREE.MeshLambertMaterial({ color: blue });
+            const stem = new THREE.Mesh(stemGeometry, stemMat);
+            const dot = new THREE.Mesh(dotGeometry, dotMat);
+            stem.position.set(n, 0.5, m);
+            dot.position.set(n, 1, m);
+            sampleRoot.add(stem, dot);
+
+            const sample = { n, m, stem, dot, currentHeight: 1, targetHeight: 1 };
+            samples.push(sample);
+
+            const info = {
+                title: `box<sub>1,1</sub>[${n}, ${m}]`,
+                tooltip: `box_1,1[${n},${m}] = ${isNormalized ? '1/9' : '1'}`,
+                body: `This coefficient is inside the 3 x 3 support, so it contributes equally to the local sum around each pixel.`,
+                setHover(on) {
+                    stem.material.color.setHex(on ? hoverBlue : blue);
+                    dot.material.color.setHex(on ? hoverBlue : blue);
+                    dot.scale.setScalar(on ? 1.28 : 1);
+                }
+            };
+            sample.info = info;
+            registerInteractive(stem, info);
+            registerInteractive(dot, info);
+            return sample;
+        }
+
+        let isNormalized = false;
+        for (const n of [-1, 0, 1]) {
+            for (const m of [-1, 0, 1]) {
+                addBoxSample(n, m);
+            }
+        }
+
+        const labelOpts = { fontFamily: 'Times New Roman, Times, serif', fontSize: '17px', color: '#000', fixedSize: true };
+        addLabel('<i>n</i>', new THREE.Vector3(1.28, -0.08, zMin), { ...labelOpts, fontSize: '18px', bold: true, offset: [8, 14] });
+        addLabel('<i>m</i>', new THREE.Vector3(xMin, -0.08, 1.28), { ...labelOpts, fontSize: '18px', bold: true, offset: [-16, 14] });
+        addLabel('box<sub>1,1</sub>[<i>n,m</i>]', new THREE.Vector3(xMin - 0.08, 0.56, zMin), { ...labelOpts, fontSize: '16px', bold: true, rotateDeg: -90, offset: [-36, 0] });
+
+        for (const x of [-1, 0, 1]) {
+            addLabel(String(x).replace('-', '&minus;'), new THREE.Vector3(x, -0.05, zMin), { ...labelOpts, fontSize: '16px', offset: [0, 13] });
+        }
+        for (const z of [-1, 0, 1]) {
+            addLabel(String(z).replace('-', '&minus;'), new THREE.Vector3(xMin, -0.05, z), { ...labelOpts, fontSize: '16px', offset: [-14, 11] });
+        }
+        addLabel('0', new THREE.Vector3(xMin - 0.03, 0, zMin), { ...labelOpts, fontSize: '16px', offset: [-18, 8] });
+        addLabel('1', new THREE.Vector3(xMin - 0.03, 1, zMin), { ...labelOpts, fontSize: '16px', offset: [-18, -4] });
+
+        const normalizedLabel = addLabel('normalized: sum = 1', new THREE.Vector3(0.08, 1.18, 0), {
+            fontFamily: 'sans-serif',
+            fontSize: '11px',
+            color: '#111',
+            background: 'rgba(255,255,255,0.85)',
+            fixedSize: true,
+            hidden: true
+        });
+
+        const btnNormalize = document.getElementById('btnNormalize');
+        btnNormalize.addEventListener('click', () => {
+            isNormalized = !isNormalized;
+            btnNormalize.classList.toggle('active', isNormalized);
+            const target = isNormalized ? 1 / 9 : 1;
+            for (const sample of samples) {
+                sample.targetHeight = target;
+                sample.info.tooltip = `box_1,1[${sample.n},${sample.m}] = ${isNormalized ? '1/9' : '1'}`;
+            }
+            normalizedLabel.hidden = !isNormalized;
+            showPopup(
+                isNormalized ? 'Unit DC gain' : 'Unnormalized box',
+                isNormalized
+                    ? 'Dividing each of the nine equal samples by 9 keeps the sum equal to 1, preserving the mean intensity of a constant image.'
+                    : 'The textbook stem plot shows the raw box kernel: all nine samples inside the support have value 1, so the DC gain is 9.'
+            );
+        });
+
+        // Match the textbook first frame: a shallow orthographic view of the 3x3 unit-height samples.
+        setCameraView({
+            projection: 'orthographic',
+            azimuthDeg: 128,
+            elevationDeg: 19,
+            rollDeg: 0,
+            zoom: 1.28,
+            target: [0.03, 0.43, 0.02],
+            heightFraction: 0.62
+        });
+
+        let _firstFrame = true;
+        function animate() {
+            requestAnimationFrame(animate);
+            for (const sample of samples) {
+                sample.currentHeight += (sample.targetHeight - sample.currentHeight) * 0.16;
+                const h = Math.max(sample.currentHeight, 0.015);
+                sample.stem.scale.y = h;
+                sample.stem.position.y = h / 2;
+                sample.dot.position.y = h;
+            }
+            controls.update();
+            renderer.render(scene, camera);
+            _syncLabels();
+            if (_firstFrame) { _firstFrame = false; window.__markRendered?.(); }
+        }
+        animate();
+
+        new ResizeObserver(() => {
+            const w = Math.max(canvas.clientWidth, 1), h = Math.max(canvas.clientHeight, 1);
+            aspect = w / h;
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h, false);
+        }).observe(canvas);
+    </script>
+</body>
+
+</html>

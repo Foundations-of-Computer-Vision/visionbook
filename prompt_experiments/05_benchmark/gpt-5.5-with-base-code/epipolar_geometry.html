@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Epipolar Geometry</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #c {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            position: fixed;
+            inset: 0;
+        }
+
+        .lbl {
+            position: absolute;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 13px;
+            color: #111;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
+        }
+
+        #ui {
+            position: absolute;
+            left: 6px;
+            bottom: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-family: sans-serif;
+            font-size: 11px;
+            max-width: 190px;
+            max-height: 34%;
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            opacity: 0.88;
+            transform: none;
+            transition: opacity 0.16s ease;
+            z-index: 10;
+        }
+
+        #ui:hover,
+        #ui:focus-within {
+            opacity: 1;
+        }
+
+        #ui button {
+            padding: 4px 10px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        #ui button:hover {
+            background: #e0e0e0;
+        }
+
+        #ui label {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            text-shadow: 0 1px 2px #fff;
+        }
+
+        #ui input[type=range] {
+            width: 92px;
+            accent-color: #d71c1c;
+        }
+
+        #figTooltip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: none;
+            max-width: 230px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.58);
+            color: #fff;
+            font: 11px/1.35 sans-serif;
+            pointer-events: none;
+            white-space: normal;
+            z-index: 20;
+        }
+
+        #err-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: #fff;
+            z-index: 999;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: sans-serif;
+            font-size: 13px;
+            color: #555;
+            gap: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+    <div id="figTooltip"></div>
+    <div id="ui">
+        <button id="btnReset" style="display:none">Reset View</button>
+        <label>P motion
+            <input id="pointSlider" type="range" min="0" max="100" value="35" />
+        </label>
+    </div>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    }
+  }
+  </script>
+
+    <div id="err-overlay">
+        <span id="err-msg">Figure failed to load</span>
+        <button onclick="location.reload()" style="padding:5px 14px;border:1px solid #aaa;
+        border-radius:5px;background:#f5f5f5;cursor:pointer;font-size:12px;">Reload</button>
+    </div>
+
+    <script>
+        let _rendered = false;
+        const _errOverlay = document.getElementById('err-overlay');
+        window.__markRendered = () => { _rendered = true; _errOverlay.style.display = 'none'; };
+        window.addEventListener('error', (e) => {
+            if (!_rendered) {
+                document.getElementById('err-msg').textContent = e.message || 'Figure failed to load';
+                _errOverlay.style.display = 'flex';
+            }
+        });
+        setTimeout(() => {
+            if (!_rendered) _errOverlay.style.display = 'flex';
+        }, 12000);
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const canvas = document.getElementById('c');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, preserveDrawingBuffer: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.setClearColor(0xffffff, 1);
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const d = 3;
+        let aspect = (canvas.clientWidth || window.innerWidth || 1) / (canvas.clientHeight || window.innerHeight || 1);
+        let camera = new THREE.OrthographicCamera(
+            -d * aspect, d * aspect, d, -d, 0.1, 100
+        );
+        camera.position.set(4, 4, 4);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const HOME_POS = new THREE.Vector3();
+        const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+        let HOME_ZOOM = 0.75;
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            camera.position.copy(HOME_POS);
+            controls.target.copy(HOME_TARGET);
+            camera.zoom = HOME_ZOOM;
+            camera.updateProjectionMatrix();
+            controls.update();
+        });
+
+        const FRAME_HALF_HEIGHT = d;
+        const MIN_ZOOM = 0.2;
+        const MAX_ZOOM = 5;
+
+        function computeSceneBounds() {
+            const box = new THREE.Box3().setFromObject(scene);
+            if (box.isEmpty()) {
+                box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2 * d, 2 * d, 2 * d));
+            }
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            return { box, center, size };
+        }
+
+        function setCameraView({
+            projection = 'orthographic',
+            azimuthDeg = 45,
+            elevationDeg = 35,
+            rollDeg = 0,
+            zoom = null,
+            target = null,
+            heightFraction = 0.5,
+            distanceScale = 1.2
+        } = {}) {
+            const { center, size } = computeSceneBounds();
+            const viewTarget = Array.isArray(target)
+                ? new THREE.Vector3(target[0] || 0, target[1] || 0, target[2] || 0)
+                : center;
+
+            const contentHeight = Math.max(size.y, 1e-6);
+            const desiredViewHeight = contentHeight / Math.max(heightFraction, 0.01);
+            let resolvedZoom = Number.isFinite(zoom) ? zoom : (2 * FRAME_HALF_HEIGHT) / desiredViewHeight;
+            resolvedZoom = Math.min(Math.max(resolvedZoom, MIN_ZOOM), MAX_ZOOM);
+            camera.zoom = resolvedZoom;
+
+            const radius = Math.max(size.length() * distanceScale, FRAME_HALF_HEIGHT * 2);
+            const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+            const elevation = THREE.MathUtils.degToRad(elevationDeg);
+            const cosElev = Math.cos(elevation);
+            const x = viewTarget.x + radius * Math.cos(azimuth) * cosElev;
+            const y = viewTarget.y + radius * Math.sin(elevation);
+            const z = viewTarget.z + radius * Math.sin(azimuth) * cosElev;
+            camera.position.set(x, y, z);
+
+            controls.target.copy(viewTarget);
+            camera.up.set(0, 1, 0);
+            if (Number.isFinite(rollDeg) && rollDeg !== 0) {
+                const viewDir = new THREE.Vector3().subVectors(viewTarget, camera.position).normalize();
+                camera.up.applyAxisAngle(viewDir, THREE.MathUtils.degToRad(rollDeg));
+            }
+            camera.updateProjectionMatrix();
+            controls.update();
+
+            HOME_POS.copy(camera.position);
+            HOME_TARGET.copy(controls.target);
+            HOME_ZOOM = camera.zoom;
+
+            window.__figureCameraView = {
+                projection,
+                azimuthDeg,
+                elevationDeg,
+                rollDeg,
+                zoom: camera.zoom,
+                target: [controls.target.x, controls.target.y, controls.target.z],
+            };
+        }
+
+        function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.5 } = {}) {
+            const azimuthDeg = THREE.MathUtils.radToDeg(azimuth);
+            const elevationDeg = 90 - THREE.MathUtils.radToDeg(polar);
+            setCameraView({ azimuthDeg, elevationDeg, heightFraction });
+        }
+
+        setStandardView();
+
+        const _labels = [];
+        const _v = new THREE.Vector3();
+
+        function addLabel(text, position, options = {}) {
+            const div = document.createElement('div');
+            div.className = 'lbl';
+            div.innerHTML = text;
+            if (options.color) div.style.color = options.color;
+            if (options.fontSize) div.style.fontSize = options.fontSize;
+            if (options.bold) div.style.fontWeight = 'bold';
+            if (options.background) {
+                div.style.background = options.background;
+                div.style.padding = '1px 4px';
+                div.style.borderRadius = '3px';
+            }
+            document.body.appendChild(div);
+            const entry = {
+                div,
+                pos: position.clone(),
+                offset: options.offset || [0, 0],
+                rotateDeg: options.rotateDeg || 0
+            };
+            _labels.push(entry);
+            return entry;
+        }
+
+        const _referenceDistance = 8;
+
+        function _syncLabels() {
+            for (const { div, pos, offset, rotateDeg } of _labels) {
+                _v.copy(pos).project(camera);
+                if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
+                    div.style.display = 'none';
+                    continue;
+                }
+                div.style.display = '';
+
+                const ox = offset && offset[0] ? offset[0] : 0;
+                const oy = offset && offset[1] ? offset[1] : 0;
+                const x = (_v.x * 0.5 + 0.5) * canvas.clientWidth + ox;
+                const y = (-_v.y * 0.5 + 0.5) * canvas.clientHeight + oy;
+
+                let scale;
+                const distance = Math.max(camera.position.distanceTo(pos), 1e-4);
+                scale = (_referenceDistance / distance) * (camera.zoom || 1);
+                scale = Math.max(0.5, Math.min(scale, 6));
+
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                div.style.transform = `translate(-50%, -50%) rotate(${rotateDeg}deg) scale(${scale})`;
+            }
+        }
+
+        const _tooltip = document.getElementById('figTooltip');
+        const _raycaster = new THREE.Raycaster();
+        const _pointer = new THREE.Vector2();
+        const _interactiveObjects = [];
+        let _hoveredInteractive = null;
+
+        function showPopup(title, body) {
+            window.parent.postMessage({ type: 'alex-popup', title, body }, '*');
+            showTooltip(`${title}: ${body}`, window.__lastPointerEvent || { clientX: 20, clientY: 20 });
+        }
+
+        function hidePopup() {
+            window.parent.postMessage({ type: 'alex-popup', title: null }, '*');
+        }
+
+        function showTooltip(text, event) {
+            if (!_tooltip || !text) return;
+            _tooltip.textContent = text;
+            _tooltip.style.display = 'block';
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            if (!_tooltip || _tooltip.style.display === 'none') return;
+            const pad = 12;
+            const x = Math.min(event.clientX + pad, window.innerWidth - _tooltip.offsetWidth - pad);
+            const y = Math.max(pad, event.clientY - _tooltip.offsetHeight - pad);
+            _tooltip.style.left = x + 'px';
+            _tooltip.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            if (_tooltip) _tooltip.style.display = 'none';
+        }
+
+        function _setPointerFromEvent(event) {
+            const rect = canvas.getBoundingClientRect();
+            _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function _firstInteractiveHit(event) {
+            if (!_interactiveObjects.length) return null;
+            _setPointerFromEvent(event);
+            _raycaster.setFromCamera(_pointer, camera);
+            const hits = _raycaster.intersectObjects(_interactiveObjects.map(entry => entry.object), true);
+            for (const hit of hits) {
+                let obj = hit.object;
+                while (obj) {
+                    const entry = _interactiveObjects.find(item => item.object === obj);
+                    if (entry) return { ...entry, hit };
+                    obj = obj.parent;
+                }
+            }
+            return null;
+        }
+
+        function registerInteractive(object, info = {}) {
+            if (!object) return object;
+            object.userData = object.userData || {};
+            object.userData.interactive = true;
+            _interactiveObjects.push({ object, info });
+            return object;
+        }
+
+        canvas.addEventListener('pointermove', (event) => {
+            window.__lastPointerEvent = event;
+            moveTooltip(event);
+            const entry = _firstInteractiveHit(event);
+            if (entry) {
+                _hoveredInteractive = entry;
+                canvas.style.cursor = 'pointer';
+                showTooltip(entry.info.tooltip || entry.info.title || 'Click to explain', event);
+            } else {
+                _hoveredInteractive = null;
+                canvas.style.cursor = controls.enabled ? 'grab' : 'default';
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('pointerleave', () => {
+            _hoveredInteractive = null;
+            canvas.style.cursor = 'default';
+            hideTooltip();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            const entry = _firstInteractiveHit(event) || _hoveredInteractive;
+            if (!entry) {
+                hidePopup();
+                return;
+            }
+            const title = entry.info.title || entry.info.tooltip || 'Figure element';
+            const body = entry.info.body || entry.info.description || 'This part is interactive.';
+            showPopup(title, body);
+            if (typeof entry.info.onClick === 'function') entry.info.onClick(entry.hit, entry.object);
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hidePopup();
+                hideTooltip();
+            }
+        });
+
+        const matPlane = new THREE.MeshBasicMaterial({ color: 0xf3ff00, transparent: true, opacity: 0.82, side: THREE.DoubleSide, depthWrite: false });
+        const matImage = new THREE.MeshBasicMaterial({ color: 0xffffb8, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false });
+        const matRed = new THREE.MeshBasicMaterial({ color: 0xff1414 });
+        const matDark = new THREE.MeshBasicMaterial({ color: 0x080808 });
+        const matGray = new THREE.LineBasicMaterial({ color: 0x383d40, linewidth: 2 });
+        const matPink = new THREE.MeshBasicMaterial({ color: 0xffb9e8, transparent: true, opacity: 0.75 });
+        const matCyan = new THREE.MeshBasicMaterial({ color: 0x98ffff });
+
+        const O1 = new THREE.Vector3(-2.45, 0, 0);
+        const O2 = new THREE.Vector3(2.45, 0, 0);
+        const e1 = new THREE.Vector3(-1.46, 0, 0);
+        const e2 = new THREE.Vector3(1.46, 0, 0);
+        const yAxis = new THREE.Vector3(0, 1, 0);
+
+        const leftPlane = {
+            epipole: e1,
+            u: new THREE.Vector3(-0.55, 0, 0.83).normalize(),
+            sMin: -0.82,
+            sMax: 0.82,
+            tMin: -1.05,
+            tMax: 1.75
+        };
+        const rightPlane = {
+            epipole: e2,
+            u: new THREE.Vector3(0.55, 0, 0.83).normalize(),
+            sMin: -0.82,
+            sMax: 0.82,
+            tMin: -1.05,
+            tMax: 1.75
+        };
+
+        function planePoint(spec, s, t) {
+            return spec.epipole.clone().addScaledVector(spec.u, s).addScaledVector(yAxis, t);
+        }
+
+        function makePlanePanel(spec) {
+            const group = new THREE.Group();
+            const corners = [
+                planePoint(spec, spec.sMin, spec.tMin),
+                planePoint(spec, spec.sMax, spec.tMin),
+                planePoint(spec, spec.sMax, spec.tMax),
+                planePoint(spec, spec.sMin, spec.tMax)
+            ];
+            const panelGeometry = new THREE.BufferGeometry().setFromPoints([corners[0], corners[1], corners[2], corners[0], corners[2], corners[3]]);
+            const panel = new THREE.Mesh(panelGeometry, matImage);
+            panel.renderOrder = 1;
+            group.add(panel);
+
+            const outlineGeometry = new THREE.BufferGeometry().setFromPoints([corners[0], corners[1], corners[2], corners[3], corners[0]]);
+            const outline = new THREE.Line(outlineGeometry, matGray);
+            group.add(outline);
+            scene.add(group);
+            return group;
+        }
+
+        function tubeBetween(start, end, radius, material, segments = 10) {
+            const curve = new THREE.LineCurve3(start.clone(), end.clone());
+            const mesh = new THREE.Mesh(new THREE.TubeGeometry(curve, 1, radius, segments, false), material);
+            scene.add(mesh);
+            return mesh;
+        }
+
+        function makeSphere(position, radius, material) {
+            const sphere = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16), material);
+            sphere.position.copy(position);
+            scene.add(sphere);
+            return sphere;
+        }
+
+        function setTube(mesh, start, end, radius, material) {
+            mesh.geometry.dispose();
+            mesh.geometry = new THREE.TubeGeometry(new THREE.LineCurve3(start.clone(), end.clone()), 1, radius, 10, false);
+            if (material) mesh.material = material;
+        }
+
+        function makeDashedLine(start, end) {
+            const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+            const material = new THREE.LineDashedMaterial({ color: 0x000000, dashSize: 0.18, gapSize: 0.09, linewidth: 2 });
+            const line = new THREE.Line(geometry, material);
+            line.computeLineDistances();
+            scene.add(line);
+            return line;
+        }
+
+        function linePlaneIntersection(rayStart, rayEnd, spec) {
+            const direction = rayEnd.clone().sub(rayStart);
+            const normal = spec.u.clone().cross(yAxis).normalize();
+            const denom = normal.dot(direction);
+            if (Math.abs(denom) < 1e-6) return spec.epipole.clone();
+            const t = normal.dot(spec.epipole.clone().sub(rayStart)) / denom;
+            return rayStart.clone().addScaledVector(direction, t);
+        }
+
+        function localCoords(point, spec) {
+            const rel = point.clone().sub(spec.epipole);
+            return { s: rel.dot(spec.u), t: rel.dot(yAxis) };
+        }
+
+        function clippedLineThroughEpipoleAndProjection(projection, spec) {
+            const coord = localCoords(projection, spec);
+            let rMin = -Infinity;
+            let rMax = Infinity;
+            const updateRange = (value, min, max) => {
+                if (Math.abs(value) < 1e-6) return;
+                const a = min / value;
+                const b = max / value;
+                rMin = Math.max(rMin, Math.min(a, b));
+                rMax = Math.min(rMax, Math.max(a, b));
+            };
+            updateRange(coord.s, spec.sMin, spec.sMax);
+            updateRange(coord.t, spec.tMin, spec.tMax);
+            return [
+                planePoint(spec, coord.s * rMin, coord.t * rMin),
+                planePoint(spec, coord.s * rMax, coord.t * rMax)
+            ];
+        }
+
+        const leftPanel = makePlanePanel(leftPlane);
+        const rightPanel = makePlanePanel(rightPlane);
+
+        // Camera panels are the 3D versions of the two pale image planes in the source figure.
+        registerInteractive(leftPanel, {
+            title: 'Camera 1 image plane',
+            tooltip: 'Camera 1 image plane',
+            body: 'The red epipolar line is where the moving epipolar plane slices this image plane.'
+        });
+        registerInteractive(rightPanel, {
+            title: 'Camera 2 image plane',
+            tooltip: 'Camera 2 image plane',
+            body: 'The matching point for p1 must lie somewhere along this red epipolar line.'
+        });
+
+        const baseline = makeDashedLine(O1, O2);
+        const origin1 = makeSphere(O1, 0.105, matDark);
+        const origin2 = makeSphere(O2, 0.105, matDark);
+        const epi1 = makeSphere(e1, 0.075, matDark);
+        const epi2 = makeSphere(e2, 0.075, matDark);
+
+        registerInteractive(epi1, {
+            title: 'Epipole e1',
+            tooltip: 'Epipole e1 stays fixed',
+            body: 'This is where the baseline O1O2 pierces camera 1 image plane. All epipolar lines in camera 1 pass through it.'
+        });
+        registerInteractive(epi2, {
+            title: 'Epipole e2',
+            tooltip: 'Epipole e2 stays fixed',
+            body: 'This is where the baseline O1O2 pierces camera 2 image plane. Moving P changes the red line angle, but not e2.'
+        });
+
+        let P = new THREE.Vector3();
+        const epipolarPlaneGeometry = new THREE.BufferGeometry();
+        const epipolarPlane = new THREE.Mesh(epipolarPlaneGeometry, matPlane);
+        epipolarPlane.renderOrder = 2;
+        scene.add(epipolarPlane);
+        registerInteractive(epipolarPlane, {
+            title: 'Epipolar plane',
+            tooltip: 'Epipolar plane O1-O2-P',
+            body: 'This plane is defined by the two camera centers and the 3D point P. Moving P rotates the plane around the fixed baseline.'
+        });
+
+        const redRay1 = tubeBetween(O1, new THREE.Vector3(-0.9, 1, 0.2), 0.024, matRed);
+        const redRay2 = tubeBetween(O2, new THREE.Vector3(-0.9, 1, 0.2), 0.024, matRed);
+        const pinkRay1 = tubeBetween(new THREE.Vector3(), new THREE.Vector3(), 0.018, matPink);
+        const pinkRay2 = tubeBetween(new THREE.Vector3(), new THREE.Vector3(), 0.018, matPink);
+        const line1 = tubeBetween(new THREE.Vector3(), new THREE.Vector3(), 0.014, matRed);
+        const line2 = tubeBetween(new THREE.Vector3(), new THREE.Vector3(), 0.014, matRed);
+
+        registerInteractive(redRay1, {
+            title: 'Ray O1P',
+            tooltip: 'Ray from camera 1 to P',
+            body: 'This ray projects the world point P to image point p1 where it crosses the first image plane.'
+        });
+        registerInteractive(redRay2, {
+            title: 'Ray O2P',
+            tooltip: 'Ray from camera 2 to P',
+            body: 'This ray projects the same world point P to image point p2 in the second view.'
+        });
+        registerInteractive(line1, {
+            title: 'Epipolar line in camera 1',
+            tooltip: 'Epipolar line in camera 1',
+            body: 'This line is the intersection of the epipolar plane with camera 1 image plane.'
+        });
+        registerInteractive(line2, {
+            title: 'Epipolar line in camera 2',
+            tooltip: 'Epipolar line in camera 2',
+            body: 'Given p1, the corresponding point in camera 2 must be searched for along this line.'
+        });
+
+        const worldPoint = makeSphere(P, 0.07, matCyan);
+        const p1Dot = makeSphere(P, 0.065, matRed);
+        const p2Dot = makeSphere(P, 0.065, matRed);
+        registerInteractive(worldPoint, {
+            title: 'World point P',
+            tooltip: 'Drag the P motion slider',
+            body: 'P chooses the epipolar plane. As P moves, both projected points and epipolar lines update together.'
+        });
+        registerInteractive(p1Dot, {
+            title: 'Image point p1',
+            tooltip: 'Projection p1',
+            body: 'p1 is where the ray from O1 through P crosses camera 1 image plane.'
+        });
+        registerInteractive(p2Dot, {
+            title: 'Image point p2',
+            tooltip: 'Projection p2',
+            body: 'p2 lies on camera 2 epipolar line because O1, O2, and P define the same plane.'
+        });
+
+        const leftAxisGroup = new THREE.Group();
+        const rightAxisGroup = new THREE.Group();
+        scene.add(leftAxisGroup, rightAxisGroup);
+
+        function addPlaneAxes(group, color, spec, projection, mirrored = false) {
+            group.clear();
+            const verticalOrigin = projection.clone().addScaledVector(yAxis, -0.75);
+            const vertical = new THREE.ArrowHelper(yAxis, verticalOrigin, 1.35, color, 0.16, 0.11);
+            const sideDir = spec.u.clone().multiplyScalar(mirrored ? -1 : 1).normalize();
+            const sideOrigin = projection.clone().addScaledVector(sideDir, -0.52).addScaledVector(yAxis, -0.55);
+            const side = new THREE.ArrowHelper(sideDir, sideOrigin, 1.1, color, 0.16, 0.11);
+            group.add(vertical, side);
+        }
+
+        const labelP = addLabel('<b>P</b>', P, { fontSize: '34px', bold: true, offset: [0, -18] });
+        const labelPlane = addLabel('Epipolar plane', new THREE.Vector3(0, 0.95, 0.18), { fontSize: '24px', offset: [0, 0] });
+        const labelP1 = addLabel('<b>p<sub>1</sub></b>', P, { fontSize: '30px', bold: true, offset: [-4, 18] });
+        const labelP2 = addLabel('<b>p<sub>2</sub></b>', P, { fontSize: '30px', bold: true, offset: [6, 20] });
+        addLabel('O<sub>1</sub>', O1.clone().add(new THREE.Vector3(-0.05, -0.22, 0)), { fontSize: '30px', offset: [-4, 16] });
+        addLabel('O<sub>2</sub>', O2.clone().add(new THREE.Vector3(0.08, -0.22, 0)), { fontSize: '30px', offset: [12, 16] });
+        addLabel('e<sub>1</sub>', e1.clone().add(new THREE.Vector3(0.03, -0.15, 0)), { fontSize: '28px', offset: [16, 20] });
+        addLabel('e<sub>2</sub>', e2.clone().add(new THREE.Vector3(0.02, -0.15, 0)), { fontSize: '28px', offset: [10, 20] });
+        addLabel('Camera 1', O1.clone().add(new THREE.Vector3(-0.44, 0.1, 0)), { fontSize: '25px', offset: [-42, 0] });
+        addLabel('Camera 2', O2.clone().add(new THREE.Vector3(0.48, 0.1, 0)), { fontSize: '25px', offset: [44, 0] });
+        const labelLine1 = addLabel('Epipolar line', e1.clone().add(new THREE.Vector3(-0.12, 0.92, 0.08)), { fontSize: '18px', rotateDeg: 58, offset: [-6, -4] });
+        const labelLine2 = addLabel('Epipolar line', e2.clone().add(new THREE.Vector3(0.12, 0.9, 0.08)), { fontSize: '18px', rotateDeg: -58, offset: [8, -4] });
+
+        function pointFromSlider(value) {
+            const t = Number(value) / 100;
+            return new THREE.Vector3(
+                THREE.MathUtils.lerp(-0.95, 0.15, t),
+                2.05 + 0.18 * Math.sin(t * Math.PI),
+                THREE.MathUtils.lerp(0.38, 0.78, t)
+            );
+        }
+
+        function updateSceneFromPoint(nextP) {
+            P.copy(nextP);
+
+            // The yellow triangular sheet is the epipolar plane through O1, O2, and P.
+            epipolarPlane.geometry.dispose();
+            epipolarPlane.geometry = new THREE.BufferGeometry().setFromPoints([O1, O2, P, O1]);
+            epipolarPlane.geometry.setIndex([0, 1, 2]);
+            epipolarPlane.geometry.computeVertexNormals();
+
+            setTube(redRay1, O1, P, 0.024, matRed);
+            setTube(redRay2, O2, P, 0.024, matRed);
+
+            const p1 = linePlaneIntersection(O1, P, leftPlane);
+            const p2 = linePlaneIntersection(O2, P, rightPlane);
+            const [line1A, line1B] = clippedLineThroughEpipoleAndProjection(p1, leftPlane);
+            const [line2A, line2B] = clippedLineThroughEpipoleAndProjection(p2, rightPlane);
+
+            setTube(line1, line1A, line1B, 0.014, matRed);
+            setTube(line2, line2A, line2B, 0.014, matRed);
+            setTube(pinkRay1, P, p1, 0.018, matPink);
+            setTube(pinkRay2, P, p2, 0.018, matPink);
+
+            worldPoint.position.copy(P);
+            p1Dot.position.copy(p1);
+            p2Dot.position.copy(p2);
+
+            labelP.pos.copy(P.clone().add(new THREE.Vector3(0.02, 0.11, 0.02)));
+            labelP1.pos.copy(p1.clone().add(new THREE.Vector3(-0.08, -0.02, 0.02)));
+            labelP2.pos.copy(p2.clone().add(new THREE.Vector3(0.08, -0.04, 0.02)));
+
+            labelPlane.pos.copy(O1.clone().add(O2).add(P).multiplyScalar(1 / 3).add(new THREE.Vector3(0, -0.08, 0.03)));
+            labelLine1.pos.copy(line1B.clone().lerp(e1, 0.38));
+            labelLine2.pos.copy(line2B.clone().lerp(e2, 0.32));
+
+            // The colored arrows echo the local image-plane axes from the textbook drawing.
+            addPlaneAxes(leftAxisGroup, 0x19df16, leftPlane, p1, true);
+            addPlaneAxes(rightAxisGroup, 0x2f7dff, rightPlane, p2, false);
+        }
+
+        const slider = document.getElementById('pointSlider');
+        slider.addEventListener('input', () => updateSceneFromPoint(pointFromSlider(slider.value)));
+
+        updateSceneFromPoint(pointFromSlider(slider.value));
+
+        setCameraView({
+            projection: 'orthographic',
+            azimuthDeg: 86,
+            elevationDeg: 5,
+            rollDeg: 0,
+            zoom: 1.28,
+            target: [0, 0.45, 0.06],
+            heightFraction: 0.62,
+            distanceScale: 1.25
+        });
+
+        let _firstFrame = true;
+        function renderFrame() {
+            controls.update();
+            renderer.render(scene, camera);
+            _syncLabels();
+            if (_firstFrame) { _firstFrame = false; window.__markRendered?.(); }
+        }
+
+        window.__renderNow = renderFrame;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderFrame();
+        }
+
+        function resizeRenderer() {
+            const w = canvas.clientWidth || window.innerWidth || 1;
+            const h = canvas.clientHeight || window.innerHeight || 1;
+            aspect = w / h;
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h, false);
+        }
+
+        resizeRenderer();
+        renderFrame();
+        animate();
+        window.addEventListener('resize', resizeRenderer);
+        new ResizeObserver(resizeRenderer).observe(canvas);
+    </script>
+</body>
+
+</html>

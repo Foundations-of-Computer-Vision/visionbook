@@ -1,0 +1,72 @@
+You are an expert educational visualization designer and Three.js developer.
+Convert the provided 2D textbook figure into an interactive 3D visualization that clearly teaches the concept shown. Use the nearby .qmd textbook context to understand what the figure is trying to convey.
+Return ONLY one complete, self-contained HTML file that runs in a modern browser and uses Three.js with OrbitControls. Do not use markdown, explanation, or code fences.
+
+You will receive:
+1. A source textbook figure image.
+2. Nearby textbook context from the .qmd file.
+3. Base HTML/Three.js code to use as a starting point.
+
+Use the source image to infer:
+- all visible geometric elements
+- labels, equations, arrows, axes, rays, points, planes, surfaces, panels, and annotations
+- colors, proportions, alignments, occlusions, and spatial relationships
+- camera angle, crop, zoom, object scale, whitespace, and label density
+
+Use the .qmd context to infer:
+- the concept the figure is trying to convey
+- which visual relationships are pedagogically important
+- what lightweight interactions would help a learner understand the figure
+
+Core requirements:
+
+1. Faithful 3D geometry
+- Recreate the key geometric elements in 3D using Three.js primitives.
+- Do not paste the original image as a texture, canvas drawing, or flat image plane.
+- Preserve geometric relationships such as intersections, parallelism, coplanarity, alignment, proportions, and depth ordering.
+- Match the original colors, relative sizes, orientations, and composition as closely as possible.
+
+2. Source-matched first frame
+- The first rendered frame must look like a drop-in replacement for the original figure.
+- Match the source figure’s camera angle, crop, zoom, object scale, whitespace, label size, and apparent perspective.
+- Do not choose a prettier or more dramatic 3D view if it changes the original viewpoint.
+- Estimate the camera from visible cues such as axes, plane foreshortening, rays, silhouettes, vanishing directions, and label placement.
+
+3. Inline augmentation UI
+- Keep the default UI minimal.
+- Do not add bulky panels, toolbars, legends, narration cards, large buttons, or large step-through controls.
+- If controls are useful, add at most two compact controls with very short labels.
+- Controls must not cover important geometry, equations, or labels.
+
+4. Educational interaction
+- Add at least one meaningful interaction beyond OrbitControls.
+- Prefer hover/click explanations on meaningful figure objects.
+- Use direct manipulation or compact controls only when they teach a real figure parameter.
+- Every interaction must visibly do something: change geometry, label state, highlight state, camera state, or show a meaningful explanation.
+- OrbitControls alone does not count as the educational interaction.
+
+5. Set camera view/zoom/crop to match the source. Call setCameraView(...) after adding all geometry and labels. Example:
+setCameraView({
+    projection: 'orthographic',
+    azimuthDeg: 35,
+    elevationDeg: 18,
+    rollDeg: 0,
+    zoom: 1.05,
+    target: [0, 0, 0],
+    heightFraction: 0.62
+});
+
+5. Labels and clarity
+- Add all important labels from the original figure using addLabel(htmlString, THREE.Vector3, options?). 
+- Missing or incorrect labels are a critical failure.
+- Use labels as spatial anchors, not decoration.
+- Match label size and placement as closely as possible with the original figure.
+- Include brief code comments explaining how major 2D elements map to 3D objects and what each interaction teaches.
+- Prefer geometric clarity and conceptual correctness over visual realism.
+
+Use the provided base HTML/Three.js code as the starting point. You may modify it as needed, but preserve its purpose: a browser-runnable Three.js scene with camera, controls, rendering loop, and responsive layout.
+
+Now generate the complete HTML file, saving it to prompt_experiments/05_benchmark/gpt-5.5/<insert figure name>.html
+
+TEXTBOOK CONTEXT:
+[paste nearby .qmd context here]

@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Complex Exponential</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #c {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        .lbl {
+            position: absolute;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 13px;
+            color: #111;
+            line-height: 1;
+        }
+
+        #ui {
+            position: absolute;
+            left: 6px;
+            bottom: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 11px;
+            max-width: 190px;
+            max-height: 34%;
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            opacity: 0.76;
+            transform: none;
+            transition: opacity 0.16s ease;
+            z-index: 10;
+        }
+
+        #ui:hover,
+        #ui:focus-within {
+            opacity: 1;
+        }
+
+        #ui button {
+            padding: 4px 10px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        #ui button:hover {
+            background: #e0e0e0;
+        }
+
+        #ui button.active {
+            background: #c8e6ff;
+            border-color: #5aabf0;
+        }
+
+        #ui label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex-direction: row;
+            text-shadow: 0 1px 2px #fff;
+            white-space: nowrap;
+        }
+
+        #ui input[type=range] {
+            width: 86px;
+        }
+
+        #figTooltip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: none;
+            max-width: 230px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.64);
+            color: #fff;
+            font: 11px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            pointer-events: none;
+            white-space: normal;
+            z-index: 20;
+        }
+
+        #figPopup {
+            position: fixed;
+            right: 8px;
+            bottom: 8px;
+            max-width: 255px;
+            padding: 7px 9px;
+            border: 1px solid rgba(0, 0, 0, 0.16);
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.94);
+            color: #111;
+            font: 11px/1.38 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            box-shadow: 0 3px 16px rgba(0, 0, 0, 0.1);
+            z-index: 19;
+        }
+
+        #figPopup[hidden] {
+            display: none;
+        }
+
+        #figPopup strong {
+            display: block;
+            margin-bottom: 2px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+    <div id="figTooltip"></div>
+    <div id="figPopup" hidden></div>
+    <div id="ui">
+        <button id="btnReset" style="display:none">Reset View</button>
+        <label><span>n</span><input id="sampleN" type="range" min="0" max="39" value="20" /></label>
+    </div>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    }
+  }
+  </script>
+
+    <div id="err-overlay" style="display:none;position:fixed;inset:0;background:#fff;z-index:999;
+       flex-direction:column;align-items:center;justify-content:center;
+       font-family:sans-serif;font-size:13px;color:#555;gap:10px;">
+        <span id="err-msg">Figure failed to load</span>
+        <button onclick="location.reload()" style="padding:5px 14px;border:1px solid #aaa;
+        border-radius:5px;background:#f5f5f5;cursor:pointer;font-size:12px;">Reload</button>
+    </div>
+
+    <script>
+        let _rendered = false;
+        const _errOverlay = document.getElementById('err-overlay');
+        window.__markRendered = () => { _rendered = true; _errOverlay.style.display = 'none'; };
+        window.addEventListener('error', (event) => {
+            if (!_rendered) {
+                document.getElementById('err-msg').textContent = event.message || 'Figure failed to load';
+                _errOverlay.style.display = 'flex';
+            }
+        });
+        setTimeout(() => {
+            if (!_rendered) _errOverlay.style.display = 'flex';
+        }, 12000);
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const canvas = document.getElementById('c');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const d = 3;
+        let aspect = (canvas.clientWidth || window.innerWidth || 1280) / (canvas.clientHeight || window.innerHeight || 720);
+        let camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 0.1, 100);
+        camera.position.set(4, 4, 4);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const HOME_POS = new THREE.Vector3();
+        const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+        let HOME_ZOOM = 0.75;
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            camera.position.copy(HOME_POS);
+            controls.target.copy(HOME_TARGET);
+            camera.zoom = HOME_ZOOM;
+            camera.updateProjectionMatrix();
+            controls.update();
+        });
+
+        const FRAME_HALF_HEIGHT = d;
+        const MIN_ZOOM = 0.2;
+        const MAX_ZOOM = 5;
+
+        function computeSceneBounds() {
+            const box = new THREE.Box3().setFromObject(scene);
+            if (box.isEmpty()) {
+                box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2 * d, 2 * d, 2 * d));
+            }
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            return { box, center, size };
+        }
+
+        function setCameraView({
+            projection = 'orthographic',
+            azimuthDeg = 45,
+            elevationDeg = 35,
+            rollDeg = 0,
+            zoom = null,
+            target = null,
+            heightFraction = 0.5,
+            distanceScale = 1.2
+        } = {}) {
+            const { center, size } = computeSceneBounds();
+            const viewTarget = Array.isArray(target)
+                ? new THREE.Vector3(target[0] || 0, target[1] || 0, target[2] || 0)
+                : center;
+
+            const contentHeight = Math.max(size.y, 1e-6);
+            const desiredViewHeight = contentHeight / Math.max(heightFraction, 0.01);
+            let resolvedZoom = Number.isFinite(zoom) ? zoom : (2 * FRAME_HALF_HEIGHT) / desiredViewHeight;
+            resolvedZoom = Math.min(Math.max(resolvedZoom, MIN_ZOOM), MAX_ZOOM);
+            camera.zoom = resolvedZoom;
+
+            const radius = Math.max(size.length() * distanceScale, FRAME_HALF_HEIGHT * 2);
+            const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+            const elevation = THREE.MathUtils.degToRad(elevationDeg);
+            const cosElev = Math.cos(elevation);
+            const x = viewTarget.x + radius * Math.cos(azimuth) * cosElev;
+            const y = viewTarget.y + radius * Math.sin(elevation);
+            const z = viewTarget.z + radius * Math.sin(azimuth) * cosElev;
+            camera.position.set(x, y, z);
+
+            controls.target.copy(viewTarget);
+            camera.up.set(0, 1, 0);
+            if (Number.isFinite(rollDeg) && rollDeg !== 0) {
+                const viewDir = new THREE.Vector3().subVectors(viewTarget, camera.position).normalize();
+                camera.up.applyAxisAngle(viewDir, THREE.MathUtils.degToRad(rollDeg));
+            }
+            camera.updateProjectionMatrix();
+            controls.update();
+
+            HOME_POS.copy(camera.position);
+            HOME_TARGET.copy(controls.target);
+            HOME_ZOOM = camera.zoom;
+
+            window.__figureCameraView = {
+                projection,
+                azimuthDeg,
+                elevationDeg,
+                rollDeg,
+                zoom: camera.zoom,
+                target: [controls.target.x, controls.target.y, controls.target.z],
+            };
+        }
+
+        function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.5 } = {}) {
+            const azimuthDeg = THREE.MathUtils.radToDeg(azimuth);
+            const elevationDeg = 90 - THREE.MathUtils.radToDeg(polar);
+            setCameraView({ azimuthDeg, elevationDeg, heightFraction });
+        }
+
+        setStandardView();
+
+        const _labels = [];
+        const _v = new THREE.Vector3();
+
+        function addLabel(text, position, options = {}) {
+            const div = document.createElement('div');
+            div.className = 'lbl';
+            div.innerHTML = text;
+            if (options.color) div.style.color = options.color;
+            if (options.fontSize) div.style.fontSize = options.fontSize;
+            if (options.bold) div.style.fontWeight = 'bold';
+            if (options.fontFamily) div.style.fontFamily = options.fontFamily;
+            if (options.background) {
+                div.style.background = options.background;
+                div.style.padding = '1px 4px';
+                div.style.borderRadius = '3px';
+            }
+            document.body.appendChild(div);
+            const entry = {
+                div,
+                pos: position.clone(),
+                offset: options.offset || [0, 0],
+                visible: options.visible !== false
+            };
+            _labels.push(entry);
+            return entry;
+        }
+
+        const _referenceDistance = 8;
+
+        function _syncLabels() {
+            for (const { div, pos, offset, visible } of _labels) {
+                if (!visible) {
+                    div.style.display = 'none';
+                    continue;
+                }
+                _v.copy(pos).project(camera);
+                if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
+                    div.style.display = 'none';
+                    continue;
+                }
+                div.style.display = '';
+
+                const ox = offset && offset[0] ? offset[0] : 0;
+                const oy = offset && offset[1] ? offset[1] : 0;
+                const canvasWidth = canvas.clientWidth || window.innerWidth || 1280;
+                const canvasHeight = canvas.clientHeight || window.innerHeight || 720;
+                const x = (_v.x * 0.5 + 0.5) * canvasWidth + ox;
+                const y = (-_v.y * 0.5 + 0.5) * canvasHeight + oy;
+
+                const distance = Math.max(camera.position.distanceTo(pos), 1e-4);
+                let scale = (_referenceDistance / distance) * (camera.zoom || 1);
+                scale = Math.max(0.5, Math.min(scale, 6));
+
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                div.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            }
+        }
+
+        const _tooltip = document.getElementById('figTooltip');
+        const _popup = document.getElementById('figPopup');
+        const _raycaster = new THREE.Raycaster();
+        const _pointer = new THREE.Vector2();
+        const _interactiveObjects = [];
+        let _hoveredInteractive = null;
+
+        function showPopup(title, body) {
+            if (_popup) {
+                _popup.innerHTML = `<strong>${title}</strong><span>${body}</span>`;
+                _popup.hidden = false;
+            }
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'alex-popup', title, body }, '*');
+            }
+        }
+
+        function hidePopup() {
+            if (_popup) _popup.hidden = true;
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'alex-popup', title: null }, '*');
+            }
+        }
+
+        function showTooltip(text, event) {
+            if (!_tooltip || !text) return;
+            _tooltip.textContent = text;
+            _tooltip.style.display = 'block';
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            if (!_tooltip || _tooltip.style.display === 'none') return;
+            const pad = 12;
+            const x = Math.min(event.clientX + pad, window.innerWidth - _tooltip.offsetWidth - pad);
+            const y = Math.max(pad, event.clientY - _tooltip.offsetHeight - pad);
+            _tooltip.style.left = x + 'px';
+            _tooltip.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            if (_tooltip) _tooltip.style.display = 'none';
+        }
+
+        function _setPointerFromEvent(event) {
+            const rect = canvas.getBoundingClientRect();
+            _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function _firstInteractiveHit(event) {
+            if (!_interactiveObjects.length) return null;
+            _setPointerFromEvent(event);
+            _raycaster.setFromCamera(_pointer, camera);
+            const hits = _raycaster.intersectObjects(_interactiveObjects.map(entry => entry.object), true);
+            for (const hit of hits) {
+                let obj = hit.object;
+                while (obj) {
+                    const entry = _interactiveObjects.find(item => item.object === obj);
+                    if (entry) return { ...entry, hit };
+                    obj = obj.parent;
+                }
+            }
+            return null;
+        }
+
+        function registerInteractive(object, info = {}) {
+            if (!object) return object;
+            object.userData = object.userData || {};
+            object.userData.interactive = true;
+            _interactiveObjects.push({ object, info });
+            return object;
+        }
+
+        canvas.addEventListener('pointermove', (event) => {
+            moveTooltip(event);
+            const entry = _firstInteractiveHit(event);
+            if (entry) {
+                _hoveredInteractive = entry;
+                canvas.style.cursor = 'pointer';
+                showTooltip(entry.info.tooltip || entry.info.title || 'Click to explain', event);
+            } else {
+                _hoveredInteractive = null;
+                canvas.style.cursor = controls.enabled ? 'grab' : 'default';
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('pointerleave', () => {
+            _hoveredInteractive = null;
+            canvas.style.cursor = 'default';
+            hideTooltip();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            const entry = _firstInteractiveHit(event) || _hoveredInteractive;
+            if (!entry) {
+                hidePopup();
+                return;
+            }
+            const title = entry.info.title || entry.info.tooltip || 'Figure element';
+            const body = entry.info.body || entry.info.description || 'This part is interactive.';
+            showPopup(title, body);
+            if (typeof entry.info.onClick === 'function') entry.info.onClick(entry.hit, entry.object);
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hidePopup();
+                hideTooltip();
+            }
+        });
+
+        const ambient = new THREE.AmbientLight(0xffffff, 0.82);
+        scene.add(ambient);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.56);
+        keyLight.position.set(3, 5, 4);
+        scene.add(keyLight);
+
+        const materials = {
+            black: new THREE.MeshBasicMaterial({ color: 0x050505 }),
+            axis: new THREE.MeshBasicMaterial({ color: 0x111111 }),
+            tick: new THREE.MeshBasicMaterial({ color: 0xb8b8b8 }),
+            red: new THREE.MeshBasicMaterial({ color: 0xff2929 }),
+            green: new THREE.MeshBasicMaterial({ color: 0x20f020 }),
+            amber: new THREE.MeshBasicMaterial({ color: 0xc77818 }),
+            gold: new THREE.MeshBasicMaterial({ color: 0xffc400 }),
+            plane: new THREE.MeshBasicMaterial({ color: 0xffc400, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false })
+        };
+
+        const N = 40;
+        const nScale = 0.076;
+        const axisLen = N * nScale;
+        const sampleGeom = new THREE.SphereGeometry(0.048, 24, 16);
+        const centerGeom = new THREE.SphereGeometry(0.021, 16, 10);
+        const markerGeom = new THREE.SphereGeometry(0.075, 28, 18);
+        const _facingCenters = [];
+        const panels = [];
+
+        function localPoint(panel, x, y, z) {
+            return panel.group.localToWorld(new THREE.Vector3(x, y, z));
+        }
+
+        function complexPoint(n, k) {
+            const phase = 2 * Math.PI * k * n / N;
+            const real = Math.cos(phase);
+            const imag = Math.sin(phase);
+            return { x: n * nScale, y: imag, z: -real, real, imag, phase };
+        }
+
+        function cylinderBetween(start, end, radius, material, segments = 12) {
+            const direction = new THREE.Vector3().subVectors(end, start);
+            const length = direction.length();
+            const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, Math.max(length, 1e-6), segments), material);
+            mesh.position.copy(start).add(end).multiplyScalar(0.5);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+            return mesh;
+        }
+
+        function updateCylinder(mesh, start, end) {
+            const direction = new THREE.Vector3().subVectors(end, start);
+            const length = Math.max(direction.length(), 1e-6);
+            mesh.position.copy(start).add(end).multiplyScalar(0.5);
+            mesh.scale.set(1, length, 1);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+        }
+
+        function dynamicSegment(radius, material) {
+            return new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, 1, 10), material);
+        }
+
+        function arrow(start, end, material) {
+            const group = new THREE.Group();
+            const direction = new THREE.Vector3().subVectors(end, start);
+            const length = direction.length();
+            const shaftEnd = start.clone().add(direction.clone().multiplyScalar((length - 0.16) / length));
+            const shaft = cylinderBetween(start, shaftEnd, 0.008, material, 10);
+            const head = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.16, 18), material);
+            head.position.copy(shaftEnd).add(end).multiplyScalar(0.5);
+            head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+            group.add(shaft, head);
+            return group;
+        }
+
+        function tube(points, material, radius, segments = 150) {
+            const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.5);
+            return new THREE.Mesh(new THREE.TubeGeometry(curve, segments, radius, 8, false), material);
+        }
+
+        function addTick(group, center, direction, length = 0.13) {
+            const start = center.clone().add(direction.clone().normalize().multiplyScalar(-length * 0.5));
+            const end = center.clone().add(direction.clone().normalize().multiplyScalar(length * 0.5));
+            group.add(cylinderBetween(start, end, 0.0065, materials.tick, 8));
+        }
+
+        function addPanelLabels(panel, panelText) {
+            const labelStyle = { fontSize: '28px' };
+            const tickStyle = { fontSize: '25px' };
+            addLabel('I', localPoint(panel, 0, 1.42, 0.02), labelStyle);
+            addLabel('R', localPoint(panel, 0, 0.18, -1.42), labelStyle);
+            addLabel('<i>n</i>', localPoint(panel, axisLen + 0.2, -0.05, 0.02), labelStyle);
+            addLabel('1', localPoint(panel, -0.02, 1, 0.08), { ...tickStyle, offset: [-22, 0] });
+            addLabel('&minus;1', localPoint(panel, -0.02, -1, 0.08), { ...tickStyle, offset: [-28, 4] });
+            addLabel('1', localPoint(panel, 0.02, 0.05, -1), { ...tickStyle, offset: [18, 5] });
+            addLabel('&minus;1', localPoint(panel, 0.02, 0.03, 1), { ...tickStyle, offset: [-18, 3] });
+            addLabel('20', localPoint(panel, 20 * nScale, -0.06, 0.02), { ...tickStyle, offset: [5, 16] });
+            addLabel('40', localPoint(panel, 40 * nScale, -0.06, 0.02), { ...tickStyle, offset: [-8, 18] });
+            addLabel(panelText, localPoint(panel, axisLen * 0.52, -1.84, 0.56), { fontSize: '30px', bold: true });
+        }
+
+        function buildPanel(k, panelText, position) {
+            const group = new THREE.Group();
+            group.position.copy(position);
+            scene.add(group);
+            const panel = { k, panelText, group, samples: [], markers: null };
+
+            // The local x direction is the discrete index n. The complex plane at each n
+            // uses vertical I and slanted R, reproducing the textbook's 3D axes.
+            group.add(arrow(new THREE.Vector3(0, -1.18, 0), new THREE.Vector3(0, 1.36, 0), materials.axis));
+            group.add(arrow(new THREE.Vector3(0, 0, 1.2), new THREE.Vector3(0, 0, -1.34), materials.axis));
+            group.add(arrow(new THREE.Vector3(0, 0, 0), new THREE.Vector3(axisLen + 0.23, 0, 0), materials.axis));
+
+            addTick(group, new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1));
+            addTick(group, new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1));
+            addTick(group, new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 1, 0));
+            addTick(group, new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0));
+            addTick(group, new THREE.Vector3(20 * nScale, 0, 0), new THREE.Vector3(0, 1, 0), 0.15);
+            addTick(group, new THREE.Vector3(40 * nScale, 0, 0), new THREE.Vector3(0, 1, 0), 0.15);
+
+            const complexPts = [];
+            const realPts = [];
+            const imagPts = [];
+            for (let n = 0; n < N; n++) {
+                const p = complexPoint(n, k);
+                complexPts.push(new THREE.Vector3(p.x, p.y, p.z));
+                realPts.push(new THREE.Vector3(p.x, 0, p.z));
+                imagPts.push(new THREE.Vector3(p.x, p.y, 0));
+            }
+
+            // Black tube is the complex exponential path; red and green are its
+            // real/cosine and imaginary/sine projections onto the coordinate planes.
+            const complexCurve = tube(complexPts, materials.black, 0.018, 210);
+            const realCurve = tube(realPts, materials.red, 0.0075, 180);
+            const imagCurve = tube(imagPts, materials.green, 0.0075, 180);
+            group.add(realCurve, imagCurve, complexCurve);
+
+            registerInteractive(realCurve, {
+                tooltip: 'Real projection: cos(2*pi*k*n/N)',
+                title: 'Real component',
+                body: `The red wave is Re(e^(2*pi*j*${k}n/40)) = cos(2*pi*${k}n/40).`
+            });
+            registerInteractive(imagCurve, {
+                tooltip: 'Imaginary projection: sin(2*pi*k*n/N)',
+                title: 'Imaginary component',
+                body: `The green wave is Im(e^(2*pi*j*${k}n/40)) = sin(2*pi*${k}n/40).`
+            });
+            registerInteractive(complexCurve, {
+                tooltip: `Complex path for k=${k}`,
+                title: `Complex exponential, k=${k}`,
+                body: `As n advances, the point rotates ${k} time${k === 1 ? '' : 's'} around the unit complex circle.`
+            });
+
+            for (let n = 0; n < N; n++) {
+                const p = complexPts[n];
+                const outer = new THREE.Mesh(sampleGeom, materials.black);
+                outer.position.copy(p);
+                group.add(outer);
+
+                const center = new THREE.Mesh(centerGeom, materials.amber);
+                center.userData.baseLocal = p.clone();
+                center.userData.panelGroup = group;
+                group.add(center);
+                _facingCenters.push(center);
+
+                panel.samples.push({ n, point: p.clone(), outer, center });
+                registerInteractive(outer, {
+                    tooltip: `sample n=${n}, k=${k}`,
+                    title: `Sample n=${n}`,
+                    body: `The black dot is e^(2*pi*j*${k}*${n}/40). Its red and green projections are the cosine and sine values at this n.`,
+                    onClick: () => selectSample(n, true)
+                });
+            }
+
+            const markers = new THREE.Group();
+            markers.visible = false;
+            const selectedComplex = new THREE.Mesh(markerGeom, materials.gold);
+            const selectedReal = new THREE.Mesh(new THREE.SphereGeometry(0.054, 20, 12), materials.red);
+            const selectedImag = new THREE.Mesh(new THREE.SphereGeometry(0.054, 20, 12), materials.green);
+            const lineToReal = dynamicSegment(0.012, materials.gold);
+            const lineToImag = dynamicSegment(0.012, materials.gold);
+            const lineToAxis = dynamicSegment(0.008, materials.gold);
+            const plane = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 2.25), materials.plane);
+            plane.rotation.y = Math.PI / 2;
+            markers.add(plane, lineToReal, lineToImag, lineToAxis, selectedReal, selectedImag, selectedComplex);
+            group.add(markers);
+            panel.markers = { group: markers, selectedComplex, selectedReal, selectedImag, lineToReal, lineToImag, lineToAxis, plane };
+
+            addPanelLabels(panel, panelText);
+            panels.push(panel);
+            return panel;
+        }
+
+        function updateFacingDotCenters() {
+            const worldBase = new THREE.Vector3();
+            const localFront = new THREE.Vector3();
+            for (const center of _facingCenters) {
+                const panelGroup = center.userData.panelGroup;
+                worldBase.copy(center.userData.baseLocal);
+                panelGroup.localToWorld(worldBase);
+                localFront.copy(camera.position).sub(worldBase).normalize().multiplyScalar(0.051).add(worldBase);
+                panelGroup.worldToLocal(localFront);
+                center.position.copy(localFront);
+            }
+        }
+
+        function setMarkerSegment(mesh, start, end) {
+            updateCylinder(mesh, start, end);
+        }
+
+        function selectSample(n, reveal = false) {
+            const index = Math.max(0, Math.min(N - 1, Math.round(n)));
+            document.getElementById('sampleN').value = String(index);
+            for (const panel of panels) {
+                const p = complexPoint(index, panel.k);
+                const complex = new THREE.Vector3(p.x, p.y, p.z);
+                const real = new THREE.Vector3(p.x, 0, p.z);
+                const imag = new THREE.Vector3(p.x, p.y, 0);
+                const axis = new THREE.Vector3(p.x, 0, 0);
+                const m = panel.markers;
+                m.group.visible = reveal;
+                m.selectedComplex.position.copy(complex);
+                m.selectedReal.position.copy(real);
+                m.selectedImag.position.copy(imag);
+                m.plane.position.set(p.x, 0, 0);
+                setMarkerSegment(m.lineToReal, real, complex);
+                setMarkerSegment(m.lineToImag, imag, complex);
+                setMarkerSegment(m.lineToAxis, axis, real);
+            }
+        }
+
+        buildPanel(1, '(a)', new THREE.Vector3(-2.2, 0, 1.35));
+        buildPanel(3, '(b)', new THREE.Vector3(1.72, 0, -1.05));
+
+        const sampleSlider = document.getElementById('sampleN');
+        sampleSlider.addEventListener('input', () => {
+            selectSample(Number(sampleSlider.value), true);
+            showPopup('Linked sample index', 'The highlighted plane keeps the same n in both panels. k=3 rotates three times while k=1 rotates once over the same 40 samples.');
+        });
+
+        // Source-matched opening view: shallow elevation, n receding down-right,
+        // I vertical, and R slanting up-right as in the textbook figure.
+        setCameraView({
+            projection: 'orthographic',
+            azimuthDeg: 36,
+            elevationDeg: 18,
+            rollDeg: 0,
+            zoom: 1.18,
+            target: [1.18, -0.18, 0.05],
+            heightFraction: 0.62
+        });
+
+        function resizeRenderer() {
+            const w = canvas.clientWidth || window.innerWidth || 1280;
+            const h = canvas.clientHeight || window.innerHeight || 720;
+            aspect = w / h;
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.top = d;
+            camera.bottom = -d;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h, false);
+        }
+
+        resizeRenderer();
+        new ResizeObserver(resizeRenderer).observe(canvas);
+
+        let _firstFrame = true;
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            updateFacingDotCenters();
+            renderer.render(scene, camera);
+            _syncLabels();
+            if (_firstFrame) {
+                _firstFrame = false;
+                window.__markRendered?.();
+            }
+        }
+        animate();
+    </script>
+</body>
+
+</html>

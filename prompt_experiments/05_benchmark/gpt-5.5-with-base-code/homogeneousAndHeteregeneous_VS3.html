@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Homogeneous and Heterogeneous Coordinates</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #c {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .lbl {
+            position: absolute;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 13px;
+            color: #111;
+            letter-spacing: 0;
+        }
+
+        #ui {
+            position: absolute;
+            left: 6px;
+            bottom: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-family: sans-serif;
+            font-size: 11px;
+            max-width: 190px;
+            max-height: 34%;
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            opacity: 0.88;
+            transform: none;
+            transition: opacity 0.16s ease;
+            z-index: 10;
+        }
+
+        #ui:hover,
+        #ui:focus-within {
+            opacity: 1;
+        }
+
+        #ui button {
+            padding: 4px 10px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        #ui button:hover {
+            background: #e0e0e0;
+        }
+
+        #ui button.active {
+            background: #c8e6ff;
+            border-color: #5aabf0;
+        }
+
+        #ui label {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            text-shadow: 0 1px 2px #fff;
+        }
+
+        #ui input[type=range] {
+            width: 86px;
+        }
+
+        .ctrl-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: #111;
+            background: rgba(255, 255, 255, 0.72);
+            border-radius: 4px;
+            padding: 2px 4px;
+            line-height: 1;
+        }
+
+        #lambdaValue {
+            min-width: 2.2em;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #figTooltip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: none;
+            max-width: 230px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.62);
+            color: #fff;
+            font: 11px/1.35 sans-serif;
+            pointer-events: none;
+            white-space: normal;
+            z-index: 20;
+        }
+
+        #clickInfo {
+            position: fixed;
+            right: 8px;
+            bottom: 8px;
+            display: none;
+            max-width: 260px;
+            padding: 7px 9px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.94);
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+            color: #111;
+            font: 12px/1.35 sans-serif;
+            z-index: 19;
+        }
+
+        #clickInfo strong {
+            display: block;
+            margin-bottom: 2px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+    <div id="figTooltip"></div>
+    <div id="clickInfo"></div>
+    <div id="ui">
+        <button id="btnReset" style="display:none">Reset View</button>
+        <label class="ctrl-row" title="Move the homogeneous point along its scale ray">
+            <span>&lambda;</span>
+            <input id="lambdaSlider" type="range" min="1.15" max="2.15" value="1.72" step="0.01" />
+            <span id="lambdaValue">1.72</span>
+        </label>
+    </div>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    }
+  }
+  </script>
+
+    <div id="err-overlay" style="display:none;position:fixed;inset:0;background:#fff;z-index:999;
+       flex-direction:column;align-items:center;justify-content:center;
+       font-family:sans-serif;font-size:13px;color:#555;gap:10px;">
+        <span id="err-msg">Figure failed to load</span>
+        <button onclick="location.reload()" style="padding:5px 14px;border:1px solid #aaa;
+        border-radius:5px;background:#f5f5f5;cursor:pointer;font-size:12px;">Reload</button>
+    </div>
+
+    <script>
+        let _rendered = false;
+        const _errOverlay = document.getElementById('err-overlay');
+        window.__markRendered = () => { _rendered = true; _errOverlay.style.display = 'none'; };
+        window.addEventListener('error', (event) => {
+            if (!_rendered) {
+                document.getElementById('err-msg').textContent = event.message || 'Figure failed to load';
+                _errOverlay.style.display = 'flex';
+            }
+        });
+        setTimeout(() => {
+            if (!_rendered) { _errOverlay.style.display = 'flex'; }
+        }, 12000);
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const canvas = document.getElementById('c');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const d = 3;
+        let aspect = (canvas.clientWidth || window.innerWidth || 16) / (canvas.clientHeight || window.innerHeight || 9);
+        let camera = new THREE.OrthographicCamera(
+            -d * aspect, d * aspect, d, -d, 0.1, 100
+        );
+        camera.position.set(4, 4, 4);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const HOME_POS = new THREE.Vector3();
+        const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+        let HOME_ZOOM = 0.75;
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            camera.position.copy(HOME_POS);
+            controls.target.copy(HOME_TARGET);
+            camera.zoom = HOME_ZOOM;
+            camera.updateProjectionMatrix();
+            controls.update();
+        });
+
+        const FRAME_HALF_HEIGHT = d;
+        const MIN_ZOOM = 0.2;
+        const MAX_ZOOM = 5;
+
+        function computeSceneBounds() {
+            const box = new THREE.Box3().setFromObject(scene);
+            if (box.isEmpty()) {
+                box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2 * d, 2 * d, 2 * d));
+            }
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            return { box, center, size };
+        }
+
+        function setCameraView({
+            projection = 'orthographic',
+            azimuthDeg = 45,
+            elevationDeg = 35,
+            rollDeg = 0,
+            zoom = null,
+            target = null,
+            heightFraction = 0.5,
+            distanceScale = 1.2
+        } = {}) {
+            const { center, size } = computeSceneBounds();
+            const viewTarget = Array.isArray(target)
+                ? new THREE.Vector3(target[0] || 0, target[1] || 0, target[2] || 0)
+                : center;
+
+            const contentHeight = Math.max(size.y, 1e-6);
+            const desiredViewHeight = contentHeight / Math.max(heightFraction, 0.01);
+            let resolvedZoom = Number.isFinite(zoom) ? zoom : (2 * FRAME_HALF_HEIGHT) / desiredViewHeight;
+            resolvedZoom = Math.min(Math.max(resolvedZoom, MIN_ZOOM), MAX_ZOOM);
+            camera.zoom = resolvedZoom;
+
+            const radius = Math.max(size.length() * distanceScale, FRAME_HALF_HEIGHT * 2);
+            const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+            const elevation = THREE.MathUtils.degToRad(elevationDeg);
+            const cosElev = Math.cos(elevation);
+            const x = viewTarget.x + radius * Math.cos(azimuth) * cosElev;
+            const y = viewTarget.y + radius * Math.sin(elevation);
+            const z = viewTarget.z + radius * Math.sin(azimuth) * cosElev;
+            camera.position.set(x, y, z);
+
+            controls.target.copy(viewTarget);
+            camera.up.set(0, 1, 0);
+            if (Number.isFinite(rollDeg) && rollDeg !== 0) {
+                const viewDir = new THREE.Vector3().subVectors(viewTarget, camera.position).normalize();
+                camera.up.applyAxisAngle(viewDir, THREE.MathUtils.degToRad(rollDeg));
+            }
+            camera.updateProjectionMatrix();
+            controls.update();
+
+            HOME_POS.copy(camera.position);
+            HOME_TARGET.copy(controls.target);
+            HOME_ZOOM = camera.zoom;
+
+            window.__figureCameraView = {
+                projection,
+                azimuthDeg,
+                elevationDeg,
+                rollDeg,
+                zoom: camera.zoom,
+                target: [controls.target.x, controls.target.y, controls.target.z],
+            };
+        }
+
+        function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.5 } = {}) {
+            const azimuthDeg = THREE.MathUtils.radToDeg(azimuth);
+            const elevationDeg = 90 - THREE.MathUtils.radToDeg(polar);
+            setCameraView({ azimuthDeg, elevationDeg, heightFraction });
+        }
+
+        setStandardView();
+
+        const _labels = [];
+        const _v = new THREE.Vector3();
+
+        function addLabel(text, position, options = {}) {
+            const div = document.createElement('div');
+            div.className = 'lbl';
+            div.innerHTML = text;
+            if (options.color) div.style.color = options.color;
+            if (options.fontSize) div.style.fontSize = options.fontSize;
+            if (options.bold) div.style.fontWeight = 'bold';
+            if (options.background) {
+                div.style.background = options.background;
+                div.style.padding = '1px 4px';
+                div.style.borderRadius = '3px';
+            }
+            if (options.fontFamily) div.style.fontFamily = options.fontFamily;
+            document.body.appendChild(div);
+            const entry = { div, pos: position.clone(), offset: options.offset || [0, 0] };
+            _labels.push(entry);
+            return entry;
+        }
+
+        const _referenceDistance = 8;
+
+        function _syncLabels() {
+            for (const { div, pos, offset } of _labels) {
+                _v.copy(pos).project(camera);
+
+                if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
+                    div.style.display = 'none';
+                    continue;
+                }
+                div.style.display = '';
+
+                const ox = offset && offset[0] ? offset[0] : 0;
+                const oy = offset && offset[1] ? offset[1] : 0;
+                const x = (_v.x * 0.5 + 0.5) * canvas.clientWidth + ox;
+                const y = (-_v.y * 0.5 + 0.5) * canvas.clientHeight + oy;
+
+                let scale;
+                if (camera.isOrthographicCamera) {
+                    scale = camera.zoom || 1;
+                } else {
+                    const distance = Math.max(camera.position.distanceTo(pos), 1e-4);
+                    scale = (_referenceDistance / distance) * (camera.zoom || 1);
+                }
+                scale = Math.max(0.62, Math.min(scale, 2.6));
+
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                div.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            }
+        }
+
+        const _tooltip = document.getElementById('figTooltip');
+        const _clickInfo = document.getElementById('clickInfo');
+        const _raycaster = new THREE.Raycaster();
+        const _pointer = new THREE.Vector2();
+        const _interactiveObjects = [];
+        let _hoveredInteractive = null;
+
+        function showPopup(title, body) {
+            if (_clickInfo) {
+                _clickInfo.innerHTML = `<strong>${title}</strong>${body}`;
+                _clickInfo.style.display = 'block';
+            }
+            window.parent.postMessage({ type: 'alex-popup', title, body }, '*');
+        }
+
+        function hidePopup() {
+            if (_clickInfo) _clickInfo.style.display = 'none';
+            window.parent.postMessage({ type: 'alex-popup', title: null }, '*');
+        }
+
+        function showTooltip(text, event) {
+            if (!_tooltip || !text) return;
+            _tooltip.textContent = text;
+            _tooltip.style.display = 'block';
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            if (!_tooltip || _tooltip.style.display === 'none') return;
+            const pad = 12;
+            const x = Math.min(event.clientX + pad, window.innerWidth - _tooltip.offsetWidth - pad);
+            const y = Math.max(pad, event.clientY - _tooltip.offsetHeight - pad);
+            _tooltip.style.left = x + 'px';
+            _tooltip.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            if (_tooltip) _tooltip.style.display = 'none';
+        }
+
+        function _setPointerFromEvent(event) {
+            const rect = canvas.getBoundingClientRect();
+            _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function _firstInteractiveHit(event) {
+            if (!_interactiveObjects.length) return null;
+            _setPointerFromEvent(event);
+            _raycaster.setFromCamera(_pointer, camera);
+            const hits = _raycaster.intersectObjects(_interactiveObjects.map(entry => entry.object), true);
+            for (const hit of hits) {
+                let obj = hit.object;
+                while (obj) {
+                    const entry = _interactiveObjects.find(item => item.object === obj);
+                    if (entry) return { ...entry, hit };
+                    obj = obj.parent;
+                }
+            }
+            return null;
+        }
+
+        function registerInteractive(object, info = {}) {
+            if (!object) return object;
+            object.userData = object.userData || {};
+            object.userData.interactive = true;
+            _interactiveObjects.push({ object, info });
+            return object;
+        }
+
+        canvas.addEventListener('pointermove', (event) => {
+            moveTooltip(event);
+            const entry = _firstInteractiveHit(event);
+            if (entry) {
+                _hoveredInteractive = entry;
+                canvas.style.cursor = 'pointer';
+                showTooltip(entry.info.tooltip || entry.info.title || 'Click to explain', event);
+            } else {
+                _hoveredInteractive = null;
+                canvas.style.cursor = controls.enabled ? 'grab' : 'default';
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('pointerleave', () => {
+            _hoveredInteractive = null;
+            canvas.style.cursor = 'default';
+            hideTooltip();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            const entry = _firstInteractiveHit(event) || _hoveredInteractive;
+            if (!entry) {
+                hidePopup();
+                return;
+            }
+            const title = entry.info.title || entry.info.tooltip || 'Figure element';
+            const body = entry.info.body || entry.info.description || 'This part is interactive.';
+            showPopup(title, body);
+            if (typeof entry.info.onClick === 'function') entry.info.onClick(entry.hit, entry.object);
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hidePopup();
+                hideTooltip();
+            }
+        });
+
+        let _firstFrame = true;
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            resizeAndRender();
+            if (_firstFrame) { _firstFrame = false; window.__markRendered?.(); }
+        }
+        animate();
+
+        function resizeAndRender() {
+            const w = canvas.clientWidth, h = canvas.clientHeight;
+            if (w <= 0 || h <= 0) return;
+            aspect = w / h;
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h, false);
+            controls.update();
+            renderer.render(scene, camera);
+            _syncLabels();
+        }
+
+        new ResizeObserver(resizeAndRender).observe(canvas);
+        window.addEventListener('resize', resizeAndRender);
+
+        // Coordinates in the textbook are (x, y, w). Three.js stores them as
+        // (worldX, worldY, worldZ) = (w, y, -x), so w appears horizontal,
+        // y vertical, and x slants into the page like the source drawing.
+        const P = (x, y, w) => new THREE.Vector3(w, y, -x);
+        const origin = P(0, 0, 0);
+        const baseX = 0.72;
+        const baseY = 0.84;
+        const heteroW = -1.22;
+        const sliceW = 1.0;
+
+        const black = new THREE.MeshBasicMaterial({ color: 0x111419 });
+        const red = new THREE.MeshBasicMaterial({ color: 0xff1919 });
+        const planeFill = new THREE.MeshBasicMaterial({
+            color: 0xdde8e8,
+            transparent: true,
+            opacity: 0.72,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const planeGhost = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.02,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const planeEdge = new THREE.MeshBasicMaterial({ color: 0x738788 });
+        const greyLine = new THREE.LineDashedMaterial({ color: 0x8a9897, dashSize: 0.08, gapSize: 0.055 });
+        const rayMaterial = new THREE.LineDashedMaterial({ color: 0x111419, dashSize: 0.075, gapSize: 0.055 });
+        const connectorMaterial = new THREE.MeshBasicMaterial({ color: 0x111419 });
+
+        scene.add(new THREE.AmbientLight(0xffffff, 1));
+
+        function cylinderBetween(start, end, radius, material) {
+            const direction = new THREE.Vector3().subVectors(end, start);
+            const length = direction.length();
+            const geometry = new THREE.CylinderGeometry(radius, radius, length, 16, 1);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(start).add(end).multiplyScalar(0.5);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.clone().normalize());
+            return mesh;
+        }
+
+        function arrowBetween(start, end, options = {}) {
+            const material = options.material || black;
+            const radius = options.radius || 0.015;
+            const headRadius = options.headRadius || 0.075;
+            const headLength = options.headLength || 0.22;
+            const direction = new THREE.Vector3().subVectors(end, start).normalize();
+            const shaftEnd = end.clone().addScaledVector(direction, -headLength);
+            const group = new THREE.Group();
+            group.add(cylinderBetween(start, shaftEnd, radius, material));
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(headRadius, headLength, 24), material);
+            cone.position.copy(end).addScaledVector(direction, -headLength * 0.5);
+            cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+            group.add(cone);
+            scene.add(group);
+            return group;
+        }
+
+        function makeQuad(corners, material) {
+            const geometry = new THREE.BufferGeometry().setFromPoints([
+                corners[0], corners[1], corners[2], corners[2], corners[3], corners[0]
+            ]);
+            geometry.computeVertexNormals();
+            return new THREE.Mesh(geometry, material);
+        }
+
+        function addOutline(corners, radius = 0.012) {
+            const group = new THREE.Group();
+            for (let i = 0; i < corners.length; i++) {
+                const a = corners[i];
+                const b = corners[(i + 1) % corners.length];
+                group.add(cylinderBetween(a, b, radius, planeEdge));
+            }
+            scene.add(group);
+            return group;
+        }
+
+        function makePoint(position, radius = 0.075) {
+            const group = new THREE.Group();
+            const outer = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 16), black);
+            const inner = new THREE.Mesh(new THREE.SphereGeometry(radius * 0.72, 32, 16), red);
+            group.add(outer, inner);
+            group.position.copy(position);
+            scene.add(group);
+            return group;
+        }
+
+        function dashedLine(points, material) {
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, material);
+            line.computeLineDistances();
+            scene.add(line);
+            return line;
+        }
+
+        function updateDashedLine(line, points) {
+            line.geometry.dispose();
+            line.geometry = new THREE.BufferGeometry().setFromPoints(points);
+            line.computeLineDistances();
+        }
+
+        // The left translucent sheet is a separate heterogeneous (x,y) space.
+        const heteroCorners = [
+            P(-1.22, -1.45, heteroW),
+            P(1.33, -1.45, heteroW),
+            P(1.33, 1.66, heteroW),
+            P(-1.22, 1.66, heteroW)
+        ];
+        const heteroPlane = makeQuad(heteroCorners, planeFill);
+        scene.add(heteroPlane);
+        registerInteractive(heteroPlane, {
+            title: 'Heterogeneous coordinates',
+            tooltip: 'The 2D point (x,y) lives in its own plane.',
+            body: 'This sheet represents ordinary heterogeneous coordinates: a point is just (x,y), with no scale coordinate.'
+        });
+
+        // The outlined right sheet is the w=1 slice inside homogeneous space.
+        const sliceCorners = [
+            P(-1.20, -1.48, sliceW),
+            P(1.25, -1.48, sliceW),
+            P(1.25, 1.60, sliceW),
+            P(-1.20, 1.60, sliceW)
+        ];
+        const slicePlane = makeQuad(sliceCorners, planeGhost);
+        scene.add(slicePlane);
+        const sliceOutline = addOutline(sliceCorners, 0.013);
+        registerInteractive(slicePlane, {
+            title: 'The w=1 slice',
+            tooltip: 'The same (x,y) is embedded as (x,y,1).',
+            body: 'Homogeneous coordinates use a 3D space for 2D points. The slice w=1 contains the representative (x,y,1).'
+        });
+
+        // Axes reproduce the source: y vertical, w horizontal, x slanted.
+        arrowBetween(P(0, -1.48, 0), P(0, 1.95, 0), { radius: 0.014, headRadius: 0.07, headLength: 0.20 });
+        arrowBetween(P(0, 0, -1.62), P(0, 0, 2.67), { radius: 0.014, headRadius: 0.085, headLength: 0.23 });
+        arrowBetween(P(-1.58, 0, 0), P(1.45, 0, 0), { radius: 0.014, headRadius: 0.075, headLength: 0.22 });
+
+        const tickHalf = 0.09;
+        scene.add(cylinderBetween(P(0, -tickHalf, sliceW), P(0, tickHalf, sliceW), 0.014, black));
+
+        const heteroPointPos = P(baseX, baseY, heteroW);
+        const unitPointPos = P(baseX, baseY, sliceW);
+        const heteroPoint = makePoint(heteroPointPos, 0.078);
+        const unitPoint = makePoint(unitPointPos, 0.083);
+        const lambdaPoint = makePoint(P(baseX * 1.72, baseY * 1.72, 1.72), 0.083);
+
+        registerInteractive(heteroPoint, {
+            title: 'Ordinary point',
+            tooltip: '(x,y) has no scale coordinate.',
+            body: 'This red point is the 2D heterogeneous coordinate (x,y). It is not the same object as the 3D point (x,y,1).'
+        });
+        registerInteractive(unitPoint, {
+            title: 'Representative at w=1',
+            tooltip: '(x,y,1) is one homogeneous representative.',
+            body: 'Choosing w=1 gives the familiar representative of the 2D point inside homogeneous coordinates.'
+        });
+        registerInteractive(lambdaPoint, {
+            title: 'Scaled representative',
+            tooltip: '(&lambda;x,&lambda;y,&lambda;) maps to the same (x,y).',
+            body: 'Dividing by w gives (&lambda;x/&lambda;, &lambda;y/&lambda;) = (x,y), so moving along this ray does not change the represented 2D point.'
+        });
+
+        scene.add(cylinderBetween(heteroPointPos, unitPointPos, 0.0065, connectorMaterial));
+
+        const rayLine = dashedLine([origin, lambdaPoint.position], rayMaterial);
+        registerInteractive(rayLine, {
+            title: 'Scale-invariant ray',
+            tooltip: 'Every nonzero point on this ray represents the same 2D point.',
+            body: 'Homogeneous coordinates identify all scaled versions of a point. The whole ray through the origin collapses back to one heterogeneous coordinate after division by w.'
+        });
+
+        // The pale dashed arc cues the mental operation: normalize a homogeneous
+        // representative back to the w=1 slice, then read out (x,y).
+        const arcCurve = new THREE.QuadraticBezierCurve3(
+            P(baseX * 1.08, baseY * 1.08, 1.08),
+            P(baseX * 1.25, baseY * 0.86, 1.18),
+            unitPointPos.clone().add(new THREE.Vector3(-0.05, -0.05, 0.03))
+        );
+        const arcLine = dashedLine(arcCurve.getPoints(36), greyLine);
+
+        // A small cone at the end of the arc makes the normalization direction legible.
+        const arcPts = arcCurve.getPoints(36);
+        const arcDir = new THREE.Vector3().subVectors(arcPts[arcPts.length - 1], arcPts[arcPts.length - 3]).normalize();
+        const arcHead = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.13, 18), new THREE.MeshBasicMaterial({ color: 0x8a9897 }));
+        arcHead.position.copy(arcPts[arcPts.length - 1]).addScaledVector(arcDir, -0.045);
+        arcHead.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), arcDir);
+        scene.add(arcHead);
+
+        addLabel('Heterogeneous', P(0.25, 0.74, -2.10), { fontSize: '34px', offset: [-16, -2] });
+        addLabel('Homogeneous', P(-1.05, 0.72, 5.05), { fontSize: '34px', offset: [18, 0] });
+        addLabel('<i>y</i>', P(0, 1.96, 0), { fontSize: '35px', offset: [20, -6] });
+        addLabel('<i>x</i>', P(1.44, 0.18, 0), { fontSize: '35px', offset: [-22, -82] });
+        addLabel('<i>w</i>', P(0, -0.18, 2.66), { fontSize: '35px', offset: [30, 18] });
+        addLabel('1', P(0, -0.28, sliceW), { fontSize: '31px', offset: [0, 15] });
+        addLabel('(<i>x</i>,<i>y</i>)', heteroPointPos, { fontSize: '28px', offset: [8, -34] });
+        addLabel('(<i>x</i>,<i>y</i>,1)', unitPointPos, { fontSize: '28px', offset: [10, 34] });
+        const lambdaLabel = addLabel('(&lambda;<i>x</i>,&lambda;<i>y</i>,&lambda;)', lambdaPoint.position, { fontSize: '30px', offset: [8, -42] });
+
+        const lambdaSlider = document.getElementById('lambdaSlider');
+        const lambdaValue = document.getElementById('lambdaValue');
+
+        function setLambda(lambda) {
+            const position = P(baseX * lambda, baseY * lambda, lambda);
+            lambdaPoint.position.copy(position);
+            lambdaLabel.pos.copy(position);
+            updateDashedLine(rayLine, [origin, position]);
+            lambdaValue.textContent = lambda.toFixed(2);
+            renderer.render(scene, camera);
+            _syncLabels();
+        }
+
+        // The slider demonstrates scale invariance: lambda changes the 3D point,
+        // but the represented heterogeneous coordinate remains (x,y).
+        lambdaSlider.addEventListener('input', () => {
+            setLambda(Number(lambdaSlider.value));
+        });
+        setLambda(Number(lambdaSlider.value));
+
+        setCameraView({
+            projection: 'orthographic',
+            azimuthDeg: 43,
+            elevationDeg: 9,
+            rollDeg: 0,
+            zoom: 1.03,
+            target: [0.36, 0.12, -0.12],
+            heightFraction: 0.62
+        });
+
+        resizeAndRender();
+        setTimeout(resizeAndRender, 0);
+        setTimeout(resizeAndRender, 120);
+        let layoutAttempts = 0;
+        const layoutRetry = setInterval(() => {
+            resizeAndRender();
+            layoutAttempts += 1;
+            if (layoutAttempts >= 24) {
+                clearInterval(layoutRetry);
+            }
+        }, 80);
+    </script>
+</body>
+
+</html>

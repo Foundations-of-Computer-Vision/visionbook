@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Gabor Space-Time Tiles</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        #c {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .lbl {
+            position: absolute;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 13px;
+            color: #111;
+            text-shadow: 0 1px 3px #fff, 0 -1px 3px #fff, 1px 0 3px #fff, -1px 0 3px #fff;
+        }
+
+        #ui {
+            position: absolute;
+            left: 6px;
+            bottom: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-family: sans-serif;
+            font-size: 11px;
+            max-width: 190px;
+            max-height: 34%;
+            background: transparent;
+            border: 0;
+            box-shadow: none;
+            opacity: 0.88;
+            transform: none;
+            transition: opacity 0.16s ease;
+            z-index: 10;
+        }
+
+        #ui:hover,
+        #ui:focus-within {
+            opacity: 1;
+        }
+
+        #ui button {
+            padding: 4px 10px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        #ui button:hover {
+            background: #e0e0e0;
+        }
+
+        #ui button.active {
+            background: #c8e6ff;
+            border-color: #5aabf0;
+        }
+
+        #ui label {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            text-shadow: 0 1px 2px #fff;
+        }
+
+        #ui input[type=range] {
+            width: 86px;
+        }
+
+        #figTooltip {
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: none;
+            max-width: 230px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, 0.62);
+            color: #fff;
+            font: 11px/1.35 sans-serif;
+            pointer-events: none;
+            white-space: normal;
+            z-index: 20;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="c"></canvas>
+    <div id="figTooltip"></div>
+    <div id="ui">
+        <button id="btnReset" style="display:none">Reset View</button>
+    </div>
+
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.171.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
+    }
+  }
+  </script>
+
+    <div id="err-overlay"
+        style="display:none;position:fixed;inset:0;background:#fff;z-index:999;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;font-size:13px;color:#555;gap:10px;">
+        <span id="err-msg">Figure failed to load</span>
+        <button onclick="location.reload()"
+            style="padding:5px 14px;border:1px solid #aaa;border-radius:5px;background:#f5f5f5;cursor:pointer;font-size:12px;">Reload</button>
+    </div>
+
+    <script>
+        let _rendered = false;
+        const _errOverlay = document.getElementById('err-overlay');
+        window.__markRendered = () => { _rendered = true; _errOverlay.style.display = 'none'; };
+        window.addEventListener('error', (e) => {
+            if (!_rendered) {
+                document.getElementById('err-msg').textContent = e.message || 'Figure failed to load';
+                _errOverlay.style.display = 'flex';
+            }
+        });
+        setTimeout(() => {
+            if (!_rendered) { _errOverlay.style.display = 'flex'; }
+        }, 12000);
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const canvas = document.getElementById('c');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xffffff);
+
+        const d = 3;
+        let aspect = canvas.clientWidth / canvas.clientHeight;
+        let camera = new THREE.OrthographicCamera(
+            -d * aspect, d * aspect, d, -d, 0.1, 100
+        );
+        camera.position.set(4, 4, 4);
+        camera.lookAt(0, 0, 0);
+        camera.updateProjectionMatrix();
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        const HOME_POS = new THREE.Vector3();
+        const HOME_TARGET = new THREE.Vector3(0, 0, 0);
+        let HOME_ZOOM = 0.75;
+
+        document.getElementById('btnReset').addEventListener('click', () => {
+            camera.position.copy(HOME_POS);
+            controls.target.copy(HOME_TARGET);
+            camera.zoom = HOME_ZOOM;
+            camera.updateProjectionMatrix();
+            controls.update();
+        });
+
+        const FRAME_HALF_HEIGHT = d;
+        const FRAME_MARGIN = 0.08;
+        const MIN_ZOOM = 0.2;
+        const MAX_ZOOM = 5;
+
+        function computeSceneBounds() {
+            const box = new THREE.Box3().setFromObject(scene);
+            if (box.isEmpty()) {
+                box.setFromCenterAndSize(new THREE.Vector3(0, 0, 0), new THREE.Vector3(2 * d, 2 * d, 2 * d));
+            }
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            return { box, center, size };
+        }
+
+        function setCameraView({
+            projection = 'orthographic',
+            azimuthDeg = 45,
+            elevationDeg = 35,
+            rollDeg = 0,
+            zoom = null,
+            target = null,
+            heightFraction = 0.5,
+            distanceScale = 1.2
+        } = {}) {
+            const { center, size } = computeSceneBounds();
+            const viewTarget = Array.isArray(target)
+                ? new THREE.Vector3(target[0] || 0, target[1] || 0, target[2] || 0)
+                : center;
+
+            const contentHeight = Math.max(size.y, 1e-6);
+            const desiredViewHeight = contentHeight / Math.max(heightFraction, 0.01);
+            let resolvedZoom = Number.isFinite(zoom) ? zoom : (2 * FRAME_HALF_HEIGHT) / desiredViewHeight;
+            resolvedZoom = Math.min(Math.max(resolvedZoom, MIN_ZOOM), MAX_ZOOM);
+            camera.zoom = resolvedZoom;
+
+            const radius = Math.max(size.length() * distanceScale, FRAME_HALF_HEIGHT * 2);
+            const azimuth = THREE.MathUtils.degToRad(azimuthDeg);
+            const elevation = THREE.MathUtils.degToRad(elevationDeg);
+            const cosElev = Math.cos(elevation);
+            const x = viewTarget.x + radius * Math.cos(azimuth) * cosElev;
+            const y = viewTarget.y + radius * Math.sin(elevation);
+            const z = viewTarget.z + radius * Math.sin(azimuth) * cosElev;
+            camera.position.set(x, y, z);
+
+            controls.target.copy(viewTarget);
+            camera.up.set(0, 1, 0);
+            if (Number.isFinite(rollDeg) && rollDeg !== 0) {
+                const viewDir = new THREE.Vector3().subVectors(viewTarget, camera.position).normalize();
+                camera.up.applyAxisAngle(viewDir, THREE.MathUtils.degToRad(rollDeg));
+            }
+            camera.updateProjectionMatrix();
+            controls.update();
+
+            HOME_POS.copy(camera.position);
+            HOME_TARGET.copy(controls.target);
+            HOME_ZOOM = camera.zoom;
+
+            window.__figureCameraView = {
+                projection,
+                azimuthDeg,
+                elevationDeg,
+                rollDeg,
+                zoom: camera.zoom,
+                target: [controls.target.x, controls.target.y, controls.target.z],
+            };
+        }
+
+        function setStandardView({ azimuth = Math.PI / 4, polar = Math.PI / 4, heightFraction = 0.5 } = {}) {
+            const azimuthDeg = THREE.MathUtils.radToDeg(azimuth);
+            const elevationDeg = 90 - THREE.MathUtils.radToDeg(polar);
+            setCameraView({ azimuthDeg, elevationDeg, heightFraction });
+        }
+
+        setStandardView();
+
+        const _labels = [];
+        const _v = new THREE.Vector3();
+
+        function addLabel(text, position, options = {}) {
+            const div = document.createElement('div');
+            div.className = 'lbl';
+            div.innerHTML = text;
+            if (options.color) div.style.color = options.color;
+            if (options.fontSize) div.style.fontSize = options.fontSize;
+            if (options.bold) div.style.fontWeight = 'bold';
+            if (options.fontFamily) div.style.fontFamily = options.fontFamily;
+            if (options.background) {
+                div.style.background = options.background;
+                div.style.padding = '1px 4px';
+                div.style.borderRadius = '3px';
+            }
+            document.body.appendChild(div);
+            const entry = { div, pos: position.clone(), offset: options.offset || [0, 0] };
+            _labels.push(entry);
+            return entry;
+        }
+
+        const _referenceDistance = 8;
+
+        function _syncLabels() {
+            for (const { div, pos, offset } of _labels) {
+                _v.copy(pos).project(camera);
+                if (_v.z > 1 || _v.z < -1 || _v.x < -1 || _v.x > 1 || _v.y < -1 || _v.y > 1) {
+                    div.style.display = 'none';
+                    continue;
+                }
+                div.style.display = '';
+
+                const ox = offset && offset[0] ? offset[0] : 0;
+                const oy = offset && offset[1] ? offset[1] : 0;
+                const x = (_v.x * 0.5 + 0.5) * canvas.clientWidth + ox;
+                const y = (-_v.y * 0.5 + 0.5) * canvas.clientHeight + oy;
+
+                let scale;
+                const distance = Math.max(camera.position.distanceTo(pos), 1e-4);
+                scale = (_referenceDistance / distance) * (camera.zoom || 1);
+                scale = Math.max(0.5, Math.min(scale, 6));
+
+                div.style.left = x + 'px';
+                div.style.top = y + 'px';
+                div.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            }
+        }
+
+        const _tooltip = document.getElementById('figTooltip');
+        const _raycaster = new THREE.Raycaster();
+        const _pointer = new THREE.Vector2();
+        const _interactiveObjects = [];
+        let _hoveredInteractive = null;
+
+        function showPopup(title, body) {
+            window.parent.postMessage({ type: 'alex-popup', title, body }, '*');
+        }
+
+        function hidePopup() {
+            window.parent.postMessage({ type: 'alex-popup', title: null }, '*');
+        }
+
+        function showTooltip(text, event) {
+            if (!_tooltip || !text) return;
+            _tooltip.textContent = text;
+            _tooltip.style.display = 'block';
+            moveTooltip(event);
+        }
+
+        function moveTooltip(event) {
+            if (!_tooltip || _tooltip.style.display === 'none') return;
+            const pad = 12;
+            const x = Math.min(event.clientX + pad, window.innerWidth - _tooltip.offsetWidth - pad);
+            const y = Math.max(pad, event.clientY - _tooltip.offsetHeight - pad);
+            _tooltip.style.left = x + 'px';
+            _tooltip.style.top = y + 'px';
+        }
+
+        function hideTooltip() {
+            if (_tooltip) _tooltip.style.display = 'none';
+        }
+
+        function _setPointerFromEvent(event) {
+            const rect = canvas.getBoundingClientRect();
+            _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            _pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function _firstInteractiveHit(event) {
+            if (!_interactiveObjects.length) return null;
+            _setPointerFromEvent(event);
+            _raycaster.setFromCamera(_pointer, camera);
+            const hits = _raycaster.intersectObjects(_interactiveObjects.map(entry => entry.object), true);
+            for (const hit of hits) {
+                let obj = hit.object;
+                while (obj) {
+                    const entry = _interactiveObjects.find(item => item.object === obj);
+                    if (entry) return { ...entry, hit };
+                    obj = obj.parent;
+                }
+            }
+            return null;
+        }
+
+        function registerInteractive(object, info = {}) {
+            if (!object) return object;
+            object.userData = object.userData || {};
+            object.userData.interactive = true;
+            _interactiveObjects.push({ object, info });
+            return object;
+        }
+
+        canvas.addEventListener('pointermove', (event) => {
+            moveTooltip(event);
+            const entry = _firstInteractiveHit(event);
+            if (entry) {
+                _hoveredInteractive = entry;
+                canvas.style.cursor = 'pointer';
+                showTooltip(entry.info.tooltip || entry.info.title || 'Click to explain', event);
+            } else {
+                _hoveredInteractive = null;
+                canvas.style.cursor = controls.enabled ? 'grab' : 'default';
+                hideTooltip();
+            }
+        });
+
+        canvas.addEventListener('pointerleave', () => {
+            _hoveredInteractive = null;
+            canvas.style.cursor = 'default';
+            hideTooltip();
+        });
+
+        canvas.addEventListener('click', (event) => {
+            const entry = _firstInteractiveHit(event) || _hoveredInteractive;
+            if (!entry) {
+                hidePopup();
+                return;
+            }
+            const title = entry.info.title || entry.info.tooltip || 'Figure element';
+            const body = entry.info.body || entry.info.description || 'This part is interactive.';
+            showPopup(title, body);
+            if (typeof entry.info.onClick === 'function') entry.info.onClick(entry.hit, entry.object);
+        });
+
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                hidePopup();
+                hideTooltip();
+                clearSelection();
+            }
+        });
+
+        let _firstFrame = true;
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+            _syncLabels();
+            if (_firstFrame) { _firstFrame = false; window.__markRendered?.(); }
+        }
+        animate();
+
+        new ResizeObserver(() => {
+            const w = canvas.clientWidth, h = canvas.clientHeight;
+            aspect = w / h;
+            camera.left = -d * aspect;
+            camera.right = d * aspect;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h, false);
+        }).observe(canvas);
+
+        const axisX = new THREE.Vector3(1, 0, 0);
+        const axisT = new THREE.Vector3(0, 1, 0);
+        const axisY = new THREE.Vector3(0.56, 0.64, -0.72).normalize();
+
+        const labelStyle = {
+            fontSize: '24px',
+            fontFamily: 'Georgia, "Times New Roman", serif',
+            color: '#050505'
+        };
+
+        const panelStyle = {
+            fontSize: '26px',
+            fontFamily: 'Georgia, "Times New Roman", serif',
+            color: '#050505'
+        };
+
+        const gaborGeometry = new THREE.SphereGeometry(0.205, 48, 32);
+        const outlineGeometry = new THREE.SphereGeometry(0.216, 48, 32);
+        const selectedSpheres = [];
+        let activeSelection = null;
+
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x7d8888, 2.5));
+        const keyLight = new THREE.DirectionalLight(0xffffff, 5.2);
+        keyLight.position.set(-3.5, 4.7, 8);
+        scene.add(keyLight);
+        const fillLight = new THREE.DirectionalLight(0xd8efee, 1.35);
+        fillLight.position.set(5, -2, 6);
+        scene.add(fillLight);
+
+        function cylinderBetween(start, end, radius, material) {
+            const dir = new THREE.Vector3().subVectors(end, start);
+            const length = dir.length();
+            const geometry = new THREE.CylinderGeometry(radius, radius, length, 16);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(start).add(end).multiplyScalar(0.5);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+            return mesh;
+        }
+
+        function makeArrow(start, end, options = {}) {
+            const color = options.color || 0x050505;
+            const radius = options.radius || 0.017;
+            const headLength = options.headLength || 0.19;
+            const headRadius = options.headRadius || 0.075;
+            const group = new THREE.Group();
+            const material = new THREE.MeshBasicMaterial({ color });
+            const dir = new THREE.Vector3().subVectors(end, start).normalize();
+            const shaftEnd = end.clone().addScaledVector(dir, -headLength);
+            group.add(cylinderBetween(start, shaftEnd, radius, material));
+            const cone = new THREE.Mesh(new THREE.ConeGeometry(headRadius, headLength, 24), material);
+            cone.position.copy(end).addScaledVector(dir, -headLength * 0.5);
+            cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+            group.add(cone);
+            return group;
+        }
+
+        function makeLine(start, end, radius = 0.019, color = 0x050505) {
+            return cylinderBetween(start, end, radius, new THREE.MeshBasicMaterial({ color }));
+        }
+
+        function makeGaborSphere(position, options = {}) {
+            const group = new THREE.Group();
+            group.position.copy(position);
+            const shell = new THREE.Mesh(
+                outlineGeometry,
+                new THREE.MeshBasicMaterial({ color: options.outline || 0x050505, side: THREE.BackSide })
+            );
+            const coreMaterial = new THREE.MeshPhysicalMaterial({
+                color: options.color || 0xbfd1d1,
+                roughness: 0.48,
+                metalness: 0.02,
+                clearcoat: 0.12,
+                emissive: 0x000000,
+                emissiveIntensity: 0
+            });
+            const core = new THREE.Mesh(gaborGeometry, coreMaterial);
+            group.add(shell, core);
+            group.userData.core = core;
+            group.userData.shell = shell;
+            group.userData.baseScale = options.scale || 1;
+            group.scale.setScalar(group.userData.baseScale);
+            scene.add(group);
+            return group;
+        }
+
+        function selectObject(object, kind) {
+            clearSelection();
+            activeSelection = object;
+            if (kind === 'sphere') {
+                object.scale.setScalar(object.userData.baseScale * 1.22);
+                object.userData.core.material.emissive.set(0xffc34a);
+                object.userData.core.material.emissiveIntensity = 0.55;
+                object.userData.shell.material.color.set(0x111111);
+            }
+            if (kind === 'plane') {
+                object.userData.face.material.color.set(0xbdd3d1);
+                object.userData.face.material.opacity = 0.88;
+                object.userData.outline.children.forEach(edge => edge.material.color.set(0x111111));
+            }
+        }
+
+        function clearSelection() {
+            if (!activeSelection) return;
+            if (activeSelection.userData.core) {
+                activeSelection.scale.setScalar(activeSelection.userData.baseScale || 1);
+                activeSelection.userData.core.material.emissive.set(0x000000);
+                activeSelection.userData.core.material.emissiveIntensity = 0;
+                activeSelection.userData.shell.material.color.set(0x050505);
+            }
+            if (activeSelection.userData.face) {
+                activeSelection.userData.face.material.color.set(0xcbd9d8);
+                activeSelection.userData.face.material.opacity = 0.74;
+                activeSelection.userData.outline.children.forEach(edge => edge.material.color.set(0x050505));
+            }
+            activeSelection = null;
+        }
+
+        function addAxes(origin, lengths, labelPrefix = '') {
+            const zLift = new THREE.Vector3(0, 0, 0.28);
+            scene.add(makeArrow(origin.clone().addScaledVector(axisX, -lengths.xNeg).add(zLift), origin.clone().addScaledVector(axisX, lengths.xPos).add(zLift), { radius: 0.018, headLength: 0.22, headRadius: 0.082 }));
+            scene.add(makeArrow(origin.clone().addScaledVector(axisT, -lengths.tNeg).add(zLift), origin.clone().addScaledVector(axisT, lengths.tPos).add(zLift), { radius: 0.018, headLength: 0.22, headRadius: 0.082 }));
+            scene.add(makeArrow(origin.clone().addScaledVector(axisY, -lengths.yNeg).add(zLift), origin.clone().addScaledVector(axisY, lengths.yPos).add(zLift), { radius: 0.018, headLength: 0.22, headRadius: 0.082 }));
+
+            addLabel('<i>w</i><sub>x</sub>', origin.clone().addScaledVector(axisX, lengths.xPos + 0.22), { ...labelStyle, offset: [8, 6] });
+            addLabel('<i>w</i><sub>t</sub>', origin.clone().addScaledVector(axisT, lengths.tPos + 0.16), { ...labelStyle, offset: [10, 0] });
+            addLabel('<i>w</i><sub>y</sub>', origin.clone().addScaledVector(axisY, lengths.yPos + 0.28), { ...labelStyle, offset: [12, 0] });
+        }
+
+        function addPlane(center, uVec, vVec, uHalf, vHalf) {
+            const corners = [
+                center.clone().addScaledVector(uVec, -uHalf).addScaledVector(vVec, -vHalf),
+                center.clone().addScaledVector(uVec, uHalf).addScaledVector(vVec, -vHalf),
+                center.clone().addScaledVector(uVec, uHalf).addScaledVector(vVec, vHalf),
+                center.clone().addScaledVector(uVec, -uHalf).addScaledVector(vVec, vHalf)
+            ];
+            const geometry = new THREE.BufferGeometry().setFromPoints(corners);
+            geometry.setIndex([0, 1, 2, 0, 2, 3]);
+            geometry.computeVertexNormals();
+            const face = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+                color: 0xcbd9d8,
+                transparent: true,
+                opacity: 0.82,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            }));
+            const outline = new THREE.Group();
+            for (let i = 0; i < 4; i++) {
+                outline.add(makeLine(corners[i], corners[(i + 1) % 4], 0.023, 0x050505));
+            }
+            const group = new THREE.Group();
+            group.add(face, outline);
+            group.userData.face = face;
+            group.userData.outline = outline;
+            scene.add(group);
+            return group;
+        }
+
+        const leftOrigin = new THREE.Vector3(-3.55, -0.28, 0.02);
+        addAxes(leftOrigin, { xNeg: 1.85, xPos: 2.25, tNeg: 1.55, tPos: 2.12, yNeg: 1.55, yPos: 2.05 });
+
+        // Panel (a): the full bank of space-time Gabor filters samples a 3D frequency lattice.
+        const leftCenter = new THREE.Vector3(-3.55, -0.20, -0.02);
+        const leftStepX = axisX.clone().multiplyScalar(0.52);
+        const leftStepT = axisT.clone().multiplyScalar(0.48);
+        const leftStepY = axisY.clone().multiplyScalar(0.48);
+        const selectedPlaneNormal = new THREE.Vector3(0.42, -0.74, 0.52).normalize();
+        for (let k = -2; k <= 2; k++) {
+            for (let j = -3; j <= 2; j++) {
+                for (let i = -2; i <= 2; i++) {
+                    if ((j === 2 && i === -2 && k === -2) || (j === -3 && i === 2 && k === 2)) continue;
+                    const pos = leftCenter.clone()
+                        .addScaledVector(leftStepX, i)
+                        .addScaledVector(leftStepT, j + 0.18 * k)
+                        .addScaledVector(leftStepY, k);
+                    const sphere = makeGaborSphere(pos, { scale: 0.98 });
+                    const planeScore = Math.abs(new THREE.Vector3().subVectors(pos, leftCenter).dot(selectedPlaneNormal));
+                    if (planeScore < 0.20) selectedSpheres.push(sphere);
+                    registerInteractive(sphere, {
+                        title: 'One Gabor filter',
+                        tooltip: 'A sampled x-y-t frequency filter. Click to highlight it.',
+                        body: 'Each sphere marks one oriented space-time Gabor filter in the frequency lattice.',
+                        onClick: () => selectObject(sphere, 'sphere')
+                    });
+                }
+            }
+        }
+
+        addLabel('(a)', new THREE.Vector3(-5.28, -2.32, 0.2), panelStyle);
+
+        const rightOrigin = new THREE.Vector3(2.65, -0.08, 0.2);
+        const rightPlaneCenter = new THREE.Vector3(2.72, 0.00, -0.03);
+        const planeU = new THREE.Vector3(0.53, 0.63, -0.07);
+        const planeV = new THREE.Vector3(0.78, -0.58, -0.10);
+
+        // Panel (b): the translucent plane is the Fourier-domain energy plane for one motion.
+        const selectedPlane = addPlane(rightPlaneCenter, planeU, planeV, 1.85, 1.72);
+        registerInteractive(selectedPlane, {
+            title: 'Motion-energy plane',
+            tooltip: 'Click the plane: a velocity selects filters lying on this slice.',
+            body: 'A moving signal concentrates energy on a plane in space-time frequency. Filters near that plane respond most strongly.',
+            onClick: () => selectObject(selectedPlane, 'plane')
+        });
+
+        addAxes(rightOrigin, { xNeg: 2.25, xPos: 2.25, tNeg: 1.95, tPos: 2.15, yNeg: 1.55, yPos: 1.95 });
+
+        const planeNormal = new THREE.Vector3().crossVectors(planeU, planeV).normalize();
+        const forwardOffset = planeNormal.z < 0 ? planeNormal.clone().multiplyScalar(-0.08) : planeNormal.clone().multiplyScalar(0.08);
+        const selectedCoords = [
+            [-1.32, -0.78], [-0.55, -0.78], [0.22, -0.78], [0.99, -0.78],
+            [-1.50, -0.05], [-0.73, -0.05], [0.04, -0.05], [0.81, -0.05], [1.58, -0.05],
+            [-1.20, 0.66], [-0.43, 0.66], [0.34, 0.66], [1.11, 0.66],
+            [-0.88, 1.34], [-0.11, 1.34], [0.66, 1.34],
+            [-0.15, -1.42], [0.62, -1.42]
+        ];
+
+        selectedCoords.forEach(([u, v], index) => {
+            const pos = rightPlaneCenter.clone()
+                .addScaledVector(planeU, u)
+                .addScaledVector(planeV, v)
+                .add(forwardOffset);
+            const sphere = makeGaborSphere(pos, { scale: 1.02 });
+            registerInteractive(sphere, {
+                title: 'Strong filter response',
+                tooltip: 'This filter lies on the motion plane. Click to highlight it.',
+                body: 'For this motion, filters on or near the plane have high amplitude responses.',
+                onClick: () => selectObject(sphere, 'sphere')
+            });
+        });
+
+        addLabel('(b)', new THREE.Vector3(0.34, -2.45, 0.2), panelStyle);
+
+        setCameraView({
+            projection: 'orthographic',
+            azimuthDeg: 90,
+            elevationDeg: 0,
+            rollDeg: 0,
+            zoom: 0.79,
+            target: [0.0, -0.05, 0.0],
+            heightFraction: 0.68,
+            distanceScale: 1.25
+        });
+    </script>
+</body>
+
+</html>
