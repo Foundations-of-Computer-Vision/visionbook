@@ -310,92 +310,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a vertical stack of five square planes viewed from an isometric/elevated perspective, looking down and left. On the left, a set of vertical arrows and rounded-rectangle labels indicates flow from bottom to top.",
-          "viewing_angle_rendered": "The rendered screenshot shows an almost identical setup with five stacked planes from an elevated isometric angle, with matching vertical arrows and labels on the left.",
-          "viewing_angle_comparison": "The viewing angles match extremely well, representing the same elevated isometric perspective and spatial layout of planes and flow arrows.",
-          "shape_comparison": [
-            {
-              "element": "planes",
-              "source_shape": "flat diamond/plane",
-              "rendered_shape": "flat plane (PlaneGeometry rotated X)",
-              "match": true
-            },
-            {
-              "element": "data points",
-              "source_shape": "small circles/spheres",
-              "rendered_shape": "small spheres",
-              "match": true
-            },
-            {
-              "element": "trajectories",
-              "source_shape": "curved dashed lines",
-              "rendered_shape": "curved dashed lines",
-              "match": true
-            },
-            {
-              "element": "flow arrows",
-              "source_shape": "thin vertical arrows",
-              "rendered_shape": "cylinder shaft and cone head arrows",
-              "match": true
-            },
-            {
-              "element": "flow labels",
-              "source_shape": "rounded rectangles",
-              "rendered_shape": "rounded HTML divs with black borders",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The arrowheads on the flow arrows on the left are slightly bulkier/wider than the sleek lines in the source.",
-            "The grid lines on the planes in the rendered version are slightly more prominent than the faint gray lines of the source."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "notes": "Excellent reproduction of the source figure's layout, style, and concept, paired with interactive tracing, filtering, and spacing controls.",
-          "action_items": [
-            "Slightly reduce the scale and width of the cone geometry on the arrowheads to make the flow arrows look sleeker and more like the 2D source arrows.",
-            "Decrease the opacity or line thickness of the grid lines on each plane to make them more subtle, matching the source.",
-            "Tweak the cluster dispersion slightly so that the bottom layer points are even more highly overlapping, and the top layer clusters are extremely compact."
-          ],
-          "visual_aesthetics": 5,
-          "overall_average": 5
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:13:50.794Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene captures the stacked t-SNE/embedding layers, colored points, connecting trajectories, arrows, and repeated “ViT block x3” labels. However, it adds visible square grid lines on every plane and a bottom-left control UI that are not in the source. The initial rendering is landscape and viewed from a shallower/wider angle than the tall source figure, with planes spread broadly across the frame; the left arrows and labels are much smaller and less dominant than in the reference.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong: the initial viewpoint/layout does not match the tall portrait source composition and shows the planes at a broader, more flattened perspective. Scale-Wrong: the arrows and labels are noticeably undersized relative to the planes and data compared with the reference. Hallucination: the plane grids and visible class/spacing UI controls are extra elements not present in the original figure.",
+          "geometry_accuracy_analysis": "The scene constructs a real 3D stack of five horizontal square planes with grid/border lines, colored spherical datapoints on each layer, dashed curved trajectories between corresponding points, and side arrows with cone heads plus “ViT block x3” labels between layers. The geometry is not a flat pasted texture or baked-in skew: the planes are clean symmetric 3D objects separated in Y and viewed by the camera. Minor shortcomings are that the scatter distributions are synthetic/random rather than likely matching the exact source layout, the layer labels/class annotations beyond the side block labels are absent, and the side arrows/labels may be somewhat generic in placement compared with the reference.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "geometry_accuracy_reasoning": "All major 3D elements of the stacked embedding/ViT-block diagram are present with plausible proportions and connections, but exact point layout and some annotations/placement details are not faithfully reproduced, fitting a score of 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this is not counted. Meaningful interactions include a Class dropdown that filters/fades classes, a Spacing slider that visibly changes vertical layer separation, hover over datapoints that highlights/enlarges a sample trajectory and shows a tooltip, click on datapoints that locks the highlighted trajectory and opens an explanatory popup, double-click to unlock/reset the selected sample, and click handlers on layer planes that trigger guided explanatory demo steps via goToStep with narration popups and animated spacing changes. A hidden Reset View button has a listener but is not usable because it is display:none. The interactions are compact, pedagogically relevant, and the small transparent UI at bottom-left sits mostly in empty space without covering the 3D geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional meaningful interactions plus a guided demo, and the UI is compact and non-intrusive, matching the rubric for a score of 5.",
+          "faithfulness_analysis": "The rendered scene preserves the general idea of stacked diamond-like planes with colored point connections and left-side ViT block labels/arrows, but the default frame is a wide landscape view instead of the tall portrait source. The planes are much larger and flatter with grid lines, the spacing/proportions and point density differ, the left arrows and labels are tiny and misplaced relative to the source, and visible UI controls occupy the lower-left corner, making it unsuitable as an inline replacement.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable conceptually, the aspect ratio, crop, zoom, margins, label/arrow scale, added gridlines, and UI chrome differ substantially, so it matches less than about 65% of the original.",
+          "label_quality_analysis": "The source figure contains four identical labels, each reading \"ViT block x3\", placed in rounded boxes along the left side next to vertical upward arrows. The generated figure also shows four \"ViT block x3\" labels in rounded boxes in roughly corresponding left-side positions, and the text is legible and unobstructed. However, the labels are noticeably smaller relative to the overall figure than in the source, the arrow/label grouping is compressed and less faithful, and extra UI text labels such as \"Class\", \"All\", \"Spacing\", and \"1.8\" appear at the bottom left.",
+          "label_quality": 3,
+          "label_quality_reasoning": "All required labels are present and readable, but their font size is consistently too small relative to the source and there is some extra text clutter, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates stacked 2D t-SNE projections of high-dimensional ViT representations across layers, with colored samples moving from mixed bottom embeddings toward separated semantic clusters at the top. The tooltips/popups are mostly figure-specific and correctly refer to embeddings, layers, ViT blocks, trajectories, and clustering, but the classes are only named by color, the positions/trajectories are synthetic, and the explanation somewhat overstates t-SNE cluster separation as evidence of linear classifier separability.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main concept is accurate and the interactions are specific, with only minor omissions/overstatements such as color-only class labels and simplified claims about t-SNE separability.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:37:37.715Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:27:37.728Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

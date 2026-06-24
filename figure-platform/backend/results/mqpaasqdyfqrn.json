@@ -676,87 +676,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure displays four independent 3D plots side-by-side from an elevated perspective looking down. The u-axis points to the right, the v-axis points into the depth (up and to the right), and the vertical axis points straight up, with the origin of the coordinate system at the center of each plot.",
-          "viewing_angle_rendered": "The rendered screenshot is extremely zoomed in and heavily cropped, showing only panels b) and c) partially. The camera elevation is very low, and the azimuth is rotated such that the u-axis points to the left, which is reversed compared to the source.",
-          "viewing_angle_comparison": "The viewing angles are completely different. The rendered camera is excessively zoomed in, and the rotation is wrong, causing axes to point in incorrect directions (e.g., u-axis pointing left instead of right). This ruins the multi-panel side-by-side comparison of the original figure.",
-          "shape_comparison": [
-            {
-              "element": "filter response surface",
-              "source_shape": "smooth colored surface with or without wireframe",
-              "rendered_shape": "wireframe grid over transparent surface",
-              "match": false
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "thin 2D black lines with arrowheads",
-              "rendered_shape": "thick 3D cylinders with large cone heads",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The camera zoom is extremely high, causing only 1.5 of the 4 panels to be visible, completely breaking the 4-panel layout.",
-            "The 'u' axis points to the left instead of to the right due to incorrect camera azimuth.",
-            "The coordinate axes origin is shifted and not centered at (0,0) on the u-v plane as in the original.",
-            "The labels (like 'c)' and 'u') are enormous, overlapping, and misplaced.",
-            "The surface colors and grid densities are overly harsh and don't match the clean, bright gradient look of the original."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Color-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 1,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 3,
-          "notes": "The mathematical shapes are coded, but the camera is completely misconfigured (extremely zoomed-in and misoriented), which makes the output unrecognizable as a reproduction of the original 4-panel figure.",
-          "action_items": [
-            "Fix the camera projection and framing: zoom out significantly so all 4 panels (a, b, c, d) are visible side-by-side in a single row.",
-            "Adjust the camera azimuth and elevation to match the original oblique perspective where the u-axis points to the right and slightly forward.",
-            "Center the coordinate axes for each panel at the true mathematical origin (0,0,0) of the u-v plane.",
-            "Greatly reduce the font size of the labels (u, v, titles, subfigure letters) to prevent overlapping and clutter.",
-            "Refine the wireframe grid density and surface transparency to match the clean vector-style shading of the source."
-          ],
-          "visual_aesthetics": 2.3,
-          "overall_average": 2.2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:01:45.205Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered view is tightly cropped and angled so only parts of the four subfigures are visible, with panels visually overlapping and labels such as b)/c)/u/v appearing in the middle of neighboring axes. The large source titles |D0(u,v)| and |D1(u,v)| are not visible in the screenshot despite being important annotations. The generated surfaces include translucent filled sheets in addition to the colored wireframe, whereas the source is essentially wireframe-only. Overall the biggest issues are the incorrect framing/viewpoint, missing visible headings, and mismatched panel layout/proportions.",
           "failure_modes": [
+            "Missing-Labels",
             "Camera-Wrong",
-            "Scale-Wrong"
+            "Scale-Wrong",
+            "Hallucination"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
+          "failure_modes_reasoning": "Missing-Labels applies because the prominent |D0(u,v)| and |D1(u,v)| headings from the source are absent from the rendered screenshot. Camera-Wrong applies because the initial view is cropped/zoomed and does not match the source's wide side-by-side presentation. Scale-Wrong applies because the panels and axes are not proportioned or spaced like the reference, causing overlap and partial cropping. Hallucination applies because the generated figure adds translucent filled surface sheets not present in the original wireframe-style plots.",
+          "geometry_accuracy_analysis": "The scene contains four separate, true 3D frequency-response panels arranged horizontally, each with a colored height surface, overlaid wire grid, and black u, v, and vertical magnitude axes with arrowheads. The main topology is recognizable and not fake 3D, but the surfaces are approximate analytic reconstructions, the Roberts/Sobel panels lack explicit title labels, and there are minor likely differences in exact surface shapes, axis placement, and proportions compared with the textbook figure.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present as real 3D geometry with plausible positions, with only minor-to-moderate inaccuracies in exact response shapes and labeling, so this fits a score of 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom, but this does not count as a meaningful interaction. A hidden Reset View button has a click handler, but it is styled display:none so it is not usable. Meaningful interactions are registered on each response surface: hovering shows a tooltip and clicking posts a popup explaining that filter response; axes groups are also registered so hovering/clicking the u/v/magnitude axes gives an explanatory tooltip/popup. These interactions should visibly function via raycasting and are pedagogically useful; the UI panel is essentially empty/transparent and does not cover geometry, though there is no guided demo or parameter control.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are multiple functional click/hover explanation interactions on surfaces and axes with compact non-intrusive UI, but no guided demo, sliders, or toggles, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The source is a very wide panoramic figure with four separate subfigures laid out horizontally, each with large white margins, black axes, labels a)–d), and titles over the first two panels. The render has a much narrower aspect ratio, shows only a cropped/overlapping portion of a few surfaces, lacks the top titles and most panel structure, and uses a different camera angle, zoom, spacing, and label placement.",
           "faithfulness": 2,
+          "faithfulness_reasoning": "Although it contains colored wireframe surfaces and axes, the crop, aspect ratio, panel layout, titles, and composition differ substantially from the source, matching well under 65% as an inline replacement.",
+          "label_quality_analysis": "Source labels include the top titles |P0(u,v)| and |P1(u,v)|, the subfigure labels a), b), c), d), and repeated axis labels u and v for the coordinate axes in each panel. In the generated figure only a few small labels are visible: b), c), several u labels, and v labels; the top titles are absent, a) and d) are absent, and the visible labels are much smaller than the source scale, with b) and c) placed awkwardly on/near axes and partially cluttered by geometry. Overall the label set is incomplete, under-scaled, and poorly positioned compared with the source.",
           "label_quality": 2,
+          "label_quality_reasoning": "Most required labels are missing or significantly too small/misplaced, though a few readable axis/subfigure labels remain, matching a score of 2.",
+          "concept_accuracy_analysis": "The figure illustrates 3D magnitude frequency-response surfaces for four spatial derivative/edge-detection operators: first difference D0, central difference D1, Roberts, and Sobel. The panel labels and popups are figure-specific and mostly explain the intended relationships between u/v spatial frequency and response magnitude, but some responses appear approximate rather than exact, the Roberts explanation overstates diagonal selectivity relative to horizontal/vertical frequencies, and the Roberts/Sobel panel titles are only available through interaction rather than visible labels.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 2.3,
-          "overall_average": 2.8
+          "concept_accuracy_reasoning": "The main concept is accurate and the explanations are specific, but there are minor formula/interpretation approximations and omissions that keep it from being fully precise.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:36:31.373Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:36:59.119Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

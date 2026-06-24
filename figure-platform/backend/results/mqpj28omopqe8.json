@@ -280,91 +280,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D geometric setup of a camera system with an elevated, rotated perspective looking down and from the right-front toward the left-back. The virtual image plane is on the far left, the optical center (pinhole) is at the origin in the middle, and the scene coordinates extend to the far right.",
-          "viewing_angle_rendered": "The rendered screenshot shows a highly zoomed-in, off-center view looking closely at the image plane on the left, completely cutting off the right half of the scene.",
-          "viewing_angle_comparison": "The rendered camera view is poorly framed, resulting in the right half of the textbook figure (including the depth axis Z and the main scene point) being pushed off-screen.",
-          "shape_comparison": [
-            {
-              "element": "image plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "similar triangles",
-              "source_shape": "flat triangles",
-              "rendered_shape": "flat triangles",
-              "match": true
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "thin lines with arrowheads",
-              "rendered_shape": "thick cylinders with cones",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The right side of the figure containing depth Z, scene point P, and the corresponding similar triangles is cut off.",
-            "Axis arrows are excessively thick compared to the thin lines in the source.",
-            "The green and cyan shaded regions representing the similar triangles are barely visible or completely clipped.",
-            "Labels are poorly aligned and overlap with lines."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 2,
-          "faithfulness": 2,
-          "label_quality": 3,
-          "concept_accuracy": 3,
-          "notes": "The code contains the full geometry, but the initial camera view is extremely zoomed in and misaligned, cutting off the entire right half of the figure.",
-          "action_items": [
-            "Reposition the camera and adjust zoom/target to capture the entire diagram on screen.",
-            "Reduce the thickness of the axis shafts and coordinate lines to match the source.",
-            "Reposition the text labels so they do not overlap with lines or arrows.",
-            "Add sliders to dynamically control focal length 'f' and coordinate depth 'Z' to make the figure interactive."
-          ],
-          "visual_aesthetics": 2.7,
-          "overall_average": 2.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:07:02.518Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main pinhole-camera elements in code (image plane, axes, similar-triangle planes, projection ray, points, and labels), and it includes hover/click interactivity. In the rendered screenshot, however, the initial camera/framing is much tighter and differently oriented than the source: the far-right object/green plane is mostly offscreen, the Y label is clipped, and the X label is not visible. The proportions/visibility of the colored triangle regions and the large wide layout differ noticeably from the reference, with the left image plane dominating the view and the right-side construction largely cropped.",
           "failure_modes": [
             "Camera-Wrong",
             "Missing-Labels",
-            "Color-Wrong"
+            "Scale-Wrong"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 2,
-          "faithfulness": 3,
+          "failure_modes_reasoning": "Camera-Wrong: the initial view is zoomed/cropped and not matched to the wide source composition, hiding much of the right-side geometry. Missing-Labels: the important X label is absent from the rendered view and Y is partially clipped. Scale-Wrong: relative proportions and framing are noticeably off, with the image plane and labels dominating while the large colored construction regions from the source are compressed or offscreen.",
+          "geometry_accuracy_analysis": "The scene is built as real 3D geometry rather than a flat pasted or skewed billboard: the image plane is a rectangle at z = -f, axes are 3D cylinders/cones, and triangles/rays occupy distinct XZ and YZ planes. Present elements include the virtual image plane with frame, pinhole/focal-length segment, X/Y/Z axes, green and cyan similar-triangle surfaces, red world-coordinate segments, dashed projection ray, labeled x/y/f/X/Y/Z quantities, and point markers. However, the single projected image point and scene point are placed only on the XZ construction line (IX and PX), while the full 3D point/image point at combined coordinates (X,Y,Z) and (x,y,-f) are not actually marked or connected by the main ray; the Y construction is separate and lacks its corresponding marked point/ray. Overall the pinhole projection geometry is recognizable and mostly complete, but the combined 3D point projection relationship is spatially incomplete/misrepresented.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric components are present as genuine 3D primitives with plausible layout, but the main point/ray geometry only represents the x-section rather than the full combined x-y projection, so this fits a score of 4 rather than 5.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom, but that does not count as a meaningful interaction. It also defines a hidden Reset View button, but because it is styled display:none it is not usable. Meaningful interactions are implemented through raycast hover and click handlers: the image plane, green x/X triangle, cyan y/Y triangle, Z/X/Y axes, focal-length segment, projection ray, and both image/world points are registered as interactive objects. Hover should show a small local tooltip, and clicking should send a popup message with explanatory text; these interactions are pedagogically relevant and the UI chrome is minimal and does not cover the geometry. There are no sliders, toggles, parameter controls, or guided step-through demo.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Multiple functional click/hover explanatory interactions are present and compact, but there is no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame shows only a zoomed-in/cropped portion of the original geometry: the left image plane, central axes, and a small part of the right plane are visible, while the large cyan and green planes, red outlined image planes, lower/right labels X/Y, red point, and much of the intended whitespace/composition are missing or cut off. The perspective is somewhat related but the crop, scale, proportions, and visual emphasis differ substantially, so it would not work as a drop-in replacement.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although some core elements are recognizable, the severe over-zoom/cropping and many absent major colored planes and labels make the match well under 65%.",
+          "label_quality_analysis": "The source figure contains six labels: x, y, f, Z, Y, and X. In the generated figure, x, y, f, and Z are present and readable, though x/y/f are somewhat smaller and shifted relative to the source; y is close to the green axis/arrow and a bit cluttered. Y is only partially visible at the far right edge and is obstructed/cut off, while X is not visible at all. Overall, the label set is incomplete, with two of the large coordinate labels missing or cut off and several remaining labels not matching the source placement precisely.",
           "label_quality": 3,
+          "label_quality_reasoning": "Four labels are readable, but one key label is missing, another is cut off, and some placements/sizes are imperfect, so this fits a mid-level score rather than 4 or 5.",
+          "concept_accuracy_analysis": "The figure illustrates pinhole-camera perspective projection using similar triangles, with labels x, y, f, X, Y, and Z and interactive tooltips explaining ratios such as x/f = X/Z and y = fY/Z. The explanations are figure-specific and mostly correct, but the geometry places the image plane behind the pinhole while calling it a virtual image plane and gives positive projection equations despite using negative image coordinates; it also treats the x and y projections as separate cross-sectional points rather than clearly showing one full projected point (x,y) corresponding to a single 3D point (X,Y,Z).",
           "concept_accuracy": 3,
+          "concept_accuracy_reasoning": "The core perspective-projection concept is present and the interactions are specific, but sign/convention inconsistencies and the split/partial representation of the projected point amount to multiple conceptual details that could confuse students.",
           "visual_aesthetics": 3,
-          "overall_average": 2.8
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:27:24.783Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:18:31.145Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

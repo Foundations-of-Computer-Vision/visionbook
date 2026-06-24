@@ -262,90 +262,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows an orthographic/isometric perspective of a 3D box containing several parallel horizontal planes. The camera is positioned at a slightly elevated angle looking down at the front-facing vertical edge, which divides the left and right visible faces of the prism equally.",
-          "viewing_angle_rendered": "The rendered screenshot shows the same 3D prism with layered planes, viewed from a highly elevated, front-centered perspective using an orthographic camera. The front vertical edge of the box is aligned directly with the center of the viewport, presenting a symmetric perspective of the left and right faces.",
-          "viewing_angle_comparison": "The viewing angles are highly aligned and faithfully capture the isometric-style perspective of the original figure. However, the extreme scale of the 3D labels severely overlays and obscures the upper and lower parts of the 3D structure.",
-          "shape_comparison": [
-            {
-              "element": "prism/box edges",
-              "source_shape": "thin lines",
-              "rendered_shape": "thin cylinders",
-              "match": true
-            },
-            {
-              "element": "layered representation planes",
-              "source_shape": "translucent gray parallelograms",
-              "rendered_shape": "translucent gray parallelograms",
-              "match": true
-            },
-            {
-              "element": "trajectory paths",
-              "source_shape": "dashed curved arrows with cones",
-              "rendered_shape": "dashed curved cylinders with cones",
-              "match": true
-            },
-            {
-              "element": "side flow arrows",
-              "source_shape": "long thin vertical arrows",
-              "rendered_shape": "cylinders with cone tips",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The text labels ('Embedding', 'Data', 'Representation learning', and 'Generative modeling') are extremely oversized, causing massive overlap with the central 3D box and clipping against the top, bottom, and side screen boundaries.",
-            "The side vertical arrows are positioned a bit too close to the main 3D box compared to the spacious layout of the source figure."
-          ],
-          "failure_modes": [
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
-          "label_quality": 2,
-          "concept_accuracy": 5,
-          "notes": "Excellent and accurate 3D geometry reproduction, but completely let down by enormously scaled text labels that overlap and ruin the layout.",
-          "action_items": [
-            "Drastically reduce the font sizes of all four labels ('Embedding', 'Data', 'Representation learning', and 'Generative modeling') to match the textbook's clean, non-overlapping proportions.",
-            "Move the vertical side labels and side arrows further outward along the X-axis to create proper breathing room (whitespace) around the central 3D prism.",
-            "Add a simple step-through UI or a slider to highlight the forward (representation learning) and backward (generative modeling) paths through the layers, enhancing the pedagogical interactivity."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:57:18.942Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main 3D stack, top/bottom outlines, intermediate gray planes, dotted trajectories, side arrows, and the main labels. However, the rendered framing is much more compact than the source: the cube is small relative to the typography, and the side labels are clipped off by the canvas edges, making parts of the annotations unreadable. The source figure has a large central prism occupying most of the page with labels fully visible around it, while the generated output is zoomed/framed differently and has mismatched proportions between labels, arrows, and geometry.",
           "failure_modes": [
+            "Missing-Labels",
             "Scale-Wrong"
           ],
-          "geometry_accuracy": 4,
+          "failure_modes_reasoning": "Important side annotations are present in code but are clipped in the rendered screenshot, so they are not fully readable as in the source (Missing-Labels). The cube, arrows, and text proportions are noticeably off: the 3D prism is too small relative to the huge labels and the overall layout does not match the source figure's scale balance (Scale-Wrong).",
+          "geometry_accuracy_analysis": "The scene is built as a genuine 3D stack: top and bottom square outlines, multiple translucent intermediate square planes, vertical prism/riser edges, dashed 3D trajectory curves with start dots and arrowheads, and opposing side arrows for representation learning and generative modeling are all present. The geometry uses separate 3D primitives at different depths/heights rather than a pasted texture or flat billboard; proportions and positions are plausible, with only minor uncertainty about the exact number/visibility of vertical risers and precise curve placements relative to the source.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are represented as coherent, unwarped 3D geometry with plausible spatial relationships, so it fits the score-5 rubric despite very minor possible alignment differences.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom/pan, but that does not count as meaningful interaction. There is a hidden Reset View button with a click handler, but it is styled display:none, so it is not usable. Pointer-move raycasting over registered scene objects shows a local hover tooltip for the top/bottom layers, prism edges, intermediate planes, mapping paths, and side arrows; this should visibly function. Clicking those same objects sends an alex-popup postMessage with explanatory text, but there is no in-page popup renderer, so the click explanation is only visibly functional if an external parent frame handles that message. Escape hides tooltip/popup messages. The interactions are pedagogically relevant and the UI chrome is essentially non-intrusive, but there is no slider, toggle, animation, parameter control, or guided demo.",
           "interactivity_usability": 3,
-          "faithfulness": 3,
+          "interactivity_usability_reasoning": "There is one clearly visible pedagogical interaction type—hover/click explanation on scene objects, with click popup dependent on external host—and no guided demo, so this fits score 3.",
+          "faithfulness_analysis": "The rendered frame shows the same general cube-with-layers concept and includes the main labels, dotted arrows, and side direction arrows, but the crop and aspect ratio are substantially different from the wide source figure. The side labels are cut off at both edges, the bottom “Data” label overlaps the cube instead of sitting well below it, the cube is much smaller and more upright, and the source’s generous horizontal whitespace and full annotation layout are not preserved.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the core idea is recognizable, the wrong aspect ratio, severe label cropping, altered spacing, and non-matching zoom/margins make it a poor inline replacement below the 65% match threshold.",
+          "label_quality_analysis": "Source labels are: \"Embedding\" at top, \"Data\" at bottom, \"Representation learning\" vertically on the left, and \"Generative modeling\" vertically on the right. In the generated figure, all four labels appear with correct text, but \"Representation learning\" is clipped by the left/bottom edge and partly cut off, \"Generative modeling\" is also oversized and clipped at the top/bottom/right edge, and \"Data\" is placed too close to/overlapping the cube rather than below with clear whitespace. \"Embedding\" is present and clear, though somewhat oversized relative to the smaller cube. Overall the label set is complete, but the side labels are poorly positioned and too large for the canvas, causing cropping and clutter.",
           "label_quality": 2,
+          "label_quality_reasoning": "Although all labels are present, most have significant size or placement problems, with the two vertical labels clipped and the bottom label crowded, matching a score of 2.",
+          "concept_accuracy_analysis": "The figure illustrates a stacked sequence of transformations between a lower “Data” space and an upper “Embedding” space, with upward arrows/paths for representation learning and a downward arrow for generative modeling. The labels and interactive popups are specific to this concept: they correctly identify data, embedding, intermediate representations, example trajectories, and the two directional readings, though the explanation slightly oversimplifies generative modeling as simply reversing the same representation-learning path.",
           "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main concept is accurately conveyed with figure-specific interactions, with only a minor oversimplification about generative modeling as the reverse of the same mapping.",
           "visual_aesthetics": 3,
           "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:17:14.280Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:27:32.898Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

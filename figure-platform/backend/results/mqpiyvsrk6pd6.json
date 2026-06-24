@@ -275,99 +275,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D perspective projection model on the left (a) from an oblique angle where the optical axis Z points horizontally to the right, Y points vertically up, and X points diagonally. On the right (b), it shows a flat, frontal 2D view of the virtual camera plane with image and camera coordinates.",
-          "viewing_angle_rendered": "The rendered screenshot matches the source perfectly in layout, utilizing an orthographic projection to replicate the oblique coordinate system of panel (a) and a flat coplanar layout on the right for panel (b).",
-          "viewing_angle_comparison": "The viewing angles and layout arrangements are exceptionally faithful to the source diagram, presenting the complex 3D oblique system alongside the 2D plane exactly as depicted.",
-          "shape_comparison": [
-            {
-              "element": "Projection plane",
-              "source_shape": "flat grey parallelogram with dashed outline",
-              "rendered_shape": "flat translucent grey parallelogram with dashed outline",
-              "match": true
-            },
-            {
-              "element": "Virtual camera plane",
-              "source_shape": "flat pale cyan/grey parallelogram",
-              "rendered_shape": "flat translucent pale cyan/grey parallelogram",
-              "match": true
-            },
-            {
-              "element": "Pinhole",
-              "source_shape": "black circle",
-              "rendered_shape": "black sphere",
-              "match": true
-            },
-            {
-              "element": "Axes and optical rays",
-              "source_shape": "thin solid and dashed lines with arrows",
-              "rendered_shape": "thin 3D cylinders with cone arrowheads and dashed segments",
-              "match": true
-            },
-            {
-              "element": "Points P, p",
-              "source_shape": "blue dots with black outline",
-              "rendered_shape": "cyan spheres with black torus rims",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "Severe overlapping of text labels: 'World coordinates' overlaps with the 'Y' label, 'Pinhole' overlaps with the focal length 'f', and panel (b) has overlapping texts in 'Camera coordinates' and 'Image coordinates'.",
-            "The label 'Projection plane' is clipped off on the bottom-left edge of the screen.",
-            "Text sizes for labels are way too large relative to the spacing of the geometric elements."
-          ],
-          "failure_modes": [
-            "Scale-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 3,
-          "faithfulness": 4,
-          "label_quality": 2,
-          "concept_accuracy": 5,
-          "notes": "Excellent and mathematically precise 3D reconstruction of the textbook diagram, but ruined by terribly oversized and overlapping labels.",
-          "action_items": [
-            "Significantly reduce the font size of all floating HTML labels to prevent crowding.",
-            "Adjust the 3D anchor offsets of labels like 'World coordinates', 'Pinhole', and 'Camera coordinates' to remove overlaps with coordinate axes and other lines.",
-            "Shift the 'Projection plane' label rightward to prevent it from clipping off the left edge of the viewport.",
-            "Add an interactive slider to change the focal length 'f', showing how the projection planes and points scale dynamically."
-          ],
-          "visual_aesthetics": 3.7,
-          "overall_average": 3.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:04:25.851Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes most of the intended planes, axes, points, focal arrows, rays, and labels, but the rendered view is badly framed: the projection plane and panel (b) are clipped at the canvas edges, and several labels are cut off or overlap heavily. Label sizes and object spacing are noticeably mismatched to the reference, making the figure cramped rather than matching the wide textbook layout. The core pinhole-camera concept and colors are mostly represented, and the code includes meaningful hover/click interactions beyond OrbitControls.",
           "failure_modes": [
+            "Missing-Labels",
+            "Camera-Wrong",
             "Scale-Wrong"
           ],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 3,
-          "faithfulness": 4,
+          "failure_modes_reasoning": "Important labels are partially or fully clipped/overlapped in the rendered view, especially around the projection plane and right panel, so Missing-Labels applies. The initial camera/framing does not match the source because the figure is cropped and not fully visible, so Camera-Wrong applies. Text and element proportions are too large/cramped relative to the available layout, causing major overlap and clipping, so Scale-Wrong applies.",
+          "geometry_accuracy_analysis": "The scene includes many expected visual elements: projection and virtual camera planes, pinhole, world axes, focal-length arrows, rays, projected points, and panel (b) coordinate axes. However, the construction is largely a screen-space reconstruction: the camera is orthographic looking essentially along the Z direction, panel (b) is a flat constant-Z rectangle, and the main planes use a hardcoded oblique/skewed basis to match the textbook drawing rather than clean, symmetric image planes with perspective generated by the camera. Several geometric relationships are also inconsistent, such as the rear projection plane not matching the red focal distance and the rear projected point/ray not being collinear with the same pinhole ray as P and p.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Because the figure bakes the 2D diagram’s skew into hardcoded flattened/oblique coordinates instead of constructing a true unwarped 3D pinhole-camera geometry, it triggers the Fake 3D critical check and must score 1.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, which function but do not count as meaningful interaction. It has a visible Reset View button that restores the camera to the saved home view, but this is a navigation convenience rather than a pedagogical control. The main meaningful interactions are many registered scene-object hover/click explainers: projection plane, virtual plane, pinhole, P, p, rays, focal-length arrows, coordinate axes, and panel (b) elements show an in-page hover tooltip and on click send a 2-3 sentence explanatory popup via postMessage; the raycaster is set up to hit child meshes within registered groups, so these should visibly function when hovered/clicked in the intended host. There are no sliders, toggles, parameter controls, animations, or guided step-through demo. The UI chrome is very compact and does not cover important geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Multiple functional pedagogical hover/click explanations are present with compact UI, but there is no guided demo or parameter control, so it fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame contains the same general pinhole-camera elements, colors, planes, axes, and labels, but the crop and aspect ratio are very different from the wide source figure. It is heavily zoomed/cropped: the left projection plane and right virtual camera panel are cut off, many labels overlap or are truncated, whitespace/margins do not match, and a Reset View UI button appears at the bottom.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the subject is recognizable, the significant wrong aspect ratio, over-zoom/cropping, label overlap, missing edges, and UI chrome make it a poor drop-in replacement matching well under 65% of the original.",
+          "label_quality_analysis": "Source labels include Y, World coordinates, X, Z, P, p on the virtual plane, p on the projection plane, x/y labels on the projection plane, x/y labels on the virtual camera plane, two f labels, (0,0,0), Pinhole, Projection plane, Virtual camera plane, (a), plus in panel (b) Camera coordinates, p, x, y, (0,0), Image coordinates, m, n, another (0,0), Virtual camera plane, and (b). The generated figure includes most of these texts, but many are poorly placed: World coordinates overlaps the Y label; the left projection-plane labels and Projection plane text are clipped by the screen edge; the virtual-plane p/x/y labels are crowded and partly overlapping; the right-panel Camera coordinates and Virtual camera plane labels are cut off; Image coordinates overlaps the blue axes; and several origin labels are crowded against arrows or borders. Overall the label set is fairly complete, but positioning/clipping/clutter problems affect a large fraction of labels, with several labels only partially readable despite generally source-like font size.",
           "label_quality": 2,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 3.7,
-          "overall_average": 3.8
+          "label_quality_reasoning": "Most labels are present, but many are clipped, overlapping, or cluttered, so the label quality falls into the score-2 range rather than a completeness-based higher score.",
+          "concept_accuracy_analysis": "The figure is intended to illustrate the pinhole camera model: a world point P projects through a pinhole onto a virtual camera plane and a physical projection plane, with focal length f and a second panel relating camera coordinates (x,y) to image coordinates (n,m). The labels and hover/click explanations are mostly figure-specific and conceptually appropriate, but the constructed geometry is not fully consistent: the physical image point p is not actually collinear with P and the pinhole, and the physical/virtual planes are not placed symmetrically at the same focal distance despite the text saying they are.",
+          "concept_accuracy": 3,
+          "concept_accuracy_reasoning": "The main pinhole-camera concept is present with specific explanations, but several geometric relationships central to the concept are wrong or internally inconsistent, so it fits the rubric for a score of 3.",
+          "visual_aesthetics": 1.7,
+          "overall_average": 2.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:24:32.647Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:23:02.232Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

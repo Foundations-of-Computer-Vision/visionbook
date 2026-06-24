@@ -750,94 +750,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D coordinate system with a projection diagram viewed from an elevated, right-of-center oblique perspective. The image plane on the left is angled clearly towards the right, the Z-axis extends horizontally to the right, the Y-axis goes straight up, and the X-axis extends up-right into the background.",
-          "viewing_angle_rendered": "The rendered screenshot shows the system from a highly skewed, nearly eye-level perspective where the image plane on the left appears extremely thin and steeply sloped. The Z-axis is horizontal to the right, the Y-axis goes vertical, and the X-axis extends down-right into the foreground.",
-          "viewing_angle_comparison": "The rendered camera view is much more foreshortened and level than the source, causing the image plane to look like a narrow sliver. Additionally, the X-axis basis vector is completely inverted in depth (pointing down-right into the foreground instead of up-right into the background), which flips the green XZ triangles.",
-          "shape_comparison": [
-            {
-              "element": "image plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "lines with arrowheads",
-              "rendered_shape": "cylinders with cones",
-              "match": true
-            },
-            {
-              "element": "similar triangles",
-              "source_shape": "flat shaded triangles",
-              "rendered_shape": "flat shaded triangles",
-              "match": true
-            },
-            {
-              "element": "points (P and p)",
-              "source_shape": "circles/spheres",
-              "rendered_shape": "spheres",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The X-axis points down-right instead of up-right, causing the green similar triangles to extend downwards rather than upwards/backwards.",
-            "The image plane is viewed at too sharp of an angle, making it look like a thin sloped sliver instead of a broad flat sheet.",
-            "Labels 'X' and 'Y' are floating far away from their actual red coordinate segments.",
-            "The image plane coordinate axis 'y' (green arrow pointing down) is missing/incorrectly represented as a red vertical coordinate line.",
-            "The label 'y' overlaps directly with the brown image point."
-          ],
-          "failure_modes": [
-            "Depth-Wrong",
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "notes": "The interactive math of the projection is correct, but the basis vector of the X-axis is inverted and the camera angle makes the image plane hard to see.",
-          "action_items": [
-            "Invert the depth component of the eX basis vector to make the X-axis point up-right/backwards, matching the source diagram's oblique frame.",
-            "Adjust the camera target and angle (azimuth and elevation) so the image plane on the left does not look like a heavily squashed sliver.",
-            "Re-position labels 'X', 'Y', 'x', and 'y' to sit closely and cleanly next to their respective coordinate highlights.",
-            "Draw the green coordinate axes (with arrows) on the sensor plane as shown in the original diagram."
-          ],
-          "visual_aesthetics": 3,
-          "overall_average": 3.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:14:53.280Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene captures the main pinhole projection construction with gray image plane, green/cyan similar triangles, red coordinate segments, dashed projection ray, and labels X, Y, Z, x, y, f. The most noticeable mismatch is proportional/framing: the source has a much larger left image plane and much more expansive world-side construction, while the rendered version is compressed and the relative sizes of the planes, labels, and point markers differ substantially. The initial view is broadly similar but not as close to the source's dramatic oblique framing and scale distribution.",
+          "failure_modes": [
+            "Scale-Wrong",
+            "Camera-Wrong"
+          ],
+          "failure_modes_reasoning": "Scale-Wrong applies because the proportions of the left image plane, world planes, coordinate spans, labels, and point markers differ noticeably from the reference. Camera-Wrong applies because the initial orthographic view is only an approximate side/oblique view and does not match the source figure's framing and apparent orientation/extent.",
+          "geometry_accuracy_analysis": "The scene contains the major expected geometric elements: three labeled coordinate axes with arrowheads, an image/sensor plane behind the pinhole, focal-distance marker, pinhole/aperture, world point and image point on a shared dashed projection ray, red coordinate construction segments, green/cyan similar-triangle regions on both world and sensor sides, guide lines, and labels. It is not a pasted flat texture and the elements are separate 3D meshes, but the coordinate frame is built with a skewed custom basis rather than an orthonormal camera coordinate frame, making the X axis and image plane geometrically sheared rather than a clean perpendicular sensor plane viewed by the camera. Overall the diagram is very recognizable and most spatial relationships are present, but the underlying 3D geometry is somewhat warped to match the 2D drawing.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present and connected plausibly, with the main penalty being the skewed non-orthogonal basis/image plane rather than a clean unwarped 3D camera geometry.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as a meaningful interaction. Two visible sliders, Z and f, have input listeners and visibly update the geometry/readouts: Z changes the world point depth and triangles/ray, while f changes the image plane distance and projected point. Several scene objects are registered for hover/click explanations; hover tooltips should appear in-page via raycasting, but click explanations are sent with window.parent.postMessage rather than rendered locally, so they may not visibly appear unless the embedding environment handles them. The red world point also has a hidden drag target with pointerdown/move/up handlers that changes X and Y and updates the projection, though the draggable affordance is not obvious. The UI is compact and placed in the lower-left corner without significantly covering the geometry, but there is no guided demo or step-through sequence.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "interactivity_usability_reasoning": "There are multiple functional, pedagogically useful interactions with compact UI, but no guided demo and the click popup visibility depends on the parent frame, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered scene contains the same basic camera-geometry elements, colored projection frusta, planes, axes, and labels, so the subject is recognizable. However the first frame is dramatically zoomed out compared with the source: the source has large cropped planes filling the wide canvas, while the render shows the entire diagram small with substantial whitespace, different apparent camera angle/proportions, much smaller typography, and visible slider UI controls at the lower left.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general layout is identifiable, the crop/zoom, scale, margins, label sizing, and added UI chrome differ substantially from the source, making it a poor inline replacement below the 65% match threshold.",
+          "label_quality_analysis": "The source figure has six labels: x, y, f, z, Y, and X. In the generated figure, x and y appear near the left image-plane construction but are extremely small and somewhat crowded by geometry; f appears near the left plane but is also much smaller than the source; z is represented as an uppercase Z rather than lowercase z and is much smaller than the large central source label; Y and X appear on the right side near the appropriate axes/plane but are significantly smaller and shifted compared with the source. Overall the label set is mostly present, but the font scale is consistently far below the source figure and several labels are crowded or mismatched in case/placement.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels are present, but the consistently undersized font and the incorrect uppercase Z make the label quality fall into the score-2 range.",
+          "concept_accuracy_analysis": "The figure illustrates pinhole-camera perspective projection using similar triangles: a world point (X,Y,Z), a physical image plane at distance f behind the pinhole, inverted image coordinates, and equations x/f = X/Z and y/f = Y/Z. The tooltips and popups are specific and mostly correct, explicitly explaining collinearity, sign reversal, focal length, depth, and the two similar-triangle relationships; only minor ambiguity remains because the displayed image point is at (-x,-y,-f) while some explanations use x and y as positive magnitudes.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "Main concept and interactions are accurate and figure-specific, with only a minor notation/sign-convention ambiguity in the projection-coordinate explanations.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:42:01.104Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:26:59.184Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

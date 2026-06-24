@@ -319,96 +319,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows the epipolar geometry setup from a slightly elevated viewpoint looking down-left, with Camera 1 on the left and Camera 2 on the right; image planes face the viewer at oblique angles and the 3D point P is visible above the baseline between the two cameras.",
-          "viewing_angle_rendered": "The rendered screenshot shows the scene from an extremely sharp angle where the camera baseline is oriented nearly parallel to the depth/viewing axis. This collapses the horizontal separation, stacking Camera 1, Camera 2, the image planes, and almost all labels on top of each other in a narrow diagonal strip.",
-          "viewing_angle_comparison": "The viewing angles are completely different. The source figure uses a wide horizontal layout where elements are clearly separated left-to-right, while the rendered view aligns the baseline into the screen, causing massive visual compression, severe label overlaps, and making the layout unrecognizable.",
-          "shape_comparison": [
-            {
-              "element": "camera centers (O1, O2)",
-              "source_shape": "flat circle",
-              "rendered_shape": "3D sphere",
-              "match": true
-            },
-            {
-              "element": "image planes",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "translucent 3D rectangle",
-              "match": true
-            },
-            {
-              "element": "point P",
-              "source_shape": "flat circle with outline",
-              "rendered_shape": "3D sphere with core",
-              "match": true
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "thin lines with 2D arrowheads",
-              "rendered_shape": "chunky 3D ArrowHelpers",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The camera viewpoint is rotated such that the camera baseline goes into depth rather than spanning horizontally, compressing the entire layout.",
-            "Labels are catastrophically overlapping ('Epipolar plane', 'Camera 1', 'Epipolar line', 'p2' are all rendering directly on top of each other).",
-            "The coordinate axes use heavy 3D ArrowHelpers which look bulky and intrusive compared to the elegant thin 2D arrows in the original.",
-            "The spacing between the two cameras is visually too narrow because of the extreme perspective angle."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Color-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 2,
-          "label_quality": 1,
-          "concept_accuracy": 4,
-          "notes": "While the geometric relationships are mathematically correct in the code, the choice of camera angle collapses the scene into an unreadable vertical pile of overlapping text and spheres.",
-          "action_items": [
-            "Drastically adjust the azimuth and elevation in setCameraView so that the camera baseline spans horizontally across the screen.",
-            "Increase the distance between O1 and O2 (baseline length) to give the elements more breathing room.",
-            "Fix label positions and offsets to eliminate all overlaps under the default camera view.",
-            "Replace the bulky ArrowHelpers with custom thin cylinder/cone coordinate axes to match the elegant lines of the source figure."
-          ],
-          "visual_aesthetics": 2,
-          "overall_average": 2.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:17:04.713Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the major epipolar-geometry elements and labels, plus functional sliders for moving P. However the rendered view is a narrow, oblique 3D view where the two image planes overlap visually and the broad left-to-right layout of the source is lost; labels are heavily clustered. The yellow epipolar plane appears as a thin/edge-on triangular surface rather than the large central filled plane spanning the stereo setup, and overall proportions are compressed compared with the source.",
           "failure_modes": [
             "Camera-Wrong",
             "Scale-Wrong"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
+          "failure_modes_reasoning": "Camera-Wrong: the initial viewpoint is very different from the source’s wide front-facing textbook-style perspective, causing the cameras, planes, and labels to stack together. Scale-Wrong: the stereo baseline, image planes, epipolar plane, and labels have noticeably different proportions and spacing from the reference, with the scene appearing tall and compressed rather than broad and balanced.",
+          "geometry_accuracy_analysis": "The scene constructs real 3D geometry rather than a flat pasted/skewed drawing: two separated camera centers O1/O2, a dashed baseline, two angled vertical image-plane rectangles with borders, projection rays to a 3D point P, projected points p1/p2, epipoles e1/e2, a translucent triangular epipolar plane, and red epipolar-line segments on each image plane are all present and spatially connected. The geometry is largely faithful to a standard epipolar-geometry textbook diagram, though the cameras are represented only as point centers with labels rather than camera bodies/frustums, and the intended colored point interiors are hidden inside opaque black spheres, making P/p1/p2 effectively black points rather than outlined colored points.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major epipolar-geometry elements are present as true 3D objects with plausible relationships, but minor representational omissions and point-shape issues keep it below a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but that does not count as meaningful interaction. There are two visible sliders, P X and P Z, with input handlers that update the 3D point P, the yellow epipolar plane, projection points, rays, labels, and epipolar lines, so both should have clear visible effects. The code also registers many scene objects as interactive with raycast hover tooltips and click handlers: the epipolar plane, P, p1, p2, e1, e2, and both image planes; hovering should show a small tooltip, and clicking sends an explanatory popup message, with some clicks also launching step-like animated changes via goToStep. A guided demo sequence exists in code and is triggered indirectly by clicking certain objects, but there are no explicit step buttons or visible demo controls. The slider UI is compact and transparent in the bottom-left corner and does not cover important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ meaningful functional interactions—two pedagogical sliders plus hover/click object explanations and indirect guided animations—with compact UI that does not obscure the scene, satisfying the score-5 rubric.",
+          "faithfulness_analysis": "The rendered first frame has a completely different oblique 3D camera angle from the source's wide side-elevation textbook diagram. The source is dominated by a large bright yellow epipolar plane spanning horizontally between two separated cameras, with large red boundary lines and carefully placed labels; the render shows a narrow vertical clustered scene, no visible yellow filled plane, overlapping labels, thin lines, different proportions, and bottom-left UI sliders that add unwanted chrome.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although some epipolar-geometry components are present, the camera angle, aspect, spacing, dominant yellow plane, label layout, and UI-free crop differ substantially, so it matches well under 65% of the original.",
+          "label_quality_analysis": "Source labels are: P, Epipolar plane, two Epipolar line labels, Camera 1, Camera 2, O1, O2, p1, p2, e1, and e2. In the generated figure, P appears and is readable near the top point; Epipolar plane appears but is misplaced and overlaps other labels rather than centered in the plane; only one Epipolar line label is visible and it is not aligned/positioned like the source, while the second is missing; Camera 1 is present but tiny and cluttered; Camera 2 is present and readable but not well placed relative to the source; O2 is present, O1 is missing; p2 is present but oversized/cluttered, p1 is missing or obscured; e1 and e2 are present but crowded together near other labels. Overall, many labels are missing, overlapping, or at inconsistent font sizes, with the central label cluster making several labels hard to distinguish.",
           "label_quality": 2,
+          "label_quality_reasoning": "Most of the label set is either missing, cluttered, misplaced, or inconsistent in size, though a few labels remain readable, matching the rubric for score 2.",
+          "concept_accuracy_analysis": "The figure illustrates epipolar geometry for two cameras: camera centers O1/O2, baseline, 3D point P, image planes, projections p1/p2, epipoles, epipolar plane, and epipolar lines. The labels and popups are figure-specific and mostly correct, explaining that the epipolar plane contains O1, O2, and P and that epipolar lines are its intersections with the image planes; however, the “depth” interaction/narration implies motion along a fixed viewing ray and fixed epipolar line, while the implemented P Z slider changes P in a way that also changes p1 and the epipolar plane, so the stereo-search demonstration is slightly misleading.",
           "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main epipolar-geometry concept is accurately represented with specific explanations, but one important interactive explanation about varying depth along a viewing ray is not faithfully implemented.",
           "visual_aesthetics": 2.7,
-          "overall_average": 3
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:35:02.182Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:51:35.466Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

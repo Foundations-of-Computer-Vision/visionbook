@@ -324,98 +324,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a camera coordinate system with the origin (0,0,0) on the left. The Y-axis points straight up, the Z-axis points horizontally to the right, and the X-axis points diagonally up-right towards the viewer. The viewpoint is from slightly above and left, looking down-right.",
-          "viewing_angle_rendered": "The rendered screenshot shows the coordinate origin (0,0,0) on the right side of the frame. The Y-axis points straight up on the right, the Z-axis points diagonally down-left, and the X-axis points diagonally up-left, creating a mirrored/reversed perspective compared to the source.",
-          "viewing_angle_comparison": "The viewing angles are completely mirrored/reversed. The source has the Z-axis pointing right, while the rendered output has the Z-axis pointing left, which completely alters the layout and readability.",
-          "shape_comparison": [
-            {
-              "element": "Coordinate Axes (X, Y, Z)",
-              "source_shape": "thin lines with 2D arrowheads",
-              "rendered_shape": "3D ArrowHelpers with bulky cone heads",
-              "match": false
-            },
-            {
-              "element": "Image Plane local axes (x, y)",
-              "source_shape": "thin green lines with 2D arrowheads",
-              "rendered_shape": "green 3D ArrowHelpers",
-              "match": false
-            },
-            {
-              "element": "Rotational indicators (Yaw, Pitch, Roll)",
-              "source_shape": "2D curved red arrows",
-              "rendered_shape": "3D curved tubes with cones",
-              "match": false
-            },
-            {
-              "element": "Point markers (P, p)",
-              "source_shape": "cyan circles with black outline",
-              "rendered_shape": "layered black/cyan spheres",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The Z-axis points to the left instead of to the right, making the layout mirrored compared to the original textbook diagram.",
-            "The origin (0,0,0) is on the right side of the viewport instead of the left side.",
-            "The red rotational indicators (Yaw, Pitch, Roll) are warped, floating in wrong positions, and do not wrap cleanly around their respective axes.",
-            "Label placement is highly disordered, with labels like Pitch and Yaw floating away from their visual indicators and overlapping other lines.",
-            "The green coordinate axes on the image plane are overlapping and misoriented compared to the source's neat orthogonal local axes."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Depth-Wrong",
-            "Color-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 2,
-          "interactivity_usability": 3,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 3,
-          "notes": "The 3D scene is mirrored with the Z-axis pointing left instead of right, and the rotational indicators are severely warped and misaligned.",
-          "action_items": [
-            "Reverse the coordinate system mapping so that the camera origin is on the left and the Z-axis points horizontally to the right.",
-            "Fix the camera view angle (azimuth/elevation) to match the exact perspective of the original textbook image.",
-            "Rebuild the curved rotational arrows using clean, unwarped circular arcs that wrap precisely around the Y, X, and Z axes.",
-            "Improve label positioning to prevent overlaps and ensure they track cleanly with the geometry.",
-            "Replace the bulky ArrowHelper primitives with custom thin line-based arrows to match the elegant 2D look of the source."
-          ],
-          "visual_aesthetics": 2,
-          "overall_average": 2.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:17:06.470Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered view is mirrored/rotated relative to the source: the origin appears on the right, P is on the left, and the Z/X/Y axes do not match the original orientation where the origin is left and Z extends right. The projection plane dominates the scene and the relative spacing of P, p, plane, and axes looks noticeably different. The Y-axis label is cut off/missing at the top, and the point markers render mostly black rather than cyan-filled with black outlines. Interactive yaw/pitch sliders and click interactions are present and functional, but the initial camera/framing is the most prominent mismatch.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Color-Wrong"
           ],
+          "failure_modes_reasoning": "Missing-Labels applies because the important Y label is cropped/offscreen in the rendered screenshot. Camera-Wrong applies because the initial viewpoint is substantially rotated/mirrored compared with the source layout. Scale-Wrong applies because the plane and spatial separations are disproportionate relative to the original figure. Color-Wrong applies because the P and p markers appear black rather than cyan-filled with black outlines as in the source.",
+          "geometry_accuracy_analysis": "The scene constructs real 3D geometry: a camera-coordinate origin sphere, three black coordinate axes, a translucent rectangular projection plane at fixed depth, green image-plane x/y axes, a 3D point P, its projected point p, a dashed projection ray, coordinate drop-lines, and red yaw/pitch/roll curved arrows with cone arrowheads and labels. The projection plane is a true planar rectangle in 3D and the projection relationship between origin, p, and P is geometrically consistent; only minor issues are that the rotation arcs are somewhat illustrative/detached and the plane extents are asymmetric rather than a clean centered image plane.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present and plausibly connected in real 3D, with only minor proportional/placement issues in the illustrative rotation arcs and projection-plane layout.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but these do not count as meaningful interactions. Two visible bottom-left sliders, Yaw (θY) and Pitch (θX), have input listeners and visibly update the 3D point P, projected point p, projection ray, drop lines, and labels. A hidden Reset View button has a click handler but is display:none, so it is not usable. The scene registers multiple objects for hover/click interaction: hovering should show short tooltips, and clicking sends explanatory popup messages via window.parent.postMessage; the hover tooltip is likely visible, but the click explanations depend on an external parent popup handler rather than an in-page popup. A guided demo is defined through demoSteps and window.goToStep, but there are no visible step buttons or controls in the rendered UI, so it is not accessible to the user. Overall, the yaw/pitch sliders are compact and pedagogically useful, and the UI does not cover important geometry.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
+          "interactivity_usability_reasoning": "There are two clearly functional, pedagogically useful sliders with compact UI, while additional object explanations and guided steps are not reliably accessible as visible in-page controls, matching a score of 4.",
+          "faithfulness_analysis": "The rendered frame contains the same general ingredients (axes, translucent image plane, point p/P, dashed projection lines, and yaw/pitch/roll labels), but the viewpoint is substantially different: the source has the origin at lower left with Z extending horizontally right and P on the far right, while the render places the origin to the right, P on the left, and the plane large and nearly front-facing. The crop/zoom is also mismatched, with the plane force-filling the center, labels partly clipped at the top, and UI sliders visible at bottom left that are absent from the source.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the topic is recognizable, the camera angle, left-right layout, zoom/crop, clipped labels, and UI chrome make it match well under 65% of the original composition.",
+          "label_quality_analysis": "Source labels: Y, Yaw, θY, Pitch, θX, X, p, y, x, θZ, Roll, Z, P, and (0,0,0). In the generated figure, Y appears to be missing/cropped; Yaw is present but small and partly crowded at the top; θY is present but small; Pitch is present but crowded/overlapping near the top; θX is present but small; X is present but placed inside/near the plane rather than clearly at the main X-axis arrow; p, x, y, θZ, Roll, Z, P, and (0,0,0) are present and mostly readable, though several are smaller than the source scale and some are placed close to geometry. Overall the label set is mostly complete, but many labels are undersized relative to the source, several are misplaced or cluttered, and the main Y label is absent or cut off.",
           "label_quality": 3,
+          "label_quality_reasoning": "Most labels are present and readable, but the consistent size mismatch plus multiple placement/cropping issues affects about half the label set, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates a pinhole camera coordinate system: a 3D point P projects along a ray from the camera origin to an image plane at fixed depth, with labeled X/Y/Z axes, image-plane x/y axes, and yaw/pitch/roll rotation arcs. The interactive explanations are figure-specific and mostly correct, describing the origin, projection plane, P, p, and rotations; the main limitation is that the yaw/pitch sliders rotate the point in camera coordinates rather than visibly rotating the camera or axes, and roll is explained but not actually controllable or demonstrated.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.6
+          "concept_accuracy_reasoning": "The main perspective-projection and rotation concepts are accurately and specifically conveyed, with only minor implementation/explanation mismatches around camera motion versus point rotation and the non-demonstrated roll degree of freedom.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:46:37.317Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:50:48.389Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

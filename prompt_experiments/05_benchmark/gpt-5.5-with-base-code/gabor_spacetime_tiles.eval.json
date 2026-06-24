@@ -3,26 +3,41 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 3,
-          "faithfulness": 4,
-          "label_quality": 4,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated figure includes both panels with sphere lattices, axes, labels, and a translucent plane, and the code provides hover/click interactions in addition to OrbitControls. The main visual mismatch is proportional: both panels are much smaller and more compressed than the source, especially panel (b), where the plane and spheres do not fill the area or match the large, elongated scale of the reference. The right-panel axes also pass through the center of the plane rather than matching the source placement near the lower/right side, giving the viewpoint/layout a noticeably different appearance.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial projection/layout of panel (b) places the axes and plane at a different orientation/position than the reference. Scale-Wrong applies because the generated objects, especially the right plane and the sphere arrays, are noticeably undersized and compressed relative to the source figure.",
+          "geometry_accuracy_analysis": "Present elements include two side-by-side panels, three labeled frequency axes with arrowheads in each panel, a dense lattice of small spherical filter markers in panel (a), and a translucent planar slice with selected spherical markers in panel (b). No source image texture is pasted, and the scene uses real meshes with nonzero depth, so it is not a purely flat billboard; however, the coordinate axes are not constructed as a clean orthogonal 3D basis, with the oblique y/frequency axis hardcoded into geometry and the final camera set nearly front-on, making some of the apparent 3D layout look baked into object coordinates rather than generated naturally by camera perspective. The main concept is recognizable, but the spatial geometry is only approximate: the Gabor filters are simple spheres rather than oriented tiles/ellipsoidal filters, the axes and data are slightly offset, and the right-hand plane is an approximate parallelogram slice rather than a rigorously integrated frequency plane through a clear 3D coordinate frame.",
+          "geometry_accuracy": 3,
+          "geometry_accuracy_reasoning": "All major figure components are present and recognizable, but noticeable spatial/shape inaccuracies and partially hardcoded oblique geometry keep it at a score of 3 rather than 4 or 5.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. A Reset View button has a click handler, but the button is styled display:none, so it is not usable. Pointermove raycasting over registered spheres and the plane changes the cursor and shows a small tooltip; this should visibly function when hovering. Clicking any Gabor sphere sends an explanatory popup message to the parent and visibly highlights/enlarges the sphere. Clicking the motion-energy plane similarly sends an explanatory popup and visibly changes the plane color/opacity. Escape clears the popup/tooltip/selection, but it is a secondary keyboard cleanup action. The interactions are compact and do not cover the geometry; they are useful for identifying filters and the selected motion plane, though there is no guided demo or parameter control.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are two main functional pedagogical interactions—click/hover explanations for filters and for the plane—with minimal UI chrome, but no guided demo or third distinct meaningful control, so this fits score 4.",
+          "faithfulness_analysis": "The rendered figure preserves the broad two-panel layout with a sphere lattice in (a), a tilted plane with spheres in (b), and labeled axes. However it is substantially under-zoomed compared with the source, leaving much more whitespace; the labels and panel markers are tiny, the sphere arrays are simplified with fewer/less dense spheres, and the right panel’s plane and lattice are much smaller and less cropped than in the original.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The general idea is recognizable, but significant scale, crop, whitespace, and density/proportion mismatches keep it around a 65–70% match rather than a close drop-in replacement.",
+          "label_quality_analysis": "Source labels are: left panel '(a)', w_t on the vertical axis, w_x on the horizontal axis, and w_y on the diagonal axis; right panel '(b)', w_t on the vertical axis, w_x on the horizontal axis, and w_y on the diagonal axis. The generated figure includes all of these labels with correct text/subscripts and generally near the corresponding axes, but every label is much smaller than in the source; the panel labels '(a)' and '(b)' are especially undersized, and the left-panel w_y is placed over/within the sphere cluster rather than clearly outside near the arrow direction. Overall the label set is complete and mostly unobstructed, but the font scale is consistently far too small relative to the source and one label placement is poor.",
+          "label_quality": 3,
+          "label_quality_reasoning": "All labels are present and readable, but the consistently undersized font relative to the source and the misplaced left w_y label warrant a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates a bank of space-time Gabor filters as samples in a 3D frequency lattice with axes w_x, w_y, and w_t, and a second panel showing that a particular motion corresponds to a plane in spatiotemporal frequency space where filters respond strongly. The tooltips and popups are mostly figure-specific and correctly mention the frequency lattice, motion-energy plane, and strong responses near the plane, but they omit the more precise velocity-plane relationship/equation and use simplified spherical markers rather than conveying detailed Gabor bandwidth/orientation structure.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 3.8
+          "concept_accuracy_reasoning": "The main concept is accurate and the explanations are specific to the figure, with only minor omissions/simplifications such as not stating the velocity-plane equation or showing detailed Gabor filter geometry.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:42:57.214Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:32:17.008Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

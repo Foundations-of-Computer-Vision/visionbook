@@ -3,26 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main cube/stack, dotted arrows, and all four major labels, but the composition is much more compact than the reference: the cube occupies a small central area, the title overlaps the top face, and the side labels/arrows are placed close to or inside the cube rather than outside as in the source. The initial view/crop differs noticeably from the source's large, wide isometric textbook diagram, and visible UI buttons labeled Rep and Gen appear in the rendered figure although they are not part of the original image.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial viewpoint/crop and label placement do not match the source composition. Scale-Wrong applies because the cube, arrows, and labels are proportioned and spaced very differently, with the figure much smaller and more compressed. Hallucination applies because the rendered Rep/Gen UI controls are visible but do not appear in the original figure.",
+          "geometry_accuracy_analysis": "The scene contains a real 3D layered rectangular volume with horizontal slice planes, vertical corner edges, faint internal diagonals, top/bottom labels for Embedding/Data, side vertical arrows for representation learning and generative modeling, and several curved dashed paths with dots and arrowheads inside the stack. The major stacked-cube topology and bidirectional conceptual arrows are present and plausibly positioned, but the internal generative path curves appear to point upward like the representation paths rather than downward, and the internal curves/diagonal guides are somewhat schematic rather than matching a precise textbook layout. This is not fake 3D: the planes occupy distinct Y depths and perspective is produced by the camera rather than a flat skewed billboard.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present in a true 3D construction, with only noticeable but not catastrophic direction/alignment inaccuracies in the internal mapping paths.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. There is a hidden Reset View button with a click handler, but because it is display:none it is not usable. Two visible bottom-left buttons, Rep and Gen, call setMode() and visibly change which mapping arrows/side direction are emphasized versus faded. The canvas has pointermove hover handling over registered mapping paths/layers/root to show a tooltip, and click handling to show a short explanatory popup about representation paths, generative paths, data layer, embedding layer, or layered network; these are pedagogically relevant, though the popup is modest and object picking may be somewhat broad because the root is also registered. The UI chrome is compact in the lower-left corner and does not cover important geometry.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
+          "interactivity_usability_reasoning": "There are two functional, pedagogically useful meaningful interactions—mode toggle buttons and hover/click explanatory annotations—with compact non-intrusive UI, so this fits score 4.",
+          "faithfulness_analysis": "The rendered figure contains the same broad concept—a wireframe cube with internal grid planes, dotted arrows, dots, and labels for Embedding/Data/representation learning/generative modeling—but the composition is substantially different. The source is a wide, tightly composed textbook diagram with very large serif labels, thick black outer cube edges, side margin arrows/brackets, and the cube filling most of the frame; the render is a smaller centered 3D scene with thin lines, compressed/overlapping labels, missing or misplaced side arrows, excessive whitespace, different zoom/crop, and visible UI buttons at the bottom left.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in subject matter, the camera framing, scale, typography, margins, line weights, and label placement differ enough that it is not a near drop-in replacement and matches well under 65%.",
+          "label_quality_analysis": "Source labels are: “Embedding” centered above the cube, “Data” centered below the cube, “Representation learning” vertically along the left side, and “Generative modeling” vertically along the right side. The generated figure includes all four labels with correct text and all are readable. However, the labels are generally smaller than the source’s large textbook-style labels, and several are placed too close to or overlapping the cube geometry: “Embedding” sits on the top face/edge area, “Data” overlaps the lower cube edge, and the vertical labels are tucked close to the cube rather than outside with clear margins.",
           "label_quality": 3,
+          "label_quality_reasoning": "All labels are present and legible, but the font scale is consistently smaller than the source and multiple labels have noticeably less accurate, cluttered placement, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates representation learning versus generative modeling with a layered stack from Data at the bottom to Embedding at the top, including side arrows for upward representation learning and downward generative modeling. Labels and popups are mostly figure-specific and correctly describe data layers, embedding layers, and the two modeling directions, but the curved generative path arrows are constructed from bottom to top with arrowheads near the embedding, contradicting the tooltip that says embedding moves downward toward data.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3.7,
-          "overall_average": 3.8
+          "concept_accuracy_reasoning": "The main concept and explanations are accurate and specific overall, but the generative path geometry has a direction error that could confuse the intended inverse mapping relationship.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:40:10.590Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:40:46.866Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

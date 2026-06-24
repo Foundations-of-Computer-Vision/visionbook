@@ -300,98 +300,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a spacious oblique 3D layout from a slightly elevated vantage point. The target camera center is on the left and the reference camera center is on the right, both at the bottom. Their corresponding image planes rise above them, and the 3D point P is positioned high above, creating a clear triangular layout of rays.",
-          "viewing_angle_rendered": "The rendered screenshot shows a highly squished, flat, and overlapping viewpoint. The camera is positioned such that the target frame, reference frame, and the point P are almost stacked vertically on top of each other, causing severe visual clutter and lack of spatial depth.",
-          "viewing_angle_comparison": "The rendered viewing angle is completely wrong for this layout: it compresses the baseline between the cameras and projects the entire 3D setup into a tight, illegible vertical cluster instead of the spacious, side-by-side arrangement shown in the source.",
-          "shape_comparison": [
-            {
-              "element": "Camera centers",
-              "source_shape": "solid black dot",
-              "rendered_shape": "black sphere",
-              "match": true
-            },
-            {
-              "element": "Image planes",
-              "source_shape": "flat rectangular outlines",
-              "rendered_shape": "flat rectangular outlines",
-              "match": true
-            },
-            {
-              "element": "Points p, p', P",
-              "source_shape": "red circle with black border",
-              "rendered_shape": "red sphere with black rim",
-              "match": true
-            },
-            {
-              "element": "Arrows",
-              "source_shape": "curved gray arrows",
-              "rendered_shape": "gray tube-based curved arrows",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The layout is extremely cramped and squished compared to the spacious textbook figure.",
-            "The camera baseline (distance between Ctarget and Creference) is far too narrow, causing the two frames to overlap.",
-            "Labels are severely overlapping and completely illegible (e.g. 'P', 'p', 'l2', and equations are on top of each other).",
-            "The circular self-mapping arrow at the top of point P is missing or distorted into a straight/short curve.",
-            "The overall aspect ratio and zoom level make the entire diagram appear very small in the center of the frame."
-          ],
-          "failure_modes": [
-            "Scale-Wrong",
-            "Camera-Wrong",
-            "Depth-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 2,
-          "label_quality": 1,
-          "concept_accuracy": 4,
-          "notes": "While the underlying geometry calculations and interactions are implemented correctly, the visual composition is completely ruined by a cramped camera view, narrow baseline, and severely overlapping labels.",
-          "action_items": [
-            "Significantly increase the distance between the target and reference cameras to separate the two halves of the diagram.",
-            "Reposition the camera view (setCameraView) to a less extreme angle to capture the spacious side-by-side textbook layout.",
-            "Reposition and offset the labels to ensure they do not collide or overlap with each other or the geometry.",
-            "Adjust the zoom level so that the figure fills more of the canvas area."
-          ],
-          "visual_aesthetics": 2,
-          "overall_average": 2.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:15:49.507Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main frames, camera centers, red points, dashed rays, gray arrows, and most labels, with sliders and a reset button visible. However, the rendered figure is extremely small and compressed in the center of the canvas compared with the source, the layout does not fill the image or match the large left-right textbook composition, and extra UI controls plus a faint epipolar line are visible that are not in the original figure.",
           "failure_modes": [
             "Camera-Wrong",
             "Scale-Wrong",
-            "Depth-Wrong"
+            "Hallucination"
           ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial view/framing is far zoomed out and does not match the source figure’s dominant 2D oblique layout. Scale-Wrong applies because the entire diagram and labels are much too small relative to the canvas and the proportions/spacing are compressed. Hallucination applies because visible sliders/reset controls and an added epipolar line are present even though they do not appear in the original figure.",
+          "geometry_accuracy_analysis": "The scene constructs genuine 3D geometry: two camera-center spheres, two tilted image-plane quadrilaterals with borders, red points for p, p′, and P, dashed rays from camera centers, a reference-plane epipolar line, and a curved R,T motion arrow. The planes are real 3D rectangles generated from center/normal/basis rather than a pasted or flat skewed texture. However, the code calls an undefined updateLabels() before updateArrows(), so the p→P, P→P′, and P′→p′ mapping arrows are never created at runtime, and several labels remain stuck at the origin. Overall the core epipolar geometry is recognizable and spatially plausible, but important arrow/label elements from the source figure are missing or misplaced due to the runtime error.",
           "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
+          "geometry_accuracy_reasoning": "Most major 3D elements are present and correctly arranged, but several mapping arrows are absent and key labels are misplaced, so this fits the rubric’s score-3 level for noticeable missing elements while preserving the concept.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as a meaningful interaction. It has a visible Reset View button that resets the camera, two visible sliders for Estimated Depth and Target Pixel position that update the point/rays/epipolar geometry, hover tooltips on many registered scene objects, click handlers that send explanatory popups via parent postMessage, Escape/blank-click popup dismissal, and a tweened guided-demo mechanism triggered by clicking the backprojection ray or epipolar line. The sliders are pedagogically useful and the UI is compact/non-intrusive, but the guided demo is not exposed with clear buttons and the popup visibility depends on a parent listener; additionally updateScene calls an undefined updateLabels(), which may cause errors and partial UI/value update failure.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "At least two meaningful parameter controls are functional and useful, with additional hover/click interactions present, but the hidden/indirect demo and potential popup/update errors prevent a top score.",
+          "faithfulness_analysis": "The generated scene contains some of the same conceptual elements—two image planes, points, dashed projection lines, transformation arc labels, and text labels—but the entire figure is rendered extremely small in the center with vast whitespace, unlike the source where the diagram fills most of the frame. The camera/layout is compressed and somewhat rearranged, colors and point emphasis are not faithfully reproduced, many labels are tiny or misplaced, and UI controls in the lower-left add chrome absent from the source.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in concept, the severe under-zoom, excessive whitespace, UI controls, and proportion/layout mismatches make it far below a near drop-in replacement and under a 65% visual match.",
+          "label_quality_analysis": "Source labels include: P=zK^{-1}p, P, P’=MP, p’=KP’, p, p’, ℓ1, ℓ2, Target frame, Reference frame, and R,T. The generated figure appears to include most or all of these labels in roughly corresponding locations, but nearly all are rendered extremely small because the entire diagram occupies only a tiny central portion of the canvas; several formula labels and line labels are barely readable at the displayed scale. Overall the label set is mostly complete, but the font size is far too small relative to the source and some labels are difficult to distinguish clearly.",
           "label_quality": 2,
+          "label_quality_reasoning": "Most labels are present and roughly placed, but the consistent severe font-size mismatch makes many labels barely readable at source scale, fitting a score of 2.",
+          "concept_accuracy_analysis": "The intended concept is two-view/epipolar geometry for depth-based reprojection: a target pixel p backprojects along a ray to P = zK⁻¹p, camera motion R,T maps toward the reference frame, and the reference projection p′ lies on an epipolar line as depth varies. The tooltips and popups are mostly specific and conceptually correct, mentioning K⁻¹, depth z, R,T, p′, and the epipolar line; however the implementation calls an undefined updateLabels(), so the update routine breaks before point labels and mapping arrows are updated, leaving important labels/arrows absent or misplaced, and the P′=MP transformation is only schematic rather than actually represented as a distinct transformed point.",
           "concept_accuracy": 3,
-          "visual_aesthetics": 2.7,
+          "concept_accuracy_reasoning": "The main epipolar-depth relationship is present and explanations are figure-specific, but broken label/arrow updating and a somewhat schematic/missing P′ transformation leave multiple important details absent or misleading, matching a score of 3.",
+          "visual_aesthetics": 2.3,
           "overall_average": 2.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:40:52.251Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:55:32.228Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

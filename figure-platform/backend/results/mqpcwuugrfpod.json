@@ -330,90 +330,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D stem plot from an elevated viewpoint looking down-left. The vertical axis is placed on the left foreground corner, while the horizontal indices 'm' and 'n' extend to the right and back. The camera is tightly zoomed on the grid containing the stems.",
-          "viewing_angle_rendered": "The rendered screenshot shows the scene from a much more distant, elevated orthographic perspective. The main axes have been offset far to the back and right, with the vertical axis standing on the right side of the screen, creating a lot of empty workspace and misalignment compared to the compact source layout.",
-          "viewing_angle_comparison": "The rendered view is significantly more zoomed out and has its axes shifted to the far right/background, whereas the source has its vertical axis directly on the left foreground. This creates a mismatch in the visual layout and camera framing.",
-          "shape_comparison": [
-            {
-              "element": "stems",
-              "source_shape": "thin line with solid sphere",
-              "rendered_shape": "thin line with solid sphere",
-              "match": true
-            },
-            {
-              "element": "grid",
-              "source_shape": "2D plane grid",
-              "rendered_shape": "2D plane grid plus a 3D wireframe box",
-              "match": false
-            },
-            {
-              "element": "axes",
-              "source_shape": "simple lines with ticks",
-              "rendered_shape": "thick 3D ArrowHelpers",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "A prominent 3D wireframe box (prism) is rendered around the stems, which is completely absent from the source figure.",
-            "The vertical axis is positioned on the far right background in the render, whereas it is on the left foreground in the source.",
-            "The grid and axis ticks are cluttered, showing values from -2 to 2, whereas the source only shows ticks/labels for -1, 0, and 1.",
-            "The perspective/crop is much more zoomed out than the tight, clean cropping of the source figure."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Hallucination",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "The concept is correct and interactive, but the visual faithfulness is low due to misplaced axes, a hallucinated bounding box, and incorrect camera cropping.",
-          "action_items": [
-            "Remove the 3D bounding box wireframe (prism) entirely to restore the clean look of the source.",
-            "Relocate the vertical axis and labels to the left foreground corner, aligning with the source's layout.",
-            "Reduce the axis tick marks and grid boundaries to only label -1, 0, and 1 for 'n' and 'm'.",
-            "Increase the camera zoom and adjust the target to tightly frame the plot, eliminating excess empty space.",
-            "Refine the font sizes and style of the labels to be larger and more clean/serif-based to match the textbook aesthetic."
-          ],
-          "visual_aesthetics": 3,
-          "overall_average": 3.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:14:53.608Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene depicts the 3×3 blue stem plot with labels, but the initial camera/view is quite different from the source: the vertical value axis appears on the far right instead of the left, and the n/m axes are oriented differently. The rendering also adds visible UI controls, arrowheads, extra −2 and 2 ticks/grid extent, and a larger surrounding support/grid than the compact source figure. The core stem-plot concept and colors are mostly correct, and the sliders/click interactions appear implemented.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
           ],
+          "failure_modes_reasoning": "Camera-Wrong: the viewpoint/orientation does not match the textbook figure, with axes appearing in different screen positions. Scale-Wrong: the generated plot is expanded to a −2…2 grid and the 3×3 kernel occupies a smaller portion of the scene than in the compact source. Hallucination: visible sliders/reset UI, arrowheads, and extra tick/grid extent are not present in the original figure.",
+          "geometry_accuracy_analysis": "The scene constructs a true 3D stem plot: a horizontal n–m grid, offset n and m axes with arrowheads/ticks/labels, a vertical coefficient axis with label, blue vertical stems at all integer samples in the active rectangular support, blue sphere markers at equal heights, and a grey rectangular support/prism outline. No source image texture or flattened perspective billboard is used; depth comes from the camera. Minor possible mismatches are that stem tops are rendered as spheres rather than flat disks/dots, the support is shown as a full 3D prism outline, and the axes/grid styling/proportions may not exactly match the textbook drawing, but the intended geometry is complete and recognizable.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
+          "geometry_accuracy_reasoning": "All major geometric elements of the box-filter 3D stem figure are present as real 3D geometry with only minor styling/proportion differences, matching the rubric for a score of 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom, but those do not count as meaningful interactions. Meaningful controls include a Reset View button that restores the camera, two sliders for Width N and Height M that visibly rebuild the box-filter support and number of blue stems, and a Normalize checkbox that changes stem heights and value labeling. It also registers hover tooltips and click explanations for the grid, axes, support box, and individual coefficient stems; clicking the support box cycles through a multi-step guided demo with narrated popup messages. The UI is small, transparent, and positioned in the lower-left corner without significantly covering the plotted geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions plus a guided demo, and the UI is compact and non-intrusive, matching the score-5 rubric.",
+          "faithfulness_analysis": "The rendered figure is recognizable as a 3D blue stem plot with a light gray grid box, but the camera/view orientation differs noticeably: the source has the vertical z-axis on the left and a compact MATLAB-like crop, while the render places the z-axis at the far right with a wider, more open perspective. The render also has a much wider aspect ratio, excessive whitespace, extra grid/axis extent, different tick ranges, and visible UI controls in the lower-left that are absent from the source.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general subject is similar, the camera angle, crop/aspect ratio, margins, axis layout, and UI chrome differ enough that it matches well under 65% as a drop-in replacement.",
+          "label_quality_analysis": "Source labels include the vertical axis label “box1,1 [n, m]”, axis labels “m” and “n”, and tick labels 0 and 1 on the vertical axis plus −1, 0, 1 on the horizontal axes. In the generated figure, “m” and “n” appear but are very small and not positioned like the source; the vertical label appears on the far right, is tiny/rotated, and does not clearly match the source text. Tick labels are present but use a different range including −2 and 2, are much smaller than the source, and several source-scale labels are not clearly readable. Extra UI/control text is also visible outside the plot area.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels are either too small, misplaced, text-mismatched, or use incorrect tick values, so the label set only partially matches the source and fails the font-size/placement expectations.",
+          "concept_accuracy_analysis": "The figure illustrates a discrete 2D box filter/kernel box_{N,M}[n,m] over integer indices n and m, with blue stems for nonzero coefficients and a grey support rectangle spanning −N…N and −M…M. The labels, controls, tooltips, and popups are highly figure-specific and correctly describe support size, equal weights, normalization to 1/((2N+1)(2M+1)), coefficient sums, and example 3×3/5×5 cases. A minor issue is that normalized coefficients are visually rescaled so their stems do not become proportionally shorter than the unnormalized weight-1 case, while the tooltip says stem height is the coefficient value; this could slightly obscure the absolute magnitude relationship.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.6
+          "concept_accuracy_reasoning": "The main box-filter concept and explanations are accurate and specific, with only a minor visual-scaling ambiguity in how coefficient height represents normalized values.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:35:53.690Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:57:00.098Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

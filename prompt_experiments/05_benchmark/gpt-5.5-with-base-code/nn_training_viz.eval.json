@@ -3,26 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 5,
-          "overall_average": 5
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main layer labels and three training-iteration stacks, but the initial view is much more zoomed out and compressed than the reference: the planes appear as narrow, small towers and the bottom training arrow is projected diagonally/cropped rather than as a long horizontal annotation. The proportions of labels, plane sizes, vertical spacing, and column spacing differ noticeably from the source, and extra visible UI buttons labeled “paths” and “goal” are present in the rendered figure.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong: the initial viewpoint and projection do not match the source, especially the flattened towers and diagonal/cropped training arrow. Scale-Wrong: the stacks, planes, labels, and spacing are substantially smaller/compressed relative to the original composition. Hallucination: the visible bottom-right interaction buttons are not part of the source figure.",
+          "geometry_accuracy_analysis": "Present: a true 3D scene with three columns of vertically stacked activation planes, red/blue datapoints, density blobs, dotted datapoint trajectories, inter-layer mapping lines, a left-side layer-operation ladder with arrows, and a training-iteration arrow. The planes are real horizontal 3D surfaces viewed by the camera rather than skewed flat billboards. Absent or weak: visible checkpoint/stage labels are not shown, the layer boxes are HTML overlays rather than 3D geometry, and the point clouds/warping paths appear schematic rather than tightly matching a specific textbook drawing. Overall, the geometry captures the intended stacked-layer/training-iteration structure well, with only minor omissions and representational approximations.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present as real 3D objects with plausible positions and connections, but some labels/boxes are non-3D overlays and the exact data-shape geometry is approximate, so this fits a score of 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. Meaningful interactions include a compact bottom-right 'paths' button that toggles dotted datapoint trajectory lines and visibly changes the scene, a 'goal' button that reveals one-hot target rings/labels and highlights the final layer, hover tooltips over registered planes/points that should appear via a local tooltip div, and click handlers on planes/points that visibly focus/highlight a selected layer or datapoint path; click explanations are sent via parent postMessage, so the explanatory popup depends on the embedding environment rather than being self-contained. There are no sliders, parameter controls, step-through animation, or guided demo. The UI chrome is small and placed in the bottom-right corner, not materially covering the geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are multiple functional, pedagogically relevant interactions with compact UI, but the lack of a guided demo and the externally dependent popup mechanism keep it below score 5.",
+          "faithfulness_analysis": "The rendered frame contains the same broad concept: a left vertical sequence of layer labels and three columns of stacked 3D planes with red/blue/black points and connecting lines. However, it is heavily under-zoomed and compressed into a much narrower aspect ratio than the source, with the 3D stacks much smaller and fully contained rather than tall/cropped; the bottom training-iteration arrow is mispositioned/diagonal and mostly missing, and UI buttons appear at the lower right. Overall it is recognizable as an attempted reconstruction but not a drop-in replacement due to major crop, scale, aspect, and composition differences.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "The general elements are present, but the wrong zoom, aspect ratio, margins, bottom arrow placement, and visible UI make the composition match well under 65% of the original.",
+          "label_quality_analysis": "Source labels: softmax, linear, relu, linear, relu, linear, relu, linear in rounded boxes on the left vertical flow, plus the large bottom label “Training iteration.” In the generated figure, all eight layer labels appear with correct text and are unobstructed in the left column, and “Training iteration” appears at the bottom; however, the boxed layer labels are much smaller than in the source, and the bottom “Training iteration” label is also substantially smaller and paired with an incorrectly angled/partly offscreen arrow rather than the source’s large horizontal axis arrow. Overall the label set is complete and readable, but the relative label scale is consistently too small and the bottom axis label/arrow placement does not match the source well.",
+          "label_quality": 3,
+          "label_quality_reasoning": "All labels are present and legible, but the font sizes are consistently too small relative to the source and the bottom label placement/axis treatment is noticeably inaccurate, matching a score-3 case.",
+          "concept_accuracy_analysis": "The figure is intended to illustrate how a neural network transforms two-class data through successive linear/ReLU layers across training iterations, ending in a softmax/one-hot output representation. The layer labels, upward data paths, training-iteration arrow, class-colored points, and goal markers are conceptually relevant, and the tooltips/popups are mostly figure-specific; however, the transformations are synthetic rather than tied to actual learned weights, column checkpoints are not visibly labeled, and the softmax output is treated as another 2D activation plane rather than clearly as probabilities on a simplex/one-hot code.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main concept is accurately conveyed with mostly specific explanations, but there are minor omissions and some simplification of the softmax/training dynamics.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:41:34.254Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T20:02:43.324Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

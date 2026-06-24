@@ -588,88 +588,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure is viewed from an elevated, oblique perspective. The 'n' axis extends towards the bottom-right, and the 'm' axis extends towards the bottom-left. The vertical 'b_2,2[n,m]' axis is located on the far-left corner.",
-          "viewing_angle_rendered": "The rendered screenshot is viewed from a similar elevated perspective, but the camera is positioned such that the vertical axis and grid lines are aligned more symmetrically. A vertical axis line runs straight up through the middle of the scene, causing visual overlapping.",
-          "viewing_angle_comparison": "The rendered view is slightly too symmetric compared to the source, and the placement of the vertical coordinate axis in the center rather than on the outer-left boundary deviates from the source's layout.",
-          "shape_comparison": [
-            {
-              "element": "coefficient stems",
-              "source_shape": "thin blue lines",
-              "rendered_shape": "thin blue cylinders",
-              "match": true
-            },
-            {
-              "element": "coefficient caps",
-              "source_shape": "blue spheres",
-              "rendered_shape": "blue spheres",
-              "match": true
-            },
-            {
-              "element": "grid/cage",
-              "source_shape": "minimal 2D floor grid with rear vertical guides",
-              "rendered_shape": "cluttered 3D wireframe box",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The vertical axis is placed in the center of the grid rather than on the left-front edge, causing it to clip through the highest coefficient stem.",
-            "The label 'b_2,2[n,m]' is rendered directly on top of the central axis and a stem cap, making it completely unreadable due to overlapping.",
-            "The 3D wireframe cage is far too complex and busy compared to the clean, minimalist lines of the original figure.",
-            "The axis label text sizes and positions are slightly misaligned."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "Excellent pedagogical interactivity and accurate concepts, but plagued by severe label overlapping and an overly cluttered 3D wireframe cage.",
-          "action_items": [
-            "Reposition the vertical amplitude axis (b_2,2[n,m]) to the left-front corner, matching the source figure instead of running through the center.",
-            "Move the vertical label 'b_2,2[n,m]' further to the left so it does not overlap with any stems, caps, or axes.",
-            "Simplify the cage/grid geometry by removing the top and front-right wireframe lines, keeping only the floor grid and rear vertical lines.",
-            "Adjust the initial camera angle to more closely match the oblique perspective of the source image."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T13:59:30.106Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene is a 3D stem plot with blue stems and markers and includes the main n, m, and b₂,₂[n,m] labels, but it adds a visible UI mode selector and code for separability/frequency-response views that are not in the source. The vertical scale is much taller, with tick labels extending to 4 and a very high central coefficient, whereas the source plot shows a shorter vertical range with ticks up to about 2. The initial view is also more centered/frontal and vertically stretched than the source, whose vertical axis appears at the left side with a different plot orientation.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
           ],
+          "failure_modes_reasoning": "Camera-Wrong: the rendered viewpoint/orientation does not match the source plot, especially the placement of the vertical axis and overall viewing angle. Scale-Wrong: the height range and proportions are noticeably off, with a 0–4 vertical scale and an overly tall plot compared with the source. Hallucination: the visible mode dropdown and additional separability/frequency-response functionality are not present in the original figure.",
+          "geometry_accuracy_analysis": "The scene is constructed as real 3D geometry: an n–m floor grid, vertical amplitude axis/cage, tick marks, and a 3×3 set of coefficient stems with spherical caps at heights 1, 2, and 4 are all present and positioned on a symmetric integer lattice. The main binomial-filter stem plot is recognizable and proportionally plausible, with correct central peak and surrounding coefficients; minor deviations include stylized spherical markers/cylindrical stems and added optional separability/frequency-response geometry that is not necessarily part of the original static figure but is mostly hidden by mode selection.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements of the coefficient plot are present as true 3D primitives with correct topology and proportions, with only minor styling/extra-mode differences preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, which works but does not count as a meaningful interaction. A visible bottom-left Mode dropdown switches between Filter Coefficients, Separability Decomposition, and Frequency Response, with animated visibility changes to coefficient stems, separability guides, and frequency surface; this is functional and pedagogically relevant. The canvas has pointermove/click handlers for the coefficient group, separability group, and frequency group: hover tooltips should appear, and clicks send explanatory popup messages via window.parent.postMessage, though the popup depends on an external parent handler rather than an in-page modal. A Reset View button has a listener but is hidden with display:none, so it is not usable. A guided demo exists only as window.goToStep/figureDemoSteps and has no visible controls. The UI is compact and located in the bottom-left corner, not covering important geometry.",
           "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are two usable pedagogical interaction types—a functional mode dropdown and object hover/click explanations—with compact UI, but the guided demo is not exposed to the user, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered output preserves the general 3D blue stem-plot idea with grid planes, axes labels, and similar marker/stem styling, but the first-frame composition is not a drop-in match. The camera angle is more centered and symmetric than the source, the aspect ratio is wide instead of square, the plot is scaled and positioned differently, and a visible UI dropdown at the bottom left adds chrome absent from the original.",
           "faithfulness": 3,
-          "label_quality": 2,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 3,
+          "faithfulness_reasoning": "Recognizable overall layout and content, but significant camera, aspect ratio, crop/whitespace, and UI differences reduce the match to roughly the 65–75% range.",
+          "label_quality_analysis": "Source figure labels include the axis labels b_{2,2}[n,m], m, and n, plus numeric tick labels on the axes such as -1, 0, 1 and vertical ticks 0, 1, 2. The generated figure includes b_{2,2}[n,m], m, n, and numeric tick labels, but they are much smaller relative to the figure than in the source; the vertical label is also placed near the central stem/top marker rather than cleanly outside the left vertical axis, causing visual clutter. Overall the label set is mostly present, but the font scale is consistently too small and the main vertical label positioning is notably worse than the source.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Most labels are present and legible in the large screenshot, but the consistently undersized font and misplaced/cluttered vertical label make this a mid-quality match rather than a strong one.",
+          "concept_accuracy_analysis": "The figure clearly illustrates a 3×3 2D binomial filter b₂,₂[n,m] with coefficient stems [1,2,1; 2,4,2; 1,2,1], its separable outer-product construction from [1,2,1]ᵀ[1,2,1], and a low-pass frequency-response surface. The tooltips/popups are figure-specific and mostly correct, including DC gain 16 and separability; the main caveat is that the frequency response is labeled as H(ωx,ωy)=(1+cosωx)(1+cosωy), which is a scaled version rather than the exact unnormalized or normalized DTFT, and the “perfectly eliminates checkerboard noise” phrasing is slightly over-specific/overstated outside the Nyquist checkerboard case.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main concept and explanations are accurate and specific, with only minor scaling/wording issues in the frequency-response interpretation.",
+          "visual_aesthetics": 3.3,
           "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:31:31.584Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:40:59.681Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

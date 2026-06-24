@@ -604,81 +604,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a vertical cylinder (barber pole) from a slightly elevated perspective, looking slightly downward so that the top flat elliptical face is visible. The real motion curved arrow is positioned directly above the cylinder, and the observed motion straight arrow is to the right of the cylinder.",
-          "viewing_angle_rendered": "The rendered screenshot matches the source's slightly elevated perspective, clearly displaying the top elliptical face of the cylinder. The curved and straight arrows are positioned in similar relative vertical and horizontal locations.",
-          "viewing_angle_comparison": "The viewing angles are highly consistent, with both showing a nearly identical orthographic elevation and zoom factor that captures the cylinder top and sides faithfully.",
-          "shape_comparison": [
-            {
-              "element": "Barber pole cylinder",
-              "source_shape": "cylinder",
-              "rendered_shape": "cylinder",
-              "match": true
-            },
-            {
-              "element": "Real motion arrow",
-              "source_shape": "flat curved arrow",
-              "rendered_shape": "curved 3D tube and cone",
-              "match": true
-            },
-            {
-              "element": "Observed motion arrow",
-              "source_shape": "flat straight arrow",
-              "rendered_shape": "3D cylinder and cone",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The 'Real motion' text label overlaps directly with the curved black arrow above the cylinder.",
-            "The 'Observed motion' text label overlaps with the right edge of the rotating cylinder.",
-            "The straight 'Observed motion' arrow is placed slightly too close to the cylinder compared to the source figure where it is further to the right."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "Excellent interactive features showing the aperture mask, but labels suffer from collision and overlap with 3D elements.",
-          "action_items": [
-            "Move the 'Real motion' label higher up along the Y-axis to prevent it from colliding with the curved arrow.",
-            "Shift the 'Observed motion' label and the downward straight arrow further to the right (positive X direction) to prevent them from overlapping with the cylinder.",
-            "Slightly reduce the font size of the two main labels ('Real motion' and 'Observed motion') to improve layout breathing room."
-          ],
-          "visual_aesthetics": 3.7,
-          "overall_average": 4.2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:23:14.295Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main barber-pole cylinder, red/blue helical bands, real-motion curved arrow, observed-motion label, and downward arrow, but the overall composition is much smaller and more centered than the source. The source cylinder dominates the left side and nearly fills the height, while the generated cylinder is narrow, short, centered, and leaves large empty margins; the top label is clipped. Extra UI controls for rotation speed and aperture mask are visible and do not appear in the original figure.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial framing/composition does not match the source, with the pole centered and distant rather than large and left-aligned. Scale-Wrong applies because the cylinder, arrows, and labels are proportionally much smaller relative to the canvas than in the reference. Hallucination applies because visible rotation-speed and aperture-mask controls, plus optional aperture/flow concepts in the code, are not present in the original figure.",
+          "geometry_accuracy_analysis": "The scene constructs a genuine 3D barber-pole cylinder with circular top/bottom outline tubes, white cylindrical body, helical red and blue bands wrapped around the surface, a curved real-motion arrow above the pole, a straight observed-motion arrow to the side, and matching labels. The geometry is not a flat pasted texture or billboard; depth comes from the cylinder, tubes, cones, and camera view. Minor issues include the missing visible bottom cap/fill and some simplified stripe-band construction and arrow placement, but the main spatial relationships and proportions are recognizable and plausible.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "geometry_accuracy_reasoning": "All major elements are present as real 3D geometry with only minor omissions/simplifications, so this fits the score-4 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, which do not count for scoring. Meaningful interactions include a visible Rotation Speed slider that updates the numeric readout and changes the animated stripe rotation speed/direction and arrow direction; a visible Aperture Mask checkbox that toggles the aperture mask, flow vectors, and labels; hover tooltips over registered scene objects; and click handlers on the pole, real-motion arrow, observed-motion arrow, aperture group, and flow group that send explanatory popups and in some cases jump to demo steps. There is also a continuous animation of the barber-pole stripes, and a hidden Reset View button that is not usable. The interactions are compact and pedagogically relevant, and the bottom-right UI does not cover the main geometry, though the guided demo is only accessible indirectly through object clicks rather than a clear step-through control.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions with compact UI and a demo-step mechanism, satisfying the score-5 rubric despite minor discoverability issues.",
+          "faithfulness_analysis": "The rendered frame contains the same general elements (striped cylinder, real-motion label/arrow, observed-motion label/down arrow), but the composition is drastically different: the source is a tall portrait figure with a large cylinder filling most of the left side and large text to the right, while the render is landscape, heavily zoomed out, with the cylinder much smaller and centered. The title is cropped at the top, there is excessive whitespace, the arrow and label proportions differ, and UI controls in the bottom-right add chrome absent from the source.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the concept is recognizable, the wrong aspect ratio, severe under-zoom, cropped title, altered margins/proportions, and visible UI controls make it match well under 65% of the original.",
+          "label_quality_analysis": "Source labels: \"Real motion\" appears in large serif type at the top above the rotation arrow; it appears in the generated figure with correct text and readable size, but it is shifted to the top edge and partially clipped. \"Observed motion\" appears as a large two-line label to the right of the cylinder above a downward arrow; it appears with correct text and is readable, but it is much closer to the cylinder than in the source and somewhat reduced/less well matched in scale. The generated screenshot also includes extra UI text labels such as \"Rotation Speed\", \"1.0\", and \"Aperture Mask\" that are not part of the source figure, though they are small and off to the bottom right.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Both required labels are present and readable, but the top label is clipped and the observed-motion label has noticeable scale/placement mismatch, with extra non-source UI labels also present, so this fits a mid-level score rather than a near-perfect one.",
+          "concept_accuracy_analysis": "The generated figure illustrates the barber-pole illusion and the related aperture problem: a rotating cylinder with helical stripes has a real rotational/horizontal surface motion while the stripe pattern is perceived as drifting vertically. The labels, demo-step narration, tooltips, and click popups are figure-specific and correctly refer to the rotating pole, real motion, observed motion, aperture mask, true horizontal flow, and normal flow; the aperture explanation accurately states that a local straight edge constrains only motion perpendicular to the edge.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All major concepts and interactive explanations are accurate, specific to the barber-pole/aperture-problem geometry, and do not introduce misleading generic filler.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:35:12.971Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:23:13.337Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

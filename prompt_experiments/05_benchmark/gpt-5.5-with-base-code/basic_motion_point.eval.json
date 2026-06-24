@@ -3,26 +3,41 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 3,
-          "faithfulness": 4,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main labels and correct basic elements (image plane, O, p/P points, green projection ray, dashed future ray, red motion arrows). However, the initial rendered view is much more compact and frontal than the source: the image plane is small and nearly rectangular instead of dominating the left side as a large oblique parallelogram, and the rays/points are compressed with different apparent slopes and placements. Proportions between the plane, points, labels, and ray lengths are noticeably off, especially the plane size and the distance to P.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial viewpoint/orientation does not match the source figure’s oblique composition and ray directions. Scale-Wrong applies because the image plane and spatial distances are much smaller/compressed relative to the points and labels compared with the reference.",
+          "geometry_accuracy_analysis": "The scene constructs a real 3D projection diagram: an image plane at focal distance, camera center O, world point P, projected point p, the projection ray O-P, 3D and image-plane motion arrows, and a dashed future ray are all present as separate 3D meshes/lines. The geometry is not a pasted texture or flat billboard; depth comes from the actual positions of O, the plane, P, and the camera view. Minor issues are that the image plane is slightly asymmetrically sized/positioned and the motion labels are placed at arrow endpoints rather than clearly on the vectors, but the topology and spatial relationships are correct.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are represented with plausible 3D geometry, correct intersections and connections, and only minor stylistic/proportional deviations.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. It has a compact bottom-left Δt button that visibly toggles the motion construction on/off, including the dashed future ray, red velocity arrows, projected motion segment, and motion labels. It registers hover handlers on several scene elements that show a tooltip, change the cursor, and attempt to highlight the object; these should be visibly functional for most solid objects/lines. It also registers click handlers on the image plane, projection ray, points, and velocity arrows to show a small explanatory popup, plus Escape to dismiss it. The interactions are pedagogically useful and unobtrusive, with only a tiny button and small tooltip/popup that do not cover important geometry; however, there is no guided step-through demo or parameter slider.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are at least two functional, pedagogically useful interactions—the Δt toggle and object hover/click explanations—with compact UI, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered figure contains the same basic semantic elements (a plane, black points, green solid/dashed rays, red arrows, and p/P/O labels), but the first-frame composition is very different: the source is a wide, zoomed-in perspective with a large cropped plane on the left and the P point far to the right, while the render is a compact centered scene with the plane fully visible, much shorter rays, smaller scale, and a different camera angle. Label placement, point positions, line slopes, margins, and overall proportions do not match well enough for an inline replacement.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in concept, the crop, zoom, camera angle, spacing, and proportions differ substantially from the source, making it a <65% match.",
+          "label_quality_analysis": "Source labels are O, p, ṗ, P, and Ṗ. In the generated figure, p, ṗ, P, and Ṗ are present, readable, and generally placed near the corresponding image/scene points, with roughly appropriate serif font size. The source label O is rendered as lowercase “o” and is placed to the right/below the left point rather than below-left as in the source. Overall the label set is mostly complete and clear, but one label has incorrect capitalization/text and somewhat off placement.",
           "label_quality": 4,
+          "label_quality_reasoning": "Four of five labels are correct and readable, while the O label is wrong as lowercase “o” and misplaced, fitting a minor 1-label issue under score 4.",
+          "concept_accuracy_analysis": "The figure illustrates perspective projection of a moving 3D point P from camera center O onto an image plane at focal distance f, with a 3D velocity Ṗ inducing an image-plane motion ṗ. The geometry and tooltips are largely figure-specific and correct, explaining the ray O–P, intersection at p, focal plane, and induced image motion; the main weakness is that the “instantaneous” velocity is represented as a finite step from P to PNext and p to pNext without giving the actual differential projection relationship.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
+          "concept_accuracy_reasoning": "The main concept is accurately conveyed with specific labels and interactions, but one minor conceptual simplification/missing detail remains in treating finite projected displacement as instantaneous ṗ.",
+          "visual_aesthetics": 3.7,
           "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:43:42.539Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:27:02.207Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

@@ -3,28 +3,41 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main labels, incoming ray, p/n/q vectors, outgoing ray, diffuse arrows, green plane, and right-angle marker. However, the rendered viewpoint is much lower and more edge-on than the reference: the green surface appears as a thin horizontal strip rather than a broad tilted parallelogram, causing the overall proportions of the plane and vector layout to look compressed compared with the source.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong"
           ],
-          "geometry_accuracy": 3,
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial view is a low grazing angle instead of the elevated oblique perspective shown in the source. Scale-Wrong applies because the surface patch is visually flattened and the diagram proportions are noticeably compressed relative to the reference.",
+          "geometry_accuracy_analysis": "The scene constructs a true 3D BRDF diagram: a horizontal green rectangular surface patch with black rim, a contact point, vertical normal n, incoming direction p, outgoing/view direction q, a colored incident light ray toward the surface, a selected outgoing ray, and multiple faint diffuse outgoing arrows. The geometry is not a flat pasted image or baked-in skew; the surface is a real unwarped PlaneGeometry viewed by the camera. Overall the major geometric relationships are accurate and recognizable, with only minor possible alignment/visual clutter issues from overlapping q and l_out arrows and extra diffuse arrows/right-angle marker.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major BRDF elements are present as real 3D geometry with plausible positions, connections, and proportions, so it meets the score-5 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but that does not count as a meaningful interaction. A visible lambda slider updates the incident ray color and related label/outgoing color, producing a clear visible effect. A visible diffuse checkbox toggles the faint diffuse reflection arrows on and off, also visibly functional. The code registers hover/click handlers for the incident ray, p, n, q, outgoing ray, diffuse group, and surface plane: hover shows a small tooltip and click pulses the object while attempting to send an explanatory popup via parent postMessage; the tooltip and pulse should be visible, but the full popup depends on an external parent listener rather than being rendered locally. There is also a reset-view button click handler, but the button is hidden with display:none, so it is not usable. The usable controls are compact in the bottom-left corner and do not cover important geometry, but there is no guided step-through demo.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 4,
+          "interactivity_usability_reasoning": "Two clearly functional pedagogical controls plus partially functional object hover/click explanations justify a 4, but the absence of a guided demo and reliance on parent-handled popups prevent a 5.",
+          "faithfulness_analysis": "The rendered scene contains the same basic ingredients (green plane, incoming and outgoing arrows, labels p/n/q and formula text), but the first-frame composition is substantially different from the source. The source is a very wide, cropped textbook figure with a large trapezoidal plane filling the lower half and oversized math labels, while the render uses a taller 3:2 canvas, a much lower/edge-on camera angle that makes the plane a thin strip, smaller labels, altered spacing, and visible UI controls in the lower-left whitespace.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in concept, the camera angle, aspect ratio, zoom/crop, label scale, whitespace, and UI chrome differ enough that it matches well under 65% as a drop-in replacement.",
+          "label_quality_analysis": "Source labels are ℓ_in(λ), ℓ_out = F(ℓ_in, n, λ, p, q), p, n, and q. The generated figure includes all five labels with correct text: ℓ_in(λ) appears along the incoming ray, ℓ_out=F(ℓ_in,n,λ,p,q) appears near the outgoing direction, and p/n/q appear near their respective vectors. However, the two formula labels are much smaller than in the source, especially the large top-right ℓ_out expression, and the p/n/q labels are also somewhat reduced relative to the bold oversized source labels, though readable and mostly unobstructed.",
+          "label_quality": 3,
+          "label_quality_reasoning": "All labels are present and correctly named, but the label font scale is consistently too small compared with the source, especially for the main formula labels, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates a BRDF-style local reflection model: an incoming spectral light term l_in(lambda) reaches a surface point with normal n, incident direction p, and outgoing/view direction q, producing l_out via F(l_in,n,lambda,p,q). The labels and interactions are mostly specific and correct, including the distinction between light travel direction and p, the role of q, wavelength-dependent color, and Lambertian diffuse dependence on n·p; however, the explanations repeatedly call radiance/illumination “power” and present F as directly mapping l_in to l_out rather than distinguishing the BRDF from the reflected radiance equation, which is a conceptual simplification that could blur the formal definition.",
           "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "Main BRDF concept and figure-specific explanations are accurate, with minor but meaningful terminology/formulation simplifications around power versus radiance and the exact BRDF relationship.",
           "visual_aesthetics": 3.3,
           "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:40:33.281Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:28:56.481Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

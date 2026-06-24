@@ -170,86 +170,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure is a 3D diagram viewed from a flat, orthographic-like front-right perspective. The camera center O is on the far left, the image plane is slanted on the left-center, and the 3D point P is on the right.",
-          "viewing_angle_rendered": "The rendered screenshot matches the source vantage point closely, using an orthographic camera projection to view the scene from a direct front-right angle, aligning all lines, points, and planes similarly.",
-          "viewing_angle_comparison": "The viewing angles are practically identical, successfully capturing the exact spatial relationships, plane tilts, and perspective alignments of the original textbook illustration.",
-          "shape_comparison": [
-            {
-              "element": "image plane",
-              "source_shape": "flat rectangle with black border",
-              "rendered_shape": "flat rectangle with black border",
-              "match": true
-            },
-            {
-              "element": "points O, p, P",
-              "source_shape": "black circles",
-              "rendered_shape": "black spheres with dark rims",
-              "match": true
-            },
-            {
-              "element": "velocity vectors",
-              "source_shape": "red arrows",
-              "rendered_shape": "3D red arrows (cylinder + cone)",
-              "match": true
-            },
-            {
-              "element": "projection rays",
-              "source_shape": "solid and dashed green lines",
-              "rendered_shape": "solid and dashed green cylinders",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The UI sliders for 'motion' and 'depth' at the bottom right are present in the render but not in the original figure (acceptable as interactive controls).",
-            "The label 'O' in the render is positioned slightly lower relative to the dot compared to the source."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 4,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "notes": "Excellent and highly faithful reproduction of the textbook figure with pedagogical, functional sliders.",
-          "action_items": [
-            "Slightly shift the position of label 'O' upwards to match the exact placement in the source.",
-            "Add a 'Reset' button to return the sliders back to their default 1.00x values.",
-            "Ensure the dashed line segments match the exact dash-to-gap ratio of the source figure's dashed green line."
-          ],
-          "visual_aesthetics": 5,
-          "overall_average": 4.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:51:52.345Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 4,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The screenshot includes all main labels and uses the expected dark plane outline, black points, green solid/dashed projection rays, and red velocity arrows. However, the code builds the diagram almost entirely as a flat XY composition with only tiny z offsets for layering; the image point p is not actually on the image plane and the ray/points do not form a true 3D perspective-projection geometry. Visually, the plane and velocity arrows are noticeably smaller and less dominant than in the source, with the plane fully framed rather than extending/cropping strongly as in the reference.",
+          "failure_modes": [
+            "Depth-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Depth-Wrong applies because the 3D geometry is essentially a 2D layered drawing rather than a correct spatial camera/image-plane/point construction. Scale-Wrong applies because the relative proportions differ: the image plane and red arrows are reduced compared with the source figure’s much larger plane and more prominent motion arrows.",
+          "geometry_accuracy_analysis": "The scene includes an image-plane outline, optical center O, projected point p, 3D point P, a green projection ray, dashed displaced ray, red velocity arrows, and labels. However, these elements are essentially constructed as a flat 2D drawing: the image plane is a hardcoded skewed quadrilateral with all vertices at nearly the same Z value, the points/rays/arrows lie on shallow layered Z offsets, and the camera is set to view the XY plane head-on, so the apparent perspective is baked into coordinates rather than produced by true 3D geometry.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Per the critical Fake 3D check, the principal geometry is flattened and asymmetrically skewed in fixed 2D coordinates to mimic the textbook perspective, so it must score 1.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for mouse rotate/zoom, but this does not count as a meaningful interaction. There are two visible sliders: “motion” scales the red velocity arrows and dashed ray endpoint, and “depth” moves the 3D point P along the ray while changing the projected motion; both should have clear visible effects and are compactly placed at the lower right. The scene also registers hover/click interactivity for the image plane, solid ray, dashed ray, velocity arrows, O, p, and P: hovering should show a small tooltip, while clicking sends a popup explanation via parent postMessage; this is pedagogically useful, though the popup depends on the hosting environment rather than being rendered directly in the HTML. A hidden Reset View button has a click handler but is not usable because it is display:none, and Escape only hides popup/tooltip. The UI chrome is small and does not cover important geometry, but there is no guided demo or step-through animation.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "interactivity_usability_reasoning": "Two functional sliders plus object hover/click explainers provide multiple useful interactions with compact UI, but the absence of a guided demo prevents a score of 5.",
+          "faithfulness_analysis": "The rendered scene has the same basic geometry: a perspective plane on the left, green solid and dashed rays, black points, red arrows, and p/P labels in roughly corresponding positions. However it is noticeably under-zoomed compared with the source: the large plane no longer reaches the top and bottom crop, the O label is not cropped as in the source, the right point and labels sit farther from the canvas edge, and there is extra whitespace plus visible motion/depth slider UI in the lower right.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The figure is recognizable but the crop, zoom level, margins, and added UI differ substantially, so it matches only around the general-layout level rather than as a near drop-in replacement.",
+          "label_quality_analysis": "Source labels: O at the left camera/point; p below the image-plane point; ṗ above the red image-plane motion arrow; P beside the right 3D point; Ṗ above the red 3D motion arrow. In the generated figure, all five source labels appear with the correct text, are large and readable, and are placed near the corresponding objects. The positions and font scale are close to the source, with no significant obstruction; only the small UI text in the lower-right is extraneous but does not interfere with the figure labels.",
+          "label_quality": 5,
+          "label_quality_reasoning": "All required labels are present, correctly named, readable at appropriate scale, and well positioned, with no meaningful clutter affecting them.",
+          "concept_accuracy_analysis": "The figure illustrates perspective projection of a moving 3D point P from optical center O onto an image point p, with 3D velocity Ṗ inducing image velocity ṗ. Labels and popups are mostly figure-specific, correctly referencing O, p, P, projection rays, image plane, inverse-depth scaling, and the perspective equations x = fX/Z and y = fY/Z; the interactive motion/depth sliders reinforce the intended relationship. Minor caveat: the finite dashed “after motion” ray and scaled ṗ are a schematic/instantaneous approximation rather than a fully exact geometric recomputation for all slider values.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main concept and explanations are accurate and specific, with only a minor approximation in how the projected velocity/new ray relationship is animated.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:27:56.834Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:39:30.960Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

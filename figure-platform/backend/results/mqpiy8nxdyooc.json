@@ -272,96 +272,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a green rectangular surface patch from an elevated, slightly right-of-center perspective. The surface normal vector points vertically up, and the incoming and outgoing rays are clearly separated with ample vertical and horizontal spacing, making the 3D relationships easy to parse.",
-          "viewing_angle_rendered": "The rendered screenshot shows the scene from a very low elevation angle. This compresses the green surface patch into a narrow, nearly horizontal strip and causes the vectors and scattering arrows at the base to cluster tightly together and overlap heavily.",
-          "viewing_angle_comparison": "The rendered camera elevation is far too low (22 degrees) compared to the source figure. This extreme foreshortening squashes the surface plane and makes the vector layout look cluttered and flat.",
-          "shape_comparison": [
-            {
-              "element": "surface patch",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "incoming ray",
-              "source_shape": "arrow",
-              "rendered_shape": "arrow",
-              "match": true
-            },
-            {
-              "element": "vectors p, n, q",
-              "source_shape": "arrows",
-              "rendered_shape": "arrows",
-              "match": true
-            },
-            {
-              "element": "scatter distribution",
-              "source_shape": "semi-transparent arrows",
-              "rendered_shape": "semi-transparent arrows",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The camera elevation angle is too low, making the green surface plane look like a thin strip rather than a wide patch.",
-            "The math labels (l_in and l_out equation) are partially clipped/cut off at the top and right edges of the viewport.",
-            "The right-angle marker at the base of the normal vector 'n' is misaligned and appears floating rather than sitting flush on the surface.",
-            "The label font sizes are excessively large relative to the canvas size, leading to overlap and clipping issues."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 1,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "The mathematical concepts and vectors are highly accurate, but the poor camera angle and oversized, clipped labels severely compromise the visual quality.",
-          "action_items": [
-            "Increase the camera elevation angle in setCameraView (e.g. from 22 to 38-45 degrees) to properly expose the surface patch.",
-            "Reduce the font size of the math labels and adjust their positions/offsets to prevent them from clipping at the canvas borders.",
-            "Align the right-angle marker geometry precisely to the base of the normal vector on the surface plane.",
-            "Add interactive sliders to allow the user to vary the wavelength (color) of the incident ray or rotate the incoming direction vector 'p'."
-          ],
-          "visual_aesthetics": 3,
-          "overall_average": 3
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:03:55.869Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main surface, incoming ray, p/n/q vectors, outgoing arrow, scatter arrows, and labels, but the outgoing equation label is clipped off the right edge so key terms are not visible. The viewpoint makes the green plane appear as a very thin strip compared with the source's broad tilted patch, changing the overall composition and apparent proportions.",
           "failure_modes": [
+            "Missing-Labels",
             "Camera-Wrong",
             "Scale-Wrong"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
+          "failure_modes_reasoning": "Missing-Labels applies because the important ℓout equation is partially offscreen/truncated. Camera-Wrong applies because the initial view is much lower/flatter and differently framed than the source. Scale-Wrong applies because the surface appears overly compressed in depth and the figure proportions differ noticeably from the reference.",
+          "geometry_accuracy_analysis": "The scene constructs a real 3D arrangement with a horizontal green rectangular surface patch, black cylindrical outline, incidence ring, incoming yellow-orange-red arrow, black p/n/q direction arrows, a longer dark-green outgoing arrow, translucent green scatter arrows, an L-shaped angle marker, and HTML labels. No major textbook elements appear absent, and the primitives are mostly appropriate; minor issues are that the hit marker and arrow origins hover slightly above the surface, the diffuse scatter is mostly near-horizontal rather than a richer upward hemispherical spray, and the angle cue is simplified as two straight segments rather than a curved angular marker. The geometry is a true 3D scene using clean primitives and camera projection, not a baked flat perspective drawing.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present and recognizable with plausible 3D placement, but small alignment and representation simplifications keep it from a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as a meaningful interaction. A Reset View button has a click handler, but the button is hidden with display:none, so it is not usable. The canvas has pointermove hover handling with raycasting over registered objects; hovering the surface, incoming ray, p, n, q, outgoing ray, or scattered-light group should show a small tooltip and pointer cursor. Clicking those same registered objects sends explanatory popup messages via window.parent.postMessage with pedagogically relevant text; Escape hides the popup/tooltip. There are no sliders, toggles, parameter controls, or guided step-through demo. The UI chrome is essentially empty/transparent and does not cover the geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Multiple click/hover explanatory interactions are present and useful with compact UI, but there is no guided demo and one reset control is hidden, so this merits 4 rather than 5.",
+          "faithfulness_analysis": "The rendered scene contains the same basic elements—green plane, incoming orange/red ray, outgoing green ray, normal and p/q labels—but the first-frame composition differs substantially. The source is a very wide figure with the full parallelogram plane visible and generous top whitespace, while the render is a squarer, over-zoomed/cropped view where the plane becomes a narrow diagonal band, the right equation is cut off, and the camera angle/tilt changes the proportions noticeably.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in concept, the wrong aspect ratio, over-zoom/crop, truncated text, and noticeably different camera angle/margins make it match well under 65% as a drop-in replacement.",
+          "label_quality_analysis": "Source labels: ℓ_in(λ), ℓ_out = F(ℓ_in, n, λ, p, q), p, n, q. In the generated figure, ℓ_in(λ) appears near the incoming ray and is readable; p, n, and q all appear near their respective arrows with adequate size and little obstruction. The outgoing formula label is present at the top right but is clipped/truncated, showing only roughly “ℓ_out = F(ℓ_in, n,” and missing the λ, p, q portion, so it is not correct as rendered. Overall the label set is mostly present and legible, but the most complex label is significantly incomplete due to placement/cropping.",
           "label_quality": 3,
+          "label_quality_reasoning": "Most labels are readable and appropriately placed, but one major source label is truncated and incomplete, preventing a higher score.",
+          "concept_accuracy_analysis": "The figure illustrates surface reflection/BRDF: incoming spectral light ℓin(λ) hits a surface at a point, with incident direction p, normal n, outgoing/view direction q, and outgoing light ℓout expressed as a function of those variables. The labels and hover/click explanations are mostly figure-specific and scientifically appropriate, including the convention that p points back toward the light source and q is an outgoing direction; the main weakness is that the small angle marker is drawn like a right-angle cue rather than clearly representing the actual angle between n and q, and the added Lambertian dot-product discussion is extra rather than directly shown by the equation.",
           "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main BRDF/reflection concept and variable relationships are accurate and specifically explained, with only a minor visual/detail ambiguity in the angle cue and some slightly extrapolated explanatory text.",
           "visual_aesthetics": 3,
-          "overall_average": 3.2
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:21:10.344Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:23:51.105Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

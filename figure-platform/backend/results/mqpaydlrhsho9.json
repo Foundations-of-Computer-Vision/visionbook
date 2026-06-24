@@ -713,96 +713,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure is drawn in an oblique parallel/perspective projection looking down from the front-right-above. The camera plane is tilted, and the planar surface is steeply slanted like a diamond/parallelogram pointing toward the bottom-left and top-right.",
-          "viewing_angle_rendered": "The rendered screenshot shows the scene from an elevated perspective looking down. The planar surface is lying completely flat/horizontal, and the camera plane stands vertically perpendicular, which distorts the spatial relationship compared to the source.",
-          "viewing_angle_comparison": "The rendered viewing angle is too top-down, and the planar surface lacks the characteristic oblique upward slant seen in the source. This makes the planar surface look like a flat floor rather than an angled 3D plane.",
-          "shape_comparison": [
-            {
-              "element": "camera center",
-              "source_shape": "flat disc",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "camera plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "planar surface",
-              "source_shape": "oblique parallelogram",
-              "rendered_shape": "horizontal trapezoid",
-              "match": false
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "thin lines with 2D arrowheads",
-              "rendered_shape": "thick 3D ArrowHelpers",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The planar surface is flat/horizontal instead of being tilted/slanted obliquely.",
-            "The coordinate axes (red and green) are thick 3D arrows rather than thin, elegant 2D-like line arrows.",
-            "The right-angle indicator symbol at the origin of the red world axes is missing.",
-            "The label 'planar surface' is positioned directly below the surface rather than to the right of it.",
-            "The green camera plane axes do not align neatly with the bottom-left corner and edges of the camera plane."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Wrong-Primitives"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent interactive controls and demo steps, but the geometry representation of the slanted planes and coordinate axes is too chunky and flat compared to the source's sleek line-art aesthetic.",
-          "action_items": [
-            "Re-orient the planar surface in 3D space to match the oblique, upward-tilted parallelogram angle shown in the source.",
-            "Replace ArrowHelpers with custom thin lines/cones for a cleaner, 2D vector look that matches the textbook.",
-            "Add the small right-angle perpendicular marker at the red axes origin.",
-            "Reposition the 'planar surface' label to the right side of the gray planar surface.",
-            "Align the green axes origin exactly with the bottom-left corner of the camera plane."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:20:05.343Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene reproduces the main camera plane, planar surface, dashed projection rays, cyan projected point/ray, and coordinate axes. However, the important “Camera center” annotation is not visible in the rendered screenshot, and the initial viewpoint is noticeably more upright/isometric than the source, where the camera plane and surface are shown with a stronger oblique textbook perspective and much wider horizontal layout.",
           "failure_modes": [
+            "Missing-Labels",
             "Camera-Wrong"
           ],
+          "failure_modes_reasoning": "Missing-Labels applies because the source prominently labels the black dot as “Camera center,” but that label is absent from the rendered output. Camera-Wrong applies because the initial view/orientation differs from the source’s oblique diagram: the generated camera plane appears more upright and compact, and the overall composition is not matched to the source figure’s angle and wide projection layout.",
+          "geometry_accuracy_analysis": "The scene constructs the main homography/projection elements as actual 3D geometry: a black camera-center sphere, a vertical camera/image plane rectangle with outline and image axes, a separate planar surface rectangle, projected quadrilateral on the camera plane, dashed projection rays from the camera center to the surface corners, a cyan surface point and its projected image point, an active cyan ray, world/image axes, and labels. The geometry is cleanly built from 3D vectors and perspective intersections rather than pasted as a flat texture or baked skewed billboard; minor issues include the projected quadrilateral/point being slightly offset from the image plane for visibility and some coordinate-convention ambiguity for the planar surface normal, but the spatial structure is largely correct.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 3,
-          "faithfulness": 4,
+          "geometry_accuracy_reasoning": "All major elements are present and connected plausibly in true 3D, with only minor alignment/offset and convention issues, matching the rubric for a score of 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but those do not count. Meaningful interactions include two visible sliders: Plane Tilt updates the planar surface orientation and corresponding projected quadrilateral/rays, and Point X moves the cyan surface point, projected point, and active ray. Several scene objects are registered for hover/click interaction: hovering shows a tooltip, and clicking the camera center, camera plane, planar surface, surface point, or projected point sends explanatory popup content; some clicks also trigger demo steps that animate/control the sliders and geometry. A guided demo sequence exists through goToStep and clickable scene elements, though there is no explicit next/previous UI. The UI is small, transparent, and placed in the lower-left corner without covering important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional pedagogical interactions—two sliders plus object hover/click explanations and demo-triggering clicks—and the UI is compact and non-intrusive, satisfying the score 5 rubric.",
+          "faithfulness_analysis": "The rendered frame contains the same broad concept—camera center, camera plane, projected point, planar surface, rays, and axes—but the composition is not a close drop-in match. It is much more zoomed out with excessive whitespace, the planar surface is far smaller and not cropped like the source, the camera-plane geometry and perspective differ, important large labels such as “Camera center” are missing, text sizes/placements differ, and UI sliders appear in the bottom-left corner.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in subject matter, the crop, zoom, margins, label treatment, proportions, and added UI chrome differ substantially, giving a match below about 65%.",
+          "label_quality_analysis": "Source labels are: “Camera center”, “Camera plane”, cyan “(x,y)”, cyan “(X,Y,0)”, “planar surface”, green camera axes “x” and “y”, and red plane axes “X”, “Y”, “Z”. In the generated figure, “Camera center” is missing entirely; “Camera plane” is present but much smaller and less prominent than in the source; “(x,y)” is present but small; “(X,Y,0)” is present but appears very small and partly crowded/overlapped by the large “planar surface” label; “planar surface” is present and readable but positioned lower and overlaps visually with the cyan point label; green “x” and “y” are present but too small; red “X”, “Y”, and “Z” are present but also smaller and not matching the source’s typographic scale. Overall, most labels exist, but one major label is absent and many labels are undersized relative to the source, with some crowding near the planar surface.",
           "label_quality": 3,
+          "label_quality_reasoning": "The label set is mostly present but has a major missing label plus consistent font-scale and placement issues, so it fits the score-3 rubric rather than 4.",
+          "concept_accuracy_analysis": "The figure illustrates pinhole projection from a camera center through an image/camera plane to a planar surface, with corresponding points (X,Y,0) and (x,y) and the planar homography relationship. Labels and popups are mostly specific and correct, explaining rays, the camera center, the image plane, the planar surface, and how a selected point projects; the main issue is the narration calling the tilted-plane mapping a “linear homography,” which is imprecise/misleading unless clarified as linear only in homogeneous coordinates, and the Z=0 label becomes somewhat ambiguous when the plane is tilted.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3.7,
+          "concept_accuracy_reasoning": "The main homography/projection concept is accurately conveyed with figure-specific interactions, but one conceptual phrasing about linearity and a minor coordinate-label ambiguity prevent a perfect score.",
+          "visual_aesthetics": 3,
           "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:32:44.306Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:25:27.819Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

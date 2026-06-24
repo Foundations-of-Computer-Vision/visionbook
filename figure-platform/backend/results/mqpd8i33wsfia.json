@@ -341,87 +341,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a standard oblique axonometric view of a 3D projection setup. The Y-axis points straight up, Z-axis points rightward (as the optical axis), and X-axis points diagonally up-right into the background. The projection and virtual planes are tilted to match this axonometric skew.",
-          "viewing_angle_rendered": "The rendered screenshot perfectly replicates this perspective using an orthographic camera at a matching oblique angle, where Y is vertical, Z goes down-right, and X goes up-right.",
-          "viewing_angle_comparison": "The viewing angles are an excellent match. The tilt, zoom, and perspective capture the structural feel of the textbook illustration precisely.",
-          "shape_comparison": [
-            {
-              "element": "pinhole",
-              "source_shape": "flat disc/dot",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "planes",
-              "source_shape": "flat tilted quadrilaterals",
-              "rendered_shape": "flat tilted planes",
-              "match": true
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "lines with arrowheads",
-              "rendered_shape": "cylinders with cones",
-              "match": true
-            },
-            {
-              "element": "points P, p",
-              "source_shape": "flat circles with outlines",
-              "rendered_shape": "spheres with outlines",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The camera coordinate label 'x' on the virtual camera plane overlaps slightly with the green axis arrow and the point 'p'.",
-            "The world coordinate axis label 'X' overlaps with the gray projection line on the virtual plane.",
-            "The letters for variables (f, x, y, P, p) are in standard sans-serif font rather than the italicized serif font of the original textbook."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 5,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Highly accurate and well-conceived interactive translation of the textbook figure with excellent step-by-step guidance and 2D/3D mode transitions.",
-          "action_items": [
-            "Slightly shift the labels 'p' and 'x' on both planes to avoid overlapping with geometric lines and axes.",
-            "Style variable labels (f, x, y, P, p) with italicized serif fonts (e.g., 'Georgia' or 'Times New Roman' in CSS) to match the math-text style of the source image.",
-            "Move the world 'X' axis label slightly higher or more to the right to clear the virtual plane's background geometry."
-          ],
-          "visual_aesthetics": 4.7,
-          "overall_average": 4.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:23:56.943Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene captures the main pinhole/virtual-plane geometry with correct planes, axes, rays, focal-length arrows, and point projections. However, the original source is a wide two-panel figure with the separate right-hand 2D virtual-camera/image-coordinate panel visible at the same time; the rendered output only shows the 3D panel by default and hides the 2D coordinate panel behind a dropdown. Several important labels from the source are absent in the rendered view, including Camera coordinates, Image coordinates, n, m, panel labels, and the full right-side virtual camera plane. The initial viewpoint is more compact/isometric, with the Z axis slanting down rather than matching the source's side-elevation layout, and the label/object proportions are noticeably smaller and less textbook-like than the original.",
+          "failure_modes": [
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Missing-Labels applies because the rendered default view lacks key annotations from the source, especially the entire right-panel camera/image coordinate labels. Camera-Wrong applies because the initial 3D viewpoint does not match the source's side-oriented projection geometry and omits the simultaneous right panel. Scale-Wrong applies because the generated composition is compressed with much smaller labels and different relative layout/proportions compared with the wide two-panel textbook figure.",
+          "geometry_accuracy_analysis": "The scene constructs true 3D geometry: parallel XY image/projection planes at Z=+f and Z=-f, a pinhole sphere at the origin, world axes, plane-local green axes with the rear plane inverted, point P, projected points on both planes, projection rays, drop lines, and red focal-distance arrows. The main topology and spatial relationships of the pinhole/virtual-image-plane diagram are correct, with only minor possible visual clutter/overlap from the extra dashed virtual ray segment and drop-line construction; no fake flat billboard or baked perspective distortion is used.",
           "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are present as clean 3D primitives with correct relative positions, connections, and proportions, so this fits the score-5 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. Visible UI controls include an f slider that updates focal length/plane positions/projection scale, a Y slider that moves the 3D point and projected points, and a View dropdown that switches between the 3D geometry and a head-on 2D virtual-plane view with a camera tween and image-coordinate arrows; these should all have visible effects. There are hover/click handlers registered on the pinhole, planes, P, and projected points: hover shows a tooltip, and click posts explanatory popup messages; several clicks also trigger guided demo steps through goToStep. A Reset View button has a listener but is hidden, so it is not usable. Escape hides popups/tooltips, and camera animations are used for view/demo transitions. The interactions are pedagogically useful and compact, with the bottom-left controls occupying little space and not covering important geometry; the only caveat is that the full click popup depends on the parent frame handling postMessage, but hover tooltips and parameter controls are present.",
           "interactivity_usability": 5,
-          "faithfulness": 5,
-          "label_quality": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically relevant interactions including sliders, a view selector, hover/click explanations, and guided demo steps, with compact UI that does not obscure the figure.",
+          "faithfulness_analysis": "The rendered frame captures a simplified version of the left 3D pinhole/camera-plane diagram, with similar planes, axes, points, and projection rays, but it omits the entire right-hand panel showing camera and image coordinates. The crop, scale, typography, label placement, margins, and proportions differ substantially from the source, and visible UI sliders/dropdown in the lower-left add chrome not present in the textbook figure.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Only part of the original composition is represented and the missing right panel plus UI chrome and major layout/scale differences make it match well under 65% of the source.",
+          "label_quality_analysis": "Source labels include, in the main panel: Y, World coordinates, X, Z, P, p on the virtual camera plane, p on the projection plane, x and y camera/projection-plane axes, two f labels, Pinhole, (0,0,0), Projection plane, Virtual camera plane, and (a). The right inset also includes Camera coordinates, p, x, y, (0,0), Image coordinates, m, n, (0,0), Virtual camera plane, and (b). The generated figure includes some main-panel labels such as Y, World coordinates, Z, P, p, x, y, f, Pinhole, (0,0), Projection plane, and Virtual camera plane, but they are generally much smaller than the source labels; the world X label and panel marker (a) are missing, and the entire right inset label set is absent. Overall, only part of the main 3D label set is represented, with consistently undersized text, and a large portion of the source labels are missing entirely.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels from the full source figure are missing due to the absent right inset, and the labels that are present are significantly smaller than the source scale, so this fits score 2.",
+          "concept_accuracy_analysis": "The figure illustrates the pinhole camera projection model with a real image/projection plane behind the pinhole, a virtual camera plane in front, focal length f, projection of a 3D point P, inversion on the physical plane, and non-inverted virtual-plane coordinates. The interactive tooltips and popups are specific and mostly mathematically correct, including the formulas x=fX/Z and y=fY/Z, the sign inversion on the real plane, focal-length scaling, and the distinction between centered camera coordinates and image coordinates.",
           "concept_accuracy": 5,
-          "visual_aesthetics": 5,
-          "overall_average": 5
+          "concept_accuracy_reasoning": "All main concepts are accurately represented and the explanations are figure-specific, with correct relationships between pinhole, focal length, real/virtual planes, projection coordinates, and inversion.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:39:10.940Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:03:12.779Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

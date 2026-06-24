@@ -709,99 +709,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure displays a 3D perspective projection diagram from an elevated, side-front viewpoint. The camera origin O is on the far-left, pointing toward the right where point P lies in the background. The green line of sight goes diagonally upwards and to the right, and the dashed line of sight is distinctly separated above it, creating a clear vertical triangle.",
-          "viewing_angle_rendered": "The rendered screenshot shows a similar orthographic perspective, but the line of sight is nearly horizontal. Consequently, the dashed green line lies very close to and almost parallel with the solid green line, reducing the vertical separation.",
-          "viewing_angle_comparison": "The rendered camera angle is too flat (nearly aligned horizontally), which drastically reduces the vertical separation between the solid and dashed lines compared to the source figure. This makes the geometric relationship harder to interpret.",
-          "shape_comparison": [
-            {
-              "element": "image plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "Origin O, point p, point P",
-              "source_shape": "flat black circles",
-              "rendered_shape": "3D spheres (rendered as flat circles in orthographic view)",
-              "match": true
-            },
-            {
-              "element": "ray",
-              "source_shape": "solid line",
-              "rendered_shape": "cylinder segment",
-              "match": true
-            },
-            {
-              "element": "displaced ray",
-              "source_shape": "dashed line",
-              "rendered_shape": "dashed cylinder segments",
-              "match": true
-            },
-            {
-              "element": "velocity vectors",
-              "source_shape": "arrows",
-              "rendered_shape": "cylinder shafts with cones",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The label 'O' next to the camera origin is completely cut off or missing from the left edge of the screen.",
-            "The label 'P' next to the 3D point is completely cut off or missing from the right edge of the screen.",
-            "The solid green line and dashed green line are too close together and nearly overlap, whereas they have a clear angular separation in the source.",
-            "The UI controls on the bottom-left overlap slightly with the frame/content."
-          ],
-          "failure_modes": [
-            "Missing-Labels",
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "Excellent interactivity and conceptual correctness, but key labels 'O' and 'P' are clipped off-screen, and the camera angle/zoom compresses the vertical separation of the rays.",
-          "action_items": [
-            "Adjust the camera zoom or target bounds to prevent 'O' and 'P' labels from being cut off at the left and right edges.",
-            "Tweak the initial 3D positions or camera elevation/azimuth so that the solid and dashed green rays are clearly separated in the 2D projection, matching the source.",
-            "Reposition the UI sliders to a clean, non-overlapping corner to avoid visual clutter with the diagram.",
-            "Fine-tune label offsets to ensure the letter 'p' and its dot variant are positioned exactly like the textbook."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:00:03.943Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main projection elements (image plane, O, p/P points, solid and dashed green rays, red velocity arrows, and labels), and the sliders/click interactions are implemented. However, the rendered viewpoint is much flatter than the source: the green ray is almost horizontal rather than strongly diagonal, the plane is shown as a narrow skewed rectangle, and the origin/its O label are cropped or absent. The 2D velocity arrow at p is very small and overlaps the projected point, making p appear red, while the 3D velocity arrow is much shorter relative to the ray than in the source.",
+          "failure_modes": [
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Color-Wrong"
+          ],
+          "failure_modes_reasoning": "The important O label is not visible in the screenshot (Missing-Labels). The initial camera angle/orientation does not match the source figure, flattening the ray and changing the plane orientation (Camera-Wrong). The velocity arrows and image plane proportions differ noticeably from the reference, especially the tiny projected motion arrow (Scale-Wrong). The projected point p appears red due to overlap with the red arrow instead of being a black point as in the source (Color-Wrong).",
+          "geometry_accuracy_analysis": "The scene constructs a genuine 3D projection diagram: a camera origin O, rectangular image plane at z=f with borders, projected point p, displaced projected point p′, 3D point P behind the plane, solid and dashed viewing rays, and red 3D/2D velocity arrows with labels. The main geometry is spatially coherent and not a flat pasted/skewed drawing, though p and p′ are artificially lifted slightly off the image plane for visibility and the displaced 3D point P+Ṗ is not explicitly marked as its own point/label.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present and correctly arranged in true 3D, with only minor projection-plane offset and endpoint/label omissions preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but those do not count as meaningful interactions. Two visible sliders, Motion Dir (θ) and Point Depth (Z), have input handlers that update the 3D point, rays, arrows, projected point, and numeric readouts, so they visibly function. Many scene objects are registered with hover/click interactivity: origin, image plane, 3D point, projected point, displaced projection, solid/dashed rays, and both velocity arrows show tooltips on hover and send explanatory popup messages on click; several also trigger goToStep animations. A small guided demo system is implemented through demoSteps and goToStep, with animated transitions to selected configurations when certain objects are clicked. The UI is compact, transparent, and located in the lower-left corner; it only minimally overlaps the scene and does not seriously cover important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions including sliders, object hover/click explanations, and animated guided steps, with compact non-intrusive UI, matching the rubric for 5.",
+          "faithfulness_analysis": "The rendered scene contains the same conceptual elements (tilted image plane, O/p/P labels, solid and dashed green rays, black point markers, red direction arrows), so the diagram is recognizable. However, the first-frame composition is substantially different: the plane is much smaller and fully visible with different perspective, the rays are nearly horizontal rather than clearly rising, the source’s large plane crop and margins are not preserved, the p marker/coloring differs, and UI controls occupy the lower-left corner.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "Recognizable overall layout but significant camera angle, zoom/crop, ray-angle, styling, and UI-chrome differences keep it around a ~65% match rather than a near drop-in replacement.",
+          "label_quality_analysis": "Source labels are: O at the left camera/center, p at the image point on the plane, ṗ near the red motion arrow on the image plane, P at the right 3D point, and Ṗ near the red motion arrow in space. In the generated figure, p, ṗ, and Ṗ appear with readable, source-like serif styling and roughly appropriate size, though p/ṗ are somewhat crowded around the red point; O is missing, and the uppercase P label next to the right black point is missing. There are also small extraneous UI text labels at bottom-left that are not part of the source figure.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Only three of the five source labels are present and readable, with two important labels missing, so the label set is incomplete enough for a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates perspective projection of a moving 3D point: O, image plane, P, projected p, 3D velocity Ṗ, projected image velocity ṗ, and the original/displaced viewing rays. The main projection relationship is correctly represented and the interactive tooltips are mostly specific, including x = fX/Z and inverse-depth effects; however, the 'pure depth motion' demo is not actually pure depth because Ṗ always includes a fixed y component, and some hover text such as 'Click: pure lateral motion'/'pure depth expansion' is tied to demo steps rather than the currently shown vector, which can be misleading.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The core concept is accurate and figure-specific, but one substantive demo/detail about pure depth motion is mathematically inaccurate due to the added lateral component, with minor misleading interaction wording.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:37:57.197Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:39:01.846Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

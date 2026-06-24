@@ -3,28 +3,40 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated figure includes the main labels x, y, f, Z, X, and Y, translucent green/cyan similar-triangle regions, red measurement segments, a gray image plane, and point markers. However, the initial rendered viewpoint is essentially mirrored/reversed relative to the source: the source shows the image plane on the left and the object/depth plane extending to the right, while the generated screenshot shows the object point/plane on the left and the image plane on the right. The overall projection geometry is recognizable, and the Z-depth slider plus hover/click interactivity appear present.",
           "failure_modes": [
             "Camera-Wrong"
           ],
+          "failure_modes_reasoning": "The initial viewpoint/orientation does not match the source figure: the arrangement is horizontally reversed, with the image plane and object plane appearing on opposite sides compared with the reference.",
+          "geometry_accuracy_analysis": "The scene contains a true 3D construction with a pinhole/origin, a translucent image plane at distance f, coordinate arrows, a 3D point at depth Z, its projected image point, a dashed projection ray, red measured segments for f/Z/X/Y, and colored similar-triangle surfaces. The elements are not merely pasted or baked into a flat billboard; depth is represented with real 3D coordinates. Minor issues include the object-side plane being represented mainly as triangular wedges rather than a fuller reference plane, and some axis/label orientations are somewhat stylized rather than exactly matching a textbook perspective diagram, but the main topology and spatial relationships are recognizable and plausible.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present as real 3D objects with plausible connections and proportions, with only minor alignment/representation simplifications.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. A visible “Z depth” range slider is present and its input handler rebuilds the projection geometry, so it should visibly move the 3D point/object plane and update the similar-triangle construction. There are pointermove and click raycast handlers for the image point, 3D point, cyan triangle, and green triangle: hovering shows a tooltip/highlight and clicking opens a short explanatory popup, which is pedagogically relevant and should visibly function. A Reset View button has a click listener but is hidden with display:none, so it is not usable. The UI is compact in the lower-left corner and does not cover important geometry; popups/tooltips are small.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 4,
+          "interactivity_usability_reasoning": "There are two meaningful, functional pedagogical interaction types—Z-depth slider and hover/click explanations—using compact UI, but there is no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered scene contains some analogous elements (two image planes, translucent colored frustums/triangles, red/green axes, dots, and labels), but the composition is very different from the source. The source is an extremely wide, tightly cropped schematic with a large right-hand green/cyan plane, central origin, large black arrows, and oversized serif labels; the render is a smaller perspective 3D view with substantial whitespace, different camera angle, different proportions, misplaced labels, a large gray vertical plane, and a visible UI slider at the bottom.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general epipolar-geometry idea is recognizable, the camera angle, crop, scale, proportions, colors, label placement, and UI chrome differ substantially, so it matches well under 65% as a drop-in replacement.",
+          "label_quality_analysis": "The source figure contains six labels: lowercase x, y, f and uppercase X, Y, Z. In the generated figure all six labels appear with correct text and are readable; X, Y, and Z are placed near the large/world geometry, and x, y, and f are placed near the smaller/image-plane geometry. However, the lowercase x/y/f labels are somewhat clustered around the central/right image plane and partially compete with axes/lines, and the uppercase labels are not positioned as spaciously as in the source, though their font scale is broadly comparable and legible.",
+          "label_quality": 4,
+          "label_quality_reasoning": "All labels are present and readable with mostly appropriate size, but several have minor placement/clutter differences from the source, fitting a score of 4.",
+          "concept_accuracy_analysis": "The figure is intended to illustrate pinhole perspective projection using similar triangles, with a 3D point at depth Z projecting to an image point on a plane at distance f and relationships like x/f = X/Z and y/f = Y/Z. The ray, image plane, depth slider, and tooltips are figure-specific and mostly conceptually relevant, but the drawn green/cyan similar-triangle geometry uses axis extents that do not match the actual point offsets X and Y, so the labeled proportional triangles are not geometrically consistent with the formulas; the sign/inversion of the rear image plane is also not clarified.",
+          "concept_accuracy": 3,
+          "concept_accuracy_reasoning": "The main projection concept and specific explanations are present, but multiple geometric details in the similar-triangle construction are inconsistent with the stated X/Y relationships, making it only partially accurate.",
           "visual_aesthetics": 3.3,
-          "overall_average": 3.6
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:44:45.953Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:52:12.540Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

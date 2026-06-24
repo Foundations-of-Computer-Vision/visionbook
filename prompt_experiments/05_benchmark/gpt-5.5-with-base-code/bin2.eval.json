@@ -3,28 +3,41 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The 3D stem plot samples, blue stems/dots, gray box/grid, tick labels, and axis labels are mostly present. The dominant discrepancy is the initial camera/viewpoint: the source shows the vertical b-axis on the left with n and m axes oriented like a MATLAB view, while the render places the vertical axis on the right and rotates the base axes differently. The render also includes visible UI buttons (/16 and outer) and code for extra normalization/outer-product displays that are not part of the source figure.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Hallucination"
           ],
-          "geometry_accuracy": 4,
+          "failure_modes_reasoning": "Camera-Wrong: the initial orientation is clearly mirrored/rotated relative to the source, with the vertical axis on the opposite side and n/m axes in different screen directions. Hallucination: visible control buttons and optional outer-product/normalization elements are added despite not appearing in the original figure.",
+          "geometry_accuracy_analysis": "The scene contains a true 3D orthographic stem plot: a 3×3 grid of samples at integer n,m positions, vertical cylindrical stems with sphere markers, binomial heights 1/2/4/2/1 scaled along the vertical axis, floor grid/reference box, axes, ticks, and labels for n, m, and b_{2,2}[n,m]. No major source elements appear absent, and the construction uses actual 3D coordinates with depth from the camera rather than a flat skewed plane or pasted texture; only minor stylistic differences such as cylinder thickness/sphere marker size or HTML labels could differ from the textbook rendering.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major geometric elements of the 3D binomial-filter stem plot are present with correct topology, positions, and relative heights, and it is implemented as genuine 3D geometry rather than fake 2D perspective.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom/pan, but these do not count as meaningful interactions. It has a /16 button that toggles normalization and visibly changes stem heights/colors, an outer button that toggles separable outer-product factor bars/labels and highlights related samples, and hover/click handlers on invisible hit spheres over each sample that show tooltips with coefficient/product information. Keyboard handlers also hide the tooltip with Escape and reset the camera with R, but these are utility controls rather than pedagogical interactions. The interactions are functional, compact, and relevant to understanding the binomial-filter samples; the small bottom-left button UI does not cover important geometry. There is no guided demo or step-through animation.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
+          "interactivity_usability_reasoning": "Two or more meaningful pedagogical interactions work and the UI is compact, but there is no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered output is recognizable as a blue 3D stem plot with similar vertical axis labeling and approximate data count, but the composition differs substantially from the source. The source is a tight square crop with the z-axis on the left and labels placed around the compact axes, while the render is a wide landscape canvas with much more whitespace, a rotated/mirrored camera view placing the z-axis on the right, larger apparent stems, and visible UI buttons in the lower-left corner.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general plot type is recognizable, the wrong aspect ratio, camera angle, margins/crop, and UI chrome make it a poor drop-in replacement matching well under 65% of the original.",
+          "label_quality_analysis": "Source labels include the axis labels n, m, and b_{2,2}[n,m], plus tick labels on the axes such as -1, 0, 1 and vertical ticks 0, 1, 2, 4. In the generated figure, n and b_{2,2}[n,m] are present and readable, though n is somewhat oversized and the vertical label is placed on the opposite side compared with the source. The m label is present but is much smaller and awkwardly placed inside the plot near grid lines, making it less clear than in the source. Tick labels are mostly present and readable, but some are missing or visually cluttered/shifted compared with the source.",
           "label_quality": 3,
+          "label_quality_reasoning": "Most key labels are present, but font scale and placement are inconsistent, with the m label especially poorly placed and some tick labels cluttered or missing, so this fits a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates a 3×3 2D binomial filter stem plot with coefficients arranged as the separable outer product [1 2 1]^T[1 2 1], labeled over n and m with the central value 4 and surrounding 2s/1s. Tooltips and click text are figure-specific, correctly reporting sample coordinates, coefficient products, and optional division by 16; the main weakness is that when normalization is toggled the vertical tick labels remain 0,1,2,4 rather than reflecting normalized amplitudes, and the tooltip shorthand uses b rather than the full b_{2,2}.",
           "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "Main concept and interactions are accurate and specific, with only minor labeling/normalization-axis omissions rather than misleading conceptual errors.",
           "visual_aesthetics": 3.3,
           "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:40:01.760Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:28:16.094Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

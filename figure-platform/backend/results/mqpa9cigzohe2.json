@@ -764,95 +764,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a camera coordinate system with a slightly elevated 3D perspective where the Z-axis is horizontal pointing to the right, the Y-axis is vertical pointing straight up, and the X-axis goes diagonally up and right representing depth.",
-          "viewing_angle_rendered": "The rendered screenshot shows the Y-axis pointing straight up, but the Z-axis points diagonally down and to the right, while the X-axis goes diagonally up and right, creating a skewed coordinate alignment compared to the original.",
-          "viewing_angle_comparison": "The rendered view has an incorrect camera angle that skews the axes; specifically, the Z-axis should be completely horizontal to the right rather than pointing downwards.",
-          "shape_comparison": [
-            {
-              "element": "Coordinate Axes (X, Y, Z)",
-              "source_shape": "lines with 2D arrowheads",
-              "rendered_shape": "3D ArrowHelpers (cones and cylinders)",
-              "match": true
-            },
-            {
-              "element": "Image Plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "Rotation Arcs",
-              "source_shape": "circular arcs with arrowheads",
-              "rendered_shape": "3D line arcs with cones",
-              "match": true
-            },
-            {
-              "element": "Points P and p",
-              "source_shape": "cyan circles with black borders",
-              "rendered_shape": "black spheres with small cyan cores",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The Z-axis points downwards in the render instead of horizontally to the right.",
-            "The 'Pitch' label is incorrectly positioned near the Y-axis rather than the X-axis, causing clutter and confusion.",
-            "Points P and p appear almost completely black instead of bright cyan with a thin outline.",
-            "The green coordinate arrows (x and y) on the image plane are extremely small and barely visible."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Color-Wrong"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "The 3D interactive model behaves correctly, but the camera angle skews the main axes and the label positions are cluttered and misplaced.",
-          "action_items": [
-            "Adjust the camera position and target so the Z-axis lies horizontally to the right, matching the textbook's orthographic-like projection.",
-            "Reposition the rotation labels ('Pitch', 'Yaw', 'Roll') and their respective theta labels to eliminate overlap and place them near their correct axes.",
-            "Increase the size of the inner cyan spheres for points P and p so that they clearly appear cyan with a black outline.",
-            "Increase the length and thickness of the green coordinate arrows on the image plane to make them readable."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:00:37.528Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The scene includes the main axes, yaw/pitch/roll arcs, image plane, projection ray, P/p labels, and origin label, with functional yaw/pitch sliders and clickable elements. However, the initial view is rotated compared with the source: the Z axis slopes downward instead of being nearly horizontal, and the image plane/point layout is more compressed. The projected point p and green x/y coordinate arrows are much smaller and more central than in the reference, where p lies higher/right on the plane and the green arrows are prominent. The cyan-filled point markers in the source appear mostly as black dots in the render because the cyan inner spheres are hidden inside opaque black outer spheres.",
           "failure_modes": [
             "Camera-Wrong",
-            "Concept-Misunderstood"
+            "Scale-Wrong",
+            "Color-Wrong"
           ],
+          "failure_modes_reasoning": "Camera-Wrong: the initial orientation does not match the source figure, especially the downward-slanting Z axis and altered plane/axis perspective. Scale-Wrong: the p position and green x/y coordinate arrows are noticeably undersized and misplaced relative to the plane compared with the source. Color-Wrong: the cyan centers of P and p are not visibly reproduced, leaving the markers effectively black instead of cyan with black outlines.",
+          "geometry_accuracy_analysis": "The scene constructs real 3D geometry: a camera-coordinate origin sphere, X/Y/Z ArrowHelpers, red yaw/pitch/roll rotation arcs with arrowheads, a translucent image plane at finite depth, grid axes on that plane, 3D point P and projected point p, a dashed projection ray, drop lines, green image-coordinate arrows, and labels. The main spatial relationships are plausible: P lies beyond the image plane, the ray from the origin passes through p, and the axes/rotation rings are arranged around the appropriate coordinate directions; minor issues include the image plane being slightly off-center and some rotation arcs/labels appearing positioned for visual resemblance rather than exact geometric construction from a common coordinate frame.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as true unwarped 3D primitives with only minor alignment/proportion issues, matching the score-4 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but these do not count as meaningful interactions. There are two visible range sliders, Yaw θY and Pitch θX, and both update the numeric readout and visibly move P, p, the projection ray, and the green image-coordinate arrows. A pointermove raycaster provides hover tooltips for many registered objects including the origin, axes, image plane, points, and rotation arcs; these should visibly show small tooltips. Click handlers are registered on many scene objects: several show explanatory popup messages via postMessage, and clicks on the origin, point P, yaw arc, and pitch arc also trigger guided demo steps with visible tweened motion and slider updates. The UI is compact in the lower-left corner and does not cover important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions including two sliders, hover/click explanations, and guided animated demo steps, with compact non-intrusive UI.",
+          "faithfulness_analysis": "The rendered figure contains the same basic components—Y/X/Z axes, yaw/pitch/roll arcs, a translucent image plane, points p and P, dashed projection line, and labels—but the first-frame composition is not a close drop-in match. The camera angle and projection differ substantially: the source has a flatter schematic view with a horizontal Z axis, larger plane and labels, P far to the upper right, and no UI, while the render is zoomed out with much more whitespace, a slanted Z axis, smaller elements, altered proportions, and visible slider controls at bottom left.",
           "faithfulness": 3,
-          "label_quality": 2,
-          "concept_accuracy": 3,
-          "visual_aesthetics": 3,
-          "overall_average": 3.2
+          "faithfulness_reasoning": "The general idea is recognizable, but significant camera-angle, zoom, proportion, whitespace, and UI differences keep it around a ~65% match rather than a faithful replacement.",
+          "label_quality_analysis": "Source labels are: Y, Yaw, θY, Pitch, θX, X, p, y, x, P, θZ, Roll, Z, and (0,0,0). The generated figure includes all of these with correct text and generally appropriate associations; θ labels, axis labels, point labels, and origin label are all readable. However, several labels are noticeably smaller than the source scale, especially the local x/y labels and θ labels, and a few placements are less faithful: Pitch is crowded between rotation arcs, p/y/x cluster around the plane and point, and θZ/Roll are shifted relative to the source. There are also extra UI slider labels at bottom-left that are not part of the source, though they do not obscure the main figure.",
+          "label_quality": 4,
+          "label_quality_reasoning": "All source labels are present and readable, but multiple labels have minor size and placement mismatches relative to the source, preventing a perfect score.",
+          "concept_accuracy_analysis": "The figure illustrates a pinhole camera coordinate frame with X/Y/Z axes, an image plane at fixed depth, a 3D point P projecting along a ray to image point p=(x,y), and Euler rotations yaw θY, pitch θX, and roll θZ. The labels and popups are mostly figure-specific and correctly describe perspective projection p=(fX/Z,fY/Z), yaw about Y, pitch about X, and roll about Z, but roll is not actually interactive and the X-axis popup incorrectly says the camera X-axis lies in the image plane rather than being parallel to the image-plane x direction.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main projection and Euler-angle concepts are accurately conveyed with specific explanations, but there are minor inaccuracies/omissions regarding the X-axis description and lack of roll demonstration.",
+          "visual_aesthetics": 3.7,
+          "overall_average": 4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:41:00.556Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:38:08.682Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

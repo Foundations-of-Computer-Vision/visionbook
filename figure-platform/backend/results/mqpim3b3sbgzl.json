@@ -272,93 +272,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a perspective projection diagram with camera center O in the lower left, an image plane in the center-left, and a sequence of birds flying along a straight line towards the upper right. The viewpoint is elevated and looking from the left-front towards the right-background, showing clear foreshortening.",
-          "viewing_angle_rendered": "The rendered screenshot shows the same scene from a very similar elevated, left-front viewpoint. The camera center O, the image plane, the 3D bird trajectory, and the vanishing point are all aligned correctly relative to the viewpoint.",
-          "viewing_angle_comparison": "The viewing angles are an excellent match, capturing the elevation, azimuth, and perspective projection of the original textbook diagram faithfully.",
-          "shape_comparison": [
-            {
-              "element": "image plane",
-              "source_shape": "flat rectangle outline",
-              "rendered_shape": "flat rectangle outline",
-              "match": true
-            },
-            {
-              "element": "camera center O",
-              "source_shape": "flat black dot",
-              "rendered_shape": "black sphere",
-              "match": true
-            },
-            {
-              "element": "projection rays",
-              "source_shape": "thin lines",
-              "rendered_shape": "thin cylinders",
-              "match": true
-            },
-            {
-              "element": "birds",
-              "source_shape": "2D outline drawings",
-              "rendered_shape": "3D tube-based outline curves",
-              "match": true
-            },
-            {
-              "element": "velocity vectors V",
-              "source_shape": "flat red arrows",
-              "rendered_shape": "3D red cylinder/cone arrows",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The camera center O has a faint grey translucent halo in the rendered version which is not present in the original source.",
-            "A tiny projected red arrow is added near the projected bird sequence on the image plane, which is not in the original diagram.",
-            "The depth slider UI in the bottom left is very basic and slightly cut off at the edge of the frame."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 4,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "notes": "An exceptionally faithful 3D recreation of the textbook diagram, complete with detailed custom bird outlines and interactive vanishing point controls.",
-          "action_items": [
-            "Improve the styling of the V_Z depth slider container to make it look cleaner and less close to the extreme bottom-left corner.",
-            "Optionally allow users to toggle the camera center halo helper visibility.",
-            "Ensure the tiny projected red arrow on the image plane scales down cleanly when the vanishing point shifts close to the birds."
-          ],
-          "visual_aesthetics": 5,
-          "overall_average": 4.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:54:29.055Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 4,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main components: dark image plane, black O point, green projection rays, red velocity arrows, bird silhouettes, vanishing point marker, and labels. However, the initial rendered view is a wide landscape, highly zoomed-out/flattened composition, whereas the source is a tall portrait diagram with the image plane and ray fan occupying most of the frame; the plane, rays, projected birds, and labels are much smaller and spatially compressed relative to the source.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong: the starting viewpoint/framing is quite different from the source, showing a small oblique 3D scene centered in a wide canvas instead of the tall close-up textbook layout. Scale-Wrong: the proportions and visual emphasis are noticeably off, with the image plane, O point, rays, birds, and labels compressed into a small region rather than filling the frame as in the reference.",
+          "geometry_accuracy_analysis": "Present elements include a dark quadrilateral image plane, a spherical camera center O with halo, green projection rays, multiple bird outline silhouettes along a receding path, smaller projected bird silhouettes, red velocity arrows, a vanishing point marker, and labels. However, the image plane is hardcoded as a skewed quadrilateral with all vertices at z=0 rather than a clean rectangular 3D plane viewed in perspective, and the bird silhouettes/projections are essentially 2D tube outlines. This exhibits baked-in perspective distortion for the principal plane, even though some other objects use nonzero depth.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Per the critical Fake 3D check, the principal image plane is a hardcoded distorted flat quadrilateral instead of an unwarped 3D primitive, so the geometry accuracy must be scored 1.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/pan/zoom, which should visibly work but does not count as a meaningful interaction. A V_Z range slider is visible in the bottom-left and updates state.vz, causing the rays, trajectory, projected points, arrows, and vanishing point to recompute visibly. There are pointermove hover handlers with raycasting over registered scene groups that show local tooltips for the image plane, camera center, vanishing point, rays, birds, projected birds, and velocity arrows; these should visibly function when hovering. Click handlers on the same registered objects send explanatory popup messages with pedagogical text, though the popup depends on the parent frame handling the postMessage rather than an in-page modal. A reset button click handler exists, but the button is hidden with display:none, so it is not usable. The interactions are compact and do not cover the geometry; they are useful for exploring how depth velocity affects the vanishing point and for identifying/explaining figure elements, but there is no guided demo or step-through animation.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "interactivity_usability_reasoning": "There are two meaningful functional interaction types—a V_Z slider and hover/click explanatory object interactions—with compact UI, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The source is a tall portrait, heavily zoomed/cropped diagram with large black silhouettes and red arrows extending off the top/right edges, a large vertical image plane, dense green perspective rays, and prominent 'Vanishing point' text near the lower center. The rendered output is a landscape canvas showing the whole scene very small and centered with large blank margins, different crop/zoom and aspect ratio, much thinner/smaller elements, and visible UI controls in the bottom-left that are absent from the source.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the same general vanishing-point concept is recognizable, the default frame has a drastically wrong zoom, crop, aspect ratio, whitespace, and UI chrome, matching well under 65% of the original composition.",
+          "label_quality_analysis": "Source labels: two instances of “V” (one near the upper red arrow sequence and one near the lower right red arrow), “O” below the black origin/camera point, and “Vanishing point” near the convergence point. The generated figure includes both “V” labels, “O”, and “Vanishing point” with correct text and generally associated with the correct objects. However, the labels are noticeably smaller relative to the figure than in the source, especially “Vanishing point,” which is much less prominent and sits close to/overlapping geometry and green rays; the upper “V” is also very close to the frame line. Overall the label set is complete and readable, but the source-scale font emphasis and placement are only partially matched.",
+          "label_quality": 3,
+          "label_quality_reasoning": "All labels are present and legible, but the font sizes are consistently too small relative to the source and some placements are cramped, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates perspective projection of a 3D bird moving with velocity V, showing rays from camera center O to an image plane, projected bird images that approach a vanishing point, and a V_Z slider that changes the depth component and vanishing point. The interactive tooltips/popups are mostly specific and correct, naming the image plane, pinhole center, projection rays, depth term Z + V_Z t, and vanishing-point dependence on V_X/V_Z and V_Y/V_Z; minor issues include simplified/non-updated apparent-size scaling and some labels/arrows that are not tightly tied to exact geometry.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main perspective-motion and vanishing-point concept is accurately conveyed with figure-specific explanations, with only minor simplifications or imprecision in the projected size/label geometry.",
+          "visual_aesthetics": 2,
+          "overall_average": 2.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:29:21.342Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:32:11.383Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

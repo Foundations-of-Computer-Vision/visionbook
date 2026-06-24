@@ -301,91 +301,41 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows three panels (a, b, c) from a moderately high orthographic/perspective angle (around 30-45 degrees elevation), looking down on 3D surfaces. The surfaces are oriented with their coordinate grids tilted obliquely to the viewer.",
-          "viewing_angle_rendered": "The rendered screenshot shows a single 3D plot from a very low elevation angle (almost flat, close to the horizon), looking slightly down at a single Gabor surface.",
-          "viewing_angle_comparison": "The rendered angle is far too shallow compared to the source, making it difficult to clearly perceive the depth of the negative troughs below the plane. Additionally, it lacks the three distinct side-by-side panels of the source.",
-          "shape_comparison": [
-            {
-              "element": "panel layout",
-              "source_shape": "three horizontal side-by-side panels",
-              "rendered_shape": "single interactive viewport",
-              "match": false
-            },
-            {
-              "element": "surface (a)",
-              "source_shape": "smooth Gaussian dome with solid blue base",
-              "rendered_shape": "N/A (only visible via interactive selection, yellow grid)",
-              "match": false
-            },
-            {
-              "element": "surfaces (b) & (c)",
-              "source_shape": "Gabor wave surfaces with distinct yellow/orange grid reference planes",
-              "rendered_shape": "Gabor wave with highly dense wireframe over a yellow translucent plane",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "Missing the multi-panel side-by-side layout (a, b, c) from the original figure.",
-            "The camera viewpoint is too low/flat compared to the textbook elevation.",
-            "The base plane color for the envelope (a) is yellow/amber instead of the distinctive dark blue shown in the source.",
-            "The wireframe on the rendered surface is far too dense and visually distracting compared to the cleaner source surfaces.",
-            "Missing the static (a), (b), (c) labels."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Color-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 4,
-          "notes": "Fails to replicate the multi-panel layout of the original textbook figure and has incorrect camera elevation and colors.",
-          "action_items": [
-            "Reorganize the scene to display three side-by-side surfaces simultaneously to match panels (a), (b), and (c).",
-            "Increase the camera elevation angle significantly (to around 35-40 degrees) so the viewer looks down onto the surfaces.",
-            "Change the base plane color for the first panel (a) to solid dark blue.",
-            "Reduce the wireframe grid resolution on the surfaces to match the clean grid style of the source image.",
-            "Add HTML labels '(a)', '(b)', and '(c)' below each corresponding panel."
-          ],
-          "visual_aesthetics": 2.3,
-          "overall_average": 3
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:28:50.244Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene shows only one Gabor-like surface with UI controls, while the reference figure contains three side-by-side subfigures labeled (a), (b), and (c). The panel labels are absent, and the simultaneous comparison between the Gaussian/envelope and two Gabor surface variants is replaced by a single selectable interactive surface. The generated surface is much broader and lower than the tall narrow peaks in the reference, and its color/plane treatment does not match the three distinct panels, especially the blue-base Gaussian panel. The camera/view and framing are for a single centered object rather than the wide three-panel textbook layout.",
           "failure_modes": [
-            "Missing-Labels"
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Color-Wrong",
+            "Concept-Misunderstood"
           ],
+          "failure_modes_reasoning": "Missing-Labels applies because the important subfigure labels (a), (b), and (c) are absent. Camera-Wrong applies because the initial view frames a single centered surface instead of the wide multi-panel arrangement and viewpoints of the source. Scale-Wrong applies because the generated peak/ridge proportions are broad and subdued compared with the tall narrow surfaces in the reference. Color-Wrong applies because the reference includes distinct blue/yellow/red coloring across the three panels, while the generated output is mostly yellow/orange with only slight hidden blue and no blue-base panel. Concept-Misunderstood applies because the original figure is a simultaneous three-part comparison, but the generated figure presents only one interactive state at a time.",
+          "geometry_accuracy_analysis": "The scene contains a true 3D height-field mesh for a Gaussian-windowed sinusoid, with vertices varying in x, z, and height y; it also includes a surface wire grid, translucent horizontal zero/reference plane, and zero-plane grid. The Gabor-like oscillatory topology is recognizable and spatially plausible, with central peak/trough structure tapering under a Gaussian envelope. However, there are no coordinate axes, tick marks, axis labels, or any separate annotations that a textbook surface plot commonly includes, and the zero plane/grid is an added reference sheet rather than necessarily matching the original figure exactly.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 2,
+          "geometry_accuracy_reasoning": "All major 3D surface geometry is correctly constructed and recognizable, but some likely supporting plot elements are missing or simplified, so this fits a score of 4 rather than 5.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but these do not count as meaningful interactions. Meaningful interactions include a Component dropdown that visibly switches between Envelope, Real Cosine, and Imaginary Sine surfaces; a frequency range slider that visibly changes ridge spacing and updates the numeric label; hover raycasting on the surface/zero plane that shows a tooltip; clicking the surface advances a multi-step guided demo with animated frequency/component changes and explanatory popup messaging; and clicking the zero plane sends an explanatory popup. The hidden Reset View button has a click handler but is not visible, so it is not usable. Overall, the functional controls are pedagogically useful for exploring the Gabor surface, and the compact transparent UI in the lower-left does not cover important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ meaningful functional interactions, including parameter controls, hover/click explanations, and a guided step-through demo, with compact non-intrusive UI, matching the score-5 rubric.",
+          "faithfulness_analysis": "The source is a wide three-panel figure with three separate 3D surface plots labeled (a), (b), and (c), generous horizontal spacing, and distinct color schemes including a blue-base Gaussian at left and two sharp oscillatory peaked surfaces. The rendered output shows only a single surface plot in a different 3:2 canvas, with UI controls in the lower-left, no panel labels, no three-panel layout, and a much broader/less sharp surface than the reference panels.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although it shares the general idea of a colored 3D mesh surface on a white background, the missing two panels, absent labels, wrong aspect/crop, visible UI chrome, and different surface proportions make it match well under 65% of the original.",
+          "label_quality_analysis": "The source figure contains three labels: “(a)” at the lower left beneath the first surface, “(b)” centered beneath the second surface, and “(c)” beneath the third surface. None of these labels appear in the generated figure; instead, unrelated small UI labels such as “Component,” “Real (Cosine),” “Freq (ω0),” and “6.28” appear in the lower-left corner. The generated output completely omits the source subfigure labels and includes extraneous interface text, so the label set does not match the source in completeness, placement, or purpose.",
+          "label_quality": 1,
+          "label_quality_reasoning": "All required source labels are missing, so this is a score-1 case under the rubric.",
+          "concept_accuracy_analysis": "The figure illustrates a 2D Gabor filter as a 3D height field: a Gaussian envelope multiplied by cosine or sine oscillations, with controls for component and frequency. The tooltips and popups are figure-specific and mostly correct, explaining positive/negative weights, the zero plane, frequency effects, and even/odd cosine/sine phase behavior; the main omission is the lack of explicit axes/formula/parameter labels beyond the frequency control.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3,
-          "overall_average": 3.4
+          "concept_accuracy_reasoning": "The core Gabor-filter concept and interactive explanations are accurate and specific, with only minor omissions such as missing formula and axis/parameter labeling.",
+          "visual_aesthetics": 2.3,
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:42:30.621Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T04:55:10.133Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

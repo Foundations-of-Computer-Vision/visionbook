@@ -309,89 +309,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows five parallel square/diamond-shaped planes stacked vertically, viewed from an elevated axonometric/isometric perspective. The planes are aligned vertically, and a schematic flow with bold upward-pointing arrows and rounded rectangles is positioned on the left side.",
-          "viewing_angle_rendered": "The rendered screenshot matches this viewpoint closely, presenting the five vertically stacked planes at an isometric-style angle, with the schematic flow of arrows and rounded labels correctly positioned on the left.",
-          "viewing_angle_comparison": "The viewing angles match nearly perfectly, maintaining the same elevation, azimuth, and vertical spacing between planes.",
-          "shape_comparison": [
-            {
-              "element": "embedding planes",
-              "source_shape": "flat diamond outlines",
-              "rendered_shape": "flat rectangle outlines viewed at an angle",
-              "match": true
-            },
-            {
-              "element": "data points",
-              "source_shape": "small colored circles",
-              "rendered_shape": "small colored spheres",
-              "match": true
-            },
-            {
-              "element": "trajectory lines",
-              "source_shape": "dashed colored lines",
-              "rendered_shape": "dashed colored lines",
-              "match": true
-            },
-            {
-              "element": "ViT block labels",
-              "source_shape": "rounded rectangles with text",
-              "rendered_shape": "HTML boxes with rounded borders and text",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The rendered figure includes numerous extra labels ('Layer 0', 'Layer 3', 'Green', 'Cyan', etc.) that are absent in the clean, minimalist source figure.",
-            "The vertical schematic arrows on the left are too thin compared to the bold, thick arrows in the original figure.",
-            "The point distribution in the bottom layers is slightly more scattered than the neat, structured clusters in the source."
-          ],
-          "failure_modes": [
-            "Hallucination"
-          ],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent interactive 3D model that perfectly captures the progressive disentanglement concept, though it introduces extra text labels that clutter the visual compared to the minimalist source.",
-          "action_items": [
-            "Add a toggle or option to hide the extra layer and class labels ('Layer 12', 'Purple', etc.) to allow a clean view that perfectly matches the original.",
-            "Increase the thickness of the schematic arrows on the left to make them look as bold as the original figure's arrows.",
-            "Fine-tune the point clustering in the lower planes to match the neat, structured bundles of the original."
-          ],
-          "visual_aesthetics": 4.3,
-          "overall_average": 4.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:26:15.326Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene recreates the stacked planes, colored point trajectories, and four ViT block arrows/labels, but the whole figure is much smaller and more compressed in the rendered view than the source. It also adds layer labels, class-name labels, grid lines, and visible UI controls that are not present in the original textbook figure.",
+          "failure_modes": [
+            "Scale-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Scale-Wrong: the main diagram occupies only a small central portion of the canvas, with labels/arrows much smaller relative to the source. Hallucination: extra layer labels, class labels, grid details, and UI controls appear even though the source only shows ViT block labels, arrows, planes, and colored trajectories.",
+          "geometry_accuracy_analysis": "The scene is constructed as real 3D geometry: five separate horizontal square embedding planes at different Y depths, grid line segments, colored sphere data points, dashed 3D trajectories between corresponding points, a vertical depth axis, and a left-side ViT-block arrow schematic with cone arrowheads and labels. The main stacked t-SNE/representation-flow structure is present and positioned plausibly, though the ViT block boxes are mostly HTML labels rather than solid 3D box geometry and some class/UI details are inconsistent, such as a purple class existing in the scene but not in the class filter. Overall the geometry matches the likely source concept well with only minor schematic/annotation shortcomings.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as true 3D geometry with plausible spatial relationships, but minor representation issues in the ViT schematic and class details prevent a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but those do not count. Meaningful interactions include a 'Show Class' dropdown that filters visible points/trajectories by class, a 'Layer Focus' range slider that switches to a focused single-layer view and animates the camera, hover behavior on data points that visibly highlights one datum's path with yellow rings/lines, hover tooltips/click handlers on points, planes, axis, and ViT-block hit area that provide explanatory text via tooltip/popup, and a window.goToStep guided-demo function with four narrated states. The visible UI is compact in the bottom-left corner and does not cover the main geometry, though the dropdown omits the Purple class and there is no visible button for the guided steps.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions plus a guided demo hook, with compact non-intrusive UI, so it fits the score-5 rubric despite minor class-option and discoverability issues.",
+          "faithfulness_analysis": "The rendered scene contains the same general concept of stacked diamond planes with colored point/line columns and ViT block arrows on the left, but it is shown in a landscape canvas instead of the source's tall portrait crop. The whole diagram is much smaller with excessive whitespace, the labels/arrows are tiny, there is visible UI chrome in the lower left, and extra layer/color text annotations appear that are absent from the source.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in broad structure, the aspect ratio, zoom/crop, margins, label scale, and added UI/annotations differ substantially, making it a poor inline replacement under the <65% match rubric.",
+          "label_quality_analysis": "The source figure contains four repeated labels, each reading \"ViT block x3\" in large rounded boxes along the left side beside vertical arrows. In the generated figure, all four \"ViT block x3\" labels appear with correct text and roughly corresponding left-side positions, but they are much smaller than the source labels and the boxes/arrows are also scaled down; additionally, many extra labels not present in the source appear, including color names, layer labels, and UI text.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Although the four required labels are present, their font size is far too small relative to the source and the generated view includes numerous extra labels, so most label presentation is problematic.",
+          "concept_accuracy_analysis": "The generated figure is intended to illustrate how Vision Transformer image embeddings evolve across network depth, shown as stacked 2D t-SNE planes with color-coded semantic classes, dashed trajectories for the same datum, and ViT block arrows between sampled layers. The labels, tooltips, popups, and guided steps are mostly figure-specific and correctly describe layer snapshots, class clustering, and representation disentangling; the main omissions/errors are that a Purple class is present in the scene but absent from the class filter, and the vertical connected paths may overstate coordinate comparability between separate t-SNE projections if not aligned.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main concept is accurate and the explanations are specific, with only minor issues such as the missing Purple filter option and a potentially simplified interpretation of t-SNE trajectories.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:45:05.595Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T04:58:17.666Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

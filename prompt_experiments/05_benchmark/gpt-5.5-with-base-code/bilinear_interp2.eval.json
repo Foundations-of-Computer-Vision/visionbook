@@ -3,26 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes most of the interpolation geometry, colors, and many labels, and the sliders appear to update the interpolation variables. However, the initial view is zoomed/cropped so the left panel is cut off at the left edge and some right-panel labels are truncated at the right edge. Several important annotations visible in the source are therefore absent or unreadable in the rendered screenshot, and the relative framing/scale of the two panels differs noticeably from the source.",
+          "failure_modes": [
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Missing-Labels applies because labels such as the leftmost l_in[n] area and right-side l_in[n+1,m+1]/related annotations are clipped or unreadable in the rendered view. Camera-Wrong applies because the initial orthographic view does not frame the full source figure and crops both sides. Scale-Wrong applies because the two panels are not proportioned/framed like the source, with the left construction partially off-screen and the right construction dominating the view.",
+          "geometry_accuracy_analysis": "The scene contains the major geometry for both panels: panel (a) has a baseline, two vertical sample stems, top green interpolation segment, sample dots, dashed vertical guide, and red input/output markers; panel (b) has a true 3D rectangular base cell, four vertical sample stems, four elevated corner samples, green top edges/cross-section lines, a translucent bilinear surface patch, dashed projection guides, and red markers for (a,b) and the interpolated output. The right panel is constructed with real x/y/z coordinates rather than a flat texture or baked-in perspective. Minor issues include some extra/ambiguous green cross-section geometry, an absent or underemphasized front intermediate marker l_out(a,m), and the surface/markers may not exactly match the sparse line-only textbook construction, but the spatial topology and proportions are largely correct.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major bilinear-interpolation elements are present as genuine 3D geometry with only minor omissions/alignment or emphasis issues, matching the score-4 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as meaningful interaction. Two visible sliders labeled a and b are functional: moving a updates the 1D red sample and the bilinear cross-section/output position, while moving b updates the bilinear row/cross-section and output point. There are hover and click handlers on several scene elements, including the linear interpolation point, bilinear surface, output point, and green interpolation segments; hovering shows tooltips and clicking opens a compact explanatory note. A Reset View button has a click handler but is hidden with display:none, so it is not a usable visible interaction. The UI is compact and mostly transparent in the top-left corner and does not significantly cover geometry; the popup is also small, though there is no guided step-through demo.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "interactivity_usability_reasoning": "There are multiple functional and pedagogically useful interactions, including two sliders and clickable explanatory scene elements, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame preserves the broad idea of two side-by-side interpolation diagrams with green lines/surfaces, black support points, red highlighted interpolated points, and captions. However it uses a much narrower aspect ratio than the source, is substantially cropped/zoomed so the left panel is cut off and right-side labels are clipped, many mathematical labels and guide lines are missing or repositioned, the typography and proportions differ, and visible slider UI controls appear in the upper-left corner.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable as the same interpolation concept, the wrong aspect ratio, significant cropping, missing detail, and UI chrome make it a poor drop-in replacement matching well under 65% of the original composition.",
+          "label_quality_analysis": "Source labels include, in panel (a): ℓ_in[n], ℓ_out(a), ℓ_in[n+1], bottom labels n, a, n+1, and caption “(a) Linear interpolation”. In the generated figure, ℓ_out(a), ℓ_in[n+1], a, n+1, and the caption appear, but ℓ_in[n] and n are cut off/missing at the left edge; there are also extraneous slider labels “a” and “b”. Source panel (b) includes ℓ_in[n,m], ℓ_in[n,m+1], ℓ_out(n,b), ℓ_out(a,m+1), ℓ_out(a,b), ℓ_in[n+1,m], ℓ_in[n+1,m+1], T(a,b), bottom labels n,m, n,m+1, (a,b), n+1,m, n+1,m+1, and caption “(b) Bilinear interpolation”. In the generated figure, several of these are present, but multiple labels are truncated or clipped at the right edge, some bottom/left labels overlap or are crowded, T(a,b) is missing, and n+1,m+1 is not clearly visible. Overall the label set is only partially complete, with significant cropping, clutter, and several missing or unreadable labels despite some correct labels being present.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels are either missing, clipped, crowded, or partially unreadable, so this fits the score-2 rubric rather than a merely minor-label issue.",
+          "concept_accuracy_analysis": "The figure illustrates linear interpolation in panel (a) and bilinear interpolation over a cell in panel (b), with sliders for fractional coordinates a and b moving the red sample points and green cross-sections. The labels and hover/click explanations are largely figure-specific and correctly describe weighted averaging from four samples, though the exact bilinear weight formula is omitted and the 'row interpolation' cross-section at fixed b is a slightly ambiguous intermediate relative to the stated two-step order.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main interpolation concept and interactions are accurate and specific, with only minor omissions/ambiguity in the intermediate labeling/explanation rather than misinformation.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:43:03.269Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T20:06:13.888Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

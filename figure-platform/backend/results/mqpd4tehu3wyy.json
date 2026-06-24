@@ -292,86 +292,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D coordinate system where the n-axis (time/sample axis) starts at the origin on the left and extends downwards and to the right. The vertical imaginary axis (I) points straight up, and the real axis (R) points upwards and to the right. The helix starts at the origin and winds forward along the positive n direction (from left to right).",
-          "viewing_angle_rendered": "The rendered screenshot shows the n-axis starting at the origin on the right and pointing upwards and to the left. The vertical axis (I) is on the right, and the real axis (R) points deep into the screen. The helix winds from right to left.",
-          "viewing_angle_comparison": "The viewing angles are completely mirrored/flipped. In the source, the n-axis goes from left to right, whereas in the rendered version, the n-axis goes from right to left. The camera azimuth is set in the opposite quadrant.",
-          "shape_comparison": [
-            {
-              "element": "helix",
-              "source_shape": "3D spiral line with spherical markers",
-              "rendered_shape": "3D tube with spherical markers",
-              "match": true
-            },
-            {
-              "element": "real/imaginary projections",
-              "source_shape": "2D sine/cosine waves along the planes",
-              "rendered_shape": "2D sine/cosine lines along the planes",
-              "match": true
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "three thin straight lines with arrowheads",
-              "rendered_shape": "three thin straight lines with cone arrowheads",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The camera view is flipped: the n-axis points to the left in the render but should point to the right.",
-            "The dense vertical/horizontal red and green 'stems' (projection lines) create a solid comb-like fill which is not present in the clean original textbook figure.",
-            "In the source, only a few selective lines connect the helix to the projections, keeping the diagram uncluttered.",
-            "The labels are shifted because of the flipped coordinate system orientation."
-          ],
-          "failure_modes": [
-            "Camera-Wrong"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Mathematically excellent and highly interactive, but the initial camera angle/axis direction is completely reversed compared to the textbook source, and the projection lines are far too dense.",
-          "action_items": [
-            "Change the camera azimuth or axis definition so that the n-axis goes from left (origin) to right (40), matching the source layout.",
-            "Significantly reduce the density of the red/green projection stems, or make them optional/sparse to match the clean aesthetic of the original figure.",
-            "Adjust the label positions once the camera view is flipped to ensure 'R', 'I', and 'n' align nicely with their respective arrowheads as in the source."
-          ],
-          "visual_aesthetics": 3.7,
-          "overall_average": 4.2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:21:04.985Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene shows only a single interactive helix view rather than the two side-by-side subfigures labeled (a) and (b). Axis labels and tick labels are mostly present, but the subfigure labels are absent; the initial camera view is mirrored/rotated compared with the reference, with the I axis on the right and the n axis pointing left instead of the source orientation. The samples are rendered as plain black spheres, whereas the reference uses black circular markers with small orange/brown centers/crosses, and the generated view adds dense red/green projection-stem curtains and UI controls that are not visually present in the textbook figure.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Color-Wrong",
+            "Hallucination"
           ],
-          "geometry_accuracy": 4,
+          "failure_modes_reasoning": "Missing-Labels applies because the important panel labels (a) and (b) are absent. Camera-Wrong applies because the initial viewpoint/orientation is substantially different and appears mirrored relative to the source. Color-Wrong applies because the distinctive orange/brown sample-marker centers from the source are missing. Hallucination applies because the generated figure adds dense projection curtain/stem structures and visible UI elements not present in the original image.",
+          "geometry_accuracy_analysis": "The scene constructs a true 3D complex-exponential helix with R, I, and n axes, arrowheads, ticks and labels, a black helical tube with black sample markers, a green unit circle in the initial complex plane, red real/cosine projection on the I=0 plane, green imaginary/sine projection on the R=0 plane, and projection stems from samples to those planes. No major geometric elements appear absent; the only minor issue is that discrete samples run through n=39 while the continuous curve and axis extend to the 40 tick, so the endpoint sampling is slightly inconsistent. Overall, the geometry accurately represents the intended 3D helix/projection diagram and uses real depth rather than a flattened perspective drawing.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are present as correct 3D geometry with plausible positions, proportions, and connections, with only negligible endpoint/sample alignment issues.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, which functions for camera movement but does not count as meaningful interaction. Meaningful interactions include a frequency slider labeled u that updates the helix/projection geometry visibly from 1 to 5; a Proj. checkbox that toggles the red/green projection curves and stems visibly; hover tooltips over the helix/projection/circle groups via raycasting; and click handlers on those groups that attempt to show explanatory popups via window.parent.postMessage. There is also a guided demo data structure and goToStep function, but no visible in-page step controls, so it is not directly usable from the rendered UI. The UI is very compact and placed in the lower-left corner without covering important geometry, and the controls are pedagogically relevant, though the guided demo is not discoverable and click popups depend on an external parent listener.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 4,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3.7,
-          "overall_average": 3.8
+          "interactivity_usability_reasoning": "Two clearly functional pedagogical controls plus object hover/click explainers are present with compact UI, but the guided demo is not accessible through visible controls, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame shows only a single 3D curve/projection scene, while the source is a two-panel figure with distinct subfigures (a) and (b), labels, and large bottom whitespace. The camera angle and orientation are substantially different from the source panels, the composition is mirrored/rotated, the right-hand multi-loop panel is absent, and UI controls at the bottom-left introduce non-source chrome.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although some elements of the left panel are recognizable, the missing second panel, wrong orientation/crop, absent subfigure labels, and visible UI make it match well under 65% of the original.",
+          "label_quality_analysis": "Source labels include, in panel (a): vertical-axis label I/Ⅱ, R, n, tick/value labels 1, -1, -1, curve/sample labels 1, 20, 40, and caption (a); in panel (b): vertical-axis label I/Ⅱ, R, n, tick/value labels 1, -1, -1, curve/sample labels 1, 20, 40, and caption (b). The generated figure shows only a single diagram, with labels I, R, n, 20, 40, and some 1/-1/0 tick labels; the duplicated panel label set and captions (a)/(b) are missing, and the source’s two-panel labeling structure is not reproduced. Most generated labels are much smaller than the source labels, especially n, 20, 40, and the tick labels, making them weak at the intended scale, though R is visible and roughly placed near the curve.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Many source labels are missing due to the absent two-panel structure and captions, and the labels that are present are mostly undersized relative to the source, so this fits score 2.",
+          "concept_accuracy_analysis": "The figure illustrates a discrete complex exponential e^{2πj u n/N} as a unit-radius helix along the sample index n, with R and I axes and red/green projections corresponding to cosine and sine components. The hover/click explanations are figure-specific, name the relevant equation, variables u, n, N, real/imaginary components, unit magnitude, and correctly describe how increasing u increases the number of rotations; only minor omissions such as not explicitly labeling the formula in the scene itself are apparent.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All core mathematical relationships and interactions are accurate and specifically tied to the complex exponential helix, its unit circle, and cosine/sine projections.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:35:34.345Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:47:56.131Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

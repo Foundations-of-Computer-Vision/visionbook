@@ -3,29 +3,41 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main four surface panels, axes labels, panel letters, and the two magnitude labels for a) and b). However, the first-frame view is much more zoomed out and compact than the reference: all four panels occupy a small central band with large white margins, while the source is a wide, close-cropped low-elevation rendering. The surfaces are also proportionally smaller/squatter relative to their axes and labels, causing labels to crowd and overlap the geometry more than in the source.",
           "failure_modes": [
             "Camera-Wrong",
             "Scale-Wrong"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial viewpoint/crop does not match the source’s wide, close, low-elevation textbook view. Scale-Wrong applies because the panels and surfaces are noticeably undersized and compressed relative to the axes/text and to the reference figure proportions.",
+          "geometry_accuracy_analysis": "The scene contains four true 3D frequency-response surface panels with separate u, v, and vertical axes, mesh/wireframe surfaces, panel letters, and magnitude labels for the first two panels. The surfaces are constructed from 3D BufferGeometry with height varying along the vertical axis, not as a flat pasted texture or billboard. The main geometry matches the likely textbook comparison of D0, D1, Roberts, and Sobel responses, though the Roberts and Sobel panels lack vertical magnitude labels and the colored translucent filled surfaces differ from a typical simple wireframe textbook rendering.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present and arranged plausibly as real 3D surfaces, with only minor labeling/stylistic and possible response-shape simplifications preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but those do not count as meaningful interactions. A visible bottom-right “slice” button toggles red constant-v cross-section curves on all four surfaces, shows a compact popup explaining the slice, and visibly changes the scene. When slice mode is active, a v range slider appears and updates the red cross-section positions, which is a functional parameter control. The surface meshes are registered for raycasting: hovering over a surface changes its opacity and shows a tooltip, and clicking a surface opens a short explanatory popup about that operator; these appear pedagogically relevant. A Reset View button has a click handler but is hidden with display:none, so it is not usable. Escape/background click only dismiss popups. The UI is very compact in the lower-right corner and does not cover important geometry, but there is no guided demo or step-through animation.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are multiple functional, pedagogically useful interactions—slice toggle, slice-position slider, and surface hover/click explanations—with compact non-intrusive UI, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame includes four labeled 3D surface panels with u/v axes and similar rainbow coloring, so the subject is recognizable. However, the source is an extremely wide, tightly cropped panoramic figure with large wireframe surfaces filling the height, while the render is a standard landscape canvas with the panels shrunk into a diagonal row, excessive whitespace, different zoom/crop, less faithful wireframe styling, smaller/misplaced labels, and a visible UI button at bottom right.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general four-surface concept is present, the aspect ratio, scale, crop, whitespace, styling, and UI chrome differ substantially, making it a poor drop-in match below 65%.",
+          "label_quality_analysis": "Source labels include the two titles |D0(u,v)| and |D1(u,v)|, subplot labels a), b), c), d), and u/v axis labels on each of the four panels. The generated figure includes all of these labels with mostly correct text and they are readable, including the two titles and repeated u/v labels. However, several labels are repositioned compared with the source: the subplot labels are placed close to or inside the miniature plots rather than in the lower-left margins, some u/v labels are crowded near axes and surfaces, and the overall label scale is somewhat inconsistent with the source, especially because the panels are compressed into a much smaller grouped view.",
           "label_quality": 3,
-          "concept_accuracy": 4,
+          "label_quality_reasoning": "All labels are present and readable, but many have noticeable size/placement mismatches and crowding relative to the source, so this fits a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates DFT magnitude responses of derivative operators over frequency coordinates u and v, with four panels for d0, d1, Roberts cross, and Sobel-Feldman, plus specific hover/click explanations and a constant-v slice interaction. The main idea is present and the explanations are mostly figure-specific, but several frequency responses are only approximate or inaccurate: derivative responses are given artificial nonzero floors at DC, the Roberts cross is reduced to a single diagonal sine ridge rather than the combined Roberts operator response, and the Sobel smoothing term does not vanish at high vertical frequency as the standard mask response would.",
+          "concept_accuracy": 3,
+          "concept_accuracy_reasoning": "Core concept and interactions are specific, but multiple mathematical details of the plotted operator responses are wrong or simplified enough to reduce accuracy to the mid range.",
           "visual_aesthetics": 3,
           "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:42:51.201Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T20:04:58.265Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

@@ -251,83 +251,37 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows the epipolar geometry setup in a flat diagrammatic orthographic perspective, with Camera 1 on the left and Camera 2 on the right, and the 3D point P situated at the top peak.",
-          "viewing_angle_rendered": "The rendered screenshot matches the flat orthographic view exactly, with a front-on camera viewpoint showing the symmetric arrangement of the left and right image planes and point P at the peak.",
-          "viewing_angle_comparison": "The viewing angles match perfectly, replicating the textbook's 2.5D schematic look via a flat orthographic projection.",
-          "shape_comparison": [
-            {
-              "element": "camera centers O1, O2",
-              "source_shape": "flat disc",
-              "rendered_shape": "flat disc",
-              "match": true
-            },
-            {
-              "element": "image planes",
-              "source_shape": "skewed flat rectangle",
-              "rendered_shape": "skewed flat rectangle",
-              "match": true
-            },
-            {
-              "element": "epipolar plane",
-              "source_shape": "flat triangle",
-              "rendered_shape": "flat triangle",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The right 'Epipolar line' label overlaps significantly with the 'Camera 2' label and 'p2'",
-            "The 'Camera 1' label is placed to the right of O1 instead of the left",
-            "The 'Camera 2' label is placed to the left of O2 instead of the right",
-            "The coordinate axes (green and blue arrows) do not originate from the exact same points as in the original textbook (where they stem from the image points/epipoles)"
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "Excellent flat 2.5D diagram translation with functional interactive point movement, though label placement needs refinement to avoid overlap.",
-          "action_items": [
-            "Move the right 'Epipolar line' label slightly upward or adjust its rotation/offset to prevent collision with 'Camera 2' and 'p2'",
-            "Shift the 'Camera 1' label to the far left (left of O1) and 'Camera 2' to the far right (right of O2) as in the source",
-            "Re-align the coordinate axes (green and blue arrows) to match the source figure's origins and directions more precisely",
-            "Increase the z-offset or adjust renderOrder on the black image plane outlines so they crisp up cleanly over the yellow epipolar plane"
-          ],
-          "visual_aesthetics": 3.7,
-          "overall_average": 4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:54:58.727Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 5,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The screenshot closely follows the source layout, with the yellow epipolar plane, red rays/epipolar lines, camera image planes, epipoles, projected points, axes, and main labels all present. However, the code constructs the diagram almost entirely in a flat XY layer with small z offsets used only for render ordering; the image planes, epipolar plane, baseline, and rays are not true 3D planes/lines in depth, so OrbitControls rotation would reveal a stacked 2D drawing rather than a meaningful 3D epipolar geometry model.",
+          "failure_modes": [
+            "Depth-Wrong"
+          ],
+          "failure_modes_reasoning": "The generated figure visually imitates the 2D source from the initial camera, but the underlying Three.js scene does not represent the stereo geometry in actual 3D depth; it uses flat ShapeGeometry and z-lifts for layering, so the depth/perspective interpretation is incorrect.",
+          "geometry_accuracy_analysis": "The scene includes many intended epipolar-geometry elements: two image-plane quadrilaterals, camera centers O1/O2, epipoles, point P, projected points p1/p2, baseline, rays, epipolar lines, coordinate axes, and labels. However, essentially all geometry is built from 2D XY coordinates with only small z-lifts for layering; the image planes and epipolar plane are ShapeGeometry polygons lying flat, and the tilted rectangles are hardcoded as skewed quadrilaterals to mimic the textbook perspective rather than being real 3D planes viewed by a camera. This fails the critical true-3D check: the figure is a layered flat illustration, not an unwarped 3D reconstruction.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Because the principal geometry is flattened into a 2D XY sheet with baked-in skewed coordinates, it is a Fake 3D case and must score 1 regardless of how many visual elements are present.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. A visible compact 'move P' range slider at the top right updates the 3D point P, yellow epipolar plane, red rays/epipolar lines, projection links, and p1/p2 labels/disks; its first pointer-down also triggers an explanatory popup via postMessage. The code registers many scene objects as interactive: image planes, baseline, epipolar plane, rays, epipolar lines, projection links, axes, camera centers, epipoles, image points, and P all support hover tooltips and click popups with explanatory text, and the raycasting logic should visibly work on their child meshes. A hidden Reset View button has a click listener but is not usable because display:none. The interactions are pedagogically useful and the UI chrome is very compact, with the small slider not meaningfully covering geometry, but there is no guided step-through demo beyond the slider and click/hover explanations.",
           "interactivity_usability": 4,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 5,
-          "overall_average": 4.8
+          "interactivity_usability_reasoning": "There are multiple functional pedagogical interactions, especially the P slider and hover/click explanations, with compact UI, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame is recognizable as the same epipolar geometry diagram, with the yellow epipolar plane, red rays, two image planes, camera centers, epipoles, and p1/p2 labels present. However, it is substantially zoomed out and compressed compared with the source: the source fills the canvas with large labels and image planes extending/cropping near the bottom, while the render leaves much more whitespace, uses smaller text, shows the full image planes, changes proportions, and includes a visible slider UI at the top right.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The main structure matches, but significant crop/zoom/proportion differences and UI chrome make it only a moderate drop-in replacement, around the 65–75% range.",
+          "label_quality_analysis": "Source labels: P, Epipolar plane, two Epipolar line labels, Camera 1, Camera 2, O1, O2, p1, p2, e1, and e2. The generated figure includes all of these labels with essentially correct text, but most are much smaller than in the source: the camera labels, epipolar plane label, O/e/p labels, and epipolar line labels are all reduced relative to the figure scale. Placement is broadly associated with the correct objects, but Camera 1/Camera 2 are cramped near the baseline rather than large and outside the geometry, and the right Epipolar line label is crowded against the camera/line region. Overall the label set is complete and readable, but the font scale is consistently too small and several placements are less clear than the source.",
+          "label_quality": 3,
+          "label_quality_reasoning": "All labels are present and mostly readable, but the consistent font-size mismatch and some cramped positioning mean roughly half or more of the label presentation has quality issues, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure is intended to illustrate stereo epipolar geometry: two camera centers O₁/O₂, baseline, epipoles e₁/e₂, a 3D point P, image points p₁/p₂, the epipolar plane, and epipolar lines on the two image planes. The labels and popups are mostly figure-specific and correctly explain that the epipolar plane contains O₁, O₂, and P; epipolar lines are intersections with image planes; and epipoles remain fixed as P moves. A minor weakness is that the constructed p₁/p₂ positions and pink “projection links” are schematic rather than rigorously aligned as projections along O₁P/O₂P, and some camera-axis tooltip details such as “yaw-only rotation” are assumed rather than established by the figure.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main epipolar-geometry concept and explanations are accurate and specific, with only minor schematic/geometric imprecision and a small amount of unsupported specificity.",
+          "visual_aesthetics": 2.3,
+          "overall_average": 3
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:16:17.178Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:31:28.136Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

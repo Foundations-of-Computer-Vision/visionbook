@@ -93,89 +93,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure presents a 3D coordinate system using a classical oblique projection. The Y-axis points straight up, the Z-axis points straight to the right, and the X-axis points diagonally up and left, creating a clear 3D spatial relationship on a 2D page.",
-          "viewing_angle_rendered": "The rendered screenshot mimics this exact oblique projection by manually layout-positioning the elements in 3D and viewing them orthographically from a direct front-facing camera angle (azimuth 90, elevation 0).",
-          "viewing_angle_comparison": "The viewing angles match perfectly. By using an orthographic front-facing view combined with carefully calculated coordinates, the rendered output reproduces the exact layout, aspect ratio, and perspective of the original 2D textbook graphic.",
-          "shape_comparison": [
-            {
-              "element": "Coordinate Axes (X, Y, Z)",
-              "source_shape": "thin lines with arrowheads",
-              "rendered_shape": "thin cylinders with cone arrowheads",
-              "match": true
-            },
-            {
-              "element": "Image Plane",
-              "source_shape": "translucent parallelogram",
-              "rendered_shape": "translucent parallelogram mesh",
-              "match": true
-            },
-            {
-              "element": "Yaw, Pitch, Roll Arcs",
-              "source_shape": "red curved arrows",
-              "rendered_shape": "red tube arcs with cone arrowheads",
-              "match": true
-            },
-            {
-              "element": "Points P and p",
-              "source_shape": "cyan circles with black borders",
-              "rendered_shape": "cyan flat disks with torus borders",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The Yaw, Pitch, and Roll red arc arrows have slightly thicker tubes than the original thin lines.",
-            "The support line connecting point P to the Z-axis is slightly thicker than the original grey line."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 4,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "notes": "An exceptionally faithful reproduction that uses manual coordinate mapping to perfectly recreate the look and feel of the original oblique 2D diagram with robust interactive tooltip annotations.",
-          "action_items": [
-            "Slightly thin the red tubes for Yaw, Pitch, and Roll to match the delicate line weights of the original figure.",
-            "Make the grey support line under point P slightly thinner.",
-            "Add a subtle UI control (e.g., a slider) to dynamically vary the pitch, yaw, or roll angles to make the interactive component even more engaging and educational."
-          ],
-          "visual_aesthetics": 5,
-          "overall_average": 4.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:50:06.075Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered view includes the main labels, axes, image plane, projected point p, point P, dashed ray, guides, and yaw/pitch/roll arcs with generally matching colors. However, the code builds almost the entire figure as a flat XY drawing using v2 coordinates with only tiny z offsets and sets the camera to a straight-on orthographic view, so the apparent 3D coordinate/projection geometry is not actually represented in depth. The yaw and pitch red arcs are visibly much smaller and thinner than in the source, and the overall proportions of some annotations versus the axes/plane are compressed.",
           "failure_modes": [
             "Depth-Wrong",
-            "Interaction-Missing"
+            "Scale-Wrong"
           ],
-          "geometry_accuracy": 2,
-          "interactivity_usability": 2,
-          "faithfulness": 4,
+          "failure_modes_reasoning": "Depth-Wrong applies because the 3D scene is essentially a 2D billboard with all major axes, plane, ray, points, and guides nearly coplanar rather than a true 3D coordinate/projection construction. Scale-Wrong applies because key visual proportions, especially the rotation arcs and annotation sizing relative to the axes and plane, are noticeably reduced compared with the reference.",
+          "geometry_accuracy_analysis": "The scene includes axes with arrowheads, an origin sphere, a translucent image-plane quadrilateral, green image-coordinate arrows, cyan p and P points, dashed projection/support guides, and red yaw/pitch/roll arcs with labels. However, nearly all geometry is flattened into an XY drawing with only tiny Z offsets for layering; the image plane is a hardcoded skewed ShapeGeometry parallelogram rather than a true rectangular plane viewed in perspective, and the camera is set to a straight-on orthographic view, so the apparent 3D depth is baked into 2D coordinates rather than generated by real 3D structure.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Per the critical Fake 3D check, the principal elements are flattened along one axis and use baked-in skewed 2D coordinates, so the geometry accuracy must be scored 1.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for camera rotation/zoom, which likely works but does not count as a meaningful interaction. A Reset View button has a click listener, but the button is styled display:none, so it is not usable. The only real pedagogical interaction is object hover/click: many scene objects are registered with raycasting so hovering changes the cursor and shows a small tooltip, and clicking sends an explanatory popup message for axes, plane, points, ray, yaw/pitch/roll arcs, and guides; this is compact and does not cover the geometry. There are no sliders, toggles, parameter controls, animations, or guided step-through demo.",
+          "interactivity_usability": 3,
+          "interactivity_usability_reasoning": "The figure provides one functional pedagogical interaction type—hover/click explanations on scene elements—with compact UI, but no guided demo or additional controls, so it fits score 3.",
+          "faithfulness_analysis": "The rendered diagram contains the same main elements and a similar oblique camera angle: axes, yaw/pitch/roll arcs, translucent image plane, point p/P, dashed ray, and green local axes are all recognizable. However, it is substantially under-zoomed and horizontally compressed compared with the source, with much larger left/right whitespace, smaller labels/arrows, paler green vectors, and altered proportions of the yaw arc, plane, and distant P construction, so it would not serve as a close drop-in replacement.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The overall layout is recognizable, but significant crop, scale, whitespace, color, and proportion mismatches keep it around a 65–75% match rather than a near-faithful reproduction.",
+          "label_quality_analysis": "Source labels: Y, Yaw, θY, Pitch, θX, X, p, y, x, P, θZ, Roll, Z, and (0,0,0). The generated figure includes all of these with correct text and generally appropriate serif styling and readable scale. Most labels are placed near the corresponding axes, rotations, point, and image-plane annotations; however, the Pitch/X area is somewhat crowded with the X label very close to the diagonal arrow and Pitch text, and the p label is slightly small/close to the point marker compared with the source. Overall the label set is complete and mostly well scaled, with only minor placement/clutter issues.",
           "label_quality": 4,
-          "concept_accuracy": 3,
-          "visual_aesthetics": 3.3,
+          "label_quality_reasoning": "All labels are present, correct, and readable at roughly the source scale, but a small number have minor crowding or placement issues, matching the score-4 rubric.",
+          "concept_accuracy_analysis": "The figure appears intended to illustrate a camera coordinate system with 3D point P projecting along a viewing ray to image point p on an image plane, along with image-coordinate directions x/y and Euler rotations yaw θY, pitch θX, and roll θZ. The labels and hover/click explanations are mostly figure-specific and correctly reference the axes, projection ray, image plane, projected point, and rotation axes, though the scene is essentially a flattened 2D reconstruction of a 3D camera geometry and the popups add some optical-flow/point-velocity context not explicitly shown by the geometry.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main camera-projection and Euler-angle concept is conveyed accurately with specific explanations, with only minor limitations from flattened geometry and a small amount of extra contextual wording not directly depicted.",
+          "visual_aesthetics": 2.7,
           "overall_average": 3
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:29:59.158Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:38:47.852Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

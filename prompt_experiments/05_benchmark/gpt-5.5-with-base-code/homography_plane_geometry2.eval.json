@@ -3,29 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main labeled elements, projection rays, cyan coordinate annotations, camera/world axes, and a tilt slider plus clickable interactions. However the initial composition/viewpoint is much more top-left/top-down and compact than the source: the source has a wide diagonal layout with the camera center at far left, the camera plane large and steeply slanted, and the planar surface far to the lower right. In the screenshot the planar surface and camera plane are comparatively small/close together, and the world point appears black rather than the cyan-filled marker shown in the source.",
           "failure_modes": [
-            "Color-Wrong",
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Color-Wrong"
           ],
-          "geometry_accuracy": 4,
+          "failure_modes_reasoning": "Camera-Wrong: the initial viewing angle and layout do not match the source's wide diagonal perspective. Scale-Wrong: the relative distances and sizes are compressed, with the long projection geometry and large planar surface greatly reduced. Color-Wrong: the world point marker on the planar surface appears black instead of cyan with a black outline as in the reference.",
+          "geometry_accuracy_analysis": "The scene includes a camera center marker, a tilted/positioned camera image plane, a larger planar surface, projection rays from the camera center to the plane corners, a cyan corresponding point and ray, image/world coordinate axes, and labels. However, the main planar surface is not built as a clean rectangular 3D plane viewed in perspective; it is hardcoded as an asymmetric quadrilateral with all vertices at Z=0, including baked-in skewed coordinates that mimic the textbook perspective shape. Although several diagram elements are present, the principal plane geometry violates the fake-3D check by encoding the perspective distortion directly into flat coordinates rather than relying on the camera view.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Per the critical check, the baked-in skewed flat Z=0 quadrilateral for the main plane requires a score of 1 despite the presence of other 3D elements.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as meaningful interaction. Meaningful interactions include a bottom-left 'tilt plane' range slider that visibly rotates the planar surface and updates projection rays/image point, a Reset button that restores the camera view, hover handlers on the camera plane, world plane, camera center, world point, and image point that show tooltips and highlight objects, and click handlers on those same objects that open explanatory popups; popup close and Escape also function. These interactions are usable and pedagogically relevant, especially the slider and click/hover explanations, and the UI is compact in the lower-left corner without covering important geometry; however there is no guided demo or step-through animation.",
           "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are at least two functional pedagogical interactions with compact UI, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered scene contains the same basic elements—camera center, camera plane, planar surface, dashed projection lines, cyan points, and coordinate axes—but the first frame is much more zoomed out with large whitespace and the diagram occupies only a small central portion instead of filling the frame like the source. The camera angle and proportions differ noticeably, labels are much smaller and differently oriented, and UI controls at the bottom-left add non-source chrome.",
           "faithfulness": 3,
+          "faithfulness_reasoning": "The general concept is recognizable, but substantial under-zoom, whitespace/crop mismatch, altered label placement/orientation, and visible UI controls make it only a moderate match rather than a drop-in replacement.",
+          "label_quality_analysis": "Source labels are: \"Camera center\", \"Camera plane\", cyan \"(x,y)\", cyan \"(X,Y,0)\", \"planar surface\", camera-coordinate labels \"x\" and \"y\", and surface-coordinate labels \"X\", \"Y\", \"Z\". The generated figure includes all of these labels with correct text, and most are readable, but the overall font scale is much smaller than in the source; \"Camera center\" and \"Camera plane\" are especially reduced and the camera-plane label is not aligned/rotated like the source and sits close to the camera geometry. The coordinate labels are present but some are small and slightly cluttered near axes/points.",
           "label_quality": 3,
+          "label_quality_reasoning": "All labels are present and mostly readable, but the font sizes are consistently too small relative to the source and several placements/orientations are only approximate, matching the rubric for a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates planar homography geometry: a camera center, image/camera plane, projection rays, a planar scene point (X,Y,0), and its image point (x,y), with labels and tooltips that specifically describe perspective projection and the plane-to-image homography. The explanations are mostly accurate and figure-specific, though the tilt slider makes the plane no longer literally the fixed world plane Z=0 while labels/tooltips still call it that, and one popup wording suggests the image changes “along the projection ray,” which is slightly imprecise because the ray changes as the point/plane tilts.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.6
+          "concept_accuracy_reasoning": "Main homography/projection concept is correct and specifically explained, with only minor imprecision around the tilted plane still being labeled Z=0 and the wording of how the image point moves.",
+          "visual_aesthetics": 2.3,
+          "overall_average": 3
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:40:24.052Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:34:35.069Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

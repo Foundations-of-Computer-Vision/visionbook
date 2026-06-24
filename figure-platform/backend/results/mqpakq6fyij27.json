@@ -682,99 +682,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure presents a 3D coordinate system using an oblique/axonometric projection. The w-axis goes horizontally to the right, the y-axis goes vertically upwards, and the x-axis goes obliquely up and to the right. The viewpoint is from slightly above, looking down at the two parallel planes (w=0 and w=1).",
-          "viewing_angle_rendered": "The rendered screenshot matches the oblique projection using an orthographic camera looking directly along the Z-axis, with the 3D basis vectors engineered to mimic the axonometric style. The w-axis is horizontal, the y-axis is vertical, and the x-axis points diagonally up-right.",
-          "viewing_angle_comparison": "The viewing angles are an exact match. Both successfully project the 3D scene onto a 2D axonometric representation where the parallel planes appear as matching parallelograms.",
-          "shape_comparison": [
-            {
-              "element": "Heterogeneous plane",
-              "source_shape": "flat parallelogram",
-              "rendered_shape": "flat parallelogram",
-              "match": true
-            },
-            {
-              "element": "Homogeneous plane",
-              "source_shape": "flat parallelogram outline",
-              "rendered_shape": "flat parallelogram outline",
-              "match": true
-            },
-            {
-              "element": "Coordinate axes",
-              "source_shape": "arrows",
-              "rendered_shape": "arrows (cone + cylinder)",
-              "match": true
-            },
-            {
-              "element": "Points (x,y), (x,y,1), and scaled",
-              "source_shape": "flat red circles with black outlines",
-              "rendered_shape": "3D spheres (black outer, red inner)",
-              "match": true
-            },
-            {
-              "element": "Dashed ray",
-              "source_shape": "dashed line",
-              "rendered_shape": "dashed cylinder segments",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The 'Heterogeneous' label is partially clipped ('eterogeneous') at the left edge of the viewport.",
-            "The x-axis arrowhead overlaps directly with the homogeneous point (x,y,1), making it look like a vector pointing directly to the dot, whereas in the source the x-axis extends further past the plane.",
-            "The connector line between (x,y) and (x,y,1) is slightly too thick compared to the thin line in the original figure."
-          ],
-          "failure_modes": [
-            "Scale-Wrong",
-            "Missing-Labels"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent reproduction of the textbook axonometric style with highly interactive sliders and step-by-step guidance, marred only by minor label clipping and axis overlap.",
-          "action_items": [
-            "Increase the length of the x-axis or shift its end point further up-right so that the arrowhead does not overlap and obscure the point (x,y,1).",
-            "Shift the 'Heterogeneous' label slightly to the right or adjust the camera's horizontal framing to prevent the text from clipping on the left edge.",
-            "Reduce the radius of the connector cylinder between (x,y) and (x,y,1) to make it look like a thin, delicate guide line."
-          ],
-          "visual_aesthetics": 4,
-          "overall_average": 4.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:09:28.455Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated figure includes the main axes, planes, red points, connector, dashed ray, and most coordinate labels, but the left 'Heterogeneous' label is clipped offscreen and the top '(λx,λy,λ)' annotation is partially cut off. The overall construction is conceptually close, but the initial framing/zoom is noticeably different from the source and causes important annotations to be cropped; the proportions/placement of labels and planes are also somewhat compressed compared with the reference.",
           "failure_modes": [
+            "Missing-Labels",
             "Camera-Wrong",
-            "Missing-Labels"
+            "Scale-Wrong"
           ],
-          "geometry_accuracy": 4,
+          "failure_modes_reasoning": "Important annotations are present in code but not fully visible in the rendered screenshot, especially the top homogeneous-coordinate label and left title, so Missing-Labels applies. The initial camera/framing does not match the source and crops content, so Camera-Wrong applies. Relative proportions and spacing of labels, planes, and points are noticeably compressed compared with the reference, so Scale-Wrong applies.",
+          "geometry_accuracy_analysis": "The scene constructs real 3D geometry: three arrowed axes, a filled heterogeneous plane at w=0, an outlined/transparent homogeneous plane at w=1, a w=1 tick, origin marker, red/black point markers for (x,y), (x,y,1), and (λx,λy,λ), a connector parallel to the w direction, and a dashed ray from the origin through the scaled homogeneous point. The planes are parallel parallelograms generated from a consistent coordinate basis rather than a pasted texture or single flat billboard, and the point/ray relationships are geometrically coherent. Minor concern is that the coordinate basis is oblique/non-orthogonal to reproduce the textbook-style drawing, but the topology, connections, and proportions of the homogeneous-coordinate diagram are accurately represented.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are present as separate 3D objects with correct relative positions and relationships, so this fits the score-5 rubric despite a stylized oblique basis.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, which allow camera rotation/zoom but do not count as meaningful interaction. Two visible sliders, Scale (λ) and Height (y), update the red homogeneous/heterogeneous points, dashed ray, connector, and labels; these are visible and pedagogically relevant. Many scene objects are registered for hover/click interaction: hovering should show a small tooltip, and clicking sends a popup message with explanatory text, although the popup depends on a parent postMessage handler and is not guaranteed to be visible in the standalone rendered page. A hidden Reset View button exists but is not usable. A guided demo is defined through window.goToStep and demoSteps, but there are no visible step buttons or controls, so it is not practically accessible from the UI. The slider UI is compact, transparent, and placed in the lower-left corner without covering important geometry.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
+          "interactivity_usability_reasoning": "At least two meaningful slider interactions are functional and pedagogically useful, with compact UI, but the guided demo is not visibly usable and click popups rely on external handling, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered figure contains the same basic components—heterogeneous and homogeneous labels, two planes, axes, red points, and dashed projection line—but the first frame is not a close drop-in replacement. The aspect ratio and crop differ substantially: the left label is cut off, the top homogeneous-coordinate label is clipped, there is extra UI chrome with sliders at bottom left, and the composition is more compact/zoomed differently with smaller labels and altered margins compared with the source.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The general diagram is recognizable, but significant crop/aspect mismatch, clipped labels, altered spacing, and visible UI controls reduce the match to roughly the 65–75% range.",
+          "label_quality_analysis": "Source labels are: \"Heterogeneous\", \"Homogeneous\", axis labels \"y\", \"x\", \"w\", point labels \"(x,y)\", \"(x,y,1)\", \"(λx,λy,λ)\", and the tick label \"1\". In the generated figure, \"y\", \"x\", \"w\", \"(x,y)\", \"(x,y,1)\", and \"1\" appear and are generally near the correct objects, though the coordinate labels are noticeably smaller than in the source. \"Heterogeneous\" is clipped on the left edge, \"Homogeneous\" is clipped on the right edge, and the top \"(λx,λy,λ)\" label is mostly cut off and not readable. Overall the label set is mostly present, but several important labels are obstructed by canvas boundaries and the coordinate label font scale is smaller than the source.",
           "label_quality": 3,
-          "concept_accuracy": 4,
+          "label_quality_reasoning": "More than half of the labels are present and readable, but multiple labels are clipped or too small relative to the source, so this fits the score-3 rubric rather than 4.",
+          "concept_accuracy_analysis": "The figure accurately illustrates homogeneous coordinates for a 2D point: an ordinary point (x,y), its normalized homogeneous representative (x,y,1) on the w=1 plane, and scaled equivalents (λx,λy,λ) lying on the same ray through the origin. Tooltips and popups are specific and correctly explain scale invariance, projection by division by w/λ, the w=1 slice, and the connector showing shared x and y values; only minor wording such as “heterogeneous” instead of the more standard “inhomogeneous” is potentially nonstandard but not conceptually misleading.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All core relationships are correctly represented and the explanations are figure-specific, mathematically accurate, and not generic filler.",
           "visual_aesthetics": 3.7,
-          "overall_average": 3.8
+          "overall_average": 4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:34:23.906Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:32:44.679Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

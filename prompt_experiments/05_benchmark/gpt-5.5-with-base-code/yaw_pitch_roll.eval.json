@@ -3,28 +3,41 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The overall yaw/pitch/roll coordinate construction is present with axes, plane, dashed projection ray, labels, and rotation arcs. However the projected and 3D points render mostly as black filled dots rather than cyan-filled points with black outlines, because the cyan sphere is nested inside a larger black sphere. The image plane and P placement are also noticeably compressed compared with the source, making the central plane narrower and the far point less visually separated.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Color-Wrong",
+            "Scale-Wrong"
           ],
+          "failure_modes_reasoning": "Color-Wrong applies because the cyan point markers p and P from the source appear black or nearly black in the rendered output. Scale-Wrong applies because the image plane and projection geometry proportions are visibly compressed/narrower, and P is not as far separated from the plane as in the reference.",
+          "geometry_accuracy_analysis": "The scene contains a true 3D coordinate triad with X, Y, and Z arrows, a rectangular image plane at constant Z, green x′ and y′ image-plane axes, collinear points p and P with a dashed projection ray from the origin, and three red circular rotation arrows for yaw, pitch, and roll with appropriate labels. The geometry is mostly coherent and genuinely 3D; minor issues include somewhat stylized/offset placement of the pitch arc and added depth guide elements that may not match the source exactly, but the main spatial relationships and proportions are recognizable.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as real 3D geometry with only minor alignment/proportion deviations, matching the rubric for a score of 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as a meaningful interaction. A visible Yaw/Pitch/Roll button cycles the selected Euler angle and updates the button text/arc highlighting; a visible angle slider changes the selected angle and shows a red ghost point/line when moved; many scene objects are registered for hover tooltips and click popups with tint highlighting and explanatory text, with axis/arc clicks also selecting the corresponding angle; Escape hides popups/tooltips. A Reset View button has a click handler but is styled display:none, so it is not usable. The meaningful interactions are compact and pedagogically relevant, and the small bottom-left UI does not cover important geometry, but there is no guided step-through demo or automated teaching sequence.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "interactivity_usability_reasoning": "Multiple functional, useful interactions are present with compact UI, but the absence of a guided demo keeps it below the score-5 rubric.",
+          "faithfulness_analysis": "The rendered frame contains the same broad concept—3D axes, yaw/pitch/roll arcs, an image plane, point p on the plane, and point P along a dashed ray—but the composition is much more zoomed out with excessive whitespace and a different aspect ratio. Typography, label scale, plane proportions, marker styling, red arrow shapes, and the P/p coloring differ noticeably, and UI controls at the bottom-left intrude into the figure area.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The layout is recognizable but has substantial crop/zoom, proportion, styling, and UI-chrome mismatches, so it only matches the source at roughly the general-idea level.",
+          "label_quality_analysis": "Source labels include Yaw, θY, Y, Pitch, θX, X, (0,0,0), p, y′, x, θZ, Roll, Z, and P. The generated figure includes essentially all corresponding labels, but many are much smaller than the source’s large textbook-style labels; Yaw/Pitch/θ labels are compressed around the axes, and the image-plane x label appears as x′ rather than the source’s x. Overall the label set is mostly complete and readable, but the font scale is consistently too small relative to the source and several placements are less faithful.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Most labels are present and readable, but the consistent font-size mismatch and a few placement/text issues make this a score 3 rather than 4 or 5.",
+          "concept_accuracy_analysis": "The figure illustrates a camera coordinate frame with yaw, pitch, and roll as rotations about the Y, X, and Z axes, plus an image plane with projected point p and 3D point P along a projection ray. Labels and interactive tooltips are figure-specific, correctly naming theta_Y, theta_X, theta_Z, P, p, the image plane, and the projection relationship; the slider/ghost point interaction appropriately demonstrates rotation about the selected axis, though it does not show a full composed Euler rotation sequence.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All core concepts are accurate and the interactions/explanations are specific to the yaw-pitch-roll axes and projection geometry, with no substantive misinformation.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:44:26.018Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T20:02:46.623Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

@@ -647,94 +647,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure is a flat 2D schematic diagram showing two side-by-side orthographic panels. Both panels depict walls and screens angled slightly in pseudo-3D perspective to show depth, viewed from a frontal orthographic perspective.",
-          "viewing_angle_rendered": "The rendered screenshot matches the frontal orthographic perspective of the source diagram, showing panels (a) and (b) side-by-side aligned along the flat screen plane.",
-          "viewing_angle_comparison": "The viewing angles are highly consistent, representing the original 2D layout faithfully within a 3D canvas.",
-          "shape_comparison": [
-            {
-              "element": "wall",
-              "source_shape": "skewed flat quadrilateral",
-              "rendered_shape": "skewed flat quadrilateral (ShapeGeometry)",
-              "match": true
-            },
-            {
-              "element": "tree canopy",
-              "source_shape": "overlapping circles",
-              "rendered_shape": "overlapping circles (CircleGeometry)",
-              "match": true
-            },
-            {
-              "element": "pinhole screen",
-              "source_shape": "skewed black flat quadrilateral",
-              "rendered_shape": "skewed black flat quadrilateral (ShapeGeometry)",
-              "match": true
-            },
-            {
-              "element": "rays",
-              "source_shape": "lines with arrowheads",
-              "rendered_shape": "thick segments with triangular arrowheads",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The 'Pinhole' label at the top is clipped off by the upper edge of the viewport, rendering as 'nhole'.",
-            "The tree in panel (a) is scaled too large, causing its green canopy to overlap and obscure the right edge of the left wall.",
-            "The color of the inverted tree in panel (b) is slightly too vibrant compared to the very faint, faded representation in the source.",
-            "The layout is tightly squeezed near the vertical margins, causing some labels to sit dangerously close to or off the viewport boundary."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 3,
-          "faithfulness": 4,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "Excellent flat 2D recreation with clean interactive click-points, though marred by label clipping at the top boundary.",
-          "action_items": [
-            "Adjust the camera target or zoom in setCameraView to shift the scene slightly downwards, preventing the 'Pinhole' label from being clipped by the top of the canvas.",
-            "Reduce the scale of the tree in panel (a) so it does not overlap with the wall's front vertical boundary.",
-            "Increase the transparency (lower opacity) of the inverted projected tree in panel (b) to better match the faint, ghost-like appearance in the original textbook diagram.",
-            "Add a simple interactive slider to adjust the pinhole aperture size, dynamically showing how the image on the wall blurs as the pinhole grows larger."
-          ],
-          "visual_aesthetics": 3.7,
-          "overall_average": 3.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:10:52.199Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated figure preserves the main pinhole-camera idea and includes the key labels, walls, trees, rays, pinhole screen, and projected image. The most obvious issues are framing/proportion problems: the left wall and right object tree are cropped, the panel spacing and relative object sizes differ from the source, and the 'Pinhole' label is partly illegible because it overlaps the black screen area.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Missing-Labels"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 2,
-          "faithfulness": 3,
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial framing/zoom does not match the source: important content at the left and right edges is cropped and the panels are not presented with the same overall composition. Scale-Wrong applies because the trees, wall outlines, projection, and pinhole screen proportions/spacing differ noticeably from the reference. Missing-Labels applies because the important 'Pinhole' annotation is not fully readable in the rendered view, with part of the word visually lost against/behind the black screen.",
+          "geometry_accuracy_analysis": "The scene contains two panels with wall outlines, a pinhole screen, tree silhouettes, colored rays, an inverted projected tree, and labels. However, essentially all geometry is constructed as flat 2D ShapeGeometry/CircleGeometry elements in the XY plane with only tiny Z offsets for draw ordering; the wall and screen perspective is hardcoded via skewed quadrilateral/segment coordinates rather than modeled as true 3D planes viewed by a camera. This is a flat textbook diagram/billboard-style construction, not an unwarped 3D scene.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Per the critical check, the principal surfaces and coordinates are flattened into a 2D plane with baked-in skewed perspective, so it must score 1 despite including many visual elements.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but those do not count as meaningful interactions. There is a hidden Reset View button with a click listener, but it is styled display:none so it is not usable. The main meaningful interactions are raycaster-based hover/click handlers on seven registered scene elements: wall A, overlapping rays, pinhole screen, aperture, projected image, object tree, and crossing rays; hover should visibly show a small tooltip, while clicking posts an explanatory popup message to the parent frame rather than rendering an in-page popup. There are no sliders, toggles, parameter controls, animations, or guided step-through demo. The UI chrome is essentially absent/compact and does not cover geometry, but the explanations depend on parent popup handling and are not evident in the screenshot.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Multiple object-based hover/click explanation interactions are present and pedagogically useful with compact UI, but there is no guided demo and the click popup implementation is somewhat indirect, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame contains the same broad subject matter—two pinhole-camera/tree diagrams with wall, arrows, and labels—but the composition is not a close match. It is heavily re-cropped and compressed compared with the source: the left wall and right tree are cut off, the panels overlap visually, the aspect ratio and whitespace differ substantially, and the source’s tall textbook-style layout with full wall outlines and centered panel labels is lost.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in theme, the first frame has significant crop, zoom, aspect-ratio, spacing, and proportion mismatches, so it matches well under 65% as a drop-in replacement.",
+          "label_quality_analysis": "Source labels are: “Wall” in panel (a), “Wall” in panel (b), “Pinhole” in panel (b), “(a)” below the left panel, and “(b)” below the right panel. In the generated figure, the panel (a) “Wall” label is not visible; the panel (b) “Wall” label appears and is readable; “Pinhole” appears but is partially obstructed/cropped so the initial letter is not clearly visible; “(a)” and “(b)” are present and readable but smaller and placed higher/closer to the scene than in the source. Overall, the label set is incomplete and several labels have placement or scale issues, though some are readable and correctly named.",
           "label_quality": 3,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3,
+          "label_quality_reasoning": "One source label is missing, one is partially obstructed, and the panel labels are undersized/mispositioned, so about half the label set has meaningful issues.",
+          "concept_accuracy_analysis": "The figure illustrates pinhole imaging/camera obscura: panel (a) shows light from a tree reaching a wall without an aperture and producing no sharp image, while panel (b) shows a pinhole selecting narrow ray bundles so an inverted tree image forms on the wall. The labels and interactive tooltips/popups are figure-specific and correctly explain ray crossing, aperture selection, inversion, blur reduction, and the contrast with unfiltered overlapping rays; no substantive conceptual misinformation is evident.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All core concepts are accurate and the interactions provide specific, correct explanations of the pinhole, wall image inversion, and ray geometry.",
+          "visual_aesthetics": 2,
           "overall_average": 3
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:38:36.839Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:31:56.334Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

@@ -495,95 +495,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D diagram of epipolar geometry using an orthographic-like oblique perspective. Camera centers O1 and O2 lie on a horizontal dashed baseline at the bottom, while two tilted rectangular image planes face inward. The 3D point P sits high in the center background, forming a yellow triangular epipolar plane with the baseline.",
-          "viewing_angle_rendered": "The rendered screenshot matches this perspective closely using an orthographic camera view. The camera centers are placed at the bottom, the yellow epipolar plane forms a triangle up to point P, and the two image planes are tilted symmetrically inward, closely mimicking the original layout.",
-          "viewing_angle_comparison": "The viewing angles are extremely well-aligned. The orthographic projection and elevation angle in the rendered screenshot perfectly capture the layout and 3D feel of the original textbook illustration.",
-          "shape_comparison": [
-            {
-              "element": "Point P",
-              "source_shape": "flat disc",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "Camera centers O1, O2",
-              "source_shape": "flat disc",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "Image planes",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "Epipoles e1, e2",
-              "source_shape": "flat disc",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "Viewing rays / Epipolar lines",
-              "source_shape": "line",
-              "rendered_shape": "cylinder",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The vertical coordinate axis line passes directly behind the 'O1' and 'O2' labels, visually bisecting them and making them look like the Greek letter Phi (Φ1 and Φ2) in the screenshot.",
-            "The 'Epipolar line' and 'Epipolar plane' labels overlap slightly with the red lines and yellow plane geometries, causing some visual clutter.",
-            "The coordinate axes lines on the image planes in the rendered version extend slightly lower than in the source image."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 5,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent, highly accurate representation of the source figure with smooth interactive controls. The only minor flaw is the placement of the O1/O2 labels relative to the coordinate axes.",
-          "action_items": [
-            "Shift the 'O1' and 'O2' labels slightly outward or downward so they do not overlap with the vertical green/blue coordinate axis lines.",
-            "Adjust the 'Epipolar line' and 'Epipolar plane' labels' offset values to prevent them from directly overlapping the red lines and central peak of the yellow plane.",
-            "Slightly reduce the vertical height of the coordinate axis arrows on both image planes to match the cleaner look of the original."
-          ],
-          "visual_aesthetics": 4.7,
-          "overall_average": 4.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T13:57:06.772Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main labels and epipolar-geometry elements, with sliders and clickable objects present. However, the composition is much more compact than the reference: the image planes are smaller and closer to the middle, the epipoles appear near the center rather than visually on the corresponding image-plane/baseline intersections, and the initial view does not reproduce the wide oblique textbook layout. The epipolar line/epipole relationship is visually weakened because the visible red line segments do not clearly pass through e1/e2 as in the source.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Concept-Misunderstood"
           ],
+          "failure_modes_reasoning": "Camera-Wrong: the initial rendered view is a compressed, more frontal/symmetric view rather than the wide oblique layout of the source. Scale-Wrong: the image planes, baseline span, labels, and yellow epipolar plane proportions differ noticeably from the reference. Concept-Misunderstood: the epipoles are visually placed away from the finite image-plane intersections and the red epipolar lines do not clearly pass through them, which misrepresents the central epipolar-line/epipole relationship.",
+          "geometry_accuracy_analysis": "The scene constructs real 3D geometry: two camera centers O1/O2 as black spheres, a dashed baseline, two transparent vertical image-plane rectangles with borders, a yellow epipolar plane through O1/O2/P, red viewing rays, red projected image points p1/p2, blue epipoles e1/e2, clipped epipolar lines, and image-plane coordinate arrows/labels. The main epipolar-geometry topology is present and connected correctly, but the camera centers are only spheres rather than camera bodies/frustums if those were in the source, and the finite image planes/proportions place the epipoles outside the visible rectangles, making some spatial relationships less faithful. Overall it is a genuine 3D reconstruction and recognizable, with minor-to-moderate proportional/placement issues rather than missing core structure.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
+          "geometry_accuracy_reasoning": "All major epipolar-geometry elements are present as true 3D objects with plausible connections, but some proportions and epipole/image-plane placement are imperfect, so this fits score 4 rather than 5.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but these do not count as meaningful interactions. There are two visible sliders, Point P X and Point P Depth Z, whose input handlers update the 3D point P, projections p1/p2, epipolar plane, rays, and epipolar lines visibly. A raycaster-based hover/click system registers many scene objects; hovering shows a local tooltip, and clicking posts explanatory popups for camera centers, baseline, epipoles, rays, image planes, projections, axes, and the epipolar plane/lines. Clicking P also advances a three-step guided demo with animated transitions of P and narrated popup text. The UI is compact in the bottom-left corner and does not materially cover the geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions including sliders, object explanations, and a guided click-through demo, with compact non-intrusive UI, matching the rubric for score 5.",
+          "faithfulness_analysis": "The rendered frame preserves the broad concept of two cameras, image planes, red epipolar lines, a yellow epipolar plane, and labels P, p1/p2, e1/e2. However, the composition is much more compressed horizontally and vertically than the source, uses a different crop/aspect ratio, clips the top label P, places the cameras and planes much closer together, omits or simplifies several translucent rays/arrows, and includes visible slider UI in the bottom-left that is absent from the textbook figure.",
           "faithfulness": 3,
+          "faithfulness_reasoning": "The diagram is recognizable in general, but major proportion, crop, spacing, detail, and UI-chrome differences keep it around a ~65% match rather than a drop-in replacement.",
+          "label_quality_analysis": "Source labels: P, Epipolar plane, Epipolar line on the left image plane, Epipolar line on the right image plane, p1, p2, e1, e2, Camera 1, Camera 2, O1, and O2. The generated figure includes all of these labels with generally readable text, but P is very close to the top edge and partly cramped, both Epipolar line labels are horizontal rather than aligned with the slanted lines and are cluttered near the red points, the e1/e2 labels are shifted toward the center rather than matching the source epipole placement, and extra UI labels appear in the lower-left corner. Overall the label set is mostly complete and readable, but several labels have noticeable placement/orientation issues and some clutter relative to the source.",
           "label_quality": 3,
+          "label_quality_reasoning": "All main labels are present, but multiple labels have significant positioning/orientation problems and added UI text creates extra clutter, so this fits a score of 3 rather than 4.",
+          "concept_accuracy_analysis": "The figure accurately illustrates epipolar geometry: two camera centers connected by a baseline, image planes, epipoles as baseline-plane intersections, viewing rays to a 3D point P, projections p₁/p₂, the epipolar plane through O₁/O₂/P, and epipolar lines as plane-image intersections. Tooltips, popups, labels, sliders, and demo steps are figure-specific and correctly describe fixed epipoles, pivoting epipolar lines, and the correspondence search constraint, with only very minor ambiguity in one slider tooltip about points 'sliding' as the line itself changes.",
           "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All main epipolar-geometry relationships are correctly represented and the interactive explanations are specific and accurate, with no substantive misinformation.",
           "visual_aesthetics": 3.3,
-          "overall_average": 3.8
+          "overall_average": 4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:31:11.936Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:43:26.994Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

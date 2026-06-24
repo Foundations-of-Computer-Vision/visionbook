@@ -178,91 +178,35 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure is a 3D coordinate diagram rendered from an orthographic axonometric projection looking slightly down and to the left, showing a vertical y-axis, an x-axis angled up-right, and a horizontal w-axis pointing to the right.",
-          "viewing_angle_rendered": "The rendered screenshot matches this viewpoint perfectly, using an orthographic camera with azimuth 90 degrees and elevation 0 to reproduce the exact axonometric perspective of the original axes and planes.",
-          "viewing_angle_comparison": "The viewing angles are identical, providing an exceptionally faithful 3D reconstruction of the textbook's 2D projection.",
-          "shape_comparison": [
-            {
-              "element": "heterogeneous plane",
-              "source_shape": "flat parallelogram",
-              "rendered_shape": "flat parallelogram",
-              "match": true
-            },
-            {
-              "element": "homogeneous plane",
-              "source_shape": "flat parallelogram outline",
-              "rendered_shape": "flat parallelogram with translucent fill and outline",
-              "match": true
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "lines with arrowheads",
-              "rendered_shape": "cylinders with cone arrowheads",
-              "match": true
-            },
-            {
-              "element": "red points",
-              "source_shape": "elliptical dots",
-              "rendered_shape": "flat circular disks",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "An extra faint grey dashed line segment is visible near the intersection of the x-axis and the heterogeneous plane, which does not exist in the original figure.",
-            "The x-axis label 'x' is placed slightly lower/more to the right compared to its position in the original.",
-            "The red dots in the original have a slight horizontal elongation (elliptical style), while the rendered ones are perfect circles."
-          ],
-          "failure_modes": [
-            "Hallucination"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent orthographic reconstruction with high-quality interactive labels, marred only by a minor misaligned/extra dashed line near the x-axis.",
-          "action_items": [
-            "Remove the 'mutedRayPart' dashed line code which creates the redundant/misaligned grey dashed line near the x-axis.",
-            "Slightly adjust the offset of the 'x' label to place it more clearly above the arrowhead of the x-axis.",
-            "Slightly squash the CircleGeometry of the red dots along the X-axis (e.g., scale.set(1.2, 1, 1)) to match the elliptical look of the original points."
-          ],
-          "visual_aesthetics": 4,
-          "overall_average": 4.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:56:52.996Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 2,
-          "faithfulness": 4,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered figure closely matches the source: both coordinate systems, planes, axes, dashed ray, solid correspondence line, red markers, and key labels are present and similarly arranged. The initial orthographic view reproduces the original 2D textbook-style perspective, colors and proportions are broadly consistent, and the code includes hover/click interactivity beyond OrbitControls.",
+          "failure_modes": [],
+          "failure_modes_reasoning": "No failure mode clearly applies: labels are present, primitives and colors match the intended diagram, depth/camera interpretation is visually consistent with the source, and interactive elements are registered with tooltips/click behavior.",
+          "geometry_accuracy_analysis": "Present: two translucent parallelogram planes labeled heterogeneous and homogeneous, black cylinder/cone axes labeled x, y, w, a w=1 tick, red point markers for (x,y), (x,y,1), and (λx,λy,λ), a solid correspondence segment, and a dashed scale ray. Absent/wrong: the coordinate system is not a clean 3D construction with orthogonal x/y/w axes and a true w=1 plane; the x direction and plane outlines are hardcoded as oblique screen-space parallelograms, and the camera is placed essentially straight-on so the figure reads as a flattened 2D diagram. The λ point/ray is also not faithfully represented as a true 3D ray through the homogeneous point. Overall, although the visual components are recognizable, the geometry relies on baked-in skewing and flat layering rather than a true unwarped 3D scene generated by camera perspective.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Per the critical Fake 3D check, the main planes and axes are baked into an oblique flat diagram with hardcoded skewed coordinates rather than constructed as clean 3D geometry, so it must score 1.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, which should function but does not count as a meaningful interaction. It also registers hover and click raycast handlers for many scene objects: the heterogeneous plane, homogeneous plane/outline, dashed scale ray, the three red point markers, and the solid correspondence segment; hovering should show a small tooltip and clicking should send a 2-3 sentence explanatory popup via postMessage, so these are pedagogically meaningful if the parent popup listener is present. There are no sliders, toggles, parameter controls, animations, or guided step-through demo; the reset button exists but is hidden, and the visible UI panel is effectively empty/transparent and does not cover geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Multiple functional click/hover explanatory interactions are present and useful with compact UI, but there is no guided demo, so it does not meet the score-5 rubric.",
+          "faithfulness_analysis": "The rendered figure reproduces the main heterogeneous-to-homogeneous construction, with the two planes, axes, red points, dashed projection ray, and labels in roughly the correct arrangement. However, the first frame is not a drop-in match: the aspect ratio is narrower, the whole diagram is scaled down with different whitespace, the typography is much smaller, the planes do not extend/crop like the source, and some line styling/proportions differ noticeably.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The general idea is clear and recognizable, but the wrong aspect ratio, zoom/margins, text scale, and proportional differences make it closer to a ~65–80% match than a near replacement.",
+          "label_quality_analysis": "Source labels are: “Heterogeneous”, “Homogeneous”, axis labels “y”, “x”, “w”, point labels “(x,y)”, “(x,y,1)”, “(λx,λy,λ)”, and tick label “1”. The generated figure includes all of these with correct text and generally appropriate placement near the corresponding axes, points, and tick; all are readable. Minor issues are that several math labels are somewhat smaller relative to the geometry than in the source, and “Heterogeneous” is placed very close to the left image edge, making the layout feel slightly cramped.",
           "label_quality": 4,
+          "label_quality_reasoning": "All labels are present and legible with mostly correct positioning, but minor font-scale and edge-placement issues prevent a perfect score.",
+          "concept_accuracy_analysis": "The figure illustrates the relationship between ordinary 2D coordinates and homogeneous coordinates: a point (x,y), its representative (x,y,1) on the w=1 slice, and a scaled representative (λx,λy,λ) on the same ray through the origin. Labels and interactive explanations are mostly figure-specific and correctly describe normalization by dividing by w, scale invariance, and the correspondence between the heterogeneous point and the homogeneous representative; the only notable imprecision is that the dashed ray explanation says all points on the ray represent the same 2D point, without excluding the origin/all-zero homogeneous vector.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 3.6
+          "concept_accuracy_reasoning": "The main homogeneous-coordinate concept is accurately conveyed with specific interactions, but one minor mathematical caveat about the origin/valid homogeneous representatives is omitted.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:21:32.621Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:29:13.131Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

@@ -669,90 +669,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "Panel (a) shows a 3D coordinate system where the Y-axis is vertical, Z-axis points horizontally to the right (representing depth/optical axis), and X-axis goes diagonally up-right into depth. The camera is positioned looking from the side-front, showing clear perspective foreshortening of the projection and virtual camera planes. Panel (b) is a flat, 2D face-on view of the virtual camera plane.",
-          "viewing_angle_rendered": "The rendered screenshot shows a completely flat 2D view of both panels. There is no actual depth along the Z-axis; the camera is positioned directly face-on (elevation 0, azimuth 90) and all geometry has been manually drawn with skewed coordinates on a single flat Z-plane.",
-          "viewing_angle_comparison": "The original figure uses true 3D spatial relationships in panel (a), whereas the rendered version completely flattens the 3D scene into a 2D plane with hand-crafted skewed perspective coordinates, destroying the ability to rotate and view the scene in 3D.",
-          "shape_comparison": [
-            {
-              "element": "Projection plane",
-              "source_shape": "Flat plane tilted in 3D",
-              "rendered_shape": "Flat 2D polygon with skewed coordinates on a flat plane",
-              "match": false
-            },
-            {
-              "element": "Virtual camera plane",
-              "source_shape": "Flat plane tilted in 3D",
-              "rendered_shape": "Flat 2D polygon with skewed coordinates on a flat plane",
-              "match": false
-            },
-            {
-              "element": "Point P",
-              "source_shape": "3D sphere / point in space",
-              "rendered_shape": "Flat circle (sphere viewed orthographically on flat plane)",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The 3D coordinate system in (a) is completely flattened into a 2D plane, making 3D rotation and depth visualization impossible.",
-            "The 'World coordinates' label severely overlaps with the arrowhead of the Y axis.",
-            "The 'Image coordinates' label in panel (b) is partially cut off at the bottom border.",
-            "The lines connecting point P to the planes are rendered flat instead of tracing back through a 3D pinhole in true 3D space."
-          ],
-          "failure_modes": [
-            "Depth-Wrong",
-            "Wrong-Primitives",
-            "Camera-Wrong"
-          ],
-          "geometry_accuracy": 2,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 3,
-          "notes": "The developer chose to fake the 3D perspective by drawing skewed 2D coordinates on a single flat plane, defeating the purpose of an interactive 3D demonstration.",
-          "action_items": [
-            "Reconstruct the scene in actual 3D: place the Pinhole at (0,0,0), the projection plane at Z = -f, the virtual camera plane at Z = +f, and the point P at some positive Z depth.",
-            "Use a Perspective or tilted Orthographic camera that allows the user to rotate the scene in 3D to see the depth relationships.",
-            "Fix label collisions, particularly 'World coordinates' overlapping the Y-axis and 'Image coordinates' clipping the bottom panel border.",
-            "Make the camera and projection planes true 3D rectangular plane primitives aligned perpendicular to the optical Z-axis."
-          ],
-          "visual_aesthetics": 2.7,
-          "overall_average": 3
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:12:45.406Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene is mostly a flat 2D construction: almost all geometry is placed at the same z value and the camera is orthographic straight-on, so the 3D pinhole/camera-plane depth is not actually represented. The rendered view is also badly framed/zoomed: the left projection plane and several left labels are cut off, and the right panel text/rectangle are clipped. Several key labels visible in the source are missing from the screenshot because of cropping, and the point markers render as black filled dots rather than cyan circles with black outlines.",
           "failure_modes": [
+            "Depth-Wrong",
+            "Missing-Labels",
             "Camera-Wrong",
-            "Missing-Labels"
+            "Color-Wrong"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 3,
-          "overall_average": 3.8
+          "failure_modes_reasoning": "Depth-Wrong applies because the 3D projection geometry is flattened into one screen plane rather than using real 3D depth. Missing-Labels applies because important annotations such as the left projection-plane text and portions of the right-panel coordinate labels are absent or clipped in the rendered output. Camera-Wrong applies because the initial orthographic framing is zoomed/targeted incorrectly and crops major parts of the figure. Color-Wrong applies because the cyan point markers from the source appear as black filled dots in the render.",
+          "geometry_accuracy_analysis": "The code includes many expected visual elements: two skewed quadrilateral planes labeled projection and virtual camera plane, world axes, pinhole sphere, point P and projected p points, rays/guides, focal-length arrows, coordinate axes, and a face-on panel (b). However, nearly all geometry is constrained to a constant Z layer and the planes are hardcoded as asymmetric 2D quadrilaterals in XY to mimic the textbook perspective; the camera is then placed essentially face-on, so depth is not generated by a true 3D arrangement of planes in space.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Per the critical Fake 3D check, the principal surfaces and coordinates are flattened and perspective is baked into skewed 2D shapes rather than constructed as unwarped 3D geometry, so the score must be 1.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom rotation, but this does not count as a meaningful interaction. A focal-length slider labeled f visibly updates the positions of the projection plane, virtual camera plane, focal arrows, rays, projected points, and labels. A coords select menu toggles between both/camera/image coordinate systems by changing opacity and label visibility, especially in panel (b). The world point P is draggable via pointer events and updates the projection rays and corresponding p locations. Several scene objects are registered for hover tooltips and click explanations, including the pinhole, virtual plane, projection plane, world point, panel (b) border, and focal-length arrow; the hover tooltip should be visible, while click popups rely on parent postMessage handling. There is also a hidden Reset View button and a window.goToStep guided-step function, but no visible step-through UI for users. Overall the interactions are compact, useful, and pedagogically relevant, with the small bottom-left UI only minimally overlapping the scene and not substantially covering geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Multiple meaningful interactions are functional and useful, but the guided demo is not exposed through visible controls, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame uses a much narrower aspect ratio and is heavily over-zoomed/cropped compared with the wide source figure: the left projection plane is mostly off-screen, the right virtual camera plane panel is cut off at the right and bottom, and several labels are truncated. The main pinhole/virtual-plane geometry is recognizable, but the original wide two-part composition, margins, full labels, cyan points, and complete planes are not preserved; UI controls at bottom left also intrude into the figure.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the central layout is recognizable, the severe crop/aspect-ratio mismatch and visible UI chrome make it match well under 65% of the source as a drop-in replacement.",
+          "label_quality_analysis": "Source labels include: World coordinates, Y, X, Z, P, p on the virtual camera plane, x and y camera axes, (0,0,0), two f labels, Pinhole, Projection plane, p/x/y on the projection plane, Virtual camera plane, (a), plus in the right panel Camera coordinates, p, x/y, (0,0), Image coordinates, m/n, another (0,0), Virtual camera plane, and (b). In the generated figure, World coordinates, X, Z, P, p, x/y near the central plane, (0,0,0), f labels, Pinhole, Virtual camera plane, and (a) are visible with generally readable size, but Y is missing, the left projection-plane labels are mostly cut off or absent, and much of the right-panel labeling is missing or clipped: Camera coordinates is absent, Image coordinates is truncated, Virtual camera plane and (b) are not visible, and only p/x/y/m/n/(0,0) partially appear. Overall the central labels are readable but the label set is substantially incomplete and several labels are clipped by the viewport.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most of the source label set is missing, cropped, or truncated despite some central labels being readable, which fits a score of 2.",
+          "concept_accuracy_analysis": "The figure illustrates pinhole camera projection: a world point P projects through a pinhole onto a rear physical projection plane with inversion and onto a front virtual camera/image plane, with panel (b) showing centered camera coordinates versus lower-left image coordinates. The labels and popups are mostly figure-specific and correctly mention focal length f, the optical center, inverted projection, virtual camera plane, and image-coordinate origins; however, the face-on panel’s point position is not updated from the actual focal-length-scaled projection, so the f slider’s claimed magnification relationship is only partially represented, and the 3D/world-coordinate geometry is somewhat flattened/schematic.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main pinhole projection concept and explanations are accurate and specific, with one notable interactive omission/inconsistency in the panel (b) projection scaling under changing focal length.",
+          "visual_aesthetics": 1.7,
+          "overall_average": 2.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:40:41.035Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:28:38.785Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

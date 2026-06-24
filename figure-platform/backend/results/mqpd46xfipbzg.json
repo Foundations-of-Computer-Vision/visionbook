@@ -319,85 +319,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D-like schematic of a Markov Random Field grid. White nodes are positioned in a 3x3 grid on a slightly tilted horizontal plane, and gray nodes are placed vertically above them. The view is from a low-elevation front-left angle, looking towards the back-right.",
-          "viewing_angle_rendered": "The rendered screenshot shows the grid structure from a slightly higher elevation, looking down at the 3x3 grid from the front-left, with a clean orthographic projection.",
-          "viewing_angle_comparison": "The viewing angles are very similar, but the rendered version has a slightly higher camera elevation (looking further down onto the grid) and a more sparse grid layout compared to the tightly packed appearance of the original.",
-          "shape_comparison": [
-            {
-              "element": "x-nodes",
-              "source_shape": "flat circle",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "y-nodes",
-              "source_shape": "flat circle",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "edges (pairwise and unary)",
-              "source_shape": "thin line",
-              "rendered_shape": "cylinder",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "A semi-transparent pale blue ground plane is present in the rendered version, which is absent in the pure-white background of the source figure.",
-            "The grid lines extending beyond the 3x3 boundary extend in multiple directions in the render, whereas the source only shows extensions towards the bottom-left and right sides.",
-            "The label 'y1' is slightly obscured behind the front-most y-node due to the camera angle alignment.",
-            "The nodes in the source are tightly packed horizontally, whereas the rendered version is more spaced out."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent pedagogical reproduction of a 2D MRF model with real interactive segmentation solving, with only minor aesthetic differences from the textbook source.",
-          "action_items": [
-            "Remove or hide the pale blue ground plane mesh (groundMat) to match the minimalist white background of the original.",
-            "Slightly adjust the camera's azimuth and elevation to prevent node labels (especially y1) from overlapping with nearby foreground nodes.",
-            "Reduce the horizontal spacing of the grid nodes to match the more compact aspect ratio of the original figure.",
-            "Adjust the border extensions to only project along the bottom-left and right axes as shown in the source."
-          ],
-          "visual_aesthetics": 4,
-          "overall_average": 4.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:20:35.859Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered graph uses the right general MRF idea with white x-nodes, gray y-nodes, and black edges, and the x/y labels are present. However the initial viewpoint is reversed relative to the source: labels appear left-to-right as y3,y2,y1 / x3,x2,x1 rather than y1,y2,y3 / x1,x2,x3, and the lattice orientation/open extensions do not match the reference. The scene also adds a pale blue ground plane and visible UI controls not present in the original. In the code, solveSegmentation() references an undefined variable labels, so updateScene() and UI/click interactions will throw and the advertised controls are effectively broken.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Interaction-Broken",
+            "Camera-Wrong",
+            "Hallucination"
           ],
+          "failure_modes_reasoning": "Interaction-Broken applies because the mode/slider/click update path calls solveSegmentation(), which uses an undefined labels variable. Camera-Wrong applies because the initial camera reverses the indexing/order and presents the lattice from a different oblique angle than the source. Hallucination applies because the generated output includes a pale ground plane and control UI/segmentation features that do not appear in the reference figure.",
+          "geometry_accuracy_analysis": "OBSERVE: The scene constructs a real 3D MRF-style graph: a 3x3 layer of white hidden x-nodes on an XZ lattice, a corresponding elevated 3x3 layer of gray y-observation nodes, vertical unary cylinders between each x/y pair, horizontal and depth-direction pairwise cylinders between neighboring x-nodes, continuation stubs at the grid boundary, and labels for the back-row x/y nodes. The geometry is symmetrical and camera-generated rather than a flat pasted/skewed drawing. Minor issues include extra transparent ground/context geometry and optional torus highlight rings not clearly part of the textbook figure; labels are only applied to one row, and a code bug in solveSegmentation prevents the intended update/highlight state from completing, though the base graph geometry is still built.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
+          "geometry_accuracy_reasoning": "All major graph elements and their 3D topology are present with plausible positions and connections, but minor extra/partial elements and the update bug keep it from a fully accurate score-5 representation.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. There is a hidden Reset View button with a click listener, so it is not usable. The Mode dropdown and Smooth slider are present, but both call updateScene(), which calls solveSegmentation() where an undeclared labels variable causes a runtime error for the default smoothness path, so these controls are likely broken or fail to produce the intended visible scene updates. The scene registers hover/click interactions on nodes, the ground plane, pairwise edges, and unary edges; hover tooltips should still work, and clicks attempt to post explanatory popups, but node-click selection also depends on the broken updateScene(). A guided demo exists only as window.goToStep with no visible UI controls, so it is not accessible to the user. The UI is compact and placed in the lower-left corner without covering important geometry.",
+          "interactivity_usability": 2,
+          "interactivity_usability_reasoning": "Multiple interactions are present, but key controls and node-selection behavior are broken by the updateScene/solveSegmentation error, so this fits the rubric’s score 2 for interactions that exist but are broken or have little visible effect.",
+          "faithfulness_analysis": "The rendered scene contains a similar lattice of white and gray circular nodes with connecting black lines, but it is shown as a small centered 3D perspective view with large whitespace, whereas the source is a tightly cropped, large 2D diagram filling the frame. The camera orientation appears mirrored/rotated, the label positions/order do not match the source, the zoom is much smaller, and UI controls at the bottom-left add non-figure chrome.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general node-line structure is recognizable, the crop, scale, camera angle, label placement, and added UI differ substantially, so it matches well under 65% as an inline replacement.",
+          "label_quality_analysis": "The source figure contains six labels: y1, y2, y3 above the three upper gray nodes, and x1, x2, x3 beside the three white nodes on the upper horizontal row. The generated figure includes all six labels with correct text and readable subscript styling. The y labels are clear and reasonably sized, but the x labels are placed too close to or directly over the nodes/edges, especially x1 and x2, making their placement more cluttered than in the source; the left-to-right ordering also appears reversed due to the 3D view compared with the source layout. Overall the label set is complete and legible, but several labels have positioning/clutter issues relative to the clean source placement.",
           "label_quality": 3,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3.7,
-          "overall_average": 3.8
+          "label_quality_reasoning": "All labels are present and readable, but about half—primarily the x labels—have notable placement/clutter issues, matching the score-3 rubric.",
+          "concept_accuracy_analysis": "The intended concept is a 2D Markov Random Field for image segmentation: hidden x nodes on a spatial lattice, observed y nodes connected by unary/data terms, pairwise smoothness edges between neighboring hidden nodes, and Markov blanket highlighting. The tooltips/popups are mostly figure-specific and correctly mention hidden states, observations, unary potentials ψᵢ(xᵢ,yᵢ), pairwise factors φᵢⱼ(xᵢ,xⱼ), smoothness, and conditional independence; however, the segmentation solver references an undefined variable `labels`, causing `updateScene()` to throw at startup, so the interactive figure likely fails to render or is covered by the error overlay, preventing the concept from actually being conveyed.",
+          "concept_accuracy": 2,
+          "concept_accuracy_reasoning": "Although the conceptual design and explanations are mostly accurate and specific, the startup runtime error makes the generated figure essentially unusable, a significant flaw that prevents students from seeing the intended MRF relationships.",
+          "visual_aesthetics": 3,
+          "overall_average": 2.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:34:40.542Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:48:57.962Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

@@ -287,85 +287,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows four vertical neural network stacks side-by-side. The camera is elevated and angled looking slightly down and to the left, showing the top-facing surfaces of the diamond-like layer planes and their vertical relationships.",
-          "viewing_angle_rendered": "The rendered screenshot shows a single vertical stack from a similar elevated, slightly right-of-center perspective looking down and left at the square layers.",
-          "viewing_angle_comparison": "The perspective and viewing angles match well, but the layout is entirely different: the source features a horizontal array of four distinct stacks representing training iterations, whereas the rendered view contains only one stack.",
-          "shape_comparison": [
-            {
-              "element": "layer planes",
-              "source_shape": "flat quadrilaterals",
-              "rendered_shape": "flat quadrilaterals",
-              "match": true
-            },
-            {
-              "element": "data points",
-              "source_shape": "red and blue spheres/dots",
-              "rendered_shape": "red and blue point sprites",
-              "match": true
-            },
-            {
-              "element": "vertical flow arrows",
-              "source_shape": "vertical arrows with labeled boxes",
-              "rendered_shape": "ArrowHelpers and HTML box labels",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The 4-panel progression layout of the original figure is replaced by a single stack controlled by an interactive slider.",
-            "The horizontal 'Training iteration' timeline arrow at the bottom is completely missing.",
-            "The outer bounding corner guides do not warp and bulge outwards/inwards dramatically like they do in the later iterations of the original figure.",
-            "The default UI contains a visible slider and checkbox panel on the screen edge."
-          ],
-          "failure_modes": [
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent conceptual visualization of manifold learning, but fails to match the textbook's 4-column layout for print-readiness.",
-          "action_items": [
-            "Replicate the 4-column layout by instantiating four separate stack groups side-by-side in the 3D scene, each frozen at a different training progress level (e.g., 0%, 33%, 66%, 100%).",
-            "Add the horizontal 'Training iteration' timeline arrow at the bottom spanning across the four stacks.",
-            "Fine-tune the geometric deformation equations so that the outer bounding guides warp and twist outward more visibly in the later stacks.",
-            "Position the vertical layer operation flowchart labels to the far left of the first stack only, matching the original layout."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:26:04.757Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 4,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 5,
-          "overall_average": 4.8
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered scene contains only one vertical network stack, while the source figure shows four separate stacks arranged left-to-right to depict successive training iterations, plus a bottom 'Training iteration' arrow with ellipses. The main operation labels on the left are present, but the bottom training-iteration annotation is missing; the generated version also adds extra labels such as layer names and one-hot target labels that are not in the original. The geometric primitives, colors, and 3D depth of the single stack are broadly similar, and the slider/checkbox interactions appear functional.",
+          "failure_modes": [
+            "Missing-Labels",
+            "Hallucination",
+            "Concept-Misunderstood"
+          ],
+          "failure_modes_reasoning": "Missing-Labels applies because the important bottom 'Training iteration' label, horizontal arrow, and ellipses are absent. Hallucination applies because the generated figure adds extra layer-name labels, target labels, and UI elements not present in the source. Concept-Misunderstood applies because the source's central visual idea is a four-panel progression over training iterations, whereas the generated view presents only a single stack at one state rather than the simultaneous sequence shown in the textbook figure.",
+          "geometry_accuracy_analysis": "OBSERVE: The scene constructs a true 3D stack of seven horizontal square layer planes with dark outlines, transparent fills, gray grid curves, red/blue point clouds, dashed inter-layer point paths, vertical corner guide lines, upward arrows at the side, and labels for layers/operations and one-hot targets. These are real 3D objects separated along the Y axis, with depth produced by the camera rather than by a pasted texture or flat baked perspective. Minor issues include the representation surfaces being simple flat square planes rather than visibly warped sheets, the transformation arrows being separated side arrows rather than a single continuous flow, and the exact distributions/warps being schematic rather than tightly matched to a source drawing. CHARACTERIZE: The geometry captures the main stacked-layer transformation concept well and uses plausible 3D positioning and connections. It is recognizable and mostly complete, with only moderate schematic simplifications in the plane/grid deformation and flow annotation.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present as real 3D geometry with plausible layout, but some details are simplified or only approximate, so it fits the score-4 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom (functional but not counted), a Reset View button that restores the camera, a Training Progress slider that visibly interpolates the layer-point/path/grid geometry, and a Grid checkbox that changes the emphasis/opacity of grids versus paths/points. It also registers hover tooltips and click explanations for planes, points, and grids; the hover tooltip should appear in-page, while the click explanation is sent to a parent popup handler. A guided demo sequence exists via window.goToStep with four narrated steps, but it has no visible in-page step buttons. The UI is compact, transparent, and placed in the lower-left corner without covering important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ meaningful functional interactions—the training slider, grid toggle, object hover/click explanations, plus an externally callable guided demo—and the UI is compact and non-intrusive, matching the score-5 rubric.",
+          "faithfulness_analysis": "The rendered frame shows only a single stacked 3D network column, whereas the source contains four separate columns showing progression across training iterations, plus a prominent bottom training-iteration arrow. The general layer-stack motif with red/blue dashed trajectories and left-side activation labels is recognizable, but the crop, horizontal composition, number of panels, whitespace distribution, and added UI controls at bottom left differ substantially.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Because the main multi-column progression and bottom arrow are missing and UI chrome is visible, the result matches well under 65% of the original despite preserving some local visual elements.",
+          "label_quality_analysis": "Source labels are: boxed 'softmax', boxed 'linear', boxed 'relu', boxed 'linear', boxed 'relu', boxed 'linear' along the left vertical arrows, plus the bottom label 'Training iteration' with the horizontal arrow/ellipsis context. In the generated figure, the six boxed left labels appear with correct text and are readable, though slightly smaller and shifted relative to the original; however, the bottom 'Training iteration' label is absent. The generated image also adds extra labels not present in the source—'Softmax', 'Input', 'Linear 1/2/3', 'ReLU 1/2', '(0, 1)', '(1, 0)', and UI labels—which clutter the label set and do not match the source figure.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Most core left-side labels are present and legible, but the bottom source label is missing and numerous extra labels create a noticeably mismatched and cluttered label set, fitting a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates how a 2D two-class dataset is transformed through successive neural-network layers—linear maps, ReLUs, and softmax—until the classes separate near one-hot outputs. Labels and popups are figure-specific and mostly accurate, explaining representation planes, transformed red/blue points, warped grids, and ReLU-like folding; the main limitation is that the softmax/output is treated as a full 2D plane with arbitrary corner locations rather than the probability simplex, and the training-progress morph is schematic rather than a true learned computation.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main neural-network representation-space concept is conveyed correctly with specific interactions, with only minor schematic inaccuracies around softmax geometry and learned-training realism.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:41:51.532Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T04:59:52.384Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

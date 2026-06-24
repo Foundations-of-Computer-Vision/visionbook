@@ -3,26 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated diagram includes the major encoders, stacked planes, arrows, labels, marker paths, and joint embedding target, with functioning buttons and hover/click interactions. The most noticeable differences are that the joint embedding space is rendered as a shaded 3D sphere rather than the flat peach circle in the source, the overall proportions are compressed with much smaller planes/text blocks relative to the canvas and circle, and the joint target color appears darker/brownish instead of the original flat peach.",
+          "failure_modes": [
+            "Wrong-Primitives",
+            "Scale-Wrong",
+            "Color-Wrong"
+          ],
+          "failure_modes_reasoning": "Wrong-Primitives applies because the source's joint embedding space is a flat 2D circle but the generated version uses a shaded sphere, and several flat symbolic markers are rendered as 3D solids. Scale-Wrong applies because the planes, labels, arrows, and encoder block boxes are noticeably smaller and more compressed relative to the figure than in the source. Color-Wrong applies because the joint embedding target is shaded dark orange/brown rather than the flat light peach used in the original.",
+          "geometry_accuracy_analysis": "The scene constructs a genuine 3D diagram with two stacked encoder branches, five horizontal grid planes per branch, colored geometric image markers, text-token markers with labels, dashed trajectories through layers, side arrows/block labels, encoder brackets, and a shared joint embedding target with incoming arrows. No source image is pasted and the planes are clean Three.js primitives viewed by an orthographic camera, not baked-in perspective. Minor issues include the joint embedding circle being rendered as a sphere/ring, some annotation geometry handled as screen-space labels rather than 3D objects, and possible simplification of brackets/inputs compared with the original 2D diagram.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major structural elements of the CLIP two-branch mapping diagram are present as plausible true 3D geometry, with only minor shape/annotation simplifications and alignment/proportion differences.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as meaningful interaction. A visible “Paths” button toggles dashed embedding trajectories on/off and should visibly affect the scene. A visible “Cue” button cycles through no cue/color cue/shape cue, changing marker halos and text label styling, so it has a visible pedagogical effect. Many scene objects are registered for hover and click: planes, image markers, text markers, and the joint embedding sphere show tooltips, hover highlighting/scaling, and click popups explaining their role. A Reset button has a click handler but is hidden with display:none, so it is not usable. Escape hides popups/tooltips. The UI is compact in the lower-left corner and does not cover important geometry; interactions are useful, but there is no true guided step-through demo.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 3,
+          "interactivity_usability_reasoning": "There are multiple functional pedagogical interactions with compact UI, but no guided demo is present, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame contains the same conceptual elements—two vertical stacks of slanted embedding planes, colored points/text labels, dashed connections, side encoder arrows, and a joint embedding circle—but the composition is far from the source. The source is a very wide, tightly cropped textbook diagram with large labels and large planes spanning the canvas, while the render is a much narrower 3:2 canvas with the entire diagram miniaturized, excessive whitespace, wrong aspect ratio/zoom, much smaller text, altered proportions, a smaller darker circle, and visible UI buttons at the bottom left.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in broad structure, the severe aspect-ratio, zoom, scale, typography, margin, and UI-chrome mismatches make it a poor drop-in replacement matching well under 65% of the original.",
+          "label_quality_analysis": "Source labels include the title \"Joint embedding space\"; left-side vertical \"Image encoder\"; four \"ViT block x3\" callouts; right-side vertical \"Text encoder\"; four \"transformer block x3\" callouts; and many repeated class labels on the text-side planes such as \"red circle\", \"purple circle\", \"pink circle\", \"blue circle\", \"orange circle\", \"purple triangle\", \"blue triangle\", \"green square\", and \"pink square\". In the generated figure, these label types are generally present with correct text, but nearly all are rendered much smaller than in the source: the title is tiny, the block callouts are small and compressed, the vertical encoder labels are very small, and the class labels are heavily clustered/overlapping and often unreadable. Overall the label set is mostly complete, but the font scale is consistently far too small relative to the source and many labels are cluttered or obstructed by nearby geometry/other labels.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels are present but fail the font-size and clarity checks, with many class labels unreadable due to tiny scale and overlap, matching a score of 2.",
+          "concept_accuracy_analysis": "The figure illustrates CLIP’s two-encoder architecture: an image encoder and text encoder map colored shape examples and matching phrases through stacked layers into a shared joint embedding space. Labels and interactions are mostly figure-specific, naming image/text encoder layers, ViT/transformer blocks, paths, matching image/text pairs, and angular distance in the normalized CLIP embedding space; however, the invented layer-wise behavior that image representations move from color clusters to shape clusters while text does the reverse is not a standard CLIP relationship and may be a fabricated interpretation unless explicitly present in the source figure.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3.7,
-          "overall_average": 3.8
+          "concept_accuracy_reasoning": "The main CLIP two-branch-to-joint-embedding concept is accurate and explanations are specific, but the detailed clustering transition across layers appears potentially unsupported or oversimplified, so this merits a minor accuracy penalty.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:43:12.011Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T20:04:59.832Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

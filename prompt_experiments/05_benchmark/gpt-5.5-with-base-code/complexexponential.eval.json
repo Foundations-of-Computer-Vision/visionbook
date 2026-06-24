@@ -3,26 +3,40 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 3,
-          "faithfulness": 4,
-          "label_quality": 4,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene reproduces the two complex exponential panels with axes, labels, red/green projections, black sample path, and panel labels. The main visible discrepancy is the extra interactive n slider at the bottom-left, which is not part of the source figure; the overall 3D construction and labels otherwise largely match the reference.",
+          "failure_modes": [
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "The bottom-left n slider/control is an added UI element visible in the rendered output and does not appear in the original textbook figure.",
+          "geometry_accuracy_analysis": "The scene contains two separate true 3D panels for k=1 and k=3, each with three orthogonal/slanted axes for n, I, and R, tick marks and labels, a black helical complex-exponential path with discrete sample spheres, plus red and green projection curves for the real and imaginary components. The geometry is constructed with real 3D coordinates varying in x, y, and z, not as a flattened billboard or baked perspective drawing. Major source elements are present and plausibly positioned; only minor stylistic/extraneous additions such as thick tube curves, amber dot centers, and optional interactive marker planes differ from a textbook line drawing.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are represented as coherent unwarped 3D geometry with correct topology, proportions, and spatial relationships, so this meets the score-5 rubric despite minor stylistic extras.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as a meaningful interaction. A visible bottom-left n range slider is present and should visibly function: moving it calls selectSample, revealing linked highlighted sample planes/markers in both panels and showing an explanatory popup. A reset-view button has a click handler, but it is styled display:none, so it is not usable. The canvas has pointermove hover handling over registered curves and sample dots, showing tooltips and changing the cursor; this should visibly function when objects are hit. The canvas click handler opens explanatory popups for real/imaginary/complex curves and sample dots, and clicking sample dots also selects the corresponding n index. Escape hides popups/tooltips. Overall, the slider plus object hover/click explanations are useful and compact, with the small transparent slider UI not covering important geometry; however there is no guided demo or step-through animation.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are two meaningful functional interaction types—a pedagogical n slider and hover/click explanatory object interactions—while the UI is compact, but there is no guided demo, so this fits score 4.",
+          "faithfulness_analysis": "The generated figure is clearly recognizable as the same two-panel 3D sequence plot with axes, red/green curves, black sampled points, and labels 20/40. However, the rendered frame uses a different overall aspect ratio and crop: the panels are enlarged vertically with much less bottom whitespace than the source, the left x-axis is cut off at the canvas edge, labels/fonts differ, and a visible slider UI appears at the bottom left. It works as a conceptual recreation but not as a near drop-in replacement due to margin, crop, and UI differences.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The main geometry and layout are recognizable, but significant crop/whitespace mismatch, altered proportions, and visible UI chrome keep it around a ~65–75% match rather than a faithful replacement.",
+          "label_quality_analysis": "Source labels: panel (a) has vertical-axis label ℑ/𝕀-like at top, tick labels 1 and -1 on the vertical axis, -1 on the left slanted axis, ℝ on the oblique axis, italic n at the right arrow, an internal 1 near the upper curve, 20, 40, and the panel label (a). Panel (b) has the same main labels: ℑ/𝕀-like vertical label, vertical 1 and -1, left slanted -1, ℝ, italic n, an internal 1, 20, 40, and (b). In the generated figure, the main numeric labels, n, 20, 40, and panel labels appear and are readable in both panels, but the ℑ/𝕀 and ℝ labels are rendered as plain I and R rather than matching the source math style, the internal 1 labels are missing or not visible, and the label font sizes are generally smaller than the source scale. Placement is broadly near the correct objects, but some labels, especially R/n and the numeric labels in panel (b), are more cramped or overlap the curves compared with the source.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Most labels are present and readable, but several source labels are missing or stylistically wrong, and the font size is consistently too small relative to the source, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates discrete complex exponentials as 3D helices over sample index n, with real/cosine and imaginary/sine projections, comparing k=1 and k=3 for N=40. The tooltips and popups are specific and mostly correct, explicitly naming Re/Im components and formulas; the main minor omission is that the visible panel labels only show (a)/(b) rather than directly labeling k=1 and k=3, and the plotted samples run n=0–39 while a tick at 40 suggests the endpoint cycle completion is not shown.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
+          "concept_accuracy_reasoning": "The core mathematical concept and interaction explanations are accurate and figure-specific, with only minor omissions/endpoint-label ambiguity preventing a perfect score.",
+          "visual_aesthetics": 3.7,
           "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:40:26.193Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:30:28.090Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

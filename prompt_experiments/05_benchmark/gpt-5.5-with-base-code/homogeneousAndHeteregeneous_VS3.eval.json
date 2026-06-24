@@ -3,29 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main planes, axes, points, ray, and text labels, and the lambda slider appears functional. However, the initial view is much more compressed and rotated than the source: the x and w axes do not match the source angles, the homogeneous point/ray is far shorter, and the right-side homogeneous construction is too close to the left plane. The red point markers in the source render mostly as black dots in the screenshot, losing the prominent red fill. Proportions and spacing are noticeably off, especially the distance to the homogeneous point and the relative size/placement of the planes and labels.",
           "failure_modes": [
-            "Color-Wrong",
-            "Scale-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Color-Wrong"
           ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial orientation does not match the source's perspective, particularly the x and w axis directions. Scale-Wrong applies because the homogeneous side, ray length, plane sizes, and label spacing are compressed relative to the original. Color-Wrong applies because the source's red coordinate points appear prominently red, while the rendered screenshot shows them mostly black.",
+          "geometry_accuracy_analysis": "The scene constructs a real 3D coordinate diagram: a translucent heterogeneous plane, an outlined w=1 homogeneous slice, x/y/w arrow axes, a w=1 tick, red/black point markers for (x,y), (x,y,1), and (λx,λy,λ), a dashed scale ray from the origin, and a dashed normalization arc. The geometry is not a flat texture or billboard; the planes are actual rectangular meshes at different w positions and the ray/points occupy true 3D positions. Minor issues are that the heterogeneous coordinate space is modeled as a parallel plane within the same 3D coordinate system and local 2D axes on that plane are not explicitly shown, but the main topology and spatial relationships are correct and recognizable.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 3,
+          "geometry_accuracy_reasoning": "All major geometric elements are present and built as true 3D objects with plausible placement, with only minor representational omissions/alignment simplifications, so this fits score 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for camera drag/zoom, but these do not count as meaningful interactions. A visible λ range slider at the bottom left updates the scaled homogeneous point, its label, numeric value, and dashed ray, so it has a clear visible pedagogical effect. Multiple scene objects are registered for pointer hover tooltips and click popups: the heterogeneous plane, w=1 slice, three points, and scale ray; the handlers appear functional and provide explanatory text. There is also an Escape key handler to hide popups and a Reset View button listener, but the reset button is hidden with display:none, so it is not usable. The UI is compact and does not cover the geometry; however, there is no guided demo or step-through animation.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are two meaningful, functional pedagogical interaction types—the λ slider and hover/click explanations—with compact UI, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered figure contains the same basic heterogeneous-to-homogeneous construction with two planes, axes, dashed ray, and point labels, but it is much smaller and centered with far more whitespace than the source. The source uses large red points, bold sweeping axes, large labels spread across the canvas, and a tight wide composition; the render uses black points, thinner/smaller geometry and text, different label placement, a more compressed layout, and includes a visible slider UI at the bottom left.",
           "faithfulness": 3,
-          "label_quality": 3,
+          "faithfulness_reasoning": "The diagram is recognizable in concept, but the under-zoomed crop, excessive whitespace, wrong point colors, altered proportions, and visible UI make it only a moderate match to the original.",
+          "label_quality_analysis": "Source labels are: “Heterogeneous”, “Homogeneous”, axis labels “y”, “x”, “w”, point labels “(x,y)”, “(x,y,1)”, “(λx,λy,λ)”, and tick label “1”. The generated figure includes all of these with correct text and they are readable; font sizes are broadly comparable in relative scale, though the overall figure is compressed and some labels, especially “Heterogeneous”, “(x,y)”, and “Homogeneous”, are placed closer to geometry/points than in the source. Overall the label set is complete and legible, with only minor placement/crowding differences from the source.",
+          "label_quality": 4,
+          "label_quality_reasoning": "All labels are present and readable with mostly appropriate sizing, but a few have minor placement/crowding issues compared with the source.",
+          "concept_accuracy_analysis": "The figure illustrates the relationship between ordinary 2D coordinates (x,y) and homogeneous coordinates (x,y,w), especially the w=1 slice and scaled representatives (λx,λy,λ) lying on a ray through the origin that normalize back to the same (x,y). Labels, slider behavior, tooltips, and popups are specific and mathematically relevant, including the division by w; the main omission is that homogeneous equivalence generally allows any nonzero scalar, not just the positive ray shown, and points at infinity are not addressed.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.4
+          "concept_accuracy_reasoning": "The main concept is accurate and the explanations are figure-specific, with only minor incompleteness about the full nonzero-scale equivalence class beyond the depicted positive ray.",
+          "visual_aesthetics": 3.7,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:40:39.643Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:34:00.532Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

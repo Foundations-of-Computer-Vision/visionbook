@@ -3,29 +3,43 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered scene includes the main triangles, image plane, dashed projection rays, point labels, primed labels, red reprojection-error segments, and green axes. However the initial composition is very different from the reference: the large 3D triangle appears at the upper left while the image plane and axes are on the right, instead of the plane/axes being in the left foreground and the large triangle extending to the right. The large triangle is much more compact/equilateral than the elongated source triangle, the image plane is relatively tiny, and the world point markers render mostly as black dots rather than clearly red/cyan/green filled circles. A visible “error” slider is also present in the screenshot, which is not part of the original figure.",
           "failure_modes": [
             "Camera-Wrong",
-            "Color-Wrong"
+            "Scale-Wrong",
+            "Color-Wrong",
+            "Hallucination"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial viewpoint/orientation places the plane, axes, and large triangle in a layout opposite to the source. Scale-Wrong applies because the proportions of the large triangle and the relative size of the image plane are noticeably off. Color-Wrong applies because the important 3D point markers are not shown with the clear red, cyan, and green fills seen in the reference. Hallucination applies because the visible UI error slider is an added element not present in the original textbook figure.",
+          "geometry_accuracy_analysis": "The scene constructs a genuine 3D reprojection-error diagram: a camera/origin point with green local axes, an image plane rectangle, dashed projection rays, three 3D points P1-P3 behind the plane, their measured image projections p1-p3, estimated projections p'1-p'3 on the same plane, red reprojection-error segments, and triangular connections among both 3D and image points. The geometry is not a flat texture or baked-in skew; depth is produced by actual distinct 3D coordinates and camera view. Minor issues are that the image plane is only an outline rather than a visible surface, the small image-plane coordinate frame is somewhat schematic/unlabeled, and some proportions/placements appear hand-tuned rather than exact, but the spatial relationships are substantially correct.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present and arranged in a recognizable 3D reprojection-error configuration, with only minor omissions or alignment/proportion issues.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, which should visibly work but does not count as a meaningful interaction. A visible “error” range slider changes the positions of the estimated p′ points and the red reprojection-error segments, so it has a clear visible and pedagogical effect. Click/hover handlers are registered on the three red error segments, P1, and p′1: hovering shows a short tooltip, clicking opens an explanatory popup, and clicking error segments also highlights the selected error and shows its label; these appear functional from the code. There is also an Escape key handler and empty-canvas click to clear popups/selections. A Reset button has a listener but is hidden with display:none, so it is not usable. The UI is small and placed in the top-left, not materially covering the geometry; the popup is compact and appears only when invoked.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are two meaningful functional interaction types—the error slider and click/hover explanatory object interactions—so this fits score 4, with no guided demo to justify a 5.",
+          "faithfulness_analysis": "The rendered frame uses a wide landscape canvas while the source is a tall portrait composition, with the major 3D triangle in the source occupying the upper-right and a large image plane dominating the center-left; in the render everything is much smaller and shifted toward the upper-left/center with excessive blank space. The camera angle, zoom, margins, triangle proportions, vertex colors, label placements, dashed-line structure, and axes location all differ substantially, though the general concept of an orange triangle projected onto a smaller triangle on a plane is present.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "The scene is recognizable only in broad concept, but the aspect ratio, crop, zoom, camera/view layout, colors, and proportions are significantly wrong, matching well under 65% of the original.",
+          "label_quality_analysis": "Source labels are P₁, P₂, P₃; p₁, p₂, p₃; p′₁, p′₂, p′₃; and axis labels X_L, Y_L, Z_L. In the generated figure, P₁, P₂, and P₃ appear and are readable, though their placement differs from the source configuration. The primed and unprimed image labels mostly appear, including p′₁, p′₂, p′₃, p₁, and p₃, but they are tightly clustered around the small image plane, with several overlapping or nearly touching points/geometry; p₂ is not clearly visible as a separate label. X_L, Y_L, and Z_L appear near the coordinate axes and are readable, but compressed compared with the source. Overall, the label set is mostly present, but the small-plane labels are cluttered and some are hard to distinguish, with at least one likely missing/unclear label.",
           "label_quality": 3,
-          "concept_accuracy": 3,
+          "label_quality_reasoning": "Most labels are present and readable, but roughly half of the small projection labels have placement/clarity problems due to clustering and overlap, so this fits a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates reprojection error in camera calibration: known 3D points P_i project to measured image points p_i on an image plane, while estimated projections p'_i are offset, and red image-plane segments e_i represent residual distances. The tooltips/popups are specific and correct, explicitly identifying p_i versus p'_i, defining each red segment as an image-plane reprojection error term, and stating that the loss sums squared segment lengths; the slider correctly demonstrates residuals shrinking to zero when p'_i coincides with p_i.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All core relationships and interactive explanations are accurate, figure-specific, and directly tied to reprojection error with no substantive misinformation.",
           "visual_aesthetics": 3,
-          "overall_average": 3
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:44:03.183Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T20:02:35.294Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

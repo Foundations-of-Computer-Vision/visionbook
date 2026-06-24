@@ -341,91 +341,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a wireframe prism (cube) from an elevated axonometric/isometric perspective, where the top face and two side faces are visible. The vertical axes are parallel to the image borders, and the horizontal axes recede at standard isometric angles.",
-          "viewing_angle_rendered": "The rendered screenshot shows the prism from a very similar orthographic perspective, with the top face, front-left, and front-right faces visible. The angle matches the source figure closely.",
-          "viewing_angle_comparison": "The viewing angles are nearly identical, successfully replicating the isometric projection and camera framing of the original diagram.",
-          "shape_comparison": [
-            {
-              "element": "Prism wireframe",
-              "source_shape": "thin lines",
-              "rendered_shape": "thin cylinders",
-              "match": true
-            },
-            {
-              "element": "Intermediate planes",
-              "source_shape": "flat quadrilaterals",
-              "rendered_shape": "translucent planes",
-              "match": true
-            },
-            {
-              "element": "Trajectories",
-              "source_shape": "curved dotted lines",
-              "rendered_shape": "curved dashed lines",
-              "match": true
-            },
-            {
-              "element": "Side arrows",
-              "source_shape": "thin 2D arrows",
-              "rendered_shape": "thick 3D cylinder-cones",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "Severe label overlapping: 'Representation learning' directly collides with the front-left vertical edge of the prism, making it unreadable.",
-            "Label overlap at top and bottom: 'Embedding' and 'Data' overlap with the top and bottom wireframe edges of the prism.",
-            "Side arrows are too thick and bulky compared to the elegant thin lines in the source figure.",
-            "First-frame clutter: The inclusion of active animating particles and extra cones along the paths clutters the visual representation compared to the clean original."
-          ],
-          "failure_modes": [
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 2,
-          "concept_accuracy": 5,
-          "notes": "Excellent interactive features and correct geometry, but severely marred by label overlapping and bulky side arrows.",
-          "action_items": [
-            "Increase the offset of the 'Representation learning' and 'Generative modeling' labels further outwards to prevent overlapping with the prism and side arrows.",
-            "Move the 'Embedding' label higher up and 'Data' label lower down to avoid colliding with the wireframe box edges.",
-            "Reduce the radius of the cylinder and cone components for the side arrows to make them look more like sleek, thin 2D lines.",
-            "Clean up the initial state of the animation to ensure the first frame is a clean drop-in replacement without multiple overlapping particles/cones."
-          ],
-          "visual_aesthetics": 3,
-          "overall_average": 3.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:16:24.375Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3.7,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene captures a stacked prism with gray intermediate planes and dashed trajectories, but the initial rendering is much more cube-like and compact than the source's tall, wide schematic. The camera angle and label placement differ: the Embedding and Data labels sit small and inside/near the cube rather than large outside the figure, and the side labels/arrows are cramped or partially obscured. The visible UI controls and extra animated particle dots are not present in the original figure.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong: the initial view presents a compact upright cube from a different angle rather than the source's broad isometric textbook composition. Scale-Wrong: the prism proportions and especially label/arrow sizes are noticeably off relative to the original. Hallucination: the screenshot includes UI controls and extra animated particle markers not shown in the source figure.",
+          "geometry_accuracy_analysis": "The scene constructs a true 3D layered prism: horizontal top, bottom, and intermediate planes with cylindrical wireframe edges, vertical corner supports, curved dashed trajectories running from data to embedding layers, bottom/top point markers, animated particles, a folded-to-flat manifold ribbon, and separate upward/downward side arrows with labels. No source image or flat billboard perspective is used; depth comes from the 3D positions and camera. Geometry and proportions are plausible, with only minor possible overdraw from duplicate top/bottom outlines and slight stylization of the curved paths/manifold.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are present as real 3D geometry with correct topology, plausible placement, and no fake baked-in 2D perspective, matching the score-5 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but those do not count toward the score. Meaningful interactions include a direction dropdown that switches representation-up vs generative-down flow, visibly changing arrow emphasis, path arrowheads, label colors, and particle direction; a mode dropdown that toggles between discrete paths and a translucent manifold-unfolding view; a speed slider that changes the animated particles' motion speed and can effectively stop them at zero; a reset-view button that restores the camera; hover tooltips over registered scene objects such as planes, arrows, prism, and manifold; click handlers that send explanatory popups for those objects; and a double-click guided-step mechanism on major objects that calls predefined narrated demo steps. The controls are compact in the lower-left and only minimally overlap peripheral arrow/label area, not the main geometry; the interactions are pedagogically relevant and mostly discoverable through the visible controls, though the double-click guided demo is less obvious.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions plus an implemented guided demo mechanism, and the UI is compact without materially covering the geometry, matching the score-5 rubric.",
+          "faithfulness_analysis": "The rendered frame is recognizable as an isometric cube/embedding schematic with dotted trajectories and side arrows, but the composition is very different from the source. The source is a very wide figure with large serif labels placed outside the cube and generous side margins, while the render is a narrower canvas with a smaller, more upright cube, labels embedded inside or tiny/rotated, altered trajectory placement, different grid density, and visible UI controls occupying the lower-left corner.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the core idea is present, the aspect ratio, crop, label placement/scale, margins, and UI chrome differ substantially, making it a poor drop-in replacement below the 65% match threshold.",
+          "label_quality_analysis": "Source labels: \"Embedding\" appears large at the top center; \"Data\" appears large at the bottom center; \"Representation learning\" appears vertically on the left beside an upward arrow; \"Generative modeling\" appears vertically on the right beside a downward arrow. In the generated figure all four labels appear with correct text, but all are much smaller than in the source: \"Embedding\" is placed inside/over the cube top rather than above it, \"Data\" is small and close to the cube bottom, \"Representation learning\" is very small, vertical, and crowded/partly obscured along the cube edge, and \"Generative modeling\" is small gray text near the right arrow rather than large black side text. Overall the label set is complete in text but fails the source-scale font size and placement match for most labels.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Although all required labels are present, most are significantly undersized and several are poorly positioned or cluttered relative to the source, matching a score of 2.",
+          "concept_accuracy_analysis": "The figure illustrates a deep-learning geometry metaphor: data at the bottom, embedding/latent space at the top, intermediate hidden layers, bottom-up representation learning, top-down generative modeling, and an optional manifold-untangling view. Labels, tooltips, popups, animation controls, and demo steps are figure-specific and correctly describe the relationships between data space, hidden layers, embedding space, sample trajectories, and generative versus representation directions; the only slight simplification is treating generative modeling as a direct reverse of representation learning, but this is consistent with the schematic metaphor.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "The main concept and interactive explanations are accurate, specific to the displayed variables and geometry, and contain no substantive misleading details.",
+          "visual_aesthetics": 3,
           "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:34:18.376Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:52:24.473Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }
