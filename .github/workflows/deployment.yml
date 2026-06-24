@@ -21,7 +21,7 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           echo "${{ secrets.PUBLIC_KEY }}" > ~/.ssh/id_rsa.pub
           chmod 600 ~/.ssh/id_rsa ~/.ssh/id_rsa.pub
-          ssh-keyscan -p ${{ secrets.PUBLIC_PORT }} -t rsa ${{ secrets.HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -p ${{ secrets.PUBLIC_PORT }} -t ed25519 ${{ secrets.HOST }} >> ~/.ssh/known_hosts
 
       - name: Pull and Render
         run: |
