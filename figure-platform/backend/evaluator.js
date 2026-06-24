@@ -68,7 +68,7 @@ Score 1 — flat texture paste:
 Score 2 — multiple missing elements and wrong primitives:
 {"geometry_accuracy_analysis": "Both camera bodies are ConeGeometry instead of BoxGeometry. Both focal points are absent from the scene entirely. Epipolar lines are rendered as thick CylinderGeometry that visually block the image planes. Image planes are axis-aligned billboards with no Z offset. More than two major elements are wrong or missing.", "geometry_accuracy": 2, "geometry_accuracy_reasoning": "Multiple wrong primitives and missing elements — cameras as cones, no focal points, obstructive cylinders for epipolar lines."}
 
-Score 3 — mostly present but noticeable spatial errors (penalized from a naive 4):
+Score 3 — mostly present but noticeable spatial errors:
 {"geometry_accuracy_analysis": "All five main elements are present: two camera bodies, two image planes, and the epipolar line bundle. However, camera bodies are SphereGeometry instead of BoxGeometry, and the baseline connecting them is drawn at the wrong vertical height relative to the image planes. The spatial concept is still recognizable despite these two errors.", "geometry_accuracy": 3, "geometry_accuracy_reasoning": "All elements present but one wrong primitive (spheres for cameras) and one spatial error (baseline height) — concept still recognizable, not a score-4."}
 
 Output ONLY a valid JSON object with exactly three keys: {"geometry_accuracy_analysis": "<observations and quality characterization>", "geometry_accuracy": <integer 1-5>, "geometry_accuracy_reasoning": "<one sentence tying the analysis to the rubric>"}`;
@@ -96,10 +96,10 @@ Examples (for reference only — do not copy):
 Score 1 — OrbitControls only:
 {"interactivity_usability_analysis": "The code registers OrbitControls and nothing else. No addEventListener calls for click or hover, no dat.GUI or custom sliders, no animation loop driven by parameters. The screenshot confirms only a static scene with orbit capability.", "interactivity_usability": 1, "interactivity_usability_reasoning": "Only OrbitControls present — no sliders, toggles, click handlers, or animated parameters; per the rubric this must score 1."}
 
-Score 2 — intrusive UI caps an otherwise functional figure (penalized from a naive 3):
+Score 2 — intrusive UI caps an otherwise functional figure:
 {"interactivity_usability_analysis": "Two sliders control camera separation and rotation and both produce visible changes in the scene. However, they are housed in a large filled <div> panel with a white background that covers the entire right third of the canvas, obscuring the second camera and its image plane. The interactions are functional but the UI is intrusive.", "interactivity_usability": 2, "interactivity_usability_reasoning": "Interactions work but a large filled panel covers important geometry — intrusive UI penalty caps the score at 2."}
 
-Score 3 — one functional interaction but no guided demo (penalized from a naive 4):
+Score 3 — one functional interaction but no guided demo:
 {"interactivity_usability_analysis": "Clicking any epipolar line triggers a correctly worded 2-sentence popup explaining the epipolar constraint. This is the only meaningful interaction in the scene — there are no sliders, no step-through animation, and no guided demo. The UI chrome is minimal.", "interactivity_usability": 3, "interactivity_usability_reasoning": "One functional pedagogical interaction (click-to-explain on epipolar lines) with no guided demo — qualifies for score 3, not 4."}
 
 Output ONLY a valid JSON object with exactly three keys: {"interactivity_usability_analysis": "<observations and quality characterization>", "interactivity_usability": <integer 1-5>, "interactivity_usability_reasoning": "<one sentence tying the analysis to the rubric>"}`;
@@ -127,7 +127,7 @@ Examples (for reference only — do not copy):
 Score 2 — wrong camera angle and force-filled iframe:
 {"faithfulness_analysis": "The source figure shows a side elevation with both cameras at the same height and generous whitespace on all sides. The rendered first frame is a top-down bird's-eye view where image planes appear as narrow horizontal strips. The scene fills the entire canvas with no margins. Viewing angle and crop both differ substantially from the source.", "faithfulness": 2, "faithfulness_reasoning": "Top-down angle instead of side elevation, and force-filled iframe with no margins — composition matches <65% of the original."}
 
-Score 3 — recognizable but over-zoomed and UI-cropped (penalized from a naive 4):
+Score 3 — recognizable but over-zoomed and UI-cropped:
 {"faithfulness_analysis": "The camera pair and image planes are arranged in the same relative positions as the source, so the general layout is recognizable. However, the scene is zoomed in approximately 2× compared to the source, cropping both image planes at their outer edges. A control strip at the bottom occupies ~15% of the canvas height, further compressing the apparent composition.", "faithfulness": 3, "faithfulness_reasoning": "Layout recognizable (~70% match) but 2× over-zoom crops both image planes and a UI strip shifts the composition — not a score-4."}
 
 Output ONLY a valid JSON object with exactly three keys: {"faithfulness_analysis": "<observations and quality characterization>", "faithfulness": <integer 1-5>, "faithfulness_reasoning": "<one sentence tying the analysis to the rubric>"}`;
@@ -155,10 +155,10 @@ Examples (for reference only — do not copy):
 Score 1 — no readable labels:
 {"label_quality_analysis": "The source figure has six labels: C1, C2, P, p, e, e'. In the generated figure all six addLabel() calls are present in code, but each renders at fontSize: 6 — roughly 4px on screen at 1× zoom. The screenshot shows only faint smudges at label positions. No label is legible.", "label_quality": 1, "label_quality_reasoning": "All labels rendered at ~4px — completely unreadable; a clear score-1 case."}
 
-Score 2 — present but failing FONT SIZE CHECK (penalized from a naive 3):
+Score 2 — present but failing FONT SIZE CHECK:
 {"label_quality_analysis": "All five labels (Camera 1, Camera 2, Image Plane 1, Image Plane 2, Epipolar Line) are correctly named and positioned near the right objects. However, they are rendered at fontSize: 10 while the source figure uses labels roughly equivalent to 18-20px. At source scale the labels are effectively unreadable smudges. The correct names partially offset this, but the size mismatch is severe.", "label_quality": 2, "label_quality_reasoning": "All labels correctly named and placed but rendered at roughly half the source font size — fails the FONT SIZE CHECK; most labels unreadable at source scale."}
 
-Score 3 — half the label set has issues (penalized from a naive 4):
+Score 3 — half the label set has issues:
 {"label_quality_analysis": "Six labels are present. C1, C2, and P are correctly placed and match source font scale. Image Plane 1 and Image Plane 2 overlap their respective geometry meshes and are partially obscured. The epipole label 'e' is rendered at half the source font size and sits directly behind the camera body. Three of six labels have placement or size problems.", "label_quality": 3, "label_quality_reasoning": "Three of six labels have significant placement or size issues — more than half the label set fails, qualifying for score 3 not 4."}
 
 Output ONLY a valid JSON object with exactly three keys: {"label_quality_analysis": "<observations and quality characterization>", "label_quality": <integer 1-5>, "label_quality_reasoning": "<one sentence tying the analysis to the rubric>"}`;
@@ -186,7 +186,7 @@ Examples (for reference only — do not copy):
 Score 2 — entirely generic tooltip filler:
 {"concept_accuracy_analysis": "The figure is meant to illustrate epipolar geometry. Clicking a ray produces the popup 'this ray shows how the camera sees the scene.' Clicking an image plane produces 'notice how the planes relate.' No popup mentions epipolar lines, the fundamental matrix, the epipole, or any variable from the source figure. The geometry itself is roughly correct, but every explanation is context-free filler that could apply to any 3D scene.", "concept_accuracy": 2, "concept_accuracy_reasoning": "All explanations are generic filler with no reference to epipolar lines, the fundamental matrix, or any figure-specific variable — fails the EXPLANATION SPECIFICITY CHECK."}
 
-Score 3 — main concept present but 2-3 details wrong or generic (penalized from a naive 4):
+Score 3 — main concept present but 2-3 details wrong or generic:
 {"concept_accuracy_analysis": "The epipolar constraint is correctly illustrated: a ray from Camera 1 does project to an epipolar line on Image Plane 2, and rotating the slider adjusts the geometry correctly. However, the baseline tooltip reads 'this shows camera displacement' rather than naming the translation vector T. Clicking the fundamental matrix label produces no popup. The epipole is labeled 'vanishing point' rather than 'epipole'. Two tooltips are missing and one is mislabeled.", "concept_accuracy": 3, "concept_accuracy_reasoning": "Core epipolar constraint correctly shown but baseline tooltip is too generic, fundamental matrix click is unresponsive, and epipole is mislabeled — three details wrong or absent."}
 
 Output ONLY a valid JSON object with exactly three keys: {"concept_accuracy_analysis": "<observations and quality characterization>", "concept_accuracy": <integer 1-5>, "concept_accuracy_reasoning": "<one sentence tying the analysis to the rubric>"}`;
