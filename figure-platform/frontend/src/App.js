@@ -1892,7 +1892,7 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
                 <>
                   <p style={styles.viewerPlanTitle}>Planner Output</p>
                   {selectedPlan.chapterName && <p style={styles.viewerPlanMeta}>Chapter: {selectedPlan.chapterName}</p>}
-                  <details open style={styles.planFieldsDetails}>
+                  <details style={styles.planFieldsDetails}>
                     <summary style={styles.planFieldsSummary}>Plan details</summary>
                     <PlanFields data={planPayload} excludeKeys={['contextChunk', 'chapterName']} />
                   </details>
@@ -2279,7 +2279,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
       {modeToggle}
       {selector}
       <div style={styles.evalHeader}>
-        <span style={styles.evalTitle}>Critic feedback</span>
+        <span style={styles.evalTitle}>Evaluator feedback</span>
         <span style={{ ...styles.evalOverall, color: scoreTextColor(evaluation.overall_average) }}>
           {evaluation.overall_average}/5
         </span>
@@ -2920,11 +2920,11 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
     const versionId = evaluationCriticVersion || currentCriticVersion || 'legacy_unknown';
     const allItems = activeTab === 'api'
       ? Object.entries(apiTree[expName] || {}).flatMap(([modelName, recs]) =>
-          recs.map(r => {
-            const view = selectedRecordView(r);
-            return { key: `api/${r.id}`, type: 'api', id: r.id, evaluationResults: view.evaluationResults || {}, evaluationMeta: view.evaluationMeta || {} };
-          })
-        )
+        recs.map(r => {
+          const view = selectedRecordView(r);
+          return { key: `api/${r.id}`, type: 'api', id: r.id, evaluationResults: view.evaluationResults || {}, evaluationMeta: view.evaluationMeta || {} };
+        })
+      )
       : expTree.flatMap(e => e.experiment !== expName ? [] : e.models.flatMap(m => m.figures.map(f => ({ ...f, type: 'experiment', key: `${e.experiment}/${m.model}/${f.name}`, model: m.model }))));
     const pending = allItems.filter(item => !filterExternalEvals(item.evaluationResults || {}, item.evaluationMeta || {}).results[evalModelId]);
     if (!pending.length) return;
