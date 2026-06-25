@@ -3,28 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered view is horizontally reversed relative to the source: the object/building and optical-axis direction appear on the left, while the sensor grid appears on the right of the camera center; the source has the sensor on the left and virtual plane/object on the right. Several labels are present, but some source annotations such as the separate “Camera” label/arrow and the lowercase v annotation on the virtual image plane are absent. The sensor and virtual/image planes are much smaller and more compressed relative to the overall scene and object than in the source, where the sensor grid and virtual plane dominate the diagram.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong"
           ],
+          "failure_modes_reasoning": "Missing-Labels applies because important annotations from the source, notably the camera label/arrow and v coordinate label, are not shown. Camera-Wrong applies because the initial viewpoint mirrors/reorders the source layout, placing the sensor and object on opposite sides from the reference. Scale-Wrong applies because the relative sizes of the sensor, virtual plane, and object differ noticeably from the textbook figure.",
+          "geometry_accuracy_analysis": "The scene contains true 3D geometry: separate sensor and virtual image planes at different Z depths, a camera center/pinhole, coordinate axes, focal-length/width dimension arrows, a 3D point P, projection rays through the camera center, sensor grid, labels, and a simplified house/building object in front of the camera. The main spatial layout is plausible and not a flat texture or baked 2D skew. However, the projected image content on the sensor is only approximate colored rectangular patches, the virtual image plane lacks a full projected object image, and some construction/dimension lines are simplified or not perfectly aligned to a precise pinhole projection diagram. Overall it is a recognizable and mostly complete 3D representation with minor-to-moderate omissions in projected-image detail.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present as real 3D objects with plausible relative positions, but simplified projection imagery and some alignment/detail inaccuracies prevent a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom, but this does not count as a meaningful interaction. A hidden Reset View button has a click listener but is styled display:none, so it is not usable. Meaningful interactions include hover/click handling on three scene elements: clicking P toggles an orange projection-ray highlight and opens a two-sentence explanatory popup; clicking the sensor plane toggles the pixel grid density and opens an explanatory popup; clicking the virtual image plane scales the virtual marker and opens an explanatory popup. Hovering these objects shows tooltips and highlights related geometry, and Escape hides the popup/tooltip. The interactions are compact and pedagogically useful, with no intrusive UI chrome covering the geometry, but there is no guided step-through demo or visible control panel beyond object clicking.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
+          "interactivity_usability_reasoning": "There are three functional pedagogical click/hover interactions with compact UI, but no guided demo is present, so it falls short of a 5.",
+          "faithfulness_analysis": "The rendered frame contains the same conceptual elements (sensor grid, camera center, virtual image plane, colored object, axes and labels), but the composition is effectively reversed left-to-right from the source: the object appears on the left and sensor on the right, whereas the source has the sensor on the left and object on the right. The zoom, aspect ratio, object/plane sizes, label placement, and whitespace are substantially different, with the generated figure much more compressed and simplified, so it would not work as an inline drop-in replacement.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in theme, the mirrored layout, incorrect crop/zoom/aspect, and major proportion differences make it match well under 65% of the original.",
+          "label_quality_analysis": "Source labels include: Image plane / sensor, N pixels, M pixels, Camera center, w, f, Y_c, X_c, Z_c, x, y, Virtual image plane, Optical / principal axis, and P. The generated figure contains all of these labels with essentially correct text, including the subscripted camera axes and lowercase image-plane axes. However, several labels are noticeably smaller than the source scale, and placement is much more crowded: Camera center overlaps nearby geometry/text, Image plane / sensor is compressed near Y_c, M pixels/N pixels are small on the grid, and Optical / principal axis is placed close to the 3D object rather than cleanly along the axis as in the source. Overall the label set is mostly complete and readable, but font scale and positioning are substantially less faithful and somewhat cluttered.",
           "label_quality": 3,
+          "label_quality_reasoning": "All labels are present, but consistent size mismatch plus multiple cluttered or poorly positioned labels make this a score 3 rather than 4.",
+          "concept_accuracy_analysis": "The figure illustrates the pinhole camera model with a camera center, optical axis, physical sensor at -f, virtual image plane at +f, focal length f, sensor width w, N/M pixel sampling, and projection of a 3D point P along a ray. The hover/click explanations are specific and mostly correct: they describe collinearity of P, camera center, virtual image point and sensor sample; inversion on the physical sensor; and conversion of focal length to pixel units via N/w. Minor limitations are that the sensor/image-plane terminology is slightly conflated and some physical dimensions/axis conventions are simplified, but the main relationships are accurately conveyed.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.6
+          "concept_accuracy_reasoning": "Main pinhole projection and sensor-sampling concepts are correct with figure-specific explanations, with only minor simplifications or terminology ambiguity.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:43:25.242Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:39:05.827Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

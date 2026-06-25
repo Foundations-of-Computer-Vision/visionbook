@@ -302,97 +302,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows the orthographic projection setup from a perspective looking from the front-left towards the back-right. The coordinate origin is on the far left, with the Z-axis pointing horizontally to the right. The projection plane is positioned near the origin (left), and the 3D L-shaped block is positioned further along the Z-axis (right).",
-          "viewing_angle_rendered": "The rendered screenshot shows the setup from an opposite perspective, looking from the front-right towards the back-left. The coordinate origin is on the far right, with the Z-axis pointing to the left. The projection plane is on the right, and the 3D block is on the left.",
-          "viewing_angle_comparison": "The viewing angle in the rendered screenshot is horizontally mirrored/flipped compared to the source figure. This reverses the entire spatial layout: the projection plane is on the right instead of the left, the object is on the left instead of the right, and the Z-axis points left instead of right.",
-          "shape_comparison": [
-            {
-              "element": "L-shaped block",
-              "source_shape": "L-shaped prism",
-              "rendered_shape": "L-shaped prism",
-              "match": true
-            },
-            {
-              "element": "Projection plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "Axes (X, Y, Z)",
-              "source_shape": "arrows",
-              "rendered_shape": "arrows",
-              "match": true
-            },
-            {
-              "element": "Projection rays",
-              "source_shape": "dashed lines",
-              "rendered_shape": "dashed lines",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The entire scene is horizontally mirrored: the projection plane is on the right and the 3D object is on the left, whereas the original has the plane on the left and the object on the right.",
-            "The Z-axis points to the left instead of pointing to the right.",
-            "The 3D block has its cyan/red colors reversed in orientation due to the flipped viewpoint.",
-            "The labels (X, Y, Z, x, y, Projection plane) are placed on the wrong sides of the screen relative to the original layout."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Depth-Wrong",
-            "Color-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 2,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "notes": "The scene is geometrically correct in concept but entirely mirrored/flipped compared to the original textbook layout, which harms visual faithfulness.",
-          "action_items": [
-            "Invert the Z-axis direction so that it points from left to right as in the original image.",
-            "Position the projection plane on the left (closer to Z=0) and the L-shaped block on the right (further along positive Z).",
-            "Adjust the camera position (azimuth and elevation) to view the scene from the front-left, matching the textbook perspective.",
-            "Re-align all text labels (X, Y, Z, x, y, Projection plane) to match their original relative placements.",
-            "Ensure the block's face colors (red front, green top, cyan side) and their corresponding projections on the plane match the original figure's orientation."
-          ],
-          "visual_aesthetics": 2.7,
-          "overall_average": 3.2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:23:24.648Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the L-shaped block, projection plane, dashed projection lines, axes, and local x/y labels, with sliders for distance and yaw. However the initial view is essentially flipped from the source: the object appears to the left of the projection plane and the Y axis is on the right, while the source shows the projection plane on the left/center and the object far to the right along the Z direction. The important \"Projection plane\" label is not visible in the rendered screenshot. The visible face colors of the main 3D block are also swapped relative to the source, with a large cyan face where the source shows a large red face and cyan mainly on the right end face.",
           "failure_modes": [
+            "Missing-Labels",
             "Camera-Wrong",
-            "Missing-Labels"
+            "Color-Wrong"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
+          "failure_modes_reasoning": "Missing-Labels applies because the source's prominent \"Projection plane\" annotation is absent from the rendered view. Camera-Wrong applies because the initial orientation/layout is reversed from the textbook figure, placing axes and object/plane relationship on the wrong side visually. Color-Wrong applies because the colored faces of the 3D block do not match the source's visible red/green/cyan face arrangement.",
+          "geometry_accuracy_analysis": "OBSERVE: The scene contains a real 3D L-shaped block made from two BoxGeometry prisms with colored red/green/cyan faces and black edge outlines, a translucent rectangular projection plane, world X/Y/Z axes with arrowheads, green local image-plane x/y axes, dashed parallel projection rays, labels, and flattened projected colored patches on the plane. No source image texture or baked perspective billboard is used; depth is represented by actual Z separation and the camera view. Minor issues are that the projected silhouette is built from separate flattened face rectangles rather than a clean boolean-unioned projection, so it may show extra internal outlines/overlaps, and the green top contribution is represented mostly as lines rather than projected filled regions. CHARACTERIZE: Overall the geometry is a faithful real 3D orthographic projection construction with all major elements present and plausibly positioned. The remaining inaccuracies are mostly in the exact projected silhouette rendering and internal face treatment rather than the core spatial layout.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as true 3D geometry with plausible positions, but minor projection-shape and overlap/internal-outline issues keep it from a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, which appear functional but do not count toward the score. Meaningful interactions include two visible sliders: Distance (Z) visibly moves the block along the depth axis and updates projection rays, and Rotation (Yaw) visibly rotates the block and changes the projected silhouette. There are hover tooltips and click handlers registered on the projection plane, depth axis, local x/y arrows, block group, projection group, and ray group; hover tooltips should be visible, and several clicks trigger explanatory popups plus guided step changes/animations via goToStep. A hidden Reset View button has an event listener but is not usable because it is display:none. The interactions are pedagogically useful for demonstrating orthographic projection, distance independence, and yaw-dependent projected area; the small bottom-left transparent UI is compact and does not cover important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions including sliders, object hover/click explanations, and guided animated demo steps, with compact non-intrusive UI, matching the score-5 rubric.",
+          "faithfulness_analysis": "The rendered frame contains the same general ingredients—colored 3D block, translucent projection plane, axes, and dashed projection lines—but the composition is substantially different. The source is a very wide landscape figure with the projection plane left/center and the 3D object far to the right, large serif labels, generous whitespace, and a long horizontal Z axis; the render uses a much narrower aspect ratio, reverses the object/plane placement, changes the camera angle and zoom, omits the large projection-plane label, and has small UI sliders in the lower-left.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the concept is recognizable, the aspect ratio, crop, camera orientation, object placement, labels, margins, and added UI chrome differ enough that it matches well under 65% as a drop-in replacement.",
+          "label_quality_analysis": "Source labels are: uppercase Y on the vertical axis, uppercase X on the diagonal/horizontal axis, uppercase Z on the rightward depth axis, lowercase y on the projection-plane vertical green arrow, lowercase x on the projection-plane diagonal green arrow, and the large text label “Projection plane” below the plane. In the generated figure, Y, X, and Z appear with correct text and are placed near the corresponding axes, though much smaller than the source labels; lowercase y and x also appear near the green arrows but are very small; “Projection plane” is missing entirely. Overall, the label set is mostly present but incomplete, and the font sizes are consistently too small relative to the bold, large labels in the source figure.",
           "label_quality": 3,
-          "concept_accuracy": 3,
+          "label_quality_reasoning": "One major label is missing and the remaining labels are consistently undersized compared with the source, matching the rubric for a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates orthographic projection of a 3D L-shaped block onto a vertical projection plane: parallel rays perpendicular to the plane flatten points by discarding depth, distance along Z does not change projected size, and yaw changes the projected face areas. The labels, sliders, tooltips, and popups are highly figure-specific and mostly correct, though statements like “x = X” slightly ignore possible image-plane origin/offset and the projected colored patches are closer to projected face patches than a pure silhouette.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main orthographic-projection concept and interactions are accurate and specific, with only minor oversimplification in coordinate equality/silhouette wording.",
           "visual_aesthetics": 3,
-          "overall_average": 3
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:38:41.596Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:04:08.667Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

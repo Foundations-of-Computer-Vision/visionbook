@@ -245,89 +245,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure displays four independent 3D frequency response plots arranged horizontally. Each plot is viewed from a slightly elevated angle looking down and slightly to the right, with the u-axis extending right-downward and the v-axis extending right-upward.",
-          "viewing_angle_rendered": "The rendered screenshot shows the four plots aligned horizontally from a similar elevated perspective, but they are placed extremely close together, causing them to visually overlap. The camera view is zoomed such that the floating HTML labels appear enormously oversized.",
-          "viewing_angle_comparison": "While the general 3D orientation of each individual plot matches the source, the horizontal spacing between the plots is far too narrow, and the excessive scale of the labels completely disrupts the visual composition compared to the clean separation in the source.",
-          "shape_comparison": [
-            {
-              "element": "frequency response surfaces",
-              "source_shape": "smooth wireframe mesh surfaces",
-              "rendered_shape": "colored line segments wire grids",
-              "match": true
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "thin 2D black arrows",
-              "rendered_shape": "3D cylinders and cones",
-              "match": true
-            },
-            {
-              "element": "text labels (u, v, a-d)",
-              "source_shape": "small clean 2D textbook typography",
-              "rendered_shape": "extremely large overlapping HTML text elements",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The panels are placed too close together horizontally, causing the meshes and axes of adjacent plots to overlap.",
-            "The HTML labels ('a', 'b', 'c', 'd', 'u', 'v') are extremely oversized (e.g., 96px-124px) and collide directly with the 3D plots and axes.",
-            "Label 'a)' is severely displaced or hidden under the first panel.",
-            "The overall aspect ratio and layout feel cramped compared to the wide, clean presentation of the original figure."
-          ],
-          "failure_modes": [
-            "Scale-Wrong",
-            "Color-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 2,
-          "label_quality": 1,
-          "concept_accuracy": 4,
-          "notes": "The mathematical surface generation is correct, but the extremely large labels and lack of horizontal spacing between panels ruin the visual layout.",
-          "action_items": [
-            "Significantly reduce the font size of all labels (e.g., from ~100px to around 16px-20px) to prevent collisions.",
-            "Increase the horizontal spacing (`rowOffset`) between the four panels so they are completely separated and do not overlap.",
-            "Adjust the camera zoom and position to cleanly frame the newly spaced-out set of four panels.",
-            "Reposition the 'u' and 'v' labels so they sit cleanly at the tips of their respective axes without overlapping the grid lines."
-          ],
-          "visual_aesthetics": 2,
-          "overall_average": 2.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:57:11.600Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered scene includes four colored wireframe 3D frequency-response surfaces with black u/v/vertical axes, but the whole figure is compressed into the upper half of the viewport with large unused white space. The source figure is a very wide layout with each panel much larger and labels a), b), c), d) clearly visible; in the generated screenshot the a) label is absent/cropped and the remaining panel letters appear shifted/overlapping the axes. A gain slider is visible at bottom left, which is not part of the source figure. The initial camera/framing differs substantially from the reference, making the panels smaller and more front-facing/clustered than the source.",
           "failure_modes": [
+            "Missing-Labels",
+            "Camera-Wrong",
             "Scale-Wrong",
-            "Missing-Labels"
+            "Hallucination"
           ],
+          "failure_modes_reasoning": "Missing-Labels applies because the important panel label a) is not visible and panel labels are poorly placed. Camera-Wrong applies because the initial viewpoint/framing does not match the wide textbook layout and leaves the figure compressed near the top. Scale-Wrong applies because the panels and labels are noticeably mis-proportioned and much too small relative to the canvas. Hallucination applies because the visible gain slider/control is not present in the original figure.",
+          "geometry_accuracy_analysis": "The scene constructs four separate true 3D frequency-response panels with sampled X-Z grids elevated in Y, colored wireframe surfaces, invisible matching surface meshes for interaction, black u/v/base and vertical magnitude axes with arrowheads, and panel labels a)–d) plus u and v labels. The main geometry appears to match the intended four DFT magnitude plots: three radially symmetric LoG band-pass surfaces with changing width/height and one discrete Laplacian high-pass surface; minor omissions include lack of tick marks, magnitude-axis label, and any filled surface/solid shading if present in the source.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
+          "geometry_accuracy_reasoning": "All major geometric elements and surface shapes are present as real 3D geometry with plausible proportions and layout, but some secondary axis/detail elements are missing or simplified, so this fits score 4 rather than 5.",
+          "interactivity_usability_analysis": "Interactions in the code: OrbitControls are enabled for drag/zoom but do not count as meaningful interaction; a Reset View button has a click handler but is display:none, so it is not usable/visible; a visible bottom-left gain range slider updates the y-coordinates of all wire surfaces and invisible picker meshes, so it should visibly scale the surface heights; canvas pointermove raycasts against registered surface pick meshes and axes groups, changes the cursor, and shows a small tooltip; canvas click on those objects sends a titled explanatory popup message with pedagogical body text, while clicking empty space hides it; Escape hides tooltip/popup. The interactions are compact and mostly useful: the slider gives a visible parameter change, and surface/axis hover/click explanations are pedagogically relevant, though the click popup depends on the parent frame listener rather than an in-page modal. The UI chrome is minimal at the lower left and does not cover important geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are two meaningful functional interaction types—the gain slider and object hover/click explanations—with compact UI and no guided demo, matching a score of 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame shows four similar colored wireframe surface plots with black axes, but they are much smaller and compressed into the center of the canvas with excessive whitespace, especially below, and a visible gain slider UI at the bottom. The source is a very wide panoramic textbook figure with large close-up panels labeled a)–d); the render has wrong/overlapping labels, different zoom and margins, and the panels do not match the original crop or scale.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general concept of four 3D wireframe surfaces is recognizable, the crop, zoom, whitespace, labeling, and UI chrome differ substantially, so it matches well under 65% as a drop-in replacement.",
+          "label_quality_analysis": "Source labels: panel labels a), b), c), d); each panel also has axis labels u and v, for four u labels and four v labels. In the generated figure, the u and v labels are generally present near the axes, but several are crowded against arrows or panel labels, and the rightmost u is partly cut off at the image edge. The panel labels are incorrect/misaligned: a) is missing, b), c), and d) appear shifted under the first three panels rather than matching the source panel identities, and there is no clear correct label for the fourth panel. The label sizes are large and readable but cluttered relative to the compressed geometry, with some overlap and an extra unrelated 'gain' UI label visible.",
           "label_quality": 2,
+          "label_quality_reasoning": "Although many axis labels are readable, the panel label set is substantially wrong/missing and several labels are crowded or clipped, so most source labels are not faithfully matched.",
+          "concept_accuracy_analysis": "The figure illustrates four 3D frequency-response/DFT magnitude surfaces: Laplacian of Gaussian responses for σ = 1/2, 1, and 2, plus the five-point discrete Laplacian response. The surfaces and explanations are largely figure-specific and correctly describe zero DC response, band-pass narrowing as σ increases, and the high-pass behavior of the discrete Laplacian; minor issues include simplified/normalized formulas, no explicit vertical-axis label, and a slightly imprecise discrete response notation using ωu and ωv rather than clearly defined frequency variables.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3,
+          "concept_accuracy_reasoning": "The main concept and interactive explanations are accurate and specific, with only minor omissions or notation/simplification issues.",
+          "visual_aesthetics": 2.7,
           "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:28:25.593Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:28:29.197Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

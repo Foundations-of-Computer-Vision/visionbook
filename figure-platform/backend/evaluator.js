@@ -9,129 +9,189 @@ const { screenshotHtml } = require('./runtime-helpers');
 const { upsertEvaluation } = require('./result_schema');
 
 const EVALUATOR_DEFAULT_MODEL = 'gpt-4o';
-const EVALUATOR_MAX_TOKENS = 4096;
 const SCORE_KEYS = ['geometry_accuracy', 'interactivity_usability', 'faithfulness', 'label_quality', 'concept_accuracy'];
 
-// ── One-shot calibration example (mpkqucxkwn9z1 — epipolar geometry figure) ──
-const EXAMPLE_PAYLOAD = "<!-- @FIGURE_UI_BEGIN -->\n<label title=\"Rotating Camera 2 changes its image plane orientation and therefore where the red ray projects as an epipolar line.\">\n  Rotate Camera 2: <span id=\"rotationCamera2Value\">0°</span>\n  <input id=\"rotationCamera2\" type=\"range\" min=\"0\" max=\"360\" step=\"1\" value=\"0\">\n</label>\n<label title=\"Translating Camera 2 changes the stereo baseline T and shifts the epipole and epipolar line.\">\n  Translate Camera 2: <span id=\"translationCamera2Value\">0h.0</span>\n  <input id=\"translationCamera2\" type=\"range\" min=\"-10\" max=\"10\" step=\"0.1\" value=\"0\">\n</label>\n<div style=\"display:flex;gap:4px;flex-wrap:wrap;width:230px;\">\n  <button id=\"step0\">Initial Setup</button>\n  <button id=\"step1\">Rotate Camera 2</button>\n  <button id=\"step2\">Translate Camera 2</button>\n</div>\n<div id=\"stepNarration\" style=\"max-width:245px;line-height:1.28;background:rgba(255,255,255,0.9);border:1px solid #d8d8d8;border-radius:6px;padding:7px 9px;\">\n  Here, you see the red ray from Camera 1 and its red epipolar-line projection on image plane 2.\n</div>\n<!-- @FIGURE_UI_END -->\n// @FIGURE_CODE_BEGIN\n[...code omitted for brevity...]\n// @FIGURE_CODE_END";
+// ── Hardcoded system prompts, one per evaluation call ────────────────────────
 
-const GOLD_EVAL = {
-  failure_modes: ['Wrong-Primitives', 'Depth-Wrong', 'Interaction-Broken'],
-  geometry_accuracy: 2,
-  interactivity_usability: 2,
-  faithfulness: 4,
-  label_quality: 1,
-  concept_accuracy: 5,
-};
+const PROMPT_FAILURE_MODES = `You are a strict evaluator of generated interactive Three.js 3D figures against original 2D textbook figure images.
+You will receive the original source figure image, the generated HTML/JavaScript code, and a rendered screenshot.
+Identify which failure modes apply by working through these steps:
+1. OBSERVE: scan the code and screenshot for each failure mode — note specifically what you see
+2. CHARACTERIZE: in 1-2 sentences describe which issues stand out most
+3. SELECT: list only the modes that clearly apply
 
-// ── 10 canonical failure modes ─────────────────────────────────────────────────
-const FAILURE_MODES = [
-  { id: 'Depth-Wrong', desc: '3D depth/perspective interpretation is incorrect' },
-  { id: 'Missing-Labels', desc: 'important text annotations are absent' },
-  { id: 'Wrong-Primitives', desc: 'incorrect geometric shapes used for the concept' },
-  { id: 'Interaction-Broken', desc: 'interactive controls are present but non-functional' },
-  { id: 'Interaction-Missing', desc: 'no meaningful interactions beyond basic OrbitControls rotation' },
-  { id: 'Camera-Wrong', desc: 'initial viewpoint differs from the source figure — wrong angle/orientation/rotation, even if all content remains visible' },
-  { id: 'Scale-Wrong', desc: 'element proportions are noticeably off' },
-  { id: 'Color-Wrong', desc: "colors don't match the original figure" },
-  { id: 'Hallucination', desc: 'elements present that do not appear in the original' },
-  { id: 'Concept-Misunderstood', desc: 'the core concept being illustrated is    misrepresented' },
-];
-
-// ── 5 primary scored metrics (each 1–5) ────────────────────────────────────────
-const SCORE_METRICS = [
-  {
-    id: 'geometry_accuracy',
-    rubric: [
-      '5 – All elements represented; plausible positions, connections, proportions',
-      '4 – All major elements present; minor position/alignment issues',
-      '3 – 1-2 elements missing OR noticeable spatial errors; concept still recognizable',
-      '2 – Multiple missing elements OR major spatial errors',
-      '1 – Unrecognizable or completely wrong topology',
-    ],
-  },
-  {
-    id: 'interactivity_usability',
-    note: 'CRITICAL: OrbitControls (mouse drag to rotate/zoom) does NOT count as an interaction. Meaningful interactions = buttons, sliders, toggles, step-through animations, parameter controls built by the developer.',
-    rubric: [
-      '5 – 3+ meaningful interactions all functional and pedagogically useful; reset button works; guided step-through demo present',
-      '4 – 2 meaningful interactions functional and pedagogically useful; reset button present; minor usability issues',
-      '3 – 1 meaningful interaction functional and pedagogically useful; no guided demo',
-      '2 – Interactions exist in code but are broken or have no visible effect',
-      '1 – Only OrbitControls present, or no interactions at all — score MUST be 1',
-    ],
-  },
-  {
-    id: 'faithfulness',
-    rubric: [
-      '5 – Matches original ≥95% (colors, proportions, composition)',
-      '4 – Matches ≥85%; recognizable at a glance',
-      '3 – Matches ≥65%; general idea clear',
-      '2 – Matches <65%; hard to recognize',
-      '1 – Completely different or fabricated',
-    ],
-  },
-  {
-    id: 'label_quality',
-    rubric: [
-      '5 – All labels correct, clear, well-sized, well-placed, not cluttered',
-      '4 – 1-2 labels have minor issues; rest perfect',
-      '3 – Half of labels have issues (size/placement/clarity/clutter)',
-      '2 – Most labels problematic or missing',
-      '1 – No labels or all wrong/unreadable/severely cluttered',
-    ],
-  },
-  {
-    id: 'concept_accuracy',
-    rubric: [
-      '5 – All concepts accurate; interactions demonstrate correct relationships; no misinformation',
-      '4 – Main concept correct; ≤1 minor detail wrong or missing',
-      '3 – Main concept present; 2-3 details wrong or missing',
-      '2 – Significant errors or fabrications; would mislead students',
-      '1 – Completely incorrect or misleading',
-    ],
-  },
-];
-
-function buildEvalPrompt(useFewShot = true) {
-  const failureModeLines = FAILURE_MODES
-    .map(f => `"${f.id}"${' '.repeat(Math.max(1, 24 - f.id.length))}— ${f.desc}`)
-    .join('\n');
-
-  const metricLines = SCORE_METRICS.map(m => {
-    const header = m.note ? `${m.id} — ${m.note}` : m.id + ':';
-    return `${header}\n${m.rubric.map(r => `  ${r}`).join('\n')}`;
-  }).join('\n\n');
-
-  const exampleOutput = JSON.stringify(
-    Object.fromEntries([
-      ['failure_modes', []],
-      ...SCORE_METRICS.map(m => [m.id, 3]),
-    ]),
-    null,
-    2
-  );
-
-  return `You are a strict evaluator of generated interactive Three.js 3D figures against original 2D textbook figure images.
-You will receive the original source figure image, the generated HTML/JavaScript code, and a rendered screenshot of the generated HTML (if screenshot capture succeeds).
-Score the generated figure using the rubric. Be critical and honest — err toward lower scores when in doubt. Do not give credit for things that are absent or barely present. Output ONLY a valid JSON object — no explanation, no markdown, no fences.
+Output ONLY a valid JSON object — no explanation, no markdown, no fences.
 
 FAILURE MODES — list any that apply (use empty array [] if none):
-${failureModeLines}
+"Depth-Wrong"              — 3D depth/perspective interpretation is incorrect
+"Missing-Labels"           — important text annotations are absent
+"Wrong-Primitives"         — incorrect geometric shapes used for the concept
+"Interaction-Broken"       — interactive controls are present but non-functional
+"Interaction-Missing"      — no meaningful interactions beyond basic OrbitControls rotation
+"Camera-Wrong"             — initial viewpoint differs from the source figure — wrong angle/orientation/rotation, even if all content remains visible
+"Scale-Wrong"              — element proportions are noticeably off
+"Color-Wrong"              — colors don't match the original figure
+"Hallucination"            — elements present that do not appear in the original
+"Concept-Misunderstood"    — the core concept being illustrated is misrepresented
 
-SCORES — integer 1–5 for each field:
-${metricLines}
+Example (for reference only — do not copy):
+{"failure_modes_analysis": "Camera bodies are ConeGeometry instead of BoxGeometry. Image planes are positioned at Z=0 with no depth offset, making the stereo geometry flat. No click handlers or sliders exist — only OrbitControls. The initial camera.position is directly overhead rather than matching the source's side elevation.", "failure_modes": ["Wrong-Primitives", "Depth-Wrong", "Interaction-Missing", "Camera-Wrong"], "failure_modes_reasoning": "Camera bodies use cone/pyramid primitives instead of rectangular boxes (Wrong-Primitives); image plane depth placement is incorrect in 3D space (Depth-Wrong); the scene provides only OrbitControls with no sliders, click handlers, or animations (Interaction-Missing); the initial viewpoint is top-down rather than the side elevation shown in the source (Camera-Wrong)."}
 
-Output this exact JSON structure and nothing else:
-${exampleOutput}
+Output ONLY: {"failure_modes_analysis": "<observations from steps 1-2>", "failure_modes": [...], "failure_modes_reasoning": "<brief rationale for each selected mode>"}`;
 
-${useFewShot ? `Here is an example output - study this before scoring. Do not copy these scores; only use them as a reference example for judgement.
-Generated code:
-${EXAMPLE_PAYLOAD}
+const PROMPT_GEOMETRY_ACCURACY = `You are a strict evaluator of generated interactive Three.js 3D figures against original 2D textbook figure images.
+You will receive the generated HTML/JavaScript code.
+Score the "geometry_accuracy" dimension by working through these steps:
+1. OBSERVE: list which 3D elements are present, which are absent, and which are the wrong shape or position
+2. CHARACTERIZE: in 1-2 sentences describe how accurately or poorly the geometry represents the source
+3. SCORE: assign an integer 1-5 per the rubric — err toward lower scores when in doubt
 
-Correct evaluation for the above code:
-${JSON.stringify(GOLD_EVAL, null, 2)}` : ''}`;
-}
+Be critical: do not give credit for things that are absent or barely present.
+
+CRITICAL CHECK — before scoring: Verify that elements are constructed as a true, unwarped 3D scene where depth is generated by the camera, NOT by baking the 2D illustration's perspective distortion into a flat canvas drawing, texture, or vertical 2D billboard.
+A figure must score 1 if it exhibits either of these "Fake 3D" tells:
+1. Flat Coordinates: The principal planar surface or its coordinates are flattened entirely along a single axis (e.g., all vertices locked to Z=0 or Y=0).
+2. Baked-In Skewing: The code hardcodes asymmetrical, distorted quadrilateral coordinates (e.g., Vector3(2.45, 1.1, 0)) to mimic perspective on a flat sheet, rather than constructing a clean, symmetrical 3D primitive and letting the camera matrix handle the viewing angle naturally.
+
+geometry_accuracy:
+  5 – All elements represented as correct 3D geometry; plausible positions, connections, proportions
+  4 – All major elements present; minor position/alignment issues
+  3 – 1-2 elements missing OR noticeable spatial errors; concept still recognizable
+  2 – Multiple missing elements OR major spatial errors
+  1 – Unrecognizable, completely wrong topology, or source image pasted as a flat texture
+
+Examples (for reference only — do not copy):
+
+Score 1 — flat texture paste:
+{"geometry_accuracy_analysis": "The code contains a single PlaneGeometry with the source image applied as a texture map. There are no BoxGeometry camera bodies, no LineSegments for epipolar lines, and no separate image plane meshes. All apparent 3D structure is a 2D bitmap projection — a textbook Fake 3D case.", "geometry_accuracy": 1, "geometry_accuracy_reasoning": "Source image pasted as a flat texture onto a PlaneGeometry at Z=0 — no real 3D geometry constructed; per the CRITICAL CHECK this must score 1."}
+
+Score 2 — multiple missing elements and wrong primitives:
+{"geometry_accuracy_analysis": "Both camera bodies are ConeGeometry instead of BoxGeometry. Both focal points are absent from the scene entirely. Epipolar lines are rendered as thick CylinderGeometry that visually block the image planes. Image planes are axis-aligned billboards with no Z offset. More than two major elements are wrong or missing.", "geometry_accuracy": 2, "geometry_accuracy_reasoning": "Multiple wrong primitives and missing elements — cameras as cones, no focal points, obstructive cylinders for epipolar lines."}
+
+Score 3 — mostly present but noticeable spatial errors:
+{"geometry_accuracy_analysis": "All five main elements are present: two camera bodies, two image planes, and the epipolar line bundle. However, camera bodies are SphereGeometry instead of BoxGeometry, and the baseline connecting them is drawn at the wrong vertical height relative to the image planes. The spatial concept is still recognizable despite these two errors.", "geometry_accuracy": 3, "geometry_accuracy_reasoning": "All elements present but one wrong primitive (spheres for cameras) and one spatial error (baseline height) — concept still recognizable, not a score-4."}
+
+Output ONLY a valid JSON object with exactly three keys: {"geometry_accuracy_analysis": "<observations and quality characterization>", "geometry_accuracy": <integer 1-5>, "geometry_accuracy_reasoning": "<one sentence tying the analysis to the rubric>"}`;
+
+const PROMPT_INTERACTIVITY_USABILITY = `You are a strict evaluator of generated interactive Three.js 3D figures against original 2D textbook figure images.
+You will receive the original source figure image, the generated HTML/JavaScript code, and a rendered screenshot.
+Score the "interactivity_usability" dimension by working through these steps:
+1. OBSERVE: list every interaction in the code — sliders, click handlers, animations, tooltips, OrbitControls — and whether each one visibly functions
+2. CHARACTERIZE: in 1-2 sentences describe how useful and usable the interactions are, and whether any UI chrome covers geometry
+3. SCORE: assign an integer 1-5 per the rubric — err toward lower scores when in doubt
+
+Be critical: do not give credit for things that are absent or barely present.
+
+IMPORTANT: OrbitControls (mouse drag to rotate/zoom) does NOT count as an interaction. Meaningful interactions = sliders, toggles, step-through animations, parameter controls, AND hover/click explanations on scene objects (e.g. clicking a ray or plane produces a 2-3 sentence popup explaining the concept). All of these count equally.
+
+interactivity_usability:
+  5 – 3+ meaningful interactions all functional and pedagogically useful; guided demo present; UI is compact and does not cover geometry
+  4 – 2 meaningful interactions functional and pedagogically useful; minor usability issues; UI is compact
+  3 – 1 meaningful interaction functional and pedagogically useful; no guided demo
+  2 – Interactions exist but are broken or have no visible effect; OR interactions work but intrusive UI covers geometry (cap at 2)
+  1 – Only OrbitControls present, or no interactions at all — score MUST be 1
+
+Examples (for reference only — do not copy):
+
+Score 1 — OrbitControls only:
+{"interactivity_usability_analysis": "The code registers OrbitControls and nothing else. No addEventListener calls for click or hover, no dat.GUI or custom sliders, no animation loop driven by parameters. The screenshot confirms only a static scene with orbit capability.", "interactivity_usability": 1, "interactivity_usability_reasoning": "Only OrbitControls present — no sliders, toggles, click handlers, or animated parameters; per the rubric this must score 1."}
+
+Score 2 — intrusive UI caps an otherwise functional figure:
+{"interactivity_usability_analysis": "Two sliders control camera separation and rotation and both produce visible changes in the scene. However, they are housed in a large filled <div> panel with a white background that covers the entire right third of the canvas, obscuring the second camera and its image plane. The interactions are functional but the UI is intrusive.", "interactivity_usability": 2, "interactivity_usability_reasoning": "Interactions work but a large filled panel covers important geometry — intrusive UI penalty caps the score at 2."}
+
+Score 3 — one functional interaction but no guided demo:
+{"interactivity_usability_analysis": "Clicking any epipolar line triggers a correctly worded 2-sentence popup explaining the epipolar constraint. This is the only meaningful interaction in the scene — there are no sliders, no step-through animation, and no guided demo. The UI chrome is minimal.", "interactivity_usability": 3, "interactivity_usability_reasoning": "One functional pedagogical interaction (click-to-explain on epipolar lines) with no guided demo — qualifies for score 3, not 4."}
+
+Output ONLY a valid JSON object with exactly three keys: {"interactivity_usability_analysis": "<observations and quality characterization>", "interactivity_usability": <integer 1-5>, "interactivity_usability_reasoning": "<one sentence tying the analysis to the rubric>"}`;
+
+const PROMPT_FAITHFULNESS = `You are a strict evaluator of generated interactive Three.js 3D figures against original 2D textbook figure images.
+You will receive the original source figure image and a rendered screenshot of the generated output.
+Score the "faithfulness" dimension by working through these steps:
+1. OBSERVE: compare the first rendered frame against the source — note differences in camera angle, zoom level, crop, margins, whitespace, colors, and proportions
+2. CHARACTERIZE: in 1-2 sentences describe how well or poorly it matches as a drop-in replacement
+3. SCORE: assign an integer 1-5 per the rubric — err toward lower scores when in doubt
+
+Be critical: do not give credit for things that are absent or barely present.
+
+INLINE REPLACEMENT CHECK: the default first frame must be a near drop-in replacement for the source figure — same crop, zoom level, camera angle, margins, and whitespace. Penalize: force-filling the iframe when the source has margins, incorrect camera angle, significant over- or under-zoom, wrong aspect ratio, and UI chrome (panels, toolbars) that shifts the figure's apparent crop or covers its content.
+
+faithfulness:
+  5 – Matches original ≥95% (colors, proportions, composition, crop, and whitespace)
+  4 – Matches ≥85%; recognizable at a glance; minor crop or margin differences
+  3 – Matches ≥65%; general idea clear; noticeable zoom, crop, or whitespace mismatch
+  2 – Matches <65%; hard to recognize; or significantly wrong crop/zoom/margins
+  1 – Completely different or fabricated
+
+Examples (for reference only — do not copy):
+
+Score 2 — wrong camera angle and force-filled iframe:
+{"faithfulness_analysis": "The source figure shows a side elevation with both cameras at the same height and generous whitespace on all sides. The rendered first frame is a top-down bird's-eye view where image planes appear as narrow horizontal strips. The scene fills the entire canvas with no margins. Viewing angle and crop both differ substantially from the source.", "faithfulness": 2, "faithfulness_reasoning": "Top-down angle instead of side elevation, and force-filled iframe with no margins — composition matches <65% of the original."}
+
+Score 3 — recognizable but over-zoomed and UI-cropped:
+{"faithfulness_analysis": "The camera pair and image planes are arranged in the same relative positions as the source, so the general layout is recognizable. However, the scene is zoomed in approximately 2× compared to the source, cropping both image planes at their outer edges. A control strip at the bottom occupies ~15% of the canvas height, further compressing the apparent composition.", "faithfulness": 3, "faithfulness_reasoning": "Layout recognizable (~70% match) but 2× over-zoom crops both image planes and a UI strip shifts the composition — not a score-4."}
+
+Output ONLY a valid JSON object with exactly three keys: {"faithfulness_analysis": "<observations and quality characterization>", "faithfulness": <integer 1-5>, "faithfulness_reasoning": "<one sentence tying the analysis to the rubric>"}`;
+
+const PROMPT_LABEL_QUALITY = `You are a strict evaluator of generated interactive Three.js 3D figures against original 2D textbook figure images.
+You will receive the original source figure image and a rendered screenshot of the generated output.
+Score the "label_quality" dimension by working through these steps:
+1. OBSERVE: list every label in the source figure, then note whether each appears in the generated figure — with correct text, appropriate size, and unobstructed placement
+2. CHARACTERIZE: in 1-2 sentences describe how well the label set matches the source in terms of completeness, size, and positioning
+3. SCORE: assign an integer 1-5 per the rubric — err toward lower scores when in doubt
+
+Be critical: do not give credit for things that are absent or barely present.
+
+FONT SIZE CHECK: label font sizes should match the relative scale of labels in the source figure. Labels that are significantly smaller or larger than in the source — even if readable in isolation — should be penalized.
+
+label_quality:
+  5 – All labels correct, clear, font size matches source scale, well-placed, not cluttered
+  4 – 1-2 labels have minor issues (size, placement, or clarity); rest perfect
+  3 – Half of labels have issues (size/placement/clarity/clutter); or font sizes consistently wrong relative to source
+  2 – Most labels problematic, missing, or at a font size that makes them unreadable at source scale
+  1 – No labels or all wrong/unreadable/severely cluttered
+
+Examples (for reference only — do not copy):
+
+Score 1 — no readable labels:
+{"label_quality_analysis": "The source figure has six labels: C1, C2, P, p, e, e'. In the generated figure all six addLabel() calls are present in code, but each renders at fontSize: 6 — roughly 4px on screen at 1× zoom. The screenshot shows only faint smudges at label positions. No label is legible.", "label_quality": 1, "label_quality_reasoning": "All labels rendered at ~4px — completely unreadable; a clear score-1 case."}
+
+Score 2 — present but failing FONT SIZE CHECK:
+{"label_quality_analysis": "All five labels (Camera 1, Camera 2, Image Plane 1, Image Plane 2, Epipolar Line) are correctly named and positioned near the right objects. However, they are rendered at fontSize: 10 while the source figure uses labels roughly equivalent to 18-20px. At source scale the labels are effectively unreadable smudges. The correct names partially offset this, but the size mismatch is severe.", "label_quality": 2, "label_quality_reasoning": "All labels correctly named and placed but rendered at roughly half the source font size — fails the FONT SIZE CHECK; most labels unreadable at source scale."}
+
+Score 3 — half the label set has issues:
+{"label_quality_analysis": "Six labels are present. C1, C2, and P are correctly placed and match source font scale. Image Plane 1 and Image Plane 2 overlap their respective geometry meshes and are partially obscured. The epipole label 'e' is rendered at half the source font size and sits directly behind the camera body. Three of six labels have placement or size problems.", "label_quality": 3, "label_quality_reasoning": "Three of six labels have significant placement or size issues — more than half the label set fails, qualifying for score 3 not 4."}
+
+Output ONLY a valid JSON object with exactly three keys: {"label_quality_analysis": "<observations and quality characterization>", "label_quality": <integer 1-5>, "label_quality_reasoning": "<one sentence tying the analysis to the rubric>"}`;
+
+const PROMPT_CONCEPT_ACCURACY = `You are a strict evaluator of generated interactive Three.js 3D figures against original 2D textbook figure images.
+You will receive the generated HTML/JavaScript code only (no source figure image, no screenshot).
+Score the "concept_accuracy" dimension by working through these steps:
+1. OBSERVE: identify the core concept being illustrated; then check each interactive explanation (tooltip, popup, label) for correctness and specificity
+2. CHARACTERIZE: in 1-2 sentences describe how accurately and specifically the figure conveys the concept — note any errors, omissions, or generic filler
+3. SCORE: assign an integer 1-5 per the rubric — err toward lower scores when in doubt
+
+Be critical: do not give credit for things that are absent or barely present.
+
+EXPLANATION SPECIFICITY CHECK: if the figure includes hover tooltips or click popups on scene objects, evaluate whether they are specific to this figure's concept or generic filler. Text like "notice how things change" or "this demonstrates the principle" with no concrete reference to the figure's actual variables, equations, or geometry should be penalized here.
+
+concept_accuracy:
+  5 – All concepts accurate; interactions and explanations are figure-specific and demonstrate correct relationships; no misinformation
+  4 – Main concept correct; ≤1 minor detail wrong, missing, or expressed too generically
+  3 – Main concept present; 2-3 details wrong, missing, or explanations are noticeably generic
+  2 – Significant errors or fabrications; would mislead students; or explanations are entirely generic with no figure-specific content
+  1 – Completely incorrect or misleading
+
+Examples (for reference only — do not copy):
+
+Score 2 — entirely generic tooltip filler:
+{"concept_accuracy_analysis": "The figure is meant to illustrate epipolar geometry. Clicking a ray produces the popup 'this ray shows how the camera sees the scene.' Clicking an image plane produces 'notice how the planes relate.' No popup mentions epipolar lines, the fundamental matrix, the epipole, or any variable from the source figure. The geometry itself is roughly correct, but every explanation is context-free filler that could apply to any 3D scene.", "concept_accuracy": 2, "concept_accuracy_reasoning": "All explanations are generic filler with no reference to epipolar lines, the fundamental matrix, or any figure-specific variable — fails the EXPLANATION SPECIFICITY CHECK."}
+
+Score 3 — main concept present but 2-3 details wrong or generic:
+{"concept_accuracy_analysis": "The epipolar constraint is correctly illustrated: a ray from Camera 1 does project to an epipolar line on Image Plane 2, and rotating the slider adjusts the geometry correctly. However, the baseline tooltip reads 'this shows camera displacement' rather than naming the translation vector T. Clicking the fundamental matrix label produces no popup. The epipole is labeled 'vanishing point' rather than 'epipole'. Two tooltips are missing and one is mislabeled.", "concept_accuracy": 3, "concept_accuracy_reasoning": "Core epipolar constraint correctly shown but baseline tooltip is too generic, fundamental matrix click is unresponsive, and epipole is mislabeled — three details wrong or absent."}
+
+Output ONLY a valid JSON object with exactly three keys: {"concept_accuracy_analysis": "<observations and quality characterization>", "concept_accuracy": <integer 1-5>, "concept_accuracy_reasoning": "<one sentence tying the analysis to the rubric>"}`;
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function finaliseEval(evaluation) {
   for (const key of SCORE_KEYS) {
@@ -152,7 +212,6 @@ async function evaluateFigure({ record, evalModel, useFewShot = true }) {
   }
 
   const usedEvalModel = evalModel || EVALUATOR_DEFAULT_MODEL;
-  const systemPrompt = buildEvalPrompt(useFewShot);
 
   const sourceImage = record.source_base64 || null;
   const sourceMediaType = record.source_media_type || 'image/png';
@@ -167,7 +226,7 @@ async function evaluateFigure({ record, evalModel, useFewShot = true }) {
     }
   }
 
-  const userContent = [
+  const visualParts = [
     ...(sourceImage ? [
       { type: 'text', text: 'Reference source figure image:' },
       { type: 'image_url', image_url: { url: `data:${sourceMediaType};base64,${sourceImage}` } },
@@ -176,28 +235,63 @@ async function evaluateFigure({ record, evalModel, useFewShot = true }) {
       { type: 'text', text: 'Rendered screenshot of the generated HTML output:' },
       { type: 'image_url', image_url: { url: `data:${thumbMediaType};base64,${thumbBase64}` } },
     ] : []),
+  ];
+
+  const userContent = [
+    ...visualParts,
     {
       type: 'text',
       text: `Here is the generated code to evaluate:\n\n${record.html}\n\nOutput ONLY the JSON evaluation object.`,
     },
   ];
 
-  let content = await generateWithModel(usedEvalModel, {
-    systemPrompt,
-    userContent,
-    maxTokens: EVALUATOR_MAX_TOKENS,
-  });
+  const userContentVisualOnly = [
+    ...visualParts,
+    { type: 'text', text: 'Output ONLY the JSON evaluation object.' },
+  ];
 
-  const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) content = fenced[1].trim();
-  content = content.trim();
+  const userContentCodeOnly = [
+    {
+      type: 'text',
+      text: `Here is the generated code to evaluate:\n\n${record.html}\n\nOutput ONLY the JSON evaluation object.`,
+    },
+  ];
 
-  let parsed;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    throw new Error('Evaluator did not return valid JSON: ' + content.slice(0, 200));
+  function parseJsonResponse(raw) {
+    const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const text = fenced ? fenced[1].trim() : raw.trim();
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error('Evaluator did not return valid JSON: ' + text.slice(0, 200));
+    }
   }
+
+  const [
+    failureModesRaw,
+    geometryRaw,
+    interactivityRaw,
+    faithfulnessRaw,
+    labelRaw,
+    conceptRaw,
+  ] = await Promise.all([
+    generateWithModel(usedEvalModel, { systemPrompt: PROMPT_FAILURE_MODES, userContent, maxTokens: 4096 }),
+    generateWithModel(usedEvalModel, { systemPrompt: PROMPT_GEOMETRY_ACCURACY, userContent: userContentCodeOnly, maxTokens: 4096 }),
+    generateWithModel(usedEvalModel, { systemPrompt: PROMPT_INTERACTIVITY_USABILITY, userContent, maxTokens: 4096 }),
+    generateWithModel(usedEvalModel, { systemPrompt: PROMPT_FAITHFULNESS, userContent: userContentVisualOnly, maxTokens: 4096 }),
+    generateWithModel(usedEvalModel, { systemPrompt: PROMPT_LABEL_QUALITY, userContent: userContentVisualOnly, maxTokens: 4096 }),
+    generateWithModel(usedEvalModel, { systemPrompt: PROMPT_CONCEPT_ACCURACY, userContent: userContentCodeOnly, maxTokens: 4096 }),
+  ]);
+
+  const parsed = Object.assign(
+    {},
+    parseJsonResponse(failureModesRaw),
+    parseJsonResponse(geometryRaw),
+    parseJsonResponse(interactivityRaw),
+    parseJsonResponse(faithfulnessRaw),
+    parseJsonResponse(labelRaw),
+    parseJsonResponse(conceptRaw),
+  );
 
   const evaluation = finaliseEval(parsed);
   const evaluatedAt = new Date().toISOString();

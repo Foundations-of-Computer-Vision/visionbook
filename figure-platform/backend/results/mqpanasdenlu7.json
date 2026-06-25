@@ -674,92 +674,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows three columns arranged side-by-side, viewed from an elevated orthographic perspective (looking down and slightly from the right, with the grids appearing as sheared parallelograms). The columns are evenly spaced and completely visible.",
-          "viewing_angle_rendered": "The rendered screenshot shows the same three columns arranged horizontally from a similar elevated perspective, but the camera is positioned too far to the right or too zoomed in, causing the leftmost column ('linear') to be severely cut off on the left edge of the frame.",
-          "viewing_angle_comparison": "While the elevation and azimuth match the source perfectly, the horizontal framing/zoom is incorrect, resulting in the left column being partially clipped out of the viewport.",
-          "shape_comparison": [
-            {
-              "element": "input/output planes",
-              "source_shape": "flat quadrilaterals with grid lines",
-              "rendered_shape": "flat quadrilaterals with grid lines",
-              "match": true
-            },
-            {
-              "element": "data points",
-              "source_shape": "small solid dots",
-              "rendered_shape": "spheres",
-              "match": true
-            },
-            {
-              "element": "mapping lines",
-              "source_shape": "thin dashed lines",
-              "rendered_shape": "thin dashed lines",
-              "match": true
-            },
-            {
-              "element": "relu axes",
-              "source_shape": "thick solid lines on positive axes",
-              "rendered_shape": "cylinders on positive axes",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The leftmost 'linear' column is partially cut off on the left edge of the screen.",
-            "The 'X_in' labels are placed directly inside/overlapping the point clouds instead of being cleanly positioned to the bottom-left of the lower planes.",
-            "The 'X_out' labels are shifted too far to the right relative to the top planes compared to the source.",
-            "The red dots and dashed mapping lines are significantly denser and thicker, making the overall visualization look cluttered compared to the clean, sparse aesthetic of the original."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "Excellent mathematical accuracy and interactive elements, but let down by poor camera framing which cuts off the left column and poorly positioned labels.",
-          "action_items": [
-            "Adjust the camera zoom or horizontal offset in `setCameraView` so that all three panels fit completely inside the viewport without clipping.",
-            "Reposition the 'X_in' labels further to the left (negative X and positive Z direction) so they sit outside the grids like in the original.",
-            "Reposition the 'X_out' labels to the far left of the upper planes.",
-            "Decrease the size of the point spheres (e.g. to 0.015) and make the red mapping connector lines thinner to reduce visual clutter."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:11:28.477Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the three mappings with labels and red point-to-point connectors, and the focus/bias controls appear functional. However, the initial framing is noticeably different from the source: the side panels are cropped off the canvas, the planes are viewed more front-on/rectangular rather than as the tilted diamond-like textbook panels, and a visible UI control block is added at the bottom that is not present in the reference.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial viewpoint/framing does not match the source and crops the left and right panels. Scale-Wrong applies because the three panels are too large/spaced for the viewport, causing major clipping and altered proportions relative to the reference. Hallucination applies because the visible Focus dropdown and Bias slider are extra elements not present in the original figure.",
+          "geometry_accuracy_analysis": "Present: three separate 3D panels for Linear, ReLU, and L2-Norm; lower input square grids; upper output grids; dashed corner guide lines; red input/output point clouds made from sphere instances; red dashed point-to-point mapping lines; a sheared/parallelogram Linear output plane; ReLU positive-axis tubes; L2 output points projected to a ring; and Xin/Xout/title labels. Absent or imperfect: the planes are only wireframe/grid outlines rather than filled surfaces, and the exact visual proportions may not perfectly match the original 2D figure, but the main spatial structure is present. This is a true 3D scene with separated Y levels and camera-generated projection, not a flat texture or baked billboard.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major geometric elements are represented with plausible 3D positions, transformations, connections, and proportions, with only minor stylistic omissions such as lack of filled plane surfaces.",
+          "interactivity_usability_analysis": "Interactions present: OrbitControls are enabled for drag/zoom but do not count as meaningful interaction. A Focus dropdown with All/Linear/ReLU/L2-Norm triggers a visible camera tween to the selected panel and is functional. A Bias range slider updates the displayed value and visibly shifts the input/output point clouds and connector lines. Canvas hover/click handlers are registered for invisible panel hit areas, dot clouds, and ReLU axes; hover tooltips should appear, and clicking panels also triggers camera focus plus bias animation through goToStep, while object explanation popups are sent via window.parent.postMessage and may depend on the embedding environment to be visible. There is a guided-demo structure in code through demoSteps/goToStep, but it is only indirectly accessible by clicking panels rather than via explicit next/previous controls. The UI is small, transparent, and located in the lower-left corner, not significantly covering the geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ meaningful functional interactions—focus dropdown, bias slider, hover/click explanations/panel guided steps—with compact non-intrusive UI, satisfying the score-5 rubric despite the popup visibility depending on the parent environment.",
+          "faithfulness_analysis": "The rendered image includes the same three labeled concepts with red point correspondences between input and output planes, but the composition is not a close replacement: the left and right panels are cropped off the canvas, the aspect ratio and vertical whitespace differ, and a visible UI control panel occupies the lower-left area. Camera angles and proportions differ noticeably from the source, with the linear panel especially rendered as a near-vertical cylinder rather than the slanted mapping shown in the reference.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general three-panel idea is recognizable, significant crop, UI chrome, camera-angle, spacing, and shape mismatches make it less than a 65% match to the original.",
+          "label_quality_analysis": "Source labels: panel titles 'linear', 'relu', and 'L2-norm'; each panel also has 'x_out' near the upper-left/top plane and 'x_in' near the lower-left/bottom plane, for six axis labels total. In the generated figure, the three titles are present and readable but noticeably smaller than the source scale; 'L2-norm' is close to the right edge. For the linear panel, 'x_out' and 'x_in' are present but smaller and shifted relative to the source, with the panel itself partly clipped on the left. For the relu panel, 'x_out' and 'x_in' are readable but misplaced toward the right/interior rather than the left-side source positions. For the L2-norm panel, 'x_in' is present but small and inside the cube, while the corresponding 'x_out' label is not visible. Overall, the label set is mostly present, but font sizes are consistently too small relative to the source and several labels are misplaced or clipped/missing.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Most labels are readable and correctly named, but the consistent font-size mismatch plus several placement issues and one missing label make this a score 3 rather than 4 or 5.",
+          "concept_accuracy_analysis": "The figure illustrates how a 2D input distribution X_in is transformed into X_out by three neural-network operations: a linear/affine map, ReLU clipping, and L2 normalization. The tooltips, popups, labels, focus control, and bias slider are figure-specific and mostly correct: they describe shearing/rotating/translating for the linear panel, coordinate clipping and axis/origin pileups for ReLU, and radial projection to a fixed-radius ring for L2 normalization. Minor issues are that the “linear” layer is described as shifting/translating despite that being affine rather than strictly linear, and one narration says ReLU “folds” negative values onto positive axes, which is less precise than clipping them to zero.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main concept and interactive explanations are accurate and specific, with only minor terminology imprecision around linear-versus-affine mapping and ReLU “folding” language.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:35:51.903Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:30:12.672Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

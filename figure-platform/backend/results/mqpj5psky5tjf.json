@@ -167,86 +167,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a vertical cylinder (barber pole) from a slightly elevated viewpoint, looking slightly down onto its top elliptical cap. A curved black arrow representing rotational motion is positioned directly above the cylinder, and a straight vertical arrow pointing downwards is on the right.",
-          "viewing_angle_rendered": "The rendered screenshot matches the source viewpoint closely, depicting the vertical cylinder with a slightly elevated camera showing the white top cap, with the curved arrow above and the vertical arrow on the right.",
-          "viewing_angle_comparison": "The viewing angles are nearly identical. The elevation, centering, and perspective match the original 2D diagram perfectly, making it an excellent drop-in replacement.",
-          "shape_comparison": [
-            {
-              "element": "barber pole cylinder",
-              "source_shape": "cylinder",
-              "rendered_shape": "cylinder",
-              "match": true
-            },
-            {
-              "element": "helical stripes",
-              "source_shape": "helical bands",
-              "rendered_shape": "helical bands (BufferGeometry)",
-              "match": true
-            },
-            {
-              "element": "real motion arrow",
-              "source_shape": "curved arrow",
-              "rendered_shape": "curved tube with triangle head",
-              "match": true
-            },
-            {
-              "element": "observed motion arrow",
-              "source_shape": "straight arrow",
-              "rendered_shape": "straight tube with triangle head",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The triangular arrowhead on the curved rotation arrow is slightly chunkier than the sleek hand-drawn arrow in the original.",
-            "The observed motion arrow is positioned slightly lower relative to the 'Observed motion' text compared to the original layout."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "notes": "An exceptionally faithful, beautiful, and pedagogically rich 3D reconstruction of the barber pole illusion with excellent interactive controls.",
-          "action_items": [
-            "Refine the arrowhead shape on the curved rotation arrow to be slightly sleeker and align more closely with the source's elegant curved tip.",
-            "Slightly shift the observed downward arrow upwards to reduce the vertical gap between the arrow and the 'Observed motion' text.",
-            "Consider adding a subtle toggle to switch between a full cylinder view and an apertured/masked view to further enhance the explanation of the aperture problem."
-          ],
-          "visual_aesthetics": 5,
-          "overall_average": 5
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:09:44.660Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main barber-pole cylinder, red/blue helical bands, curved real-motion arrow, downward observed-motion arrow, and both text labels. However, the entire figure is much smaller and centered in a landscape canvas rather than the tall portrait composition where the cylinder dominates the left side and the labels/arrows are large. A visible bottom-left UI panel with move/speed controls is present, which is not in the source image.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial framing/composition differs substantially from the source: the pole is centered and distant rather than large, left-aligned, and portrait-oriented. Scale-Wrong applies because the relative visual sizes of the labels, arrows, and cylinder are much smaller than in the source. Hallucination applies because the visible checkbox and speed slider controls are extra elements not present in the original figure.",
+          "geometry_accuracy_analysis": "The scene constructs a true 3D vertical cylinder with circular top/bottom rims, a top cap, black side outlines, red and blue helical bands wrapped around the cylindrical surface, a curved rotation arrow above the pole, a downward observed-motion arrow to the side, and the corresponding text labels. Major elements appear present and are mostly positioned plausibly; the arrows and labels are flat annotation elements placed in front of the pole, but the principal pole and stripes are real 3D geometry rather than a pasted or skewed 2D drawing. Minor concerns include the annotation arrowheads being planar billboards and the cylinder/ring outline potentially showing ideal full circular geometry rather than carefully matching the source’s stylized occlusion, but the topology and proportions are largely faithful.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric components are present as real 3D primitives with plausible spatial relationships, with only minor annotation/outline fidelity issues preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. A visible bottom-left checkbox labeled “move” starts/stops the barber-pole animation, and a visible speed range slider changes the animation rate; both should have visible effects on the rotating stripeGroup/down-arrow pulse. The scene registers hover and click handlers on the cylinder, colored helical stripes, real-motion arrow, and observed-motion arrow: hovering should show a local tooltip, while clicking sends explanatory popup messages to the parent; clicking the real-motion arrow also toggles animation. Escape hides tooltip/popup, and there is a Reset View button listener, but the button is hidden so it is not usable. The UI is compact and does not cover the geometry, and the interactions are pedagogically relevant, though there is no explicit guided step-through demo and the click popups depend on the embedding parent handling postMessage.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "interactivity_usability_reasoning": "Multiple meaningful controls and object hover/click interactions are functional and useful with compact UI, but the absence of a guided demo and reliance on parent-handled popups keep it below a 5.",
+          "faithfulness_analysis": "The rendered frame includes the same basic elements—a striped cylinder, a real-motion rotation arrow, and observed-motion downward arrow/text—but the composition is very different. The source is a tall portrait figure with a large cylinder filling most of the height and text placed large at the top-left/right, while the render is a landscape canvas with the cylinder much smaller and centered, excessive whitespace, different text scale/placement, and visible UI controls in the lower-left.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in concept, the aspect ratio, zoom level, crop, margins, text sizing, and UI chrome differ substantially from the source, making it a poor drop-in replacement below the 65% match threshold.",
+          "label_quality_analysis": "Source figure labels: \"Real motion\" appears in very large serif text at the upper left; \"Observed motion\" appears in very large two-line serif text to the right of the cylinder. In the generated figure, both labels are present with correct text and are readable, but \"Real motion\" is much smaller than the source and centered above the cylinder rather than large at the upper left; \"Observed motion\" is also much smaller than the source and placed closer to the cylinder, though unobstructed. Overall the label set is complete, but the font scale is consistently too small relative to the source and positioning only approximately matches.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Both labels are present and legible, but both have significant font-size mismatch and some placement differences, so the label quality fits a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates the barber-pole illusion/aperture problem: a rotating cylinder with diagonal helical stripes is labeled with real rotational motion and apparent downward observed motion. The labels, arrows, controls, and hover/click explanations are specific and correctly describe the relationship between helical stripe rotation, local motion perpendicular to diagonal edges, the tall aperture/window, and perceived vertical drift.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All core concepts and interactions are figure-specific and accurately explain the barber-pole aperture illusion without evident misinformation.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:25:36.764Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:16:24.724Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

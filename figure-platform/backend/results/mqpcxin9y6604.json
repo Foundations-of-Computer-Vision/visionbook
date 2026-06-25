@@ -274,88 +274,37 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D stem plot from an elevated oblique angle where all 9 stems are clearly separated and visible without overlapping. The azimuth is slightly off-axis (not exactly 45 degrees) to avoid symmetry-induced overlapping.",
-          "viewing_angle_rendered": "The rendered screenshot uses an orthographic projection at a perfect 45-degree azimuth, which causes symmetric stems along the diagonals to project onto the exact same vertical lines, resulting in spheres overlapping at different heights on the same visual stems.",
-          "viewing_angle_comparison": "The 45-degree azimuth in the rendered version causes severe overlapping of stems, which does not happen in the source figure. This makes the 3D structure much harder to interpret in the rendering.",
-          "shape_comparison": [
-            {
-              "element": "stems",
-              "source_shape": "thin vertical lines",
-              "rendered_shape": "thin cylinders",
-              "match": true
-            },
-            {
-              "element": "caps",
-              "source_shape": "circles/spheres",
-              "rendered_shape": "spheres",
-              "match": true
-            },
-            {
-              "element": "grid",
-              "source_shape": "flat 2D grid lines",
-              "rendered_shape": "flat 2D grid lines",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The camera azimuth of 45 degrees causes perfect alignment and overlap of symmetric stems, making single vertical lines appear to have multiple blue spheres.",
-            "The vertical amplitude axis line is drawn on the front-left corner instead of the back-left corner as in the original.",
-            "The grid has extra padding lines making it a 5x5 grid rather than the tight 3x3 grid seen in the source.",
-            "Labels for coordinates and axes are not rendered in the same clean serif/italic style as the textbook source."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 4,
-          "concept_accuracy": 4,
-          "notes": "The 3D stem plot is mathematically correct, but the chosen camera angle causes severe visual overlapping of symmetric stems, making the visualization confusing.",
-          "action_items": [
-            "Change the camera azimuth to a non-symmetric angle (e.g., 55 or 65 degrees instead of 45) to prevent stems from overlapping vertically.",
-            "Tighten the grid boundaries to match the exact coordinate range (from -1 to 1 for N=2) without adding excessive outer padding lines.",
-            "Move the vertical amplitude axis to the back-left corner of the grid to match the source layout.",
-            "Improve the font and styling of the axis labels to match the elegant serif LaTeX style of the textbook."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:15:24.453Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene correctly uses blue 3D stems with circular caps on a gray base grid and includes the main axes/tick labels for n, m, and b_{2,2}[n,m]. The most noticeable mismatch is the addition of visible UI controls at the bottom left and an extra matrix/sum overlay at the top right, neither of which appears in the source textbook figure.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Hallucination"
           ],
+          "failure_modes_reasoning": "Extra interactive controls and the displayed coefficient matrix/sum overlay are visible elements not present in the original figure, so Hallucination applies.",
+          "geometry_accuracy_analysis": "The scene constructs a true 3D stem plot: a gray XZ floor grid, vertical blue cylinder stems with spherical caps at binomial coefficient locations, guide-frame lines, three axes, tick labels, and an HTML formula/matrix overlay. The coefficient layout and heights correctly form a symmetric 2D binomial-filter surface for N=2 and higher; no flat texture or baked-in perspective distortion is used. Minor issues are that the formula is not a 3D element and the guide/axis framing may not exactly match a static textbook drawing, but the main geometry is present and spatially plausible.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements of the binomial coefficient stem plot are present as real 3D primitives with only minor alignment/style deviations, so this fits a score of 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, which likely works but does not count as a meaningful interaction. A visible Order (N) slider updates the filter order from 1–4, rebuilding the stems, grid, labels, formula, and camera framing; this has a clear visible effect. A visible Normalize checkbox toggles normalized coefficients, changing the height scaling/axis values and formula matrix; this also visibly functions. Each blue stem/cap is registered for hover/click interaction: hovering shows a tooltip with the coefficient and coordinates, and clicking sends a pedagogical popup explanation via postMessage. The top-right formula/matrix overlay is clickable and cycles through a three-step guided demo with narration while changing order/normalization, though it is not labeled as clickable. A reset-view button has a click handler but is hidden, so it is not usable. The UI is compact and mostly transparent; the bottom-left controls and small top-right formula overlay do not materially cover the plotted geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions, including parameter controls, object hover/click explanations, and a guided demo, with compact non-intrusive UI, matching the rubric for 5.",
+          "faithfulness_analysis": "The rendered scene shows the same general 3D blue stem plot with gray grid and similar coefficient values, but it is not framed like the source. The source is a compact square MATLAB-style plot with tight crop and no extra annotations, while the render is a wide canvas with large whitespace, added matrix text at the top right, a UI control panel at the bottom left, different label placement, and a noticeably different zoom/crop balance.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The figure is recognizable in content, but the aspect ratio, margins, extra UI/text, and composition differ substantially, so it matches only around the general-idea level rather than as a drop-in replacement.",
+          "label_quality_analysis": "Source labels include the vertical quantity label b_{2,2}[n,m], the horizontal axis labels n and m, and numeric tick labels on the axes including -1, 0, 1 for the n/m plane and 0, 1, 2 on the vertical axis. In the generated figure, b_{2,2}[n,m], n, m, and most tick labels are present and readable, but the b_{2,2}[n,m] label is horizontal and displaced rather than rotated alongside the vertical axis; there is also an extra top-right matrix/sum annotation and UI text labels not present in the source. Overall the main labels are mostly complete and legible, but positioning/orientation differs noticeably and extra labels clutter the output relative to the source.",
+          "label_quality": 3,
+          "label_quality_reasoning": "The core label set is mostly present and readable, but the key vertical-axis label is poorly positioned/oriented and several extra labels are introduced, so the match is only moderate.",
+          "concept_accuracy_analysis": "The figure illustrates a 2D separable binomial filter as a 3D stem plot, with coefficients formed by the outer product of a 1D binomial row, plus controls for filter order N and normalization. The matrix overlay, normalization sums, axis labels, and tooltips are mostly accurate and figure-specific; the main minor issue is that for even-sized filters such as N=1 or N=3 the code labels a single stem as the “central binomial coefficient,” although there is no unique center sample and multiple peak coefficients exist.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main binomial-filter concept and interactions are correct and specific, with only a minor misleading detail about a singular central coefficient for even-sized kernels.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:33:55.947Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:56:15.617Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

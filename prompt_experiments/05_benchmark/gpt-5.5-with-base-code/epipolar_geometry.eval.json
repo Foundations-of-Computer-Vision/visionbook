@@ -3,26 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main epipolar plane, camera centers, epipoles, projected points, epipolar lines, and most labels, but the initial framing cuts off the Camera 1/Camera 2 annotations at the canvas edges. The view is more compressed and differently framed than the wide textbook figure, with the image planes much smaller/narrower relative to the baseline and yellow plane. A visible P motion slider appears, and it is functional, so interaction is present.",
+          "failure_modes": [
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Missing-Labels applies because important camera labels are partially offscreen/clipped in the rendered view. Camera-Wrong applies because the initial viewpoint/framing does not match the wide source composition and crops side annotations. Scale-Wrong applies because the proportions of the image planes, baseline span, labels, and epipolar plane are noticeably compressed compared with the reference.",
+          "geometry_accuracy_analysis": "The scene contains real 3D image-plane panels for camera 1 and camera 2, camera centers O1/O2 as black spheres, epipoles e1/e2, a dashed baseline, a yellow epipolar plane through O1-O2-P, rays from both camera centers to P, projected points p1/p2, red epipolar lines on both image planes, and local image-plane axes. The geometry is not a flat texture or single billboard; depth is generated with 3D vectors and camera view. Overall it represents the standard epipolar-geometry diagram well, though the actual camera bodies/frusta are absent and the planes/rays are somewhat stylized with extra tube segments and simplified point-camera geometry.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 3,
-          "faithfulness": 4,
+          "geometry_accuracy_reasoning": "All major epipolar-geometry elements are present as plausible 3D geometry, with only minor omissions/stylization such as missing camera bodies or frusta, so it fits score 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for mouse rotation/zoom, but this does not count as a meaningful interaction. A visible “P motion” range slider updates the 3D point P and visibly moves the epipolar plane, rays, projected points, epipolar lines, axes, and labels. There are pointermove and click handlers with raycasting over many scene objects; hovering shows compact tooltips and clicking posts/opens explanatory popups for elements such as the epipolar plane, rays, image planes, epipoles, and projected points, which is pedagogically useful. A reset-view button has a click handler but is hidden with display:none, so it is not usable. Escape hides popups/tooltips, but this is only a utility interaction. The UI is very compact in the bottom-left corner and does not cover important geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Two meaningful pedagogical interactions are functional—the P-motion slider and hover/click explanations—while there is no guided demo or third visible parameter control, so this fits score 4.",
+          "faithfulness_analysis": "The rendered figure contains the main conceptual elements from the source—two cameras, image planes, a yellow epipolar plane, red rays/epipolar lines, P, p1/p2, and e1/e2—so the diagram is recognizable. However, the crop, zoom, proportions, and camera angle differ substantially: the source is a tall, tightly composed textbook diagram with large perspective image planes and extensive lower geometry, while the render is compressed, zoomed out, horizontally centered, has clipped camera labels at the edges, simplified geometry, and a visible slider UI at the bottom.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The general epipolar-geometry layout is clear, but significant mismatches in crop, margins, proportions, perspective, label placement, and UI chrome make it only a moderate match rather than a near drop-in replacement.",
+          "label_quality_analysis": "Source labels are: P, Epipolar plane, two Epipolar line labels, Camera 1, Camera 2, O1, O2, p1, p2, e1, and e2. In the generated figure, P, Epipolar plane, both Epipolar line labels, O1/O2, p1/p2, and e1/e2 are present with generally readable size and appropriate placement. However, Camera 1 is clipped on the left edge so the initial letter is missing, and Camera 2 is clipped/off-canvas on the right so the full label is not visible. Overall the label set is mostly complete and scaled reasonably, but the camera labels have clear placement/clipping problems.",
           "label_quality": 4,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 3.8
+          "label_quality_reasoning": "Nearly all labels are correct and legible, but two important camera labels are partially cut off, fitting the rubric for minor issues on 1-2 labels.",
+          "concept_accuracy_analysis": "The figure accurately illustrates epipolar geometry with two camera centers O1/O2, image planes, epipoles e1/e2, a 3D point P, rays to P, projected image points p1/p2, and epipolar lines generated by the intersection of the epipolar plane with each image plane. The slider-specific behavior and hover/click explanations are concrete and mostly correct: they identify the epipolar plane as O1-O2-P, epipoles as baseline intersections, and corresponding-point search along the epipolar line; only minor omissions such as not explicitly naming the baseline or algebraic epipolar constraint are present.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All core epipolar-geometry relationships are correctly represented and the interactive explanations are figure-specific with no misleading generic filler.",
+          "visual_aesthetics": 3.7,
+          "overall_average": 4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:38:10.695Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:31:07.541Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

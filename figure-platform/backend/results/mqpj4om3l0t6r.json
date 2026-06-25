@@ -282,94 +282,35 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure depicts a perspective projection setup from a elevated right-side camera viewpoint. The camera center sits on the left, projecting lines through a central, upright camera plane onto a tilted, lower-right planar surface.",
-          "viewing_angle_rendered": "The rendered screenshot closely matches this layout: the camera center is on the far left, the upright camera plane stands in the middle-left, and the planar surface lies tilted in the lower-right quadrant, viewed from a slightly elevated, right-facing angle.",
-          "viewing_angle_comparison": "The viewing angles are exceptionally well-matched. The orthographic camera in the rendered setup preserves the parallel lines and foreshortening of the original diagram perfectly.",
-          "shape_comparison": [
-            {
-              "element": "Camera center",
-              "source_shape": "flat circle",
-              "rendered_shape": "3D sphere",
-              "match": true
-            },
-            {
-              "element": "Camera plane / Image plane",
-              "source_shape": "flat quadrilaterals",
-              "rendered_shape": "flat quadrilaterals",
-              "match": true
-            },
-            {
-              "element": "Planar surface",
-              "source_shape": "flat quadrilateral",
-              "rendered_shape": "flat quadrilateral",
-              "match": true
-            },
-            {
-              "element": "Coordinate axes",
-              "source_shape": "2D vector arrows",
-              "rendered_shape": "3D cylinder/cone arrows",
-              "match": true
-            },
-            {
-              "element": "Projection rays",
-              "source_shape": "dashed lines",
-              "rendered_shape": "dashed cylinders",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The label 'planar surface' overlaps with the bottom-right border of the planar surface mesh.",
-            "The label '(X,Y,0)' is slightly shifted right and down, overlapping the edge, whereas in the source it is neatly positioned below-left of the cyan dot.",
-            "The right-angle perpendicular indicator at the world coordinate origin (Z-axis to X/Y plane) is missing in the generated output."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent spatial matching and superb interactive annotations, with only very minor label overlaps and a missing perpendicular indicator symbol.",
-          "action_items": [
-            "Adjust the position offset of the 'planar surface' label to move it further to the right, clear of the plane boundary.",
-            "Reposition the '(X,Y,0)' label slightly to the left and up to avoid clipping the lower edge of the world plane.",
-            "Add a small perpendicular right-angle indicator (using line segments) at the red world coordinate origin to represent the orthogonality of the Z-axis.",
-            "Nudge the 'Camera plane' label slightly higher to avoid overlapping with the upper-left projection line."
-          ],
-          "visual_aesthetics": 4.3,
-          "overall_average": 4.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:08:56.475Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated figure includes the camera center, camera plane, image patch, planar surface, dashed projection rays, cyan correspondence points, coordinate axes, and major labels. Colors, primitives, and the overall perspective layout broadly match the reference, and there are click/hover interactions registered beyond OrbitControls. The main differences are minor proportional/framing differences, but no failure mode is clearly severe.",
           "failure_modes": [],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
+          "failure_modes_reasoning": "No listed failure mode clearly applies: labels are present, geometry and colors are appropriate, the core projection concept is represented correctly, and meaningful interactions are implemented.",
+          "geometry_accuracy_analysis": "The scene contains the main homography/projection elements: a camera center, a large camera-plane frame, a smaller gray image-plane patch with a projected cyan point, a separate gray planar surface with a corresponding cyan world point, dashed projection rays through the camera center, and image/world coordinate axes with labels. Nothing major is entirely absent, and the world plane is constructed as a real tilted parallelogram rather than a flat texture; however, the camera plane and image patch are hand-coded as slightly asymmetric/non-rectangular quadrilaterals, the camera center is a large sphere rather than a simple point, and some ray/plane intersections appear approximate rather than rigorously derived. Overall the geometry represents the source concept well, but with minor-to-moderate inaccuracies in planar shape/alignment.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as separate 3D geometry and the figure is recognizable, but imperfect plane construction and approximate alignment prevent a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. A Reset View button has an event listener, but the button is hidden with display:none, so it is not usable. There are hover interactions on many registered scene objects—camera center, camera plane, image-plane patch/point, planar surface, world point, cyan projection ray, black ray bundle, image axes, and world axes—which should change the cursor and show a small tooltip. Clicking those same objects sends a pedagogical popup via postMessage with useful explanatory text; Escape hides popup/tooltip. There are no sliders, toggles, parameter controls, step-through animation, or guided demo. The tooltip/UI chrome is compact and does not cover important geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Multiple functional click/hover explanatory interactions are present and pedagogically useful, but there is no guided demo or parameter control, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered figure preserves the main elements and relative layout: camera center at left, tilted camera plane, dashed projection rays, cyan correspondences, and gray planar surface at right. However it is noticeably zoomed out with much smaller text and objects, larger whitespace at the bottom/right, a smaller planar surface that sits higher in the frame, and several labels/axes are repositioned or scaled differently from the source, so it is not a near drop-in replacement.",
           "faithfulness": 3,
+          "faithfulness_reasoning": "The composition is recognizable but the scale, margins, text sizing, and object proportions differ substantially, matching roughly the general idea rather than the source crop and appearance.",
+          "label_quality_analysis": "Source labels: \"Camera center\" appears in the generated figure with correct two-line text and clear placement, though smaller relative to the source; \"Camera plane\" appears rotated along the plane and is readable, but slightly crowded against the geometry; cyan \"(x,y)\" appears near the image-plane point but is small and partially visually cluttered by nearby lines/plane; cyan \"(X,Y,0)\" appears on the planar surface but is small and crowded/overlapped by the \"planar surface\" label; \"planar surface\" appears with correct text but is shifted onto/over the plane and close to the cyan coordinate label rather than cleanly outside as in the source; green axis labels \"x\" and \"y\" appear but are much smaller than the source; surface-frame labels \"X\", \"Y\", and \"Z\" appear but are also noticeably smaller and less prominent than in the source. Overall the label set is mostly complete and readable, but several labels have reduced font size relative to the source and the planar-surface/cyan-coordinate area is cluttered.",
           "label_quality": 3,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3,
-          "overall_average": 3.2
+          "label_quality_reasoning": "All key labels are present, but multiple labels have significant size and placement/clutter issues, especially the coordinate and axis labels, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure is intended to illustrate perspective projection of a planar world surface Z=0 to an image/camera plane, yielding corresponding points (X,Y,0) and (x,y) and motivating a homography; the labels and popups are figure-specific and correctly mention the camera center, projection rays, image/world axes, and homography. However, the constructed image patch is not actually coplanar with the larger camera plane frame, the cyan image point is defined along the ray but is not the true intersection with the displayed camera/image plane, and the projected surface corners are not aligned with the shown image patch, so several geometric relationships described in the explanations are only approximate or inconsistent.",
+          "concept_accuracy": 3,
+          "concept_accuracy_reasoning": "The core homography/projection concept is present with specific explanations, but multiple geometric details contradict the stated relationships, fitting the rubric’s score-3 category.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:18:35.293Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:17:29.317Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

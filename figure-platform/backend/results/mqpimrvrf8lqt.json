@@ -259,93 +259,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure displays four separate, side-by-side 3D plot panels (a, b, c, d) aligned horizontally. Each panel uses an identical, slightly elevated isometric/orthographic perspective where the u-axis points to the right, the v-axis points into the depth, and the vertical axis points straight up, presenting a clean parallel row layout.",
-          "viewing_angle_rendered": "The rendered screenshot views all four panels within a single 3D scene from a highly skewed, low-elevation angle. As a result, the panels recede diagonally into the distance, distorting the horizontal alignment and causing significant perspective foreshortening.",
-          "viewing_angle_comparison": "The rendered view fails to capture the flat, side-by-side textbook layout of the source. By looking at all panels through a single skewed perspective camera rather than rendering them orthogonally or in separate aligned viewports, the panels are distorted and recede into the background.",
-          "shape_comparison": [
-            {
-              "element": "D0, D1, Roberts, Sobel surfaces",
-              "source_shape": "smoothly shaded 3D grid surfaces",
-              "rendered_shape": "3D BufferGeometry meshes with line segment grids",
-              "match": true
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "thin 2D black arrows",
-              "rendered_shape": "thick 3D cylinders and cones",
-              "match": false
-            },
-            {
-              "element": "panel labels",
-              "source_shape": "neatly sized 2D serif text labels",
-              "rendered_shape": "extremely oversized, overlapping HTML text elements",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The camera viewpoint is heavily angled and skewed, making the horizontal row of panels recede into the distance instead of being presented flat and parallel.",
-            "The HTML labels (e.g., |D0(u,v)|, a, b, c, d, u, v) are drastically oversized, causing massive overlap with the actual 3D geometry.",
-            "The 3D coordinate axes are too thick and use bulky cone arrowheads compared to the clean, thin lines in the source.",
-            "The surfaces themselves are scaled far too small relative to the labels and axes, losing their detailed structure.",
-            "There is a weird floating dot element near the 'v' labels."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Color-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 1,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 4,
-          "notes": "The mathematical surface functions are correct, but the visual rendering is heavily compromised by massive, overlapping labels, a highly skewed camera angle, and tiny squished geometry.",
-          "action_items": [
-            "Drastically reduce the font sizes of all HTML labels (e.g., from 94px/88px down to 14px/16px) and reposition them to avoid overlapping the surfaces.",
-            "Change the camera angle to be nearly front-facing or use separate orthogonal viewpoints for each panel to restore the neat, horizontal side-by-side textbook layout.",
-            "Scale up the physical size of the surface plots so they become the dominant visual elements in the scene.",
-            "Thin out the coordinate axes cylinders and cones to match the delicate line aesthetic of the original figure.",
-            "Add interactive controls (such as a slider to morph the frequency-domain filters, or a toggle to switch between 3D view and 2D contour maps) to meet the interactivity requirement."
-          ],
-          "visual_aesthetics": 2.3,
-          "overall_average": 2.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:55:00.903Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the four colored surface panels with u/v axes and panel labels, but the entire figure is framed very small with large unused whitespace, unlike the source where each surface fills the vertical extent and panels are cropped/large. The initial camera/framing and viewing angle make the surfaces appear compressed and the top |D0| and |D1| labels crowd together, and the surfaces are rendered as translucent filled meshes rather than the predominantly colored wireframe surfaces in the source.",
           "failure_modes": [
+            "Camera-Wrong",
             "Scale-Wrong",
-            "Missing-Labels"
+            "Hallucination"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 2,
-          "faithfulness": 3,
-          "label_quality": 2,
+          "failure_modes_reasoning": "Camera-Wrong: the initial view is zoomed far out and at a lower/flattened oblique angle compared with the source's close, tall oblique panels. Scale-Wrong: surfaces, axes, and panel spacing are noticeably compressed relative to the label sizes and canvas, leaving excessive whitespace. Hallucination: the generated figure adds solid translucent filled surface faces, while the source is primarily a colored wireframe mesh.",
+          "geometry_accuracy_analysis": "The scene constructs four real 3D frequency-response panels arranged horizontally, each with a sampled colored surface mesh, overlaid grid lines, black u/v/vertical axes with arrowheads, panel labels a)–d), u/v labels, and top magnitude labels for the first two panels. The geometry is true 3D rather than a flat billboard or baked-in perspective. Major structures are present and the surface topologies are recognizable: D0 is a one-directional curtain, D1 has repeated lobes, Roberts is diagonal, and Sobel combines derivative and smoothing; however, the mathematical surface shapes/proportions and labeling for the latter panels are only approximate, and the axes/grid placement may not exactly match the source plots.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present as plausible true 3D geometry, with only minor-to-moderate shape/proportion and labeling-position mismatches preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for camera rotation/zoom, but this does not count as a meaningful interaction. A hidden Reset View button has a click handler, but the button is styled display:none, so it is not usable. There are pointermove and click handlers with raycasting over registered surfaces, wireframes, and axes: hovering should show a small tooltip for these objects, and clicking sends an explanatory popup message via window.parent.postMessage, though the popup is not rendered in-page unless the parent frame handles it. There are no sliders, toggles, parameter controls, or guided step-through demo. The UI chrome is minimal and does not cover geometry.",
+          "interactivity_usability": 3,
+          "interactivity_usability_reasoning": "The figure has one meaningful pedagogical interaction category—hover/click explanations on scene objects—with compact UI and no guided demo, so it fits score 3.",
+          "faithfulness_analysis": "The rendered output shows the same general concept of four colored 3D surface plots with u/v axes and panel labels, but it is dramatically zoomed out and compressed into the center with large whitespace, unlike the panoramic source where each surface fills a large portion of the frame. The aspect ratio, crop, surface proportions, label placement, axis thickness/scale, and mesh appearance differ substantially, making it unsuitable as a drop-in replacement.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the four-panel surface-plot idea is recognizable, the severe under-zoom, wrong aspect ratio, excessive margins, and mismatched composition place it well below a 65% match.",
+          "label_quality_analysis": "Source labels include the two title labels |D_0(u,v)| and |D_1(u,v)|, subfigure labels a), b), c), d), and u and v axis labels on each of the four panels. The generated figure includes all of these labels with generally correct text, and most are readable. However, the two title labels are crowded together rather than centered above their respective first two panels as in the source, several subfigure labels and u/v labels are cramped because the panels are much closer together, and overall label placement is less clean than the source.",
+          "label_quality": 4,
+          "label_quality_reasoning": "All labels are present and readable, but there are minor-to-moderate placement and spacing issues, especially with the top labels and crowded panel labels.",
+          "concept_accuracy_analysis": "The figure illustrates frequency-domain magnitude surfaces for derivative/edge-detection masks: D₀, D₁, Roberts cross, and Sobel-Feldman, with u-v frequency axes and interactive explanations. The hover/click text is mostly figure-specific and correctly describes curtains, central-difference lobes, diagonal Roberts response, and Sobel as derivative plus smoothing, but at least the D₀ surface appears shifted so its zero is at the positive u boundary rather than at the DC origin, and several mathematical details/normalizations are approximate or omitted.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 2.7,
-          "overall_average": 2.8
+          "concept_accuracy_reasoning": "The main concept and interactions are specific and largely correct, but there is a notable likely error in the D₀ frequency response placement plus some approximate/missing mathematical detail, fitting a score of 4.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:25:57.521Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:30:14.620Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

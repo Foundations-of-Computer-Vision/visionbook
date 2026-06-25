@@ -1188,6 +1188,122 @@ app.delete('/api/result/:id', (req, res) => {
   }
 });
 
+// ── DELETE /api/result/:id/evaluation ────────────────────────────────────────
+app.delete('/api/result/:id/evaluation', (req, res) => {
+  const filePath = path.join(RESULTS_DIR, `${req.params.id}.json`);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Result not found.' });
+  try {
+    const record = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    record.evaluationResults = {};
+    record.evaluationMeta = {};
+    record.evaluationVersions = {};
+    saveRecord(record, filePath);
+    refreshHistoryManifestSafe();
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/results/evaluations?experiment=X[&chapter=Y] ─────────────────
+app.delete('/api/results/evaluations', (req, res) => {
+  const { experiment, chapter } = req.query;
+  if (!experiment) return res.status(400).json({ error: 'experiment query param required.' });
+  try {
+    const files = fs.readdirSync(RESULTS_DIR).filter(f => f.endsWith('.json') && f !== 'manifest.json');
+    let cleared = 0;
+    for (const file of files) {
+      const filePath = path.join(RESULTS_DIR, file);
+      let record;
+      try { record = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch { continue; }
+      if (record.experiment !== experiment) continue;
+      if (chapter && (record.chapter || null) !== chapter) continue;
+      record.evaluationResults = {};
+      record.evaluationMeta = {};
+      record.evaluationVersions = {};
+      saveRecord(record, filePath);
+      cleared++;
+    }
+    refreshHistoryManifestSafe();
+    return res.json({ cleared });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/experiment-figure/evaluation ─────────────────────────────────
+app.delete('/api/experiment-figure/evaluation', (req, res) => {
+  const { htmlPath } = req.body;
+  if (!htmlPath) return res.status(400).json({ error: 'htmlPath required.' });
+  const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
+  const resolved = path.resolve(evalPath);
+  if (!resolved.startsWith(path.resolve(EXPERIMENTS_DIR))) {
+    return res.status(403).json({ error: 'Path outside experiments directory.' });
+  }
+  try {
+    if (fs.existsSync(resolved)) fs.unlinkSync(resolved);
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/experiment-chapter/evaluations ───────────────────────────────
+app.delete('/api/experiment-chapter/evaluations', (req, res) => {
+  const { experiment, model, chapter } = req.body;
+  if (!experiment || !model) return res.status(400).json({ error: 'experiment and model required.' });
+  const dir = chapter
+    ? path.join(EXPERIMENTS_DIR, experiment, model, chapter)
+    : path.join(EXPERIMENTS_DIR, experiment, model);
+  const resolved = path.resolve(dir);
+  if (!resolved.startsWith(path.resolve(EXPERIMENTS_DIR))) {
+    return res.status(403).json({ error: 'Path outside experiments directory.' });
+  }
+  try {
+    let cleared = 0;
+    if (fs.existsSync(resolved)) {
+      const walk = (d) => {
+        for (const f of fs.readdirSync(d)) {
+          const full = path.join(d, f);
+          if (fs.statSync(full).isDirectory()) walk(full);
+          else if (f.endsWith('.eval.json')) { fs.unlinkSync(full); cleared++; }
+        }
+      };
+      walk(resolved);
+    }
+    return res.json({ cleared });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/experiment-entry/evaluations ─────────────────────────────────
+app.delete('/api/experiment-entry/evaluations', (req, res) => {
+  const { experiment } = req.body;
+  if (!experiment) return res.status(400).json({ error: 'experiment required.' });
+  const dir = path.join(EXPERIMENTS_DIR, experiment);
+  const resolved = path.resolve(dir);
+  if (!resolved.startsWith(path.resolve(EXPERIMENTS_DIR))) {
+    return res.status(403).json({ error: 'Path outside experiments directory.' });
+  }
+  try {
+    let cleared = 0;
+    if (fs.existsSync(resolved)) {
+      const walk = (d) => {
+        for (const f of fs.readdirSync(d)) {
+          const full = path.join(d, f);
+          if (fs.statSync(full).isDirectory()) walk(full);
+          else if (f.endsWith('.eval.json')) { fs.unlinkSync(full); cleared++; }
+        }
+      };
+      walk(resolved);
+    }
+    return res.json({ cleared });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/base-scaffold ────────────────────────────────────────────────────
 app.get('/api/base-scaffold', (req, res) => {
   res.json({ content: BASE_SCAFFOLD });

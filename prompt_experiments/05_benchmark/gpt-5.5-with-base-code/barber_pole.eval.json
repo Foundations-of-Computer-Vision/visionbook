@@ -3,29 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The main labels are present, and the scene does show a cylinder with a curved real-motion arrow and a downward observed-motion arrow. However, the generated view is zoomed far out in a landscape composition rather than the tall close-up textbook layout; the cylinder is much thinner/smaller, the observed-motion label overlaps the pole, and the colored barber-pole bands appear as very thin diagonal traces instead of broad filled red/blue bands. Extra visible UI buttons are present in the rendered image.",
           "failure_modes": [
-            "Color-Wrong",
-            "Scale-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
           ],
-          "geometry_accuracy": 3,
+          "failure_modes_reasoning": "Camera-Wrong: the initial framing/composition differs substantially from the source figure, with a small centered pole rather than a tall close-up pole on the left. Scale-Wrong: the cylinder proportions and especially the stripe widths are noticeably off; the broad colored bands become thin line-like ribbons. Hallucination: visible Spin/Aperture UI controls appear that are not part of the original textbook figure.",
+          "geometry_accuracy_analysis": "The scene constructs a true 3D vertical barber-pole cylinder with cylindrical body, circular top/bottom rims, and red/blue helical ribbon meshes wrapped around the surface. It also includes a curved real-motion arrow above the pole, a downward observed-motion arrow to the right, labels, and an optional rectangular aperture frame. The geometry is not a flat pasted texture or billboard; the pole and stripes are modeled in depth. Minor issues are that the outline strokes and annotation arrows are somewhat stylized and the aperture is hidden by default, but the main topology, proportions, and spatial relationships are accurate.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are present as plausible true 3D geometry with correct overall positions and connections, with only minor stylistic deviations.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but those do not count. Meaningful interactions include a Spin button that toggles the animated rotation of the stripe group and should visibly start/stop the moving bands; an Aperture button that toggles a visible aperture overlay and opens a short explanatory popup; hover tooltips and click popups registered on the stripes, real-motion arrow, observed-motion arrow, and aperture group, which should provide pedagogical explanations when hit by the raycaster. Escape hides popups/tooltips, and a Reset button has a handler but is hidden, so it is not a usable interaction. The interactions are compact and relevant, with the top-right UI not covering important geometry; however there is no true guided step-through demo, just toggles and object explanations.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
+          "interactivity_usability_reasoning": "There are multiple functional, pedagogically useful interactions with compact UI, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame has the same basic concept (a vertical cylinder with helical red/blue markings, a top rotation arrow, and observed-motion text/arrow), but the composition is very different: the source is a tall portrait figure with a large cylinder filling most of the left side, thick filled red/blue bands, large serif labels, and generous vertical extent, while the render is a landscape canvas with the cylinder much smaller and centered, thin colored spiral lines instead of broad bands, different crop/zoom, and visible UI buttons in the upper right. The result is recognizable in theme but not a near drop-in replacement for the original figure.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Major aspect-ratio, zoom/crop, stripe-style, scale, and UI-chrome differences make it match well under 65% despite preserving the general idea.",
+          "label_quality_analysis": "Source labels are: \"Real motion\" at the top in large serif type, and \"Observed motion\" to the right of the cylinder in large two-line serif type with a downward arrow beneath. In the generated figure, both text labels appear with correct wording and are readable at roughly comparable size. However, \"Real motion\" is centered near the top rather than left-aligned as in the source, and \"Observed motion\" is placed too close to / partially overlapping the cylinder instead of being clearly separated to the right. There are also small extraneous UI labels/buttons in the upper-right corner.",
+          "label_quality": 4,
+          "label_quality_reasoning": "All source labels are present and legible with generally appropriate scale, but 1-2 placement/clutter issues prevent a perfect score.",
+          "concept_accuracy_analysis": "The figure illustrates the barber-pole illusion: a rotating striped cylinder has real rotational motion while the slanted stripes are perceived as moving vertically downward, with an optional aperture showing how hidden stripe endpoints contribute to the illusion. Labels, tooltips, and popups are figure-specific and correctly discuss rotation around the vertical axis, observed downward motion, stripe orientation, aperture hiding endpoints, and the aperture problem; the only slight simplification is that it attributes the illusion mainly to the visible perpendicular component without fully explaining the role of the elongated aperture in selecting vertical motion.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3,
-          "overall_average": 3.4
+          "concept_accuracy_reasoning": "The main concept and interactions are accurate and specific, with at most one minor oversimplification in the explanatory text about how the barber-pole motion percept is produced.",
+          "visual_aesthetics": 3.7,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:42:30.633Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:26:34.973Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

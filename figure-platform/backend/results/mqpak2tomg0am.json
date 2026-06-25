@@ -797,95 +797,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a green surface plane viewed from a moderately high oblique perspective, appearing as a clear parallelogram with substantial visible depth. The vectors and light rays project upwards and outwards into the 3D space above the plane.",
-          "viewing_angle_rendered": "The rendered screenshot shows the green plane from a very low, almost edge-on perspective, making the plane look like a flat, narrow horizontal strip spanning the screen. This severely compresses the vertical depth of the scene.",
-          "viewing_angle_comparison": "The rendered camera angle is much too low (flat elevation angle) compared to the source, which hides the depth of the plane and squashes the spatial layout of the scattering arrows.",
-          "shape_comparison": [
-            {
-              "element": "surface plane",
-              "source_shape": "flat parallelogram with visible depth",
-              "rendered_shape": "very narrow, almost edge-on horizontal rectangle",
-              "match": false
-            },
-            {
-              "element": "incoming light ray",
-              "source_shape": "thick colored line",
-              "rendered_shape": "segmented cylinder",
-              "match": true
-            },
-            {
-              "element": "vectors p, n, q",
-              "source_shape": "thin black arrows",
-              "rendered_shape": "bulky 3D cylinders with conical heads",
-              "match": false
-            },
-            {
-              "element": "scattering distribution",
-              "source_shape": "fan of multiple discrete green arrows",
-              "rendered_shape": "fan of green arrows enveloped by a translucent volumetric lobe",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The camera elevation is too low, rendering the green plane as a flat band rather than a tilted 3D parallelogram.",
-            "The right-hand label 'l_out = F(l_in, n, ...' is truncated/cut off by the right edge of the screen.",
-            "A large translucent green volumetric lobe is present in the rendered scene but does not exist in the original 2D figure.",
-            "The 3D arrows (p, q, n) are too thick and chunky compared to the elegant thin arrows in the original."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "The interactive BRDF physics are excellently simulated, but the viewing angle is way too flat, squishing the plane, and the main formula label is cut off.",
-          "action_items": [
-            "Increase the elevation angle of the camera view to match the oblique parallelogram perspective of the source.",
-            "Fix the position/offset of the top-right formula label to ensure it is fully visible and not clipped by the viewport edge.",
-            "Make the arrow shafts and cones significantly thinner and sleeker to match the original diagram style.",
-            "Optionally tone down or remove the volumetric green lobe in Specular mode so it focuses primarily on the discrete green scattering arrows as shown in the original."
-          ],
-          "visual_aesthetics": 3,
-          "overall_average": 3.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:08:58.188Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered view collapses the green surface into a mostly flat horizontal band rather than the oblique parallelogram seen in the source, and the visible side/depth edges are essentially lost. The outgoing equation label is clipped off on the right, so the full formula from the source is not visible. The overall BRDF arrow setup is recognizable and the sliders/dropdown appear functional, but the initial camera/framing and depth presentation are the most noticeable mismatches.",
           "failure_modes": [
-            "Camera-Wrong",
-            "Missing-Labels"
+            "Depth-Wrong",
+            "Missing-Labels",
+            "Camera-Wrong"
           ],
+          "failure_modes_reasoning": "The surface depth/perspective is not represented like the source; it appears as a flat rectangular strip rather than a receding plane (Depth-Wrong). The important ℓout = F(ℓin, n, λ, p, q) annotation is partially cut off in the screenshot (Missing-Labels). The initial viewpoint is much more side-on/flattened than the original oblique perspective (Camera-Wrong).",
+          "geometry_accuracy_analysis": "Present elements include a true horizontal 3D surface plane with black border, an incidence point ring, incoming and outgoing rays, p/q/n direction arrows, right-angle normal marker, scatter arrows, a translucent specular BRDF lobe, optional Lambertian lobe, and labels. The geometry is constructed as real 3D primitives with rays and lobes extending in depth rather than as a pasted or skewed flat image. Minor issues include some overlap between the outgoing ray and q vector, stylized cylindrical thickness, and the added interactive Lambertian mode that may not be part of the static source figure, but the main spatial layout and topology are accurate.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major BRDF diagram elements are present as plausible 3D geometry with only minor alignment/styling and extra-mode issues, matching the score-4 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but those do not count. Meaningful controls include a BRDF type dropdown that visibly switches between the specular lobe and Lambertian diffuse lobe, a p/incident-angle slider that visibly rotates the incoming ray and changes lobe size, and a q/outgoing-angle slider that visibly rotates the outgoing/view direction. Many scene objects are registered for hover tooltips and click explanations; hover tooltips should be visible in-page, while click popups rely on parent postMessage support and may not appear in a standalone render. There is also a scripted demoSteps/goToStep mechanism with animated transitions, but no visible next/previous guided-demo UI, making it only partially discoverable through object clicks. The UI is compact, transparent, and placed at the bottom-left, mostly below the main geometry, so it does not significantly cover the figure.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
+          "interactivity_usability_reasoning": "Multiple functional and pedagogically useful interactions are present with compact UI, but the guided demo is not clearly exposed as a usable step-through interface, so it falls short of a 5.",
+          "faithfulness_analysis": "The rendered frame contains the main conceptual elements (green surface, incoming yellow/orange ray, outgoing green ray, normal, p/q labels), but the composition is substantially different from the source. The source is a very wide perspective trapezoidal plane with large whitespace and full equation text, while the render is a narrower canvas with a flat horizontal green band, cropped/right-cut text, fewer translucent direction arrows, different zoom/camera angle, and a visible control UI occupying the bottom portion.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in subject, the wrong aspect ratio, camera perspective, crop, missing elements, and bottom UI chrome make it match well under 65% as a drop-in replacement.",
+          "label_quality_analysis": "Source labels are: ℓ_in(λ), ℓ_out = F(ℓ_in, n, λ, p, q), p, n, and q. In the generated figure, ℓ_in(λ) appears near the incoming ray and is readable, though somewhat smaller than the source. The labels p, n, and q are present, readable, and placed near the corresponding arrows. The outgoing formula label is present but is clipped at the right edge, showing only something like “ℓ_out = F(ℓ_in, n,” and missing λ, p, q and the closing parenthesis; it is also smaller and less prominently positioned than in the source. There are extra UI text labels below the figure, but they are separate from the main diagram.",
           "label_quality": 3,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.8
+          "label_quality_reasoning": "Most core labels are present and readable, but the important output formula label is incomplete/clipped and the main formula text is undersized relative to the source, making the label match only partially successful.",
+          "concept_accuracy_analysis": "The figure illustrates a local BRDF/reflection setup: incoming spectral light ℓin(λ) strikes a surface at a point, with surface normal n, incoming direction p, outgoing/view direction q, and reflected output ℓout governed by a material response F. The geometry, labels, sliders, and popups are specific and mostly correct, including specular lobe behavior, Lambertian diffuse behavior, and n·p cosine falloff; the only mild issue is that “General (Specular)” somewhat conflates a general BRDF with a shiny/specular example and the ℓout formula is simplified rather than physically complete.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main BRDF concept and interactions are accurate and figure-specific, with only minor simplifications/conflations that keep it just below a perfect score.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:33:24.998Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:33:31.119Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

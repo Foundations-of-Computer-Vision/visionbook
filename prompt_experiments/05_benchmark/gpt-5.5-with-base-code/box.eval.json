@@ -3,28 +3,41 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene has the correct 3x3 blue stem-plot structure with vertical samples and most labels present. However, the initial viewpoint is much shallower/wider than the source and the n/m axis presentation does not match the reference orientation; a visible top-right “1/9” UI control also appears that is not part of the original figure.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Hallucination"
           ],
-          "geometry_accuracy": 4,
+          "failure_modes_reasoning": "Camera-Wrong applies because the rendered view is rotated/flattened relative to the textbook perspective, with the n and m axes appearing in different screen positions than in the source. Hallucination applies because the screenshot includes an extra interactive '1/9' button not present in the original figure.",
+          "geometry_accuracy_analysis": "The scene constructs a true 3D stem plot with a discrete n–m grid in the horizontal plane, vertical coefficient axis, nine blue stems at n,m = -1,0,1, and markers at equal height 1, plus tick marks, grid/back guide lines, axis labels, and coefficient label. No major geometric elements of a 3x3 box-filter kernel plot are absent; the proportions and positions are plausible, with only minor stylistic differences such as spherical markers instead of flat plotted dots. The critical fake-3D check passes because the samples occupy real 3D coordinates with height along Y and depth along Z, not a flat pasted or skewed 2D drawing.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are present as correct, unwarped 3D geometry with appropriate positions, connections, and proportions for the source stem-plot figure.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. A visible top-right “1/9” button toggles normalization: it changes all stem heights toward 1/9 or back to 1, updates the button state, shows/hides a normalization label, and opens an explanatory popup, so it visibly functions and is pedagogically useful. The nine stems/dots are registered for pointer hover: hovering changes color/scale and shows a tooltip with the coefficient value, which visibly functions. Clicking a stem/dot opens a small explanatory popup about the selected box-kernel coefficient, and Escape/clicking empty space can dismiss it. A Reset button has a click handler but is hidden with display:none, so it is not usable. The UI chrome is very compact in the top-right corner and does not cover the geometry.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
+          "interactivity_usability_reasoning": "There are multiple functional, useful interactions, but no true guided demo or step-through control, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered scene contains the same general 3D blue stem plot with gray grid planes and black axis labels, but it is much more zoomed out with large empty whitespace around the plot compared with the tightly framed source. The camera angle and apparent axis placement differ noticeably, the plot is stretched horizontally, and a small UI badge appears in the top-right, so it would not work as a close inline replacement.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The core plot is recognizable, but significant under-zoom, whitespace, aspect/camera differences, and visible UI chrome make it only about a general-match replacement rather than a faithful one.",
+          "label_quality_analysis": "Source labels include the vertical axis label “box_{1,1}[n,m]”, axis labels “m” and “n”, and tick labels 0 and 1 on the vertical axis plus -1, 0, 1 on both horizontal axes. The generated figure includes the same main labels and tick labels, and they are generally readable, but the horizontal axis labels are repositioned relative to the source: “n” sits near the middle of the plot and close to a tick/axis line, while “m” is placed on the front lower axis rather than matching the source’s left-side placement. Font size is somewhat small relative to the larger rendered canvas, though still legible.",
           "label_quality": 4,
-          "concept_accuracy": 4,
+          "label_quality_reasoning": "All source labels are present and readable, but a few have noticeable placement/scale issues, especially the m/n axis labels.",
+          "concept_accuracy_analysis": "The figure illustrates a 2D discrete box filter kernel as a 3D stem plot over n and m, with nine equal samples on the support {-1,0,1}×{-1,0,1} and vertical value box_{1,1}[n,m]. Labels, tick marks, and tooltips are specific to the kernel coefficients, and the normalization toggle correctly explains changing the nine unit coefficients to 1/9 for unit DC gain; the main omission is that zero values outside the support are not explicitly shown.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "The core box-kernel concept and the optional normalization relationship are accurate and figure-specific, with no substantive misinformation.",
           "visual_aesthetics": 4,
-          "overall_average": 4
+          "overall_average": 4.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:42:44.220Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:28:34.798Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

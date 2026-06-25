@@ -295,83 +295,42 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure displays four distinct panels (a, b, c, d) side-by-side. In each panel, we see a 3D surface plot with coordinate axes $u$ extending to the right-down, $v$ extending to the right-up (into the background), and a vertical axis pointing straight up, viewed from a slightly elevated orthographic perspective.",
-          "viewing_angle_rendered": "The rendered screenshot displays a single 3D plot from an elevated orthographic perspective, where the $u$ axis extends to the left-down and the $v$ axis extends to the right-down. The vertical axis points straight up and is topped with a black arrowhead.",
-          "viewing_angle_comparison": "The viewing angle in the rendered screenshot is rotated relative to the source: the $u$ and $v$ axes are oriented differently, with $u$ pointing left-down instead of right-down. Furthermore, the single-panel layout completely fails to match the horizontal four-panel layout of the source.",
-          "shape_comparison": [
-            {
-              "element": "coordinate axes",
-              "source_shape": "thin lines with small arrowheads",
-              "rendered_shape": "thick cylinders with large cone arrowheads",
-              "match": false
-            },
-            {
-              "element": "3D surfaces",
-              "source_shape": "smooth wireframe grids representing four different filter responses",
-              "rendered_shape": "a single colored line-segment grid representing one response at a time",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The layout is completely different: the source has four separate panels side-by-side (a, b, c, d), while the rendered version shows only one plot with interactive controls.",
-            "The camera azimuth is rotated, causing the $u$ and $v$ axes to point in incorrect directions.",
-            "The vertical axis has a 'Magnitude' label which is not present in the original, and it overlaps with the arrowhead.",
-            "The panel labels 'a)', 'b)', 'c)', 'd)' are entirely missing.",
-            "The axis lines and arrowheads are excessively bulky compared to the clean, thin lines in the source."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Missing-Labels"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 5,
-          "faithfulness": 2,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "notes": "The code creates a single highly interactive panel instead of replicating the four static panels from the textbook, resulting in a low faithfulness score despite good technical implementation of the individual surface.",
-          "action_items": [
-            "Reconstruct the scene to display four distinct sub-viewports or side-by-side canvas panels (a, b, c, d) matching the original layout.",
-            "Fix the camera viewing angle and axis rotation in all panels so that $u$ points down-right and $v$ points up-right.",
-            "Add the panel labels 'a)', 'b)', 'c)', and 'd)' to their respective locations.",
-            "Make the coordinate axes and arrowheads much thinner to match the clean style of the original 2D vector graphic.",
-            "Remove the 'Magnitude' label and fix overlapping text."
-          ],
-          "visual_aesthetics": 2.7,
-          "overall_average": 3.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:15:49.821Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The screenshot shows only one centered 3D wireframe response surface with UI controls, while the reference is a wide four-panel figure containing four separate wireframe surfaces labeled a), b), c), d). The generated surface is a single volcano/band-pass form and does not reproduce the four distinct shapes/layouts shown; subfigure labels are absent and extra annotations/UI such as “Magnitude,” filter selector, and sigma slider appear. The initial camera/layout is also completely different from the source montage.",
+          "failure_modes": [
+            "Missing-Labels",
+            "Interaction-Missing",
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination",
+            "Concept-Misunderstood"
+          ],
+          "failure_modes_reasoning": "Missing-Labels applies because the important subfigure labels a), b), c), d) are absent. Interaction-Missing applies because although controls exist, the source figure is a static four-panel comparison and the generated interactivity replaces rather than meaningfully recreates that comparison. Camera-Wrong applies because the initial rendered view is a single centered perspective rather than the wide four-panel arrangement and viewing angles of the source. Scale-Wrong applies because the proportions and layout are dominated by one large surface instead of four similarly sized panels. Hallucination applies due to extra UI controls and the added Magnitude label not present in the source. Concept-Misunderstood applies because the core comparison of four different frequency-response surfaces is represented as one switchable surface, so the figure’s main visual concept is not reproduced.",
+          "geometry_accuracy_analysis": "The scene constructs a true 3D height-field surface from sampled u,v coordinates with varying vertical magnitude, rendered as colored LineSegments, plus real 3D cylinder/cone arrows for the u, v, and Magnitude axes and HTML labels. It does not appear to fake perspective with a flat billboard or texture; however, the visible surface is only a wire grid with no filled/shaded surface, no tick marks or numeric frequency bounds, and axis orientation/proportions may not exactly match a textbook static plot. Overall the main geometry of a LoG/frequency-response magnitude surface with three axes is recognizable and mostly correct, with minor omissions/detail mismatches.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "geometry_accuracy_reasoning": "All major 3D elements are present and constructed as real geometry, but missing plot details such as ticks/bounds and the simplified wire-only surface keep it below a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but those do not count as meaningful interactions. Meaningful controls include a filter-type dropdown that visibly switches between Continuous LoG and Discrete 5-Point surfaces, a σ slider that visibly reshapes the continuous LoG surface and becomes disabled for the discrete case, a Reset View button that restores the camera, hover tooltips over registered surface/axis objects, click popups explaining the surface and axes, and a click-to-cycle guided demo on the surface that animates σ/filter settings through narrated steps. The interactions are pedagogically useful and usable: the parameter controls directly change the mathematical surface, and the click demo/explanations teach what the response and axes mean; the small transparent UI panel sits in the lower-left corner and only minimally overlaps empty space rather than covering key geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions plus a guided demo, with compact non-intrusive UI, matching the rubric for score 5.",
+          "faithfulness_analysis": "The source is an extremely wide four-panel figure (a–d) with separate wireframe surfaces, black axes, italic u labels, and large whitespace/margins between panels. The rendered output shows only a single centered 3D surface at a different camera angle and zoom, with added UI controls and text labels, so it cannot serve as a drop-in replacement for the original multi-panel composition.",
+          "faithfulness": 1,
+          "faithfulness_reasoning": "Most of the source content and layout is absent, and the crop, aspect ratio, camera framing, labels, and UI chrome differ substantially, making the match far below 65%.",
+          "label_quality_analysis": "Source labels are: panel labels “a)”, “b)”, “c)”, “d)” at the lower left of each subfigure, plus axis labels “u” and “v” on each of the four panels. In the generated figure, the panel labels are entirely absent, the repeated “u” labels are absent, and only a single tiny “v” appears near the lower right; it is much smaller than the source labels and not placed like the source. The generated figure also adds non-source labels such as “Magnitude” and small axis letters/UI text, which do not match the reference. Overall the label set is almost completely missing or wrong, with severe size and placement mismatch.",
+          "label_quality": 1,
+          "label_quality_reasoning": "Nearly all source labels are absent, the only partial match is a tiny misplaced “v”, and extra non-source labels are present, so this is a score-1 case.",
+          "concept_accuracy_analysis": "The figure illustrates frequency-domain magnitude surfaces for a Laplacian-of-Gaussian filter and a discrete five-point Laplacian, with u and v spatial-frequency axes and vertical magnitude. The explanations are specific and mostly correct: they mention zero DC response, annular band-pass behavior, sigma-dependent bandwidth, Nyquist-boundary behavior, and the discrete approximation’s divergence at high frequencies; the only minor issue is that the continuous LoG surface is normalized to its own maximum, so absolute attenuation changes with σ are not conveyed.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "Main concept and figure-specific interactions are accurate, with only a minor omission/misleading aspect from per-surface normalization hiding absolute magnitude differences.",
+          "visual_aesthetics": 2,
+          "overall_average": 3
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:45:47.053Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:54:32.189Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

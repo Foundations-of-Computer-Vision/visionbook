@@ -275,92 +275,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure depicts a flat, parallel orthographic layout of two conceptual diagrams, (a) and (b), viewed slightly from the side to give depth to the slanted wall and pinhole screen. The trees and walls face somewhat to the right, showing a clear spatial sequence from left to right: Wall -> (Pinhole Screen) -> Tree.",
-          "viewing_angle_rendered": "The rendered screenshot matches this perspective closely, showing both panels side by side with the wall, pinhole screen, and tree correctly oriented in a pseudo-3D orthographic projection.",
-          "viewing_angle_comparison": "The viewing angles are highly consistent, successfully replicating the flat-yet-angled perspective of the source textbook figure.",
-          "shape_comparison": [
-            {
-              "element": "Wall",
-              "source_shape": "slanted flat plane with a black outline",
-              "rendered_shape": "slanted flat plane with a black outline",
-              "match": true
-            },
-            {
-              "element": "Tree",
-              "source_shape": "organic green/brown tree shape",
-              "rendered_shape": "simplistic polygonal shape with circular leaf clusters",
-              "match": true
-            },
-            {
-              "element": "Pinhole screen",
-              "source_shape": "black plane with a physical circular cutout (hole)",
-              "rendered_shape": "black plane with an overlaid white solid circle",
-              "match": false
-            },
-            {
-              "element": "Rays",
-              "source_shape": "thin lines with directional arrowheads",
-              "rendered_shape": "cylinders with conical arrowheads",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "In panel (a), the rays in the source diagram converge precisely onto two distinct points on the wall (one for the green leaves' rays and one for the brown trunk's rays) to show overlap. In the rendered scene, the rays are scattered and do not converge to common points on the wall, losing the physical concept.",
-            "The pinhole in panel (b) is represented as a solid white circle rather than a true transparent opening that reveals the background/tree behind it.",
-            "Several green rays in panel (a) float past the boundary of the wall into empty space behind it, instead of terminating cleanly on the wall's surface.",
-            "The inverted projected tree on the wall in panel (b) is somewhat misaligned and too dark compared to the faint, pale projection in the source."
-          ],
-          "failure_modes": [
-            "Concept-Misunderstood",
-            "Wrong-Primitives"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 4,
-          "concept_accuracy": 3,
-          "notes": "While the visual layout and interactivity are strong, the physical concept in panel (a) is compromised because the rays do not converge to illustrate overlapping light blur.",
-          "action_items": [
-            "Re-engineer the rays in panel (a) to converge onto exactly two specific points on the wall (one green target point near the top, one brown target point near the bottom) to correctly represent the physics of overlapping light rays.",
-            "Create a true hollow pinhole inside the black screen using Three.js Path/Shape holes, rather than overlaying a solid white circle.",
-            "Ensure all rays in panel (a) terminate exactly on the surface of the wall instead of extending beyond it.",
-            "Adjust the opacity, scale, and positioning of the inverted projected tree in panel (b) to make it look like a soft, pale projection cleanly framed on the wall."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:03:00.995Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 4,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated screenshot includes the main labels (Wall, Pinhole, (a), (b)) and the two-panel pinhole-camera concept, but the geometry is rendered as mostly flat cutouts with little actual spatial depth. The composition is much more zoomed out and compressed than the source: the trees, walls, black pinhole screen, and projected image are noticeably smaller and differently proportioned, with large extra whitespace and visible UI sliders at the lower left. The most prominent issues are the flattened depth interpretation and poor match to the source scale/camera framing.",
+          "failure_modes": [
+            "Depth-Wrong",
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Depth-Wrong applies because the scene is essentially a 2D layer stack rather than a spatial pinhole-camera setup with real depth between wall, aperture plane, rays, and tree. Camera-Wrong applies because the initial framing/zoom and view differ substantially from the source, showing the whole simplified construction much smaller and more centered. Scale-Wrong applies because the relative sizes of the walls, trees, pinhole screen, rays, and projected image are noticeably off compared with the original. Hallucination applies because visible interactive slider controls labeled “hole” and “rays” appear in the rendered figure but are not part of the source textbook image.",
+          "geometry_accuracy_analysis": "The scene includes two labeled panels with wall outlines, trees, ray arrows, a pinhole screen/aperture, and an inverted projected tree image. However, these elements are built almost entirely as flat 2D ShapeGeometry/CircleGeometry/cylinder overlays on the XY plane with only tiny Z offsets for layering, and the wall/screen quadrilaterals are hardcoded as skewed outlines to mimic the textbook perspective rather than being true 3D planes viewed by a camera. This fails the critical check: the apparent depth is baked into flattened coordinates rather than generated by real 3D geometry and camera projection.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Because the figure is essentially a flat 2D reconstruction with baked-in skewing and all principal geometry locked to a planar sheet, it must score 1 under the Fake 3D rule.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but these do not count as meaningful interactions. There are two visible range sliders: the “hole” slider scales the white aperture and changes the projected image brightness, and the “rays” slider changes ray opacity/visibility and also affects brightness; both should produce visible, pedagogically relevant changes. There are hover/click handlers with raycasting for several scene objects: hovering registered objects shows a small tooltip, and clicking posts a popup message with explanatory text, though the full popup depends on an external parent listener and may not be visible in the standalone render. A hidden Reset View button has a listener but is not usable because it is display:none. The UI is compact, transparent, and placed at the lower-left without covering important geometry; interactions are useful, but there is no guided demo and the click explanation mechanism is only partially self-contained.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
+          "interactivity_usability_reasoning": "Two functional pedagogical sliders are clearly present and the UI is compact, with additional hover/click explainers present but not enough for a score 5 because there is no guided demo and the popup is not self-contained.",
+          "faithfulness_analysis": "The rendered frame preserves the broad two-panel concept with a wall, tree, ray lines, and a pinhole screen, but the composition is dramatically zoomed out compared with the source: the original panels fill the canvas with large cropped trees and walls, while the render has small objects centered in a 900x600 frame with large whitespace. The tree shapes, ray density/placement, wall/pinhole proportions, labels, and panel spacing differ substantially, and UI sliders appear at the bottom left, making it unsuitable as an inline drop-in replacement.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the subject is recognizable, the crop/zoom, proportions, whitespace, simplification, and visible UI controls make it match well under 65% of the original.",
+          "label_quality_analysis": "Source labels are: \"Wall\" in panel (a), \"Wall\" in panel (b), \"Pinhole\" above the black pinhole screen in panel (b), and panel markers \"(a)\" and \"(b)\". The generated figure includes all five with correct text and generally readable serif styling; the two Wall labels and panel markers are well placed, while \"Pinhole\" is slightly too close to/overlapping the black screen edge compared with the source. There are also small extraneous UI labels \"hole\" and \"rays\" at the bottom left, which are not part of the source figure but do not obstruct the main labels.",
           "label_quality": 4,
+          "label_quality_reasoning": "All required labels are present and readable with mostly appropriate scale, but the Pinhole placement and extra UI text create minor label-quality issues.",
+          "concept_accuracy_analysis": "The figure illustrates pinhole camera image formation: panel (a) contrasts a bare wall receiving overlapping rays with panel (b) where a light-tight screen with a small aperture admits rays that cross and form an inverted tree image on the wall. The labels and tooltips are figure-specific and mostly accurate, explicitly referencing the wall, pinhole, blocked rays, ray crossing, image inversion, and brightness/sharpness tradeoff; the main omission is that the hole slider changes aperture size and image brightness but does not actually widen ray bundles or blur/sharpen the projected image as described.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "Main concept and explanations are correct and specific, but one interactive relationship—the aperture-size blur/sharpness tradeoff—is described without being physically demonstrated.",
+          "visual_aesthetics": 2.3,
+          "overall_average": 3
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:22:25.825Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:24:54.119Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

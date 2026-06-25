@@ -258,88 +258,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "Three parallel 3D sub-panels are laid out horizontally. Each has two stacked horizontal square planes (bottom for input, top for output) viewed from an oblique elevated angle. The layout is wide, showing all three setups clearly side-by-side.",
-          "viewing_angle_rendered": "The rendered screenshot shows only the middle 'relu' panel centered in the screen. The left and right panels are mostly clipped outside the viewport, although the oblique perspective on the visible center panel is correct.",
-          "viewing_angle_comparison": "While the perspective angle of the individual panel matches the source, the framing and zoom are completely wrong, cropping out the 'linear' and 'L2-norm' panels and failing the side-by-side three-panel layout requirement.",
-          "shape_comparison": [
-            {
-              "element": "planes",
-              "source_shape": "flat quadrilaterals with dark borders",
-              "rendered_shape": "flat quadrilaterals with dark borders",
-              "match": true
-            },
-            {
-              "element": "points",
-              "source_shape": "small red dots",
-              "rendered_shape": "small red spheres",
-              "match": true
-            },
-            {
-              "element": "correspondence lines",
-              "source_shape": "fine dashed lines",
-              "rendered_shape": "dense red lines",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "Only the middle 'relu' panel is visible; 'linear' and 'L2-norm' panels are cropped out due to incorrect camera zoom and framing.",
-            "Mapping lines are too dense and solid, creating a thick red column rather than individual thin dashed lines.",
-            "The horizontal spacing between panels is too wide for the current viewport settings."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 1,
-          "faithfulness": 2,
-          "label_quality": 3,
-          "concept_accuracy": 3,
-          "notes": "The figure is extremely unfaithful because the camera setup crops out two of the three main panels, and there are no functional interactive elements besides default rotation.",
-          "action_items": [
-            "Adjust the camera zoom and orthographic boundaries to frame all three panels horizontally on screen.",
-            "Reduce the point count and increase the line transparency/dashed styling to match the clean, airy look of the original diagram.",
-            "Add interactive controls (such as toggles, sliders, or step-through animations) to explore the transformations dynamically.",
-            "Fix label positions so they align correctly above and beside each of the three panels."
-          ],
-          "visual_aesthetics": 2.7,
-          "overall_average": 2.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:05:55.646Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the three labeled panels with red point clouds, mapping lines, plane frames, and input/output labels, and the core geometric constructions are broadly recognizable. However, the initial rendered view is framed much too tightly: the linear and L2-norm panels are cut off at the left and right edges, leaving only the ReLU panel fully visible, unlike the source where all three panels are visible with balanced spacing.",
           "failure_modes": [
-            "Interaction-Missing"
+            "Camera-Wrong",
+            "Scale-Wrong"
           ],
+          "failure_modes_reasoning": "Camera-Wrong: the initial orthographic view/zoom does not match the source composition and crops two of the three panels. Scale-Wrong: the panel spacing/overall figure scale relative to the viewport is too large, so the full three-panel layout cannot fit as in the reference.",
+          "geometry_accuracy_analysis": "The scene contains three side-by-side 3D panels labeled linear, relu, and L2-norm, each with a lower input plane, upper output plane, square/rhombus frame outlines, internal guide diagonals/midlines, dashed gray correspondence guides, red point clouds, and many red mapping segments connecting input to output. The geometry is constructed as real 3D with separated Y-level planes and camera-generated perspective, not a flat pasted texture or billboard. The overall topology and spatial relationships match the intended stacked-plane transformation diagrams well; minor issues include somewhat stylized/thick cylindrical frame edges, the panel spacing being camera-dependent, and the ReLU/L2 output frames remaining generic squares rather than reflecting any transformed output support beyond the point cloud.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 2,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "geometry_accuracy_reasoning": "All major elements are present and plausibly positioned as real 3D geometry, with only minor alignment/stylization and output-frame representation issues, fitting a score of 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, which should function but does not count as a meaningful interaction. A hidden Reset View button has a click handler, but the button is display:none, so it is not usable. There are pointermove, pointerleave, click, and Escape handlers tied to registered interactive panel groups: hovering over each of the three transformation panels should show a small tooltip, and clicking should send a popup message with an explanatory title/body for the linear, ReLU, and L2-normalization panels; the tooltip is locally visible, while the click popup depends on a parent message handler rather than an in-page popup. There are no sliders, toggles, parameter controls, or guided animation/demo. The UI chrome is minimal and does not cover geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "The three panel hover/click explanations are functional and pedagogically useful with compact UI, but there is no guided demo and no parameter controls, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame uses a much narrower crop/zoom centered on the relu panel, cutting off most of the linear panel on the left and L2-norm panel on the right, whereas the source shows all three panels fully with balanced margins across a wide canvas. The central relu geometry, labels, black diamonds, and red point/line styling are recognizable, but the composition is not a drop-in replacement because two-thirds of the figure is largely missing and the aspect ratio/whitespace differ substantially.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the relu subfigure is recognizable, the severe horizontal cropping and missing full left/right panels make the overall match well under 65%.",
+          "label_quality_analysis": "Source labels are: titles 'linear', 'relu', and 'L2-norm', plus 'x_out' and 'x_in' for each of the three panels. In the generated screenshot, the central 'relu', 'x_out', and 'x_in' labels are visible, correctly spelled, large, and reasonably placed; the right panel's 'x_out' and 'x_in' are partially visible near the cropped edge, but 'L2-norm' is not visible. The entire left panel label set, including 'linear', 'x_out', and 'x_in', is missing/offscreen. Overall, the visible labels are clear and at an appropriate scale, but a substantial portion of the source label set is absent due to cropping/positioning.",
+          "label_quality": 3,
+          "label_quality_reasoning": "About half of the required labels are missing or effectively absent, though the visible labels are clear and well-sized, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure appears to illustrate how three neural-network layer operations transform a 2D point cloud: an affine/linear layer shifts and shears/rotates the distribution, ReLU collapses coordinates onto axes, and L2 normalization projects points to a ring. The tooltips and popups are figure-specific and mostly correct, but the ReLU implementation visually maps positive inputs to negative output coordinates while the explanation says ReLU is max(0,x), and the 'linear' panel is actually affine with bias, which is a minor terminology mismatch if the source distinguished linear from affine.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 3.6
+          "concept_accuracy_reasoning": "The main concepts and interactions are accurate and specific, with only minor conceptual/implementation issues around the ReLU sign convention and linear-versus-affine wording.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:26:18.932Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:20:23.306Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

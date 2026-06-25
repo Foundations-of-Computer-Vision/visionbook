@@ -119,90 +119,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows three distinct panels side-by-side. Each panel contains two parallel square plates stacked vertically, viewed from an orthographic, isometric-like perspective from the front-right-above, showing both the top faces of the plates and the space between them clearly.",
-          "viewing_angle_rendered": "The rendered screenshot shows an extremely over-zoomed, cropped view of the middle ('relu') and parts of the neighboring panels. The camera is far too close, causing the top and bottom of the panels to be cut off and the labels to overlap awkwardly.",
-          "viewing_angle_comparison": "The rendered view's perspective angle is generally correct, but the camera zoom and framing are completely wrong. The camera is excessively zoomed in, which prevents the user from seeing the full three-panel layout as a clean side-by-side comparison.",
-          "shape_comparison": [
-            {
-              "element": "Plates (x_in and x_out)",
-              "source_shape": "Flat squares with thin dark borders",
-              "rendered_shape": "Flat squares with thin dark borders",
-              "match": true
-            },
-            {
-              "element": "Points",
-              "source_shape": "Small red dots/spheres",
-              "rendered_shape": "Faint red point-cloud dots",
-              "match": true
-            },
-            {
-              "element": "Mapping lines",
-              "source_shape": "Distinct dashed red lines",
-              "rendered_shape": "Very dense, faint red dashed segments resembling a continuous blur",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "Extreme over-zooming: the entire three-panel figure is heavily cropped and cannot be viewed as a single cohesive diagram.",
-            "The density of the points and mapping lines is too high, making the trajectories look like a dense vertical waterfall/fuzz rather than distinct, traceable mapping lines.",
-            "Labels like 'x_out' and 'L2-norm' overlap, making them difficult to read.",
-            "The grid lines on the planes are extremely faint and barely visible compared to the original."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 1,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 4,
-          "notes": "The underlying mapping math is correct, but the visualization is ruined by severe camera over-zooming and overly dense point/line representations.",
-          "action_items": [
-            "Significantly decrease the camera zoom parameter in setCameraView so all three panels fit perfectly within the screen horizontally.",
-            "Reduce the number of sample points (e.g., from 185 to 80) to make the individual dashed mapping lines clear and distinct.",
-            "Increase the opacity and thickness of the plane outlines and grid lines to match the clean, high-contrast look of the source.",
-            "Adjust HTML label positions and offsets to ensure there is no overlapping between panel titles and 'x_out' indicators."
-          ],
-          "visual_aesthetics": 2.3,
-          "overall_average": 2.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:24:00.447Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene uses appropriate square plane frames, red point clouds, and red mapping trajectories for the three transformations, with labels implemented in code. However, the rendered initial view is zoomed/framed incorrectly: the left linear panel is mostly cut off, the right L2-norm panel is partly cut off, and some important titles/axis labels are not visible or are clipped. The main standout issue is camera/framing rather than the underlying geometric construction.",
           "failure_modes": [
             "Camera-Wrong",
             "Missing-Labels"
           ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial viewpoint/zoom does not match the source figure and crops substantial parts of the left and right panels. Missing-Labels applies because important visible annotations from the source, such as the linear title and some x_in/x_out labels, are absent from the rendered view due to the bad framing.",
+          "geometry_accuracy_analysis": "The scene contains three side-by-side true 3D panels for linear, ReLU, and L2-norm mappings, each with lower and upper square planes, guide edges, red input/output point clouds, and red mapping trajectories between corresponding points. The main geometry is constructed as symmetric 3D planes and line/point objects rather than a flat pasted perspective drawing. Minor possible inaccuracies include simplified unfilled panel surfaces, sparse grid/guide representation, and approximate distribution shapes/placements, but the spatial organization and intended transformations are clearly represented.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as real 3D geometry with plausible positions and connections, with only minor simplifications or alignment/detail differences from the likely source figure.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom, but that does not count as meaningful interaction. A hidden Reset View button has a click listener, but it is styled display:none, so it is not usable. The scene registers mapping line segments and output point clouds as interactive objects; hovering over them should change the cursor and show a small tooltip, and clicking them posts a popup message with a pedagogical explanation, though the popup depends on an external parent handler rather than being rendered directly in the HTML. Escape and pointerleave hide the popup/tooltip. There are no sliders, toggles, guided demo, or parameter controls. The UI chrome is minimal and does not cover geometry.",
           "interactivity_usability": 3,
-          "faithfulness": 3,
+          "interactivity_usability_reasoning": "There is one meaningful pedagogical interaction pattern—hover/click explanations on scene objects—while the reset is hidden and OrbitControls do not count, so this fits score 3.",
+          "faithfulness_analysis": "The rendered first frame uses a similar three-panel 3D schematic style with red point/line mappings and black plane outlines, but the crop and zoom are substantially different from the source. The scene is over-zoomed and horizontally shifted so the left linear panel is mostly cut off, the right L2-norm panel is partially cut off, titles/labels are truncated or displaced, and the aspect ratio/margins do not match the original wide textbook layout.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general idea is recognizable, the default frame is not a near drop-in replacement because major panels are cropped and the zoom/margins/aspect ratio differ substantially, matching well under 65% of the original composition.",
+          "label_quality_analysis": "Source labels: left panel has title 'linear', 'x_out', and 'x_in'; center panel has title 'relu', 'x_out', and 'x_in'; right panel has title 'L2-norm', 'x_out', and 'x_in'. In the generated screenshot, the left-panel labels are not visible because the panel is cropped offscreen. The center labels 'relu', 'x_out', and 'x_in' are present and readable, though 'x_in' sits over the geometry. The right labels 'L2-norm', 'x_out', and 'x_in' are present but crowded: 'x_out' is very close to/overlapping the title area, and the right panel is partially cropped. Overall, the label set is only partially complete in the rendered view, with several labels missing due to cropping and some visible labels poorly positioned or cluttered.",
           "label_quality": 3,
+          "label_quality_reasoning": "About one third of the labels are missing and several of the remaining labels have placement/cropping issues, so this fits a score of 3 rather than 4.",
+          "concept_accuracy_analysis": "The figure illustrates how three neural-network-style transformations map an input point distribution to an output distribution: an affine/linear layer, coordinatewise ReLU, and L2 normalization, with dashed trajectories between input and output planes. The labels and interactive popups are figure-specific and correctly describe the intended transformations; the only notable imprecision is that the ReLU implementation includes scaling, translation, and an upper clamp, so it is not a pure ReLU even though the explanation describes pure clipping at zero.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.4
+          "concept_accuracy_reasoning": "The main concepts and explanations are accurate and specific, with only a minor mismatch in the ReLU mapping implementation versus its stated behavior.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:42:11.202Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:00:30.970Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

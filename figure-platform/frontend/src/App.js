@@ -1892,7 +1892,7 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
                 <>
                   <p style={styles.viewerPlanTitle}>Planner Output</p>
                   {selectedPlan.chapterName && <p style={styles.viewerPlanMeta}>Chapter: {selectedPlan.chapterName}</p>}
-                  <details open style={styles.planFieldsDetails}>
+                  <details style={styles.planFieldsDetails}>
                     <summary style={styles.planFieldsSummary}>Plan details</summary>
                     <PlanFields data={planPayload} excludeKeys={['contextChunk', 'chapterName']} />
                   </details>
@@ -2279,7 +2279,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
       {modeToggle}
       {selector}
       <div style={styles.evalHeader}>
-        <span style={styles.evalTitle}>Critic feedback</span>
+        <span style={styles.evalTitle}>Evaluator feedback</span>
         <span style={{ ...styles.evalOverall, color: scoreTextColor(evaluation.overall_average) }}>
           {evaluation.overall_average}/5
         </span>
@@ -2287,20 +2287,35 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
       <p style={styles.evalMeta}>Model: {selectedModelLabel}</p>
 
       {METRICS.map(({ key, label }) => (
-        <div key={key} style={styles.evalRow}>
-          <span style={styles.evalLabel}>{label}</span>
-          <div style={styles.evalBarBg}>
-            <div
-              style={{
-                ...styles.evalBar,
-                width: `${((evaluation[key] ?? 0) / 5) * 100}%`,
-                background: scoreBarColor(evaluation[key] ?? 0),
-              }}
-            />
+        <div key={key}>
+          <div style={styles.evalRow}>
+            <span style={styles.evalLabel}>{label}</span>
+            <div style={styles.evalBarBg}>
+              <div
+                style={{
+                  ...styles.evalBar,
+                  width: `${((evaluation[key] ?? 0) / 5) * 100}%`,
+                  background: scoreBarColor(evaluation[key] ?? 0),
+                }}
+              />
+            </div>
+            <span style={{ ...styles.evalScore, color: scoreTextColor(evaluation[key] ?? 0) }}>
+              {evaluation[key]}
+            </span>
           </div>
-          <span style={{ ...styles.evalScore, color: scoreTextColor(evaluation[key] ?? 0) }}>
-            {evaluation[key]}
-          </span>
+          {evaluation[`${key}_reasoning`] && (
+            <p style={{ fontSize: 10, color: '#777', margin: '1px 0 2px', fontStyle: 'italic', lineHeight: 1.4 }}>
+              {evaluation[`${key}_reasoning`]}
+            </p>
+          )}
+          {evaluation[`${key}_analysis`] && (
+            <details style={{ margin: '0 0 6px' }}>
+              <summary style={{ fontSize: 9, color: '#aaa', cursor: 'pointer', userSelect: 'none', listStyle: 'none' }}>▸ analysis</summary>
+              <p style={{ fontSize: 10, color: '#888', margin: '3px 0 0', lineHeight: 1.5 }}>
+                {evaluation[`${key}_analysis`]}
+              </p>
+            </details>
+          )}
         </div>
       ))}
 
@@ -2324,6 +2339,19 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
               >show less</span>
             )}
           </div>
+          {evaluation.failure_modes_reasoning && (
+            <p style={{ fontSize: 10, color: '#777', margin: '6px 0 2px', fontStyle: 'italic', lineHeight: 1.4 }}>
+              {evaluation.failure_modes_reasoning}
+            </p>
+          )}
+          {evaluation.failure_modes_analysis && (
+            <details style={{ margin: '0' }}>
+              <summary style={{ fontSize: 9, color: '#aaa', cursor: 'pointer', userSelect: 'none', listStyle: 'none' }}>▸ analysis</summary>
+              <p style={{ fontSize: 10, color: '#888', margin: '3px 0 0', lineHeight: 1.5 }}>
+                {evaluation.failure_modes_analysis}
+              </p>
+            </details>
+          )}
         </div>
       )}
 
@@ -2335,7 +2363,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
         <summary style={styles.planFieldsSummary}>Full evaluation details</summary>
         <PlanFields
           data={evaluation}
-          excludeKeys={['geometry_accuracy', 'interactivity_usability', 'faithfulness', 'label_quality', 'concept_accuracy', 'visual_aesthetics', 'overall_average', 'failure_modes', 'notes']}
+          excludeKeys={['geometry_accuracy', 'interactivity_usability', 'faithfulness', 'label_quality', 'concept_accuracy', 'visual_aesthetics', 'overall_average', 'failure_modes', 'failure_modes_reasoning', 'failure_modes_analysis', 'notes', 'geometry_accuracy_reasoning', 'geometry_accuracy_analysis', 'interactivity_usability_reasoning', 'interactivity_usability_analysis', 'faithfulness_reasoning', 'faithfulness_analysis', 'label_quality_reasoning', 'label_quality_analysis', 'concept_accuracy_reasoning', 'concept_accuracy_analysis']}
         />
       </details>
 
@@ -2535,6 +2563,7 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
   const [selected, setSelected] = React.useState(null);
   const [evaluatingKey, setEvaluatingKey] = React.useState(null);
   const [evaluatingAll, setEvaluatingAll] = React.useState(null); // chapter being batch-evaluated
+  const [evaluatingExperiment, setEvaluatingExperiment] = React.useState(null); // experiment being batch-evaluated
   const [baseScaffold, setBaseScaffold] = React.useState(null);
   const [openChapters, setOpenChapters] = React.useState(new Set());
   const [filterChapter, setFilterChapter] = React.useState('');
@@ -2886,6 +2915,120 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
     setEvaluatingKey(null);
   };
 
+  const handleEvalExperiment = async (expName) => {
+    const evalModelId = evaluatorModel || DEFAULT_EVALUATION_MODEL;
+    const versionId = evaluationCriticVersion || currentCriticVersion || 'legacy_unknown';
+    const allItems = activeTab === 'api'
+      ? Object.entries(apiTree[expName] || {}).flatMap(([modelName, recs]) =>
+        recs.map(r => {
+          const view = selectedRecordView(r);
+          return { key: `api/${r.id}`, type: 'api', id: r.id, evaluationResults: view.evaluationResults || {}, evaluationMeta: view.evaluationMeta || {} };
+        })
+      )
+      : expTree.flatMap(e => e.experiment !== expName ? [] : e.models.flatMap(m => m.figures.map(f => ({ ...f, type: 'experiment', key: `${e.experiment}/${m.model}/${f.name}`, model: m.model }))));
+    const pending = allItems.filter(item => !filterExternalEvals(item.evaluationResults || {}, item.evaluationMeta || {}).results[evalModelId]);
+    if (!pending.length) return;
+    setEvaluatingExperiment(expName);
+    for (const item of pending) {
+      setEvaluatingKey(item.key);
+      try {
+        if (item.type === 'api') {
+          const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: evalModelId, criticVersion: evaluationCriticVersion || undefined }) });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+          setApiRecords(prev => prev.map(r => r.id === item.id ? { ...upsertVersionedEvaluation(r, evalModelId, data, { criticVersion: versionId }) } : r));
+        } else {
+          const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: evalModelId, criticVersion: evaluationCriticVersion || undefined }) });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+          const [eN, mN, fN] = item.key.split('/');
+          setExpTree(prev => prev.map(exp => exp.experiment !== eN ? exp : {
+            ...exp,
+            models: exp.models.map(m => m.model !== mN ? m : {
+              ...m,
+              figures: m.figures.map(f => f.name !== fN ? f : { ...upsertVersionedEvaluation(f, evalModelId, data, { criticVersion: versionId }) })
+            })
+          }));
+        }
+      } catch { }
+    }
+    setEvaluatingExperiment(null);
+    setEvaluatingKey(null);
+  };
+
+  const handleClearFigureEval = async (e, item) => {
+    e.stopPropagation();
+    if (!window.confirm(`Clear evaluation for '${item.figure}'?`)) return;
+    try {
+      if (item.type === 'api') {
+        await apiFetch(`/api/result/${item.id}/evaluation`, { method: 'DELETE' });
+        setApiRecords(prev => prev.map(r => r.id === item.id ? { ...r, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} } : r));
+      } else {
+        await apiFetch('/api/experiment-figure/evaluation', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath }) });
+        const [eN, mN, fN] = item.key.split('/');
+        setExpTree(prev => prev.map(exp => exp.experiment !== eN ? exp : {
+          ...exp,
+          models: exp.models.map(m => m.model !== mN ? m : {
+            ...m,
+            figures: m.figures.map(f => f.name !== fN ? f : { ...f, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} })
+          })
+        }));
+      }
+    } catch (err) { console.error('Clear eval failed:', err); }
+  };
+
+  const handleClearChapterEvals = async (e, groupKey, items) => {
+    e.stopPropagation();
+    if (!window.confirm(`Clear all evaluations in '${groupKey}'?`)) return;
+    const evalModelId = evaluatorModel || DEFAULT_EVALUATION_MODEL;
+    const withEvals = items.filter(i => filterExternalEvals(i.evaluationResults || {}, i.evaluationMeta || {}).results[evalModelId]);
+    if (!withEvals.length) return;
+    try {
+      if (activeTab === 'api') {
+        for (const item of withEvals) {
+          await apiFetch(`/api/result/${item.id}/evaluation`, { method: 'DELETE' });
+        }
+        const itemIds = new Set(withEvals.map(i => i.id));
+        setApiRecords(prev => prev.map(r => itemIds.has(r.id) ? { ...r, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} } : r));
+      } else {
+        const combos = [...new Map(withEvals.map(i => {
+          const [eN, mN] = i.key.split('/');
+          return [`${eN}/${mN}/${i.chapter || ''}`, { experiment: eN, model: mN, chapter: i.chapter || null }];
+        })).values()];
+        for (const combo of combos) {
+          await apiFetch('/api/experiment-chapter/evaluations', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(combo) });
+        }
+        const figKeys = new Set(withEvals.map(i => i.key));
+        setExpTree(prev => prev.map(exp => ({
+          ...exp,
+          models: exp.models.map(m => ({
+            ...m,
+            figures: m.figures.map(f => figKeys.has(`${exp.experiment}/${m.model}/${f.name}`) ? { ...f, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} } : f)
+          }))
+        })));
+      }
+    } catch (err) { console.error('Clear chapter evals failed:', err); }
+  };
+
+  const handleClearExperimentEvals = async (expName) => {
+    if (!window.confirm(`Clear all evaluations in experiment '${expName}'?`)) return;
+    try {
+      if (activeTab === 'api') {
+        await apiFetch(`/api/results/evaluations?experiment=${encodeURIComponent(expName)}`, { method: 'DELETE' });
+        setApiRecords(prev => prev.map(r => r.experiment === expName ? { ...r, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} } : r));
+      } else {
+        await apiFetch('/api/experiment-entry/evaluations', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ experiment: expName }) });
+        setExpTree(prev => prev.map(exp => exp.experiment !== expName ? exp : {
+          ...exp,
+          models: exp.models.map(m => ({
+            ...m,
+            figures: m.figures.map(f => ({ ...f, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} }))
+          }))
+        }));
+      }
+    } catch (err) { console.error('Clear experiment evals failed:', err); }
+  };
+
   const sc = s => s >= 4 ? '#2e7d32' : s >= 3 ? '#e65100' : '#c00';
 
   // Prompt to show when a model row is selected
@@ -3138,7 +3281,7 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
                     onSelect: () => setSelected({ experiment: expName, model: modelName }),
                   })),
                 }))
-                : expTree.map(exp => ({
+                : [...expTree].reverse().map(exp => ({
                   group: exp.experiment,
                   items: exp.models.map(m => ({
                     modelName: m.model, evalCount: m.figures.filter(f => hasSelectedEvaluation(f)).length, total: m.figures.length,
@@ -3228,6 +3371,19 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
                   </>
                 )}
               </div>
+              {selected?.experiment && (
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                  <button
+                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid #d0d8e8', background: '#f2f6fb', color: '#5878a0', cursor: 'pointer', fontWeight: 600 }}
+                    disabled={evaluatingExperiment === selected.experiment}
+                    onClick={() => handleEvalExperiment(selected.experiment)}
+                  >{evaluatingExperiment === selected.experiment ? `Evaluating…` : 'Evaluate all'}</button>
+                  <button
+                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid #e8c8c8', background: '#fbedf0', color: '#a05878', cursor: 'pointer', fontWeight: 600 }}
+                    onClick={() => handleClearExperimentEvals(selected.experiment)}
+                  >Clear all evals</button>
+                </div>
+              )}
               {selectedPrompt && (
                 <details style={{ marginBottom: 8 }}>
                   <summary style={{ fontSize: 11, color: '#888', cursor: 'pointer', fontWeight: 600 }}>Prompt</summary>
@@ -3272,6 +3428,13 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
                               : `Evaluate all (${items.filter(i => !filterExternalEvals(i.evaluationResults || {}, i.evaluationMeta || {}).results[evaluatorModel || DEFAULT_EVALUATION_MODEL]).length} pending)`}
                           </button>
                         )}
+                        {items.some(i => Object.keys(i.evaluationResults || {}).length > 0) && (
+                          <button
+                            style={{ marginLeft: items.some(i => !filterExternalEvals(i.evaluationResults || {}, i.evaluationMeta || {}).results[evaluatorModel || DEFAULT_EVALUATION_MODEL]) ? 0 : 'auto', fontSize: 10, padding: '1px 8px', borderRadius: 4, border: '1px solid #e8c8c8', background: '#fbedf0', color: '#a05878', cursor: 'pointer', fontWeight: 600 }}
+                            onClick={e => handleClearChapterEvals(e, groupKey, items)}
+                            title="Clear all evaluations in this chapter"
+                          >✕ evals</button>
+                        )}
                       </summary>
                       <div style={{ ...styles.historyGrid, marginTop: 10 }}>
                         {items.map(item => {
@@ -3312,7 +3475,14 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
                                 {item.generationDurationMs != null && <p style={{ ...styles.cardTs, marginBottom: 3 }}>Time: {formatDuration(item.generationDurationMs)}</p>}
                                 {evalEntries.length ? (
                                   <>
-                                    <span style={{ ...styles.sourceBadge, background: ev.overall_average >= 4 ? '#e8f5e9' : ev.overall_average >= 3 ? '#fff3e0' : '#ffebee', color: sc(ev.overall_average) }}>{ev.overall_average}/5</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      <span style={{ ...styles.sourceBadge, background: ev.overall_average >= 4 ? '#e8f5e9' : ev.overall_average >= 3 ? '#fff3e0' : '#ffebee', color: sc(ev.overall_average) }}>{ev.overall_average}/5</span>
+                                      <button
+                                        style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, border: '1px solid #e8c8c8', background: '#fbedf0', color: '#a05878', cursor: 'pointer', lineHeight: 1.4 }}
+                                        onClick={e => handleClearFigureEval(e, item)}
+                                        title="Clear evaluation"
+                                      >✕</button>
+                                    </div>
                                     <p style={styles.cardEvalModel}>Latest eval: {evalEntries[0].modelLabel}</p>
                                     <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
                                       {evalEntries.map(({ modelId, modelLabel, result }) => (

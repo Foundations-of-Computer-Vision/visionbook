@@ -329,95 +329,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D projection setup from a elevated, three-quarter right perspective. The camera origin O is in the lower left foreground, the image plane is on the left angled obliquely, and the 3D point P is on the right in the background.",
-          "viewing_angle_rendered": "The rendered screenshot shows a viewpoint that is much flatter and rotated further to the right. The image plane is extremely wide and stretched across the screen, and the depth relationship between the foreground origin O and background point P is flattened.",
-          "viewing_angle_comparison": "The rendered camera angle is too low and rotated too far horizontally, which causes the image plane to stretch horizontally and distort the perspective compared to the clean, compact axonometric projection of the source.",
-          "shape_comparison": [
-            {
-              "element": "camera origin O",
-              "source_shape": "flat disc / sphere",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "image plane",
-              "source_shape": "tilted rectangle",
-              "rendered_shape": "tilted rectangle",
-              "match": true
-            },
-            {
-              "element": "projection ray",
-              "source_shape": "line",
-              "rendered_shape": "cylinder line",
-              "match": true
-            },
-            {
-              "element": "velocity vectors",
-              "source_shape": "arrow",
-              "rendered_shape": "cylinder and cone arrow",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The label 'P' is placed directly under the projected point 'p' on the image plane, which is completely incorrect and extremely confusing (P should label the 3D point on the far right).",
-            "The image plane is drawn far too wide and stretched horizontally compared to the compact vertical-ish parallelogram in the original.",
-            "The initial camera angle is rotated too far, losing the spatial depth and composition of the source.",
-            "The dotted green line has dots/dashes that are very long cylinders rather than clean short dashes."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Color-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 2,
-          "concept_accuracy": 3,
-          "notes": "Excellent interactive features and code structure, but let down by incorrect label positions (P labeling the projected point p) and a distorted, overly wide camera view.",
-          "action_items": [
-            "Fix the label positions: move the label 'P' to the far-right 3D point and make sure 'p' corresponds to the projection point.",
-            "Adjust the camera viewpoint coordinates (azimuth, elevation, and target) to match the elevated three-quarter view of the source.",
-            "Reduce the width of the image plane bounding box (halfW) from 4.85 to approximately 2.5-3.0 to match the vertical-oblique proportions of the original.",
-            "Shorten the dash length in the dashed line representation to make it look like a standard dashed line rather than long segment bars."
-          ],
-          "visual_aesthetics": 2.7,
-          "overall_average": 3.2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:16:23.683Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main projection objects, rays, arrows, and labels, but the rendered viewpoint is noticeably different: the image plane dominates the left/center of the view, the main green ray is nearly horizontal, and the right-side P label is effectively missing/cropped while other labels are much smaller than in the source. The proportions are off, especially the very small projected red arrow and labels compared with the large textbook annotations; visible f and Z slider UI elements are also extra elements not present in the reference.",
           "failure_modes": [
-            "Scale-Wrong"
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
           ],
+          "failure_modes_reasoning": "Important labels are absent or not readable in the rendered view, especially the large P label at the right endpoint (Missing-Labels). The initial camera angle/framing does not match the source perspective and changes the apparent ray/plane orientation (Camera-Wrong). Labels, arrows, and the plane/ray proportions differ noticeably from the reference, with the projected arrow and annotations too small (Scale-Wrong). The visible f and Z sliders/control UI are additional visual elements not present in the original figure (Hallucination).",
+          "geometry_accuracy_analysis": "The scene is constructed as true 3D geometry: a camera center O, a rectangular image plane at z=f, 3D point P, projected point p on the plane, green projection ray, dashed future ray, and red 3D/image-plane velocity arrows are all present and spatially connected by perspective projection. Minor shortcomings are that the image plane is only an outline with no surface, and the future point / future projected point are not explicitly marked as separate visible points beyond the arrow tips, but the main geometry and relationships are accurate.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
+          "geometry_accuracy_reasoning": "All major elements are present with plausible 3D positions and correct projection relationships, with only minor omissions in explicit surface/endpoint representation.",
+          "interactivity_usability_analysis": "The code includes OrbitControls (functional but not counted), two visible sliders for focal length f and depth Z that call updateScene and visibly move/scale the plane, rays, points, and projected velocity, plus hover tooltips and click handlers registered on the plane, rays, points, and velocity arrows. Several object clicks trigger explanatory popups and some call goToStep, which animates parameters through pedagogical demo states; however popup visibility depends on the parent postMessage handler. There is also a pointer-drag interaction on the red 3D velocity arrow tip that updates the 3D velocity and projected 2D velocity, and Escape hides popups/tooltips. The reset button has a listener but is hidden, so it is not usable. Overall the interactions are compact, mostly functional, and pedagogically relevant; the small transparent slider UI in the lower-left does not significantly cover the geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ meaningful functional interactions, including sliders, object hover/click explanations with guided animated demo steps, and draggable velocity control, with compact non-intrusive UI.",
+          "faithfulness_analysis": "The rendered scene contains the same basic objects: a projection plane, black points, green solid/dashed rays, red arrows, and labels. However the first-frame composition is substantially different: the plane is over-zoomed and cropped off the top, left, and bottom edges, the camera angle makes the rays nearly horizontal instead of matching the source's diagonal layout, labels are much smaller and misplaced, and UI sliders occupy the bottom-left corner. As an inline replacement it is recognizable only in concept, not in crop, scale, whitespace, or proportions.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "The general projection idea is present, but significant camera/crop/zoom mismatch, cropped geometry, tiny labels, and visible UI chrome make it match well under 65% of the original.",
+          "label_quality_analysis": "Source labels are O, p, ṗ (p with dot), P, and Ṗ (P with dot). In the generated figure, O appears near the left point but is much smaller than the source; p and ṗ appear near the image-plane point but are very small and p is displaced below the point; Ṗ appears near the red arrow tip but is also very small; the right-side P label for the far black point is missing. Overall the label set is mostly present except for P, but all visible labels are far smaller than the source’s large serif labels, with some placement mismatch.",
+          "label_quality": 2,
+          "label_quality_reasoning": "One label is missing and nearly all remaining labels fail the font-size match badly, making most of the label set problematic relative to the source.",
+          "concept_accuracy_analysis": "The figure illustrates perspective projection of a moving 3D point: camera center O, image plane at z=f, 3D point P, projected point p, 3D velocity P-dot, and induced image-plane velocity p-dot/optical flow. The interactive explanations are highly figure-specific, correctly referencing z=f, x=fX/Z and y=fY/Z, depth/parallax, focal-length scaling, and the relation between the 3D velocity and projected 2D motion; the main simplification is that the projected velocity is represented as a finite displacement to P+P-dot rather than explicitly as an instantaneous derivative, and the 1/Z description omits the full depth-motion term.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.6
+          "concept_accuracy_reasoning": "Main concept and interactions are accurate and specific, with only minor simplifications in treating velocity as a finite step and describing optical-flow depth dependence somewhat incompletely.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:43:59.710Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:53:10.499Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

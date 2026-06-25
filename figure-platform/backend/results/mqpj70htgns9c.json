@@ -270,93 +270,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure uses an axonometric/orthographic view from a slightly elevated, right-of-center vantage point. The optical axis (Z_c) is aligned perfectly horizontally, and the vertical axis (Y_c) is perfectly vertical, creating a clean lateral flow from left (sensor) to right (object).",
-          "viewing_angle_rendered": "The rendered view uses an orthographic perspective but is rotated so that the optical axis (Z_c) tilts upward to the right at an angle. The Y_c axis is nearly vertical, but the entire coordinate system feels slightly pitched and rotated relative to the screen frame.",
-          "viewing_angle_comparison": "The rendered camera angle is tilted compared to the source, causing the optical axis to run diagonally instead of horizontally. This ruins the clean lateral progression of the textbook figure and causes several planes to overlap awkwardly.",
-          "shape_comparison": [
-            {
-              "element": "Image plane / sensor",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "Virtual image plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "3D house",
-              "source_shape": "axonometric 3D house drawing",
-              "rendered_shape": "extruded 3D house mesh",
-              "match": true
-            },
-            {
-              "element": "Camera center",
-              "source_shape": "flat solid circle",
-              "rendered_shape": "3D sphere",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The camera angle is tilted, making the optical axis diagonal rather than horizontal.",
-            "The 'Camera center' label is positioned on top of the sensor grid instead of near the camera center pinhole.",
-            "The 'P' label is superimposed directly on the house's red roof, whereas in the source it sits clearly in the white space above the point.",
-            "The dimension arrows for focal length 'f' and width 'w' do not align neatly with their respective intervals.",
-            "There are no interactive UI elements (sliders, buttons) to modify parameters like focal length or sensor size."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 1,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "The geometry is structurally correct, but the wrong camera angle and a complete lack of custom interactive controls (relying only on basic OrbitControls) drag down the usability and faithfulness scores.",
-          "action_items": [
-            "Adjust the camera view and target coordinates so that the optical axis (Z_c) is perfectly horizontal and Y_c is perfectly vertical.",
-            "Add interactive HTML UI controls (like sliders) to dynamically adjust the focal length 'f' and sensor width 'w' to make the demo educational.",
-            "Reposition labels (such as 'Camera center', 'P', and 'X_c') using manual offsets so they do not overlap with other geometry or lines.",
-            "Adjust the house mesh scale and position to match the cleaner proportion and spacing shown in the source diagram."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:10:45.185Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 5,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main components: sensor grid, virtual image plane, camera center, projection rays, house object, colored projected blocks, and most labels. However, the rendered view is much more compact and zoomed out than the source; the sensor, virtual plane, and house are all compressed into a small central cluster, and the house/object is far smaller relative to the planes than in the reference. The initial camera angle is also noticeably different: the source has a stronger oblique textbook perspective with the planes and optical axis spread widely across the image, while the generated view is more front-on and clustered.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial viewpoint/orientation does not match the source figure’s wide oblique perspective. Scale-Wrong applies because the relative proportions and spacing are noticeably off, especially the house/object and virtual plane being much smaller and closer together than in the reference.",
+          "geometry_accuracy_analysis": "The scene constructs real 3D geometry: a sensor plane behind the camera with pixel grid and sampled colored quads, a camera-center sphere at the origin, a virtual image plane in front, optical/principal axis and camera/image coordinate arrows, focal-length and sensor-width dimension arrows, projection rays with projected point markers, and an extruded house object with roof and windows. The planes are clean axis-aligned 3D quads at different depths rather than baked-in skewed billboards; the main spatial relationships are correct, though there are minor proportional/alignment issues such as unequal sensor/virtual focal distances and somewhat approximate dimension-arrow placement.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present as plausible true 3D objects with only minor spatial/proportional inaccuracies, matching the score-4 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom, but these do not count as meaningful interactions. The visible UI panel is effectively empty and the Reset View button is hidden, so it is not usable. There are raycast-based hover tooltips registered for the sensor, virtual image plane, house, camera center, projection rays, and point P; these should visibly show compact tooltip text on hover. Click handlers on the projection rays and point P toggle an orange highlight path, which should be visibly functional and pedagogically relevant. Clicks on other registered objects only send a parent postMessage popup rather than displaying an in-page popup, so in the standalone rendered figure their explanatory click behavior is not visibly usable. The UI chrome is compact and does not cover geometry, but there is no guided demo, no sliders, and several click explanations depend on an external host.",
           "interactivity_usability": 4,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 5,
-          "overall_average": 4.8
+          "interactivity_usability_reasoning": "There are at least two functional pedagogical interactions—hover explanations and click-to-highlight projection path—with compact UI, but no guided demo and some click popups are not locally visible, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered scene contains the same overall camera geometry, image plane grid, virtual plane, axes, and colored house object, and the viewing angle is broadly similar. However, it is dramatically under-zoomed and centered with large white margins, making all labels and structures much smaller than in the source; the source fills the frame with large typography and edge-to-edge composition, while the render looks like a reduced inset version with simplified/less prominent annotations.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The general layout is recognizable, but the severe zoom/whitespace mismatch and reduced label/detail prominence make it only about a 65–70% drop-in match.",
+          "label_quality_analysis": "Source labels include: Image plane / sensor, N pixels, M pixels, Y_c, X_c, Z_c, P, Optical / principal axis, Camera center, Camera, Virtual image plane, x, y, w, and f. In the generated figure most of these appear with correct text: Image plane / sensor, N pixels, M pixels, Y_c, X_c, Z_c, P, Optical / principal axis, Camera center, Virtual image plane, x, y/v, w, and f are present, though many are much smaller than the source-scale typography. The separate large 'Camera' label from the source is not really reproduced; only a small 'Camera center' label is shown. Several labels are cramped or partially competing with geometry/lines, especially Camera center, Optical/principal axis, X_c/Y_c, and the small x/y labels. Overall the label set is fairly complete but consistently undersized relative to the source and less cleanly positioned.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Most labels are present, but the font size is consistently too small compared with the source and several labels are cramped or less clear, with at least one source label effectively missing.",
+          "concept_accuracy_analysis": "The figure illustrates a pinhole camera model: a 3D house point P projects through the camera center to both a physical sensor plane behind the pinhole and a virtual image plane in front, with camera axes, focal length, sensor width, pixel grid, and projection rays. The tooltips/popups are specific and mostly correct, mentioning collinearity, division by Zc, sensor sampling, N/w scaling, and image inversion/upright virtual plane; the main minor issue is that the virtual image plane is described as being at distance f even though the code places it at a different distance than the labeled sensor focal length.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The core pinhole projection and sensor-sampling concept is accurate with figure-specific explanations, but there is a minor geometric inconsistency/misstatement about the virtual plane distance relative to f.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:22:48.678Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:15:45.796Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

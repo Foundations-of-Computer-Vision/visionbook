@@ -318,92 +318,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a camera projection model with the camera center at the origin, a sensor plane on the left, a virtual image plane in the center-right, and a 3D house on the far right. The viewpoint is orthographic, slightly elevated and looking from the front-left toward the back-right, making all planes and the house clearly separated and legible.",
-          "viewing_angle_rendered": "The rendered screenshot captures the same spatial layout but is extremely zoomed out, making all elements appear clustered and tiny in the center of the frame. The perspective angle matches the original, but the scale and framing are vastly different.",
-          "viewing_angle_comparison": "While the directional viewing angle is largely correct, the camera is far too distant (under-zoomed), leaving excessive whitespace and compressing the visual details of the figure.",
-          "shape_comparison": [
-            {
-              "element": "Camera center",
-              "source_shape": "small black dot",
-              "rendered_shape": "black sphere",
-              "match": true
-            },
-            {
-              "element": "Virtual image plane",
-              "source_shape": "translucent flat rectangle",
-              "rendered_shape": "translucent flat rectangle",
-              "match": true
-            },
-            {
-              "element": "House depth structure",
-              "source_shape": "solid 3D volumetric house",
-              "rendered_shape": "flat 2D plates with gray line-drawn wireframe depth",
-              "match": false
-            },
-            {
-              "element": "Coordinate axes arrows",
-              "source_shape": "thin 2D arrows",
-              "rendered_shape": "thick 3D cylinder/cone arrows",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The figure is heavily under-zoomed, making all components look tiny and hard to read.",
-            "The house's depth is rendered with thin gray wireframe lines rather than solid 3D colored volumes (the side wall should be green and the side roof red).",
-            "Labels like 'Optical / principal axis' and 'Z_c' overlap due to the cramped layout.",
-            "The pixelated preview cells on the sensor plane do not perfectly match the clean look of the pixel grid projection on the left of the original figure."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "Excellent interactive concept modeling, but the final camera view is too zoomed out, and the house lacks solid 3D depth geometry.",
-          "action_items": [
-            "Adjust the camera zoom in setCameraView to frame the elements closely, mimicking the crop and scale of the original figure.",
-            "Rebuild the house depth as solid 3D meshes (solid green side wall and solid red roof) instead of using gray lines.",
-            "Increase the font size of the labels and adjust their positions to prevent overlaps (especially near the coordinate axes).",
-            "Thicken the projection ray dashed line and make the projected cyan dots larger so they stand out at proper scale."
-          ],
-          "visual_aesthetics": 3,
-          "overall_average": 3.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:26:37.937Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 5,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 4.7,
-          "overall_average": 4.8
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main sensor plane, virtual image plane, camera center, optical axis, object P, a colored house, and many labels, but it is rendered very small with a different initial orientation from the source’s wide horizontal textbook view. The code references an undefined updateLabels() inside updateScene(), so slider input and subsequent scripted/click interactions are likely to throw or fail; some important annotations such as the virtual-plane vector/label v are absent. The proportions of the planes and object are compressed compared with the source, especially the large sensor and virtual image plane.",
+          "failure_modes": [
+            "Interaction-Broken",
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Missing-Labels"
+          ],
+          "failure_modes_reasoning": "Interaction-Broken applies because updateScene() calls an undefined updateLabels(), which can break the sliders and prevent later registered interactions from working reliably. Camera-Wrong applies because the initial rendered viewpoint is a small isometric/diagonal view rather than the source’s broad, horizontally oriented schematic. Scale-Wrong applies because the sensor, virtual image plane, house, and labels are proportioned and framed very differently from the reference. Missing-Labels applies because at least the important v annotation/vector on the virtual image plane is not present, despite many other labels being included.",
+          "geometry_accuracy_analysis": "The scene constructs a genuine 3D pinhole-camera diagram: camera center sphere, optical/principal axis, camera axes, front virtual image plane, rear sensor plane with grid/pixel cells, a colored house object with some depth edges, point P, projected points, dashed projection ray, and f/w dimension arrows are all present. The geometry is not a flat texture or single baked billboard; depth is represented with separate planes, lines, spheres, arrows, and camera view. Minor issues include the camera coordinate axes being somewhat geometrically inconsistent/non-orthogonal, the house being mostly a flat facade with only edge-depth cues rather than a complete solid, and some labels/axis naming relying on presentation rather than exact spatial construction.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements of the pinhole projection figure are represented with real 3D geometry and plausible positions, with only minor geometric inaccuracies in axis orientation and object solidity.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for mouse rotation/zoom, but that does not count as a meaningful interaction. There are two visible sliders: focal length f, which updates the image-plane positions, projected points, ray, and preview scale, and sensor resolution N, which changes the sensor grid/pixel sampling; both are compact and should have visible pedagogical effects. A Reset View button has an event handler but is hidden with display:none, so it is not usable. The code also defines hover tooltips and click handlers for scene objects that should show explanations and trigger tweened demo steps, but these are not exposed by visible UI controls and rely on parent postMessage popups; additionally the script calls updateLabels() without a visible definition before registering those objects, so the click/hover explainers are questionable/brittle. The UI chrome is small in the lower-left corner and does not cover important geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Two meaningful sliders are visible, functional, compact, and pedagogically useful, while the additional guided/object-click interactions are not reliably usable enough to justify a 5.",
+          "faithfulness_analysis": "The rendered scene contains many of the same conceptual elements—sensor grid, camera center, virtual image plane, colored object, axes, dashed rays, and labels—but the first frame is dramatically under-zoomed compared with the source. The original figure fills the canvas with large labels and cropped/near-edge elements, while the render is a small diagram floating in a large white field with UI sliders at the lower left; label sizes, proportions, and apparent crop are very different.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in content, the severe zoom/whitespace mismatch and visible UI controls make it a poor drop-in replacement, matching well under 65% of the original composition.",
+          "label_quality_analysis": "Source labels include: Image plane / sensor, N pixels, M pixels, Camera center, W, f, Yc, Xc, Zc, x, y, P, Optical / principal axis, and Virtual image plane. The generated figure includes most corresponding labels: Image plane / sensor, N pixels, M pixels, Camera center, W, Yc, Xc, Zc, x, y, P, Optical / principal axis, and Virtual image plane are visible, though many are very small; the geometric focal-length label f from the source is not properly reproduced as a scene dimension and only appears as a tiny UI slider label. Overall the label set is mostly complete, but the font sizes are consistently far smaller than the source figure’s large textbook labels, and several labels are cramped near geometry or axes, making them hard to read at the rendered scale.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels are present but the consistently undersized font and a missing/misplaced f dimension make the majority of labels problematic relative to the source scale.",
+          "concept_accuracy_analysis": "The intended concept is pinhole camera projection: rays from a 3D point pass through the camera center to a real sensor plane, with a virtual image plane used for upright geometry, and sliders for focal length f and pixel count N. The labels and popup text are figure-specific and mostly correct, mentioning +f, inversion on the sensor, magnification with focal length, and pixel sampling; however, the code calls an undefined updateLabels() inside updateScene(), so registration of interactive tooltips/click popups after that point never executes, and the sliders/demo interactions are partially broken. There is also a minor geometric concern that the displayed camera axes are not clearly orthogonal in 3D, but the core projection relationship is represented accurately.",
+          "concept_accuracy": 3,
+          "concept_accuracy_reasoning": "The main pinhole projection concept is present and mostly accurate, but important interactive explanations are effectively absent due to a runtime error and there are minor geometric/labeling issues, fitting the rubric for a partially correct figure with several missing details.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:43:38.695Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T04:57:39.706Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

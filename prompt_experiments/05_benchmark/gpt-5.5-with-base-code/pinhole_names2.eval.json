@@ -3,28 +3,41 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated figure includes the main camera box, projection plane, pinhole, coordinate axes, focal-length arrow, leaders, and most labels. However the initial view does not match the source: in the source Z is a long horizontal axis to the right and X is the diagonal up-right axis, while in the rendering Z angles down-right and X is nearly horizontal/shorter, causing label overlap and clipping. The camera housing and focal-length bracket also appear much more compact than the reference, with the labels oversized relative to the geometry.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial orthographic orientation differs noticeably from the textbook view, especially the projected directions of the X and Z axes. Scale-Wrong applies because the camera body, focal-length arrow, and labels have noticeably different relative proportions from the source, producing a compact cube-like figure with oversized/crowded annotations.",
+          "geometry_accuracy_analysis": "The scene constructs a genuine 3D pinhole-camera diagram: a rectangular projection plane at z=-f, a pinhole/camera-center wall at z=0, connecting top/right/bottom panels forming a camera box, dashed hidden edges, a principal/optical axis, X/Y/Z coordinate arrows from the pinhole, a focal-length double arrow, leader arrows, and labels. The main geometry matches the expected pinhole camera coordinate figure well, though the pinhole is represented as a black oval/sphere on a solid wall rather than an actual aperture, the box is not fully closed on all sides, and some hidden/edge details are simplified.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as true 3D geometry with plausible proportions and positions, with only minor geometric simplifications and aperture/edge inaccuracies preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but those do not count as meaningful interactions. Meaningful interactions include a visible “Rays” button that toggles a red perspective projection ray and opens an explanatory popup; an f range slider that visibly moves the projection plane/focal-distance bracket and updates the ray intersection; hover tooltips and click popups on the projection plane, pinhole/camera center, optical axis hit target, and ray group, with some visible highlighting on hover; Escape hides popups. A Reset View button has a listener but is hidden with display:none, so it is not usable. The interactions are compact, functional, and pedagogically relevant, and the small bottom-left UI does not cover important geometry, though there is no guided step-through demo.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are multiple functional pedagogical interactions with compact UI, but no guided demo is present, so this falls short of the score-5 rubric.",
+          "faithfulness_analysis": "The rendered frame contains the same basic pinhole-camera block, projection plane, pinhole, axes, and labels, with roughly similar colors. However, it is substantially zoomed out and shifted upward compared with the source, leaving excessive blank space at the bottom; UI controls occupy the lower-left area, the aspect/crop differs, some labels are clipped or overlap, and the camera angle/proportions of the block and axes are noticeably different from the original.",
           "faithfulness": 3,
+          "faithfulness_reasoning": "The general concept is recognizable, but significant zoom, crop, label placement, camera-angle, and UI-chrome differences make it only about a mid-level match rather than a drop-in replacement.",
+          "label_quality_analysis": "Source labels are: \"Pinhole camera\", \"World coordinates\", \"Y\", \"X\", \"Z\", \"Projection plane\", \"Optical / principal axis\", \"Pinhole / camera center\", and \"f\". The generated figure includes all of these labels, but several have placement problems: \"Optical / principal axis\" is cut off at the right edge, \"Projection plane\" is crowded against the left edge, \"World coordinates\" overlaps/competes with the Y axis label, and \"Pinhole / camera center\" is crowded into the lower central geometry/axis area. The font sizes are generally readable and roughly similar in style, but the label layout is much more cluttered than the source and some labels are partially obstructed or clipped.",
           "label_quality": 3,
-          "concept_accuracy": 3,
-          "visual_aesthetics": 3,
-          "overall_average": 3
+          "label_quality_reasoning": "Although the label set is mostly complete and readable, several of the nine labels have significant placement/clipping/clutter issues, so this fits a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates a pinhole-camera coordinate setup: a camera center/pinhole at the origin, X/Y/Z axes, a projection plane separated by focal distance f, the optical/principal axis, and an optional perspective ray from a 3D point through the pinhole to the image plane. The tooltips and popups are mostly figure-specific and correctly describe the projection plane, pinhole, principal axis, focal-distance slider, and ray intersection, though the coordinate frame is called “world coordinates” despite being fixed at the camera center, and image-plane coordinates/formulae are not explicitly shown.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main pinhole-camera geometry and interactions are accurate and specific, with only minor ambiguity/omission around the coordinate-frame naming and lack of explicit projection equations or image-coordinate axes.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:44:30.662Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:40:12.450Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

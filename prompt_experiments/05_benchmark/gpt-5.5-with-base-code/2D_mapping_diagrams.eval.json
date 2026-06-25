@@ -3,26 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The main labels are present and the red trace/dot styling mostly matches. The L2-norm panel replaces the black square output plane from the source with a circular frame/ring, so the top plane primitive is wrong. The three panels are projected as one continuous 3D scene, producing a diagonal/staggered layout with the linear panel higher and the L2 panel lower, unlike the source where the three diagrams are aligned side-by-side with a consistent isometric view. The rendered content is also noticeably smaller with much more empty whitespace than the source.",
+          "failure_modes": [
+            "Wrong-Primitives",
+            "Camera-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Wrong-Primitives applies because the L2 output sheet should be a square plane with points on a circular locus, not a circular frame replacing the plane. Camera-Wrong applies because the initial viewpoint/layout causes the panels to be vertically staggered rather than aligned like the source. Scale-Wrong applies because the figure is scaled down with excessive whitespace and the L2 ring/plane proportions differ noticeably from the reference.",
+          "geometry_accuracy_analysis": "The scene contains three separate 3D mapping panels labeled linear, relu, and L2-norm, each with a lower input square plane, an upper output plane or circular locus, red point samples, and red correspondence traces between input and output. The ReLU panel includes collapsed outputs on positive axes, and the L2 panel includes a circular output ring; the linear panel shows an affine-transformed cloud. The geometry is constructed as actual 3D line/sphere elements on separated horizontal planes, not a flat image or baked perspective. Minor issues include mostly wireframe rather than surface sheets and slight alignment inconsistency between the rotated linear output frame and its guides/points, but the overall topology and spatial relationships are accurate.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as real 3D geometry with plausible positions and connections, with only minor frame/surface/alignment simplifications preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as a meaningful interaction. A visible “traces” button toggles the red input-to-output correspondence lines and should visibly function. A visible “focus” button cycles emphasis among the three panels by fading the others, which should visibly function and is pedagogically useful, though the button label is terse. The code also registers hover/click raycasting on the upper and lower frame outlines: hovering shows a tooltip and clicking opens a short mapping explanation and emphasizes that panel, but the clickable targets are thin line frames and may require precise pointing. A Reset View button and handler exist but the button is hidden, so it is not usable. The UI is very compact in the bottom-left corner and does not cover the geometry.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "interactivity_usability_reasoning": "There are at least two functional, pedagogically useful interactions plus object tooltips/click explanations, with compact nonintrusive UI, but no clear guided demo and some click targets are thin, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered figure preserves the three labeled panels and the red point/line mapping concept, but the composition is not a close drop-in replacement. The source is a wide, tightly composed horizontal figure with large panels and consistent oblique diamond frames, while the render has a taller aspect ratio, much more bottom whitespace, smaller/staggered panels, different camera geometry, a vertical-cylinder look for L2-norm, and visible UI buttons at the lower left.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The general idea is recognizable, but major aspect-ratio, zoom, whitespace, panel alignment, geometry, and UI-chrome differences keep it around a 65% match rather than a faithful replacement.",
+          "label_quality_analysis": "Source labels: panel titles 'linear', 'relu', and 'L2-norm'; each panel also has 'x_out' near the upper plane and 'x_in' near the lower plane, for six axis/input-output labels total. The generated figure includes all nine label instances with correct text, but the labels are consistently much smaller relative to the objects and canvas than in the source; several 'x_in' labels sit inside or on top of the red point clouds/planes rather than outside the cube as in the reference, making placement less clean. Overall the label set is complete and readable, but font scale is noticeably too small and some positioning is less faithful and slightly cluttered.",
+          "label_quality": 3,
+          "label_quality_reasoning": "All labels are present and correct, but the font sizes are consistently too small relative to the source and several labels have placement/clutter issues, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates three 2D-to-2D mappings of the same Gaussian input cloud: a linear/affine layer, ReLU, and L2 normalization, with red traces connecting corresponding input and output points. Labels and interactive popups are figure-specific and correctly describe the main transformations; the only minor imprecision is that the “linear” map includes a bias/shift, making it technically affine, and the L2 circle is visually scaled though described as the unit circle.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main concepts and interactions are accurate and specific, with only minor terminology/scale imprecisions rather than misleading errors.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:42:25.407Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:24:32.274Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

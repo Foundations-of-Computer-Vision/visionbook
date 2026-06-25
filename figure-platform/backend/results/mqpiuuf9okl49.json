@@ -90,83 +90,35 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows four vertical stacks arranged horizontally from left to right. Each stack consists of seven square planes stacked vertically, viewed from an orthographic, elevated isometric-like perspective looking down-right. The planes are rotated to appear as diamond-like shapes.",
-          "viewing_angle_rendered": "The code configures an orthographic camera with azimuth 45 degrees and elevation 24 degrees, looking at the center of the vertical stacks. The stacks are laid out along a 45-degree horizontal axis matching the camera's rotation to align them horizontally on the screen.",
-          "viewing_angle_comparison": "The viewing angles match closely. The code uses an orthographic camera at a 24-degree elevation to recreate the flat isometric perspective of the textbook's schematic.",
-          "shape_comparison": [
-            {
-              "element": "Layer planes",
-              "source_shape": "flat square outlines",
-              "rendered_shape": "LineLoop square outlines",
-              "match": true
-            },
-            {
-              "element": "Warped regions",
-              "source_shape": "dashed line boundaries",
-              "rendered_shape": "dashed LineLoop boundaries",
-              "match": true
-            },
-            {
-              "element": "Datapoints",
-              "source_shape": "small flat circles",
-              "rendered_shape": "small 3D spheres",
-              "match": true
-            },
-            {
-              "element": "Layer operations labels",
-              "source_shape": "rounded rectangles with text",
-              "rendered_shape": "HTML labels with border-radius and background styling",
-              "match": true
-            }
-          ],
-          "discrepancies": [],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 4,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "notes": "The rendered screenshot was not received, but the code structure shows an exceptionally faithful translation of the complex multi-layer geometric transformation schematic with high-quality coordinate math, appropriate materials, and helpful interactive descriptions.",
-          "action_items": [
-            "Verify label alignments of the left-hand operations under extremely wide/narrow aspect ratios.",
-            "Add a toggle button to switch between orthographic and perspective cameras to let users explore the 3D volume of the manifolds.",
-            "Consider adding a play/pause animation showing data flowing upwards through the layers of the selected checkpoint."
-          ],
-          "visual_aesthetics": 5,
-          "overall_average": 4.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:01:17.445Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered screenshot visually matches the reference very closely: stacked square layer planes, red/blue dashed point trajectories, gray dashed warped regions, left operation labels, vertical arrows, and bottom training-iteration arrow are all present with matching layout and colors. The code also includes OrbitControls plus registered hover/click interactions for checkpoint groups, so interaction is not limited to rotation only.",
           "failure_modes": [],
+          "failure_modes_reasoning": "No clear failure modes apply because the geometry, labels, colors, proportions, camera framing, and interactive hooks align with the source figure.",
+          "geometry_accuracy_analysis": "The scene is constructed as true 3D geometry: four checkpoint stacks are placed in depth/diagonal space, each with multiple horizontal square layer outlines, central axes, dashed warped-region outlines, dashed corner trajectories, red/blue spherical datapoints, and dashed datapoint paths through layers. Operation labels, upward layer arrows, and a bottom training-iteration arrow with ellipses are present. Minor issues include the lack of actual filled/translucent layer planes, the hidden/unused one-hot output label and empty softmaxTop group, and some procedural warping/point placement that may not exactly match the source proportions, but the overall topology and spatial relationships are clear and plausible.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present in a real 3D scene with only minor omissions and proportional/alignment simplifications, so this fits a score of 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom, but this does not count as a meaningful interaction. A hidden Reset View button has a click listener but is styled display:none, so it is not usable. The only visible meaningful interactions are raycaster-based hover tooltips and click popups registered on the four training checkpoint groups and the overall master group; hovering should change the cursor and show a small tooltip, and clicking should post an explanatory popup message about the remapping/network transformation. There are no sliders, toggles, step-through animation, or guided demo, and the UI chrome is essentially absent so it does not cover geometry.",
           "interactivity_usability": 3,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "interactivity_usability_reasoning": "There is one functional pedagogical interaction type—hover/click explanations on scene objects—with no guided demo or parameter controls, so it fits score 3.",
+          "faithfulness_analysis": "The rendered screenshot matches the source essentially exactly: same camera angle, scale, crop, whitespace, layer labels, arrows, colors, line styles, and proportions across all four training-iteration columns. There is no visible UI chrome or cropping mismatch, and it functions as a drop-in replacement.",
+          "faithfulness": 5,
+          "faithfulness_reasoning": "The composition, margins, colors, geometry, and annotations match the original at ≥95%, warranting a score of 5.",
+          "label_quality_analysis": "Source labels are: “softmax”, “linear”, “relu”, “linear”, “relu”, “linear” along the left vertical progression, plus the bottom label “Training iteration” and two ellipsis markers along the horizontal arrow. In the generated figure, all these labels appear with correct text, matching font scale, clear black styling, and unobstructed placement essentially identical to the source. Overall, the label set is complete and accurately positioned with appropriate size and clarity.",
+          "label_quality": 5,
+          "label_quality_reasoning": "All labels are present, readable, correctly sized relative to the source, and well placed, matching the score-5 rubric.",
+          "concept_accuracy_analysis": "The figure illustrates a deep classifier as a sequence of geometric transformations: red/blue 2D datapoints pass through stacked linear/ReLU/softmax layers, with multiple training checkpoints shown along a training-iteration direction. The labels and popups are largely figure-specific and correctly explain layer-wise remapping and training-induced separation, though the transformation is synthetic/schematic and the checkpoint popups repeat the same explanation rather than describing each checkpoint’s specific state; “softmax vertices/one-hot output” is also a mild simplification.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 3.8
+          "concept_accuracy_reasoning": "The main concept is accurate and the explanations are specific to neural-network layer transformations, with only minor schematic simplifications and limited checkpoint-specific detail.",
+          "visual_aesthetics": 4.7,
+          "overall_average": 4.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:54:26.954Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:25:38.497Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

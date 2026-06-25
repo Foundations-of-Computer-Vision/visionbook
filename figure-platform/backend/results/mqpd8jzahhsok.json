@@ -323,89 +323,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure depicts a 3D pinhole camera model from a slightly elevated, front-right viewpoint. The camera body is a rectangular box extending along the negative Z-axis, with coordinate axes emerging from the pinhole center at the origin.",
-          "viewing_angle_rendered": "The rendered screenshot matches this viewpoint closely, showing the camera body from an elevated front-right orthographic perspective, with the X, Y, and Z axes properly oriented matching the source layout.",
-          "viewing_angle_comparison": "The viewing angles are highly consistent, capturing the same elevation, azimuth, and perspective of the original textbook diagram.",
-          "shape_comparison": [
-            {
-              "element": "Camera body",
-              "source_shape": "3D cuboid / box",
-              "rendered_shape": "3D cuboid / box",
-              "match": true
-            },
-            {
-              "element": "Pinhole center",
-              "source_shape": "black circle/disk",
-              "rendered_shape": "black sphere",
-              "match": true
-            },
-            {
-              "element": "Coordinate axes",
-              "source_shape": "thin arrowed lines",
-              "rendered_shape": "ArrowHelper (line + cone)",
-              "match": true
-            },
-            {
-              "element": "Focal length dimension",
-              "source_shape": "red double-headed arrow",
-              "rendered_shape": "red cylinder with dual cone heads",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The rendered camera body has semi-transparent faces showing interior dashed lines that make the geometry look slightly more cluttered than the clean, solid faces of the source.",
-            "The interactive UI (checkboxes and sliders) is visible in the bottom-left corner.",
-            "The gray callout arrow pointing to the 'Optical / principal axis' is rendered as a thin arrow that is slightly misaligned compared to the original label position."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent interactive reproduction of the pinhole camera coordinate system with high conceptual accuracy and highly aligned viewing angles.",
-          "action_items": [
-            "Make the camera body faces opaque (or significantly less transparent) to match the clean solid-looking surfaces of the source and keep the dashed lines strictly to the back/hidden edges.",
-            "Adjust the position and length of the callout arrow for 'Optical / principal axis' to cleanly point from the label to the Z-axis.",
-            "Compact the bottom-left UI panel to reduce vertical clutter in the frame."
-          ],
-          "visual_aesthetics": 4.3,
-          "overall_average": 4.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:23:59.398Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated figure includes the main camera box, axes, pinhole, projection plane callout, focal length arrow, and all major labels. The 3D geometry and colors are broadly consistent, and the controls appear meaningful and wired to scene updates. The most noticeable mismatch is the initial view/framing: the source has the Z axis nearly horizontal to the right and a larger, more textbook-like composition, while the generated view is more isometric with the Z axis slanting downward and the whole diagram smaller with UI occupying visible space.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong"
           ],
-          "geometry_accuracy": 5,
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial orientation does not closely match the source figure, especially the optical/Z axis direction and overall perspective angle. Scale-Wrong applies because the rendered diagram and labels are noticeably smaller and less proportionally dominant within the canvas than in the source, with extra visible UI space altering the composition.",
+          "geometry_accuracy_analysis": "The scene constructs real 3D elements: a translucent rectangular pinhole camera box extending from Z=-f to Z=0, a rear projection plane at Z=-f, a black spherical pinhole at the origin, X/Y/Z arrow axes, an optical axis, a red focal-length dimension arrow, dashed hidden edges, and callout arrows/labels. Optional rays, a virtual +f plane, a 3D F-shaped object, and its projections are also implemented. The main geometry is clean, symmetric 3D construction rather than a flat perspective-skewed drawing. Minor issues include the camera body being only partially faced/open at the front and some callout/label placement being approximate, but the principal spatial relationships are correct and recognizable.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric components of the pinhole-camera diagram are present as true 3D geometry with plausible positions, with only minor omissions/alignment approximations preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, a visible Reset View button, a focal-length slider, two checkboxes for showing the virtual +f plane and rays, hover tooltips/click handlers on many scene objects, and a guided step mechanism triggered by clicking some objects. The focal-length slider visibly rebuilds the camera body/projection plane and focal-length marker; the virtual-plane and rays checkboxes visibly reveal additional geometry and explanatory popups; hover tooltips should appear locally, while click explanations are sent via parent postMessage and may depend on the hosting environment. The UI is compact, transparent, and placed in the lower-left corner without covering the main geometry.",
           "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 4.7,
-          "overall_average": 4.8
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions plus a guided demo mechanism, and the UI is compact and non-intrusive, satisfying the score-5 rubric.",
+          "faithfulness_analysis": "The rendered figure contains the same conceptual elements (pinhole camera box, projection plane, axes, labels, focal length arrow), but the first frame is much smaller with large unused whitespace and visible UI controls in the lower left. The camera angle, proportions, axis directions, label scale/placement, and crop differ substantially from the source; the source has a large wide textbook composition with oversized serif labels and a horizontal optical/Z axis, while the render is a compact isometric scene.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in theme, the significant zoom-out, UI chrome, camera-angle mismatch, altered proportions, and label/axis placement differences make it match well under 65% of the original.",
+          "label_quality_analysis": "Source labels: “Pinhole camera” appears in the generated figure with correct text but much smaller than the source; “World coordinates” appears, correct but very small; “Y” appears near the vertical axis and is readable; “X” appears near the diagonal axis and is readable; “Z” appears near the horizontal/diagonal axis and is readable; “Optical / principal axis” appears but is small and positioned somewhat detached from the axis; “Pinhole / camera center” appears but is small and partially cluttered by nearby lines; “Projection plane” appears with correct text but is small; “f” appears below the red focal-length arrow and is readable. Overall the label set is complete and mostly correctly placed, but the generated labels are consistently much smaller relative to the figure than in the source, and a few labels are cramped or visually de-emphasized.",
+          "label_quality": 3,
+          "label_quality_reasoning": "All labels are present and readable, but the font scale is consistently too small compared with the source and some placements are cluttered, matching the rubric for a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates a pinhole camera model with the camera center/pinhole at the origin, optical Z axis, projection plane at Z = −f, focal-length distance f, and optional rays/virtual image plane showing perspective projection and inversion. The labels, tooltips, popups, and demo steps are mostly specific and technically correct: they explain collinearity of object point–pinhole–image point, image inversion on the rear plane, upright virtual plane at +f, and focal-length scaling; the only mild concern is calling the coordinate frame “world coordinates” while also defining it as centered at the pinhole, which is more accurately the camera coordinate frame unless the world frame has been chosen to coincide with it.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "Main pinhole-camera concept and interactions are accurate and figure-specific, with at most one minor terminology ambiguity about world versus camera coordinates.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:39:42.948Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:01:24.255Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

@@ -758,93 +758,41 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
+    "legacy_unknown": {
+      "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D discrete stem plot of a 3x3 box filter. The viewpoint is elevated, looking down-left towards the grid, with the vertical axis on the left, the 'm' axis extending towards the viewer/left, and the 'n' axis extending towards the right.",
-          "viewing_angle_rendered": "The rendered figure attempts the same viewpoint but is extremely zoomed out, placing a tiny, nearly invisible 3D grid with microscopic elements in the center of a large white canvas.",
-          "viewing_angle_comparison": "While the elevation and azimuth angles are roughly similar, the zoom/scale is completely incorrect, rendering the entire plot as a tiny speck compared to the screen space.",
-          "shape_comparison": [
-            {
-              "element": "Stems",
-              "source_shape": "thin lines",
-              "rendered_shape": "microscopic cylinders",
-              "match": false
-            },
-            {
-              "element": "Sample heads",
-              "source_shape": "large blue spheres",
-              "rendered_shape": "microscopic blue spheres",
-              "match": false
-            },
-            {
-              "element": "Axes and grid",
-              "source_shape": "clear black lines and gray grid",
-              "rendered_shape": "thin wireframes",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The entire 3D plot is extremely zoomed out and occupies less than 10% of the canvas height",
-            "The blue stems and spheres are microscopic and nearly invisible",
-            "A box frame is drawn around the whole grid which does not exist in the source figure",
-            "Labels are unreadably small and overlapping near the center",
-            "The vertical axis should only be on the left edge, but extra bounding box lines confuse the layout"
-          ],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered scene shows only a very small gray/black empty 3D frame/grid near the center of a large white canvas, with the blue vertical stems and blue sample dots from the source absent. The code calls updateLabels(), but no updateLabels function is defined, so initialization stops before rebuilding stems, positioning labels, and applying the final camera view; the visible axis/title labels are missing or collapsed/tiny. UI sliders and a checkbox are visible, but their callbacks call the same broken updateScene path. The most prominent issues are that the actual box-filter stem plot is not rendered, the camera/framing is far too zoomed out, labels are not correctly displayed, and interactions are effectively broken by the JavaScript error.",
           "failure_modes": [
-            "Scale-Wrong",
+            "Missing-Labels",
+            "Interaction-Broken",
             "Camera-Wrong",
-            "Color-Wrong"
+            "Scale-Wrong",
+            "Concept-Misunderstood"
           ],
+          "failure_modes_reasoning": "Missing-Labels: the source’s n, m, vertical value label, and tick labels are not properly visible/placed due to the undefined updateLabels call. Interaction-Broken: UI controls exist, but changing them invokes updateScene, which throws because updateLabels is undefined. Camera-Wrong: the final intended camera setup never runs, leaving the plot tiny and centered with a viewpoint/framing unlike the close textbook view. Scale-Wrong: the figure occupies only a tiny portion of the canvas compared with the reference. Concept-Misunderstood: the rendered output omits the essential blue stem-and-dot coefficient samples, so it no longer conveys the box filter stem plot shown in the source.",
+          "geometry_accuracy_analysis": "The code constructs a real 3D scene with an n-m ground grid, black axes including a vertical value axis, and a pale 3D bounding frame, so it is not a fake flat-perspective drawing. However, the scene calls an undefined updateLabels() function during initialization, aborting before the blue coefficient stems and sphere sample heads are created; tick/axis labels also remain unpositioned or empty. As rendered, the major box-filter sample geometry is absent, leaving mostly an empty coordinate frame rather than the intended discrete 3D box-filter plot.",
           "geometry_accuracy": 2,
-          "interactivity_usability": 3,
+          "geometry_accuracy_reasoning": "Multiple major elements, especially the blue stem-and-dot coefficient samples and proper labels, are missing due to the initialization error, so only the surrounding frame/axes remain.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but that does not count as a meaningful interaction. Meaningful controls include an N range slider that expands/contracts support along n with visible scene rebuilding/refitting, an M range slider that does the same along m, and a normalize checkbox that visibly animates coefficient heights down/up. There are also hover/click raycaster handlers for the support, axes, and frame groups: hovering should show a tooltip, clicking posts explanatory popup messages, and clicking the blue support group cycles through a multi-step guided demo that changes parameters. The UI is small and transparent at the bottom-left and does not cover the central geometry, though the rendered figure is very small relative to the canvas.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions including sliders, a checkbox, clickable explanations, and a guided demo, with compact non-intrusive UI, so this meets the score-5 rubric.",
+          "faithfulness_analysis": "The source is a tightly cropped 3D stem plot occupying most of the frame, with prominent blue vertical stems and circular markers, readable axis labels, and modest whitespace. The rendered screenshot shows a very small 3D axes box floating near the center with enormous whitespace, barely visible data marks, and UI controls in the lower-left corner that are absent from the source; the zoom, crop, and apparent proportions are drastically different.",
           "faithfulness": 2,
+          "faithfulness_reasoning": "Although it resembles a 3D plot in concept, the severe under-zoom, huge whitespace, barely visible data, and added UI controls make it match well under 65% of the original.",
+          "label_quality_analysis": "The source figure includes axis labels “box1,1 [n, m]” on the vertical axis, “m” on the left/front horizontal axis, and “n” on the bottom/right horizontal axis, plus tick labels such as −1, 0, 1 on the base axes and 0, 1 on the vertical axis. In the generated figure, the plotted scene is extremely small and centered in a large blank canvas; any axis labels or tick labels within the 3D plot are tiny and essentially unreadable. The visible UI labels “N”, “M”, “1”, and “norm” are not part of the source figure and do not substitute for the required plot labels. Overall, the source label set is mostly absent or illegible, with severe font-size and scale mismatch.",
           "label_quality": 1,
-          "concept_accuracy": 4,
-          "notes": "The underlying mathematical structure is correct, but severe camera zoom and scaling issues make the figure completely unusable and unreadable.",
-          "action_items": [
-            "Drastically increase the camera zoom (e.g., increase camera.zoom or adjust orthographic camera bounds) so the plot fills the frame",
-            "Increase the radius of the sphere heads and thickness of the cylinder stems to make them visually prominent like the original",
-            "Remove the outer gray bounding box frame lines to match the clean background of the source figure",
-            "Increase the font size of the labels (n, m, box_1,1[n,m], ticks) and adjust their offset positions so they are clearly legible"
-          ],
+          "label_quality_reasoning": "The required source labels are either missing or rendered so small that they are unreadable, while unrelated UI labels are visible, so this fits the score-1 rubric.",
+          "concept_accuracy_analysis": "The intended concept is a 3D stem plot of a discrete 2D box filter box_{N,M}[n,m], with sliders for half-widths N and M and an optional normalization that changes each coefficient from 1 to 1/((2N+1)(2M+1)). The tooltip and popup text is generally figure-specific and mostly correct, but the actual code calls an undefined updateLabels() during initialization, so the figure stops before creating the blue coefficient stems and before positioning labels; the visible scene would be only a partial grid/frame with misplaced labels, making the central box-filter concept largely absent despite accurate explanatory text in the code.",
+          "concept_accuracy": 2,
+          "concept_accuracy_reasoning": "Because a runtime error prevents the main coefficient stems and labels from being built, the visualization would significantly fail to convey the intended box-filter concept even though the written explanations are specific and mostly accurate.",
           "visual_aesthetics": 1.7,
           "overall_average": 2.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T13:58:08.613Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
-    "legacy_unknown": {
-      "criticVersion": "legacy_unknown",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [
-            "Missing-Labels",
-            "Wrong-Primitives",
-            "Interaction-Broken",
-            "Camera-Wrong"
-          ],
-          "geometry_accuracy": 2,
-          "interactivity_usability": 2,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 2,
-          "visual_aesthetics": 2,
-          "overall_average": 2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:32:01.743Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:42:33.739Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

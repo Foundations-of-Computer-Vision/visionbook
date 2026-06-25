@@ -3,29 +3,41 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main labels and both panels, and the ray/pinhole concept is broadly present. However the initial view is very different from the reference: the wall and pinhole screen are seen nearly edge-on, the panels are compressed with large whitespace, panel (a) is partly cut off, and the large black pinhole screen and tree/wall proportions do not match the source composition.",
           "failure_modes": [
             "Camera-Wrong",
-            "Missing-Labels"
+            "Scale-Wrong"
           ],
-          "geometry_accuracy": 3,
+          "failure_modes_reasoning": "Camera-Wrong: the source shows an oblique textbook-style view with broad wall/screen faces visible, while the render starts from a side/edge-on angle that makes the wall and pinhole screen thin slivers and changes the apparent layout. Scale-Wrong: the trees, walls, rays, and screen are much smaller and more compressed relative to the canvas than in the source, with proportions and panel filling noticeably off.",
+          "geometry_accuracy_analysis": "Present: two side-by-side panels with vertical wall planes, stylized trees, ray bundles, a black pinhole screen with circular aperture, an inverted projected tree image on the second wall, labels for Wall/Pinhole/(a)/(b), and sample correspondence markers. Absent or weak: the projected image is manually approximated rather than geometrically generated from the full tree silhouette, and the tree geometry is mostly a flat XY silhouette with only slight thickness/ellipsoid depth rather than a fully placed vertical object parallel to the wall. The scene is not fake 3D: walls and rays occupy real 3D coordinates and perspective is produced by the camera rather than a pasted skewed texture. Overall it represents the source diagram well with all major components and correct ray topology, but with some simplification and minor spatial/orientation inaccuracies.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present and recognizably arranged with plausible 3D ray connections, but the mostly flat tree/object geometry and approximated wall image keep it from a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, which appears functional but does not count as a meaningful interaction. A hidden Reset View button has a click handler but is styled display:none, so it is not usable. The visible “Ray map” button toggles highlighted correspondence markers, thickens rays, and opens an explanatory popup, so it visibly functions and is pedagogically useful. The “Hole” range slider changes the pinhole radius, ray/image opacity, and adds blur copies for larger apertures, so it has a visible conceptual effect. Pointer hover/click handlers are registered for the open wall, pinhole screen, projected image, and tree; they show tooltips and explanatory popups, and clicking the tree also enables the ray map. The UI is small and placed at the lower-left edge, not significantly covering important geometry, though there is no guided step-through demo.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
+          "interactivity_usability_reasoning": "There are multiple functional, pedagogically useful interactions with compact UI, but no guided demo is present, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered image contains the same broad subject matter—two panels with trees, rays, a wall, and a pinhole—but the first-frame composition is far from the source. The aspect ratio, zoom, camera angle, object scale, crop, and margins are substantially different; panel (a) is missing the prominent wall framing and large tree placement from the source, panel (b) is much smaller and rearranged, and UI controls at the bottom add non-source chrome.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable as a related pinhole/ray diagram, the crop, scale, proportions, missing/altered wall geometry, and added UI make it match well under 65% of the original.",
+          "label_quality_analysis": "Source labels are: “Wall” in panel (a), “Wall” in panel (b), “Pinhole” in panel (b), “(a)”, and “(b)”. In the generated figure, “Pinhole”, “Wall”, “(a)”, and “(b)” are readable, but only one “Wall” label appears instead of one for each panel; the labels are also substantially smaller than the large serif labels in the source, with the panel labels especially reduced and positioned closer to the drawing rather than large at the bottom. Overall, the label set is partially complete and legible, but it misses a wall label and consistently fails to match the source label scale.",
           "label_quality": 3,
-          "concept_accuracy": 3,
+          "label_quality_reasoning": "Several labels are present and readable, but one source label is missing and the font sizes are consistently too small relative to the source, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates why an exposed wall does not form an image while a pinhole screen creates an inverted projection: panel (a) shows many rays from different tree points mixing at wall points, and panel (b) shows rays constrained through a small aperture to form an upside-down tree image. Tooltips and popups are figure-specific, correctly explaining ray mixing, the pinhole selecting narrow straight-line bundles, object-to-image point correspondences, inversion, and aperture-size blur; no substantive conceptual misinformation is present.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All main relationships are accurately represented and the interactive explanations are specific to pinhole-camera geometry, ray mapping, inversion, and blur.",
           "visual_aesthetics": 3,
-          "overall_average": 3.2
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:43:21.662Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T20:02:26.658Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

@@ -687,92 +687,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D perspective of a pinhole camera setup, viewed from an elevated right-side angle. This oblique angle allows both the physical sensor plane (on the left) and the virtual image plane (in the middle) to be clearly visible as broad rectangular surfaces, showing their grids and coordinate axes.",
-          "viewing_angle_rendered": "The rendered screenshot is viewed from a much shallower azimuth angle, almost parallel to the image planes. As a result, both the physical sensor plane and the virtual image plane appear extremely thin and edge-on, obscuring the grid pattern and projected shapes.",
-          "viewing_angle_comparison": "The rendered camera angle is too far to the side (azimuth is wrong), causing the image planes to appear squished and edge-on compared to the clearly visible, oblique faces in the source figure.",
-          "shape_comparison": [
-            {
-              "element": "camera center",
-              "source_shape": "flat dot",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "image plane / sensor",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "virtual image plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "3D house",
-              "source_shape": "box and prism",
-              "rendered_shape": "box and prism",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The camera azimuth is incorrect, rendering the sensor plane and virtual image plane nearly edge-on and squished.",
-            "The 'Virtual image plane' label is positioned far below the actual virtual plane.",
-            "The 'M pixels' label is rotated vertically and overlaps with the focal length dimension line.",
-            "The grid lines and colored projection pixels on the sensor plane are barely visible due to the steep viewing angle."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "Excellent interactive functionality with draggable point P, but the camera viewpoint makes the image planes nearly invisible/edge-on, and several labels overlap.",
-          "action_items": [
-            "Adjust the initial camera viewpoint azimuth in setCameraView (e.g. azimuthDeg closer to 130-140 degrees) so the image planes are seen at an oblique angle, matching the source.",
-            "Reposition the 'Virtual image plane' label so it is physically closer to the virtual plane or has a clear leader line.",
-            "Fix the overlap of the 'M pixels' label with the bottom dimension lines by adjusting its 3D anchor position.",
-            "Adjust the scale or aspect ratio of the image planes to ensure they don't look overly stretched or thin."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:21:57.561Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 5,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main camera-center, sensor plane with grid, virtual plane, axes, projection ray, cyan points, and a 3D house with matching colors. However, the initial viewpoint is not the same as the source: the camera Xc axis appears as a very short near-horizontal marker rather than the prominent diagonal axis, and the overall composition is much more compact. Several source annotations are absent or diminished, notably the large diagonal “Camera” label and the “v” coordinate label near the ray/virtual plane. The sensor, virtual plane, and house proportions differ noticeably from the reference, with the house and planes appearing much smaller and less expansive than in the original.",
+          "failure_modes": [
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Missing-Labels applies because visible source annotations such as “Camera” and “v” are not present. Camera-Wrong applies because the initial orientation does not match the reference oblique view, especially the projected direction of Xc. Scale-Wrong applies because the relative sizes and spatial spread of the sensor, virtual image plane, and house are noticeably compressed compared with the source.",
+          "geometry_accuracy_analysis": "The scene constructs a genuine 3D pinhole-camera diagram: a camera center sphere, camera-coordinate axes, separate physical sensor plane behind the center with a pixel grid and inverted colored image, a virtual image plane in front with x/y axes, a true 3D house made from a cuboid plus triangular-prism roof with face details, cyan object/projection points, dashed projection rays, and focal-length/width dimension arrows. The major geometry is present and arranged plausibly along the optical axis with real depth rather than a baked flat perspective; minor issues are that the sensor image polygons are approximate/hardcoded rather than geometrically projected from the 3D house, and some proportions/label placements are only approximate.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are represented as true 3D geometry with plausible positions and connections, but small proportional and projection-detail inaccuracies keep it below a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom, but those do not count as meaningful interactions. A Reset View button is visible and should reset the camera, though it is only a utility control. Multiple scene objects are registered for hover/click explanations: camera center, sensor grid, virtual image plane, house, projection ray, point P, sensor projection, and virtual projection; hover tooltips should visibly appear, while the longer click explanations are sent via window.parent.postMessage rather than rendered directly in the page, so their visibility depends on the embedding environment. Point P has a drag handler that disables OrbitControls while dragging and visibly updates P, the projected points, and dashed ray. The UI chrome is very compact in the bottom-left and does not cover important geometry, but there is no guided demo or step-through control.",
           "interactivity_usability": 4,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 5,
-          "overall_average": 4.8
+          "interactivity_usability_reasoning": "There are at least two pedagogically useful functional interactions—dragging P and hover/click explanations on scene elements—with compact UI, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered scene has the same broad concept—image plane on the left, camera center, virtual image plane, optical axis, and a house point on the right—but it is far more compact and zoomed out than the source, with large empty whitespace and much smaller objects and labels. The source has a wide textbook-style composition with large planes, dense grid, large typography, and a much larger house/virtual image relationship; the render simplifies many elements, changes proportions, and includes a visible Reset View button UI chrome.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The layout is recognizable but the zoom, proportions, typography scale, missing detail, and UI chrome create a substantial crop/composition mismatch, so it only matches the original at roughly the general-idea level.",
+          "label_quality_analysis": "Source labels include: Image plane / sensor, N pixels, M pixels, Camera center, w, f, X_c, Y_c, Z_c, x, y, P, Optical / principal axis, and Virtual image plane. In the generated figure, Image plane / sensor appears but is much smaller than the source; N pixels and M pixels appear but are very small/tilted and somewhat cramped; Camera center appears but small; w appears but cramped near the sensor; f is missing; X_c, Y_c, and Z_c appear but are small, with X_c crowded at the camera center; x and y appear but x is tiny and hard to read; P appears but is small; Optical / principal axis appears and is readable; Virtual image plane appears but is much smaller than the source. Overall, most labels are present and mostly in the right regions, but the font scale is consistently far smaller than the reference, several labels are cramped or difficult to read, and the f label is absent.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Although most label text is present, the consistent font-size mismatch, cramped small labels, and missing f label mean roughly half the label set has size/clarity issues, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates the pinhole camera model with a camera center, physical sensor plane at z = −f, virtual image plane at z = +f, camera axes, focal length/width dimensions, a 3D house object, and projection rays/points. The explanatory tooltips are specific and mostly correct, including collinearity and x′ = fX/Z, y′ = fY/Z for the virtual plane; however, the colored house image drawn on the sensor appears manually sketched and not geometrically consistent with the actual 3D house projection, despite being described as the sampled projection.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main pinhole projection concept and interactive explanations are accurate and figure-specific, but the sensor image representation is not a faithful computed projection, creating one notable conceptual mismatch.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:38:16.904Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:24:02.273Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

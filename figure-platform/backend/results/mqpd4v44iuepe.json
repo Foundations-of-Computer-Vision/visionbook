@@ -304,97 +304,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a horizontal, green rectangular surface patch viewed from a moderately elevated angle looking down-right. The plane lies flat with its long edge running horizontally across the lower middle of the frame, and the incoming ray enters from the top-left.",
-          "viewing_angle_rendered": "The rendered screenshot shows the green surface patch rotated dramatically, oriented diagonally from top-left to bottom-right. The camera is extremely far away, causing the entire 3D setup to appear tiny in the center of the frame.",
-          "viewing_angle_comparison": "The rendered camera is tilted and significantly under-zoomed compared to the source figure, making the entire setup look small, rotated, and distant rather than a flat horizontal platform filling the width of the frame.",
-          "shape_comparison": [
-            {
-              "element": "surface patch",
-              "source_shape": "flat parallelogram",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "incoming ray",
-              "source_shape": "thick cylinder with cone tip",
-              "rendered_shape": "thin segmented cylinder with cone tip",
-              "match": true
-            },
-            {
-              "element": "vector n (normal)",
-              "source_shape": "black arrow",
-              "rendered_shape": "black arrow",
-              "match": true
-            },
-            {
-              "element": "vector q",
-              "source_shape": "black arrow",
-              "rendered_shape": "dark green arrow",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The camera is extremely zoomed out, making the 3D geometry very small in the center.",
-            "The labels are completely broken, overlapping and clumping together at the center of the scene, making them totally illegible.",
-            "The green surface patch is oriented diagonally in the frame instead of horizontally.",
-            "Vector q is colored dark green instead of black like in the original figure."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Missing-Labels",
-            "Color-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 2,
-          "label_quality": 1,
-          "concept_accuracy": 4,
-          "notes": "The 3D scene is heavily zoomed out and the labels are completely broken and piled up on top of each other at the center.",
-          "action_items": [
-            "Adjust camera position and zoom so that the green surface patch fills the viewport horizontally, matching the crop of the original image.",
-            "Fix label positions by applying correct 3D offsets so they do not all clump at the origin; place l_in at the top-left of the incoming ray and l_out at the top-right of the q vector.",
-            "Change the color of vector q and its label to black to match the original illustration style.",
-            "Increase the size/thickness of the vectors and labels relative to the viewport to improve readability."
-          ],
-          "visual_aesthetics": 2,
-          "overall_average": 2.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:21:07.204Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered scene is much smaller and more top-down/diamond-like than the source, which fills the frame with a wide tilted green plane. The main math/vector labels are tiny, overlapped near the origin, and ℓin(λ) is not visibly placed along the incoming ray; this is consistent with the code calling updateLabels(pDir, qDir) even though updateLabels is not defined. The source’s large incoming ray and outgoing vector composition are present in concept, but the initial framing and label placement are badly off, and UI interactions that call updateScene will hit the same missing-function error.",
           "failure_modes": [
             "Missing-Labels",
-            "Interaction-Broken"
+            "Interaction-Broken",
+            "Camera-Wrong",
+            "Scale-Wrong"
           ],
+          "failure_modes_reasoning": "Important annotations are absent or unreadably overlapped instead of placed around the figure (Missing-Labels). The code calls an undefined updateLabels function inside updateScene, so slider/material updates break with a runtime error (Interaction-Broken). The initial view is too zoomed out and more top-down/rotated than the reference’s close side-oblique composition (Camera-Wrong). The figure elements and labels occupy a tiny portion of the canvas compared with the source where the plane and arrows dominate the frame (Scale-Wrong).",
+          "geometry_accuracy_analysis": "The scene constructs a true 3D setup: a horizontal rectangular green surface patch with black cylindrical border and contact ring, a vertical normal arrow, an incoming segmented yellow/red ray, black p arrow, green q arrow, a right-angle marker, and multiple green reflected-lobe arrows over the upper hemisphere. The geometry is not a flat pasted texture or baked-in skew; depth comes from actual 3D cylinders, cones, torus, and a rotated plane. However, the code calls an undefined updateLabels() function, so several labels remain at default/origin positions or execution may stop before final camera setup; label placement is therefore wrong, though the major physical elements are mostly present and recognizable.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 2,
-          "faithfulness": 3,
+          "geometry_accuracy_reasoning": "All major geometric elements are present as real 3D primitives with plausible relative positions, but label positioning/runtime issues create minor-to-moderate alignment problems, keeping it below a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom, but that does not count as meaningful interaction. Meaningful controls include an Incoming Angle slider that updates the incoming ray, p/q directions, spray lobe, and displayed angle; a Material dropdown that switches between glossy and Lambertian reflection lobes; hover raycasting on the surface, normal, rays/vectors, and spray that shows a small tooltip; and click handlers on those objects that send explanatory popups, with the surface click also cycling through a multi-step BRDF demo and animating angle/material changes. A Reset View button is present and functional for camera usability but is not pedagogical. The UI is compact in the bottom-left and does not cover the main geometry, though the click explanations rely on a parent popup handler rather than an in-page modal.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions including parameter controls, hover/click explanations, and a guided step-through demo, with compact non-intrusive UI, satisfying the score-5 rubric.",
+          "faithfulness_analysis": "The rendered frame contains the same basic elements (green plane, incoming colored ray, outgoing/vector markers, and formula text), but the composition is very different: the source is a wide, tightly cropped textbook diagram with the plane filling the lower portion and large readable labels, while the render is a small centered 3D scene with excessive whitespace, a different camera angle, tiny overlapping labels, and visible UI controls occupying the lower-left. The plane proportions, zoom level, margins, label placement, and arrow scale are all substantially mismatched, so it would not work as a drop-in replacement.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general concept is recognizable, the severe under-zoom, wrong crop/aspect, tiny labels, altered viewpoint, and UI chrome make it match well under 65% of the original.",
+          "label_quality_analysis": "The source figure contains labels ℓ_in(λ), ℓ_out = F(ℓ_in, n, λ, p, q), p, n, and q. In the generated figure, the outgoing formula appears but is much too small relative to the source, placed on the plane near the center rather than large in the upper-right, and partially cluttered by nearby arrows/labels. The labels p, n, and q appear to be present near the central arrows but are very small, overlapping/cluttered, and not clearly readable. The incoming label ℓ_in(λ) is missing or not visible along the incoming ray. Overall, the label set is incomplete and the visible labels fail the source-scale font size and placement expectations.",
           "label_quality": 2,
-          "concept_accuracy": 3,
-          "visual_aesthetics": 3,
-          "overall_average": 2.8
+          "label_quality_reasoning": "Most labels are missing, too small, or cluttered/poorly positioned, with only a tiny partially readable formula present, matching a score of 2.",
+          "concept_accuracy_analysis": "The figure is intended to illustrate a BRDF: incoming spectral light ℓin(λ) from direction p strikes a surface with normal n, and reflected/outgoing radiance is distributed into direction q according to ℓout = F(ℓin,n,λ,p,q). The geometry and interactive explanations are mostly figure-specific and conceptually correct, including p/q directions, the normal, glossy vs Lambertian reflection lobes, and cosine falloff; however the code calls an undefined updateLabels function, so key labels for ℓin, ℓout, p, and q will not be positioned correctly and may trigger a runtime error, reducing the reliability of the conveyed concept.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "Main BRDF concept and explanations are accurate and specific, but a significant label/update implementation error leaves important figure annotations absent or misplaced.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:37:38.745Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:46:53.771Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }
