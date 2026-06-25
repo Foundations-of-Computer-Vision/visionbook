@@ -13,6 +13,13 @@ const {
   saveRecord,
 } = require('./figure_pipeline');
 const { evaluateFigure } = require('./evaluator');
+const {
+  pairwiseEvaluateFigure,
+  loadPairwiseResult,
+  savePairwiseResult,
+  loadAllPairwiseResults,
+  canonicalizePair,
+} = require('./pairwise_evaluator');
 const { planForFigure, planChapter, PLANNER_MODEL } = require('./planner');
 const { plan2dFigure } = require('./planner-2d');
 const { listChapters, list3dCandidates, list2dCandidates } = require('./chapter-discovery');
@@ -882,6 +889,20 @@ app.get('/api/result/:id', (req, res) => {
   }
 });
 
+// ── GET /api/result/:id/html — serve raw HTML from a result record (for iframes) ─
+app.get('/api/result/:id/html', (req, res) => {
+  const filePath = path.join(RESULTS_DIR, `${req.params.id}.json`);
+  if (!fs.existsSync(filePath)) return res.status(404).send('Not found');
+  try {
+    const record = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    if (!record.html) return res.status(404).send('No HTML in record');
+    res.setHeader('Content-Type', 'text/html');
+    res.send(record.html);
+  } catch (err) {
+    return res.status(500).send(err.message);
+  }
+});
+
 // ── POST /api/save ───────────────────────────────────────────────────────────
 // Accepts chat-generated HTML (no image required). Source is set to 'chat'.
 app.post('/api/save', (req, res) => {
@@ -1262,6 +1283,46 @@ app.get('/api/experiments/imageurl', (req, res) => {
 
 // ── Experiment helpers ────────────────────────────────────────────────────────
 
+// Scan backend/results/ and group by experiment/model for pairwise setup selector.
+// Only includes records that have both `experiment` and `model` fields.
+// Returns [ { id, experiment, model, figures: [ { name, chapter, resultId, imagePath } ], source: 'agent' } ]
+function scanAgentResults() {
+  if (!fs.existsSync(RESULTS_DIR)) return [];
+
+  // Use the manifest when available — avoids reading every result JSON file.
+  let records = null;
+  if (fs.existsSync(MANIFEST_PATH)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf-8'));
+      if (Array.isArray(parsed?.results)) records = parsed.results;
+    } catch { /* fall through */ }
+  }
+  if (!records) {
+    records = [];
+    for (const f of fs.readdirSync(RESULTS_DIR)) {
+      if (!f.endsWith('.json')) continue;
+      try { records.push(JSON.parse(fs.readFileSync(path.join(RESULTS_DIR, f), 'utf-8'))); }
+      catch { /* skip malformed */ }
+    }
+  }
+
+  const grouped = new Map();
+  for (const d of records) {
+    const { experiment, model, id, filename, chapter } = d;
+    if (!experiment || !model || !id || !filename) continue;
+    const key = `${experiment}/${model}`;
+    if (!grouped.has(key)) grouped.set(key, { experiment, model, figures: [] });
+    const stem = filename.replace(/\.[^.]+$/, '');
+    grouped.get(key).figures.push({ name: stem, chapter: chapter || inferChapter(stem), resultId: id, imagePath: null });
+  }
+
+  const setups = [];
+  for (const [id, { experiment, model, figures }] of grouped) {
+    setups.push({ id, experiment, model, figures, source: 'agent' });
+  }
+  return setups;
+}
+
 // Walk prompt_experiments/ and return structured index:
 // [ { experiment, prompt, models: [ { model, figures: [ { name, htmlPath, imagePath } ] } ] } ]
 function scanExperiments() {
@@ -1420,6 +1481,194 @@ app.post('/api/experiments/evaluate', async (req, res) => {
     return res.json({ ...result.evaluation, criticPasses: result.passCount });
   } catch (err) {
     return res.status(500).json({ error: err?.message || 'Unknown error.' });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Pairwise evaluation routes
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── GET /api/pairwise/setups ──────────────────────────────────────────────────
+// Returns all <experiment>/<model> setups from both prompt_experiments/ and
+// backend/results/ (agent runs), filtered to those containing "benchmark".
+// With ?setupA=&setupB= query params, also returns matchingFigures.
+app.get('/api/pairwise/setups', (req, res) => {
+  try {
+    // Prompt-experiment setups
+    const tree = scanExperiments();
+    const setups = [];
+    for (const exp of tree) {
+      if (!exp.experiment.toLowerCase().includes('benchmark')) continue;
+      for (const m of exp.models) {
+        setups.push({
+          id: `${exp.experiment}/${m.model}`,
+          experiment: exp.experiment,
+          model: m.model,
+          source: 'prompt_experiments',
+          figures: m.figures.map(f => ({ name: f.name, chapter: f.chapter, htmlPath: f.htmlPath, imagePath: f.imagePath })),
+        });
+      }
+    }
+
+    // Agent result setups
+    for (const s of scanAgentResults()) {
+      if (!s.experiment.toLowerCase().includes('benchmark')) continue;
+      setups.push(s);
+    }
+
+    const { setupA, setupB } = req.query;
+    let matchingFigures = null;
+    if (setupA && setupB) {
+      const sa = setups.find(s => s.id === setupA);
+      const sb = setups.find(s => s.id === setupB);
+      if (sa && sb) {
+        // Build lookup key: if a figure has a chapter, use chapter__name; otherwise name only.
+        // When one side lacks chapter, fall back to name-only matching.
+        const figKey = (f) => (f.chapter ? `${f.chapter}__${f.name}` : f.name);
+        const bMapFull = new Map(sb.figures.map(f => [figKey(f), f]));
+        const bMapName = new Map(sb.figures.map(f => [f.name, f]));
+
+        matchingFigures = [];
+        for (const f of sa.figures) {
+          const bFig = bMapFull.get(figKey(f)) || bMapName.get(f.name);
+          if (!bFig) continue;
+          matchingFigures.push({
+            name: f.name,
+            chapter: f.chapter || bFig.chapter,
+            htmlPathA: f.htmlPath || null,
+            resultIdA: f.resultId || null,
+            imagePathA: f.imagePath || null,
+            htmlPathB: bFig.htmlPath || null,
+            resultIdB: bFig.resultId || null,
+            imagePathB: bFig.imagePath || null,
+          });
+        }
+      }
+    }
+
+    return res.json({ setups, matchingFigures });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/pairwise/results/:setupA/:setupB ─────────────────────────────────
+app.get('/api/pairwise/results/:setupA/:setupB', (req, res) => {
+  try {
+    const { setupA, setupB } = req.params;
+    const results = loadAllPairwiseResults(setupA, setupB);
+    return res.json(results);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/pairwise/batch-evaluate ────────────────────────────────────────
+// Body: { setupA, setupB, figures: [{name, chapter, htmlPathA, resultIdA, imagePathA, htmlPathB, resultIdB, imagePathB}], evalModel }
+// Figures from prompt_experiments have htmlPath; agent results have resultId.
+// Streams NDJSON progress, one line per figure.
+app.post('/api/pairwise/batch-evaluate', async (req, res) => {
+  const { setupA, setupB, figures, evalModel } = req.body;
+  if (!setupA || !setupB) return res.status(400).json({ error: 'setupA and setupB are required.' });
+  if (!Array.isArray(figures) || figures.length === 0) return res.status(400).json({ error: 'figures array is required.' });
+
+  res.setHeader('Content-Type', 'application/x-ndjson');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  // Helper to read HTML + thumb + sourceImage from either a file path or a result record
+  const readFigureAssets = (htmlPath, resultId, imagePath) => {
+    if (htmlPath) {
+      const abs = path.resolve(htmlPath);
+      if (!fs.existsSync(abs)) return null;
+      const html = fs.readFileSync(abs, 'utf-8');
+      const thumbPath = abs.replace(/\.html$/, '.thumb.b64');
+      const thumb = fs.existsSync(thumbPath) ? fs.readFileSync(thumbPath, 'utf-8') : null;
+      let sourceImg = null;
+      if (imagePath) {
+        const absImg = path.resolve(imagePath);
+        if (fs.existsSync(absImg)) sourceImg = fs.readFileSync(absImg).toString('base64');
+      }
+      return { html, thumb, sourceImg };
+    }
+    if (resultId) {
+      const rPath = path.join(RESULTS_DIR, `${resultId}.json`);
+      if (!fs.existsSync(rPath)) return null;
+      const rec = JSON.parse(fs.readFileSync(rPath, 'utf-8'));
+      return {
+        html: rec.html || '',
+        thumb: rec.base64thumb || null,
+        sourceImg: rec.source_base64 || null,
+      };
+    }
+    return null;
+  };
+
+  for (const fig of figures) {
+    const { name, chapter, htmlPathA, resultIdA, imagePathA, htmlPathB, resultIdB, imagePathB } = fig;
+    try {
+      const assetsA = readFigureAssets(htmlPathA, resultIdA, imagePathA);
+      const assetsB = readFigureAssets(htmlPathB, resultIdB, imagePathB);
+      if (!assetsA || !assetsB) {
+        res.write(JSON.stringify({ name, chapter, status: 'error', error: 'HTML assets not found.' }) + '\n');
+        continue;
+      }
+
+      const htmlA = assetsA.html;
+      const htmlB = assetsB.html;
+      const thumbA = assetsA.thumb;
+      const thumbB = assetsB.thumb;
+      const sourceImage = assetsA.sourceImg || assetsB.sourceImg;
+
+      const evalResult = await pairwiseEvaluateFigure({ htmlA, setupA, htmlB, setupB, thumbA, thumbB, sourceImage, evalModel });
+
+      // Load existing record (to preserve humanEvals) or start fresh
+      const existing = loadPairwiseResult(setupA, setupB, chapter, name) || { setupA, setupB, chapter, figure: name, humanEvals: [] };
+      const record = { ...existing, machineEval: evalResult };
+      savePairwiseResult(setupA, setupB, chapter, name, record);
+
+      res.write(JSON.stringify({ name, chapter, status: 'ok', result: evalResult }) + '\n');
+    } catch (err) {
+      console.error(`Pairwise eval error for ${chapter}/${name}:`, err?.message || err);
+      res.write(JSON.stringify({ name, chapter, status: 'error', error: err?.message || 'Evaluation failed.' }) + '\n');
+    }
+  }
+
+  res.end();
+});
+
+// ── POST /api/pairwise/human-evaluate ────────────────────────────────────────
+// Body: { setupA, setupB, chapter, figure, winner, notes }
+// winner: a setup id or 'tie'
+app.post('/api/pairwise/human-evaluate', (req, res) => {
+  const { setupA, setupB, chapter, figure, winner, notes } = req.body;
+  if (!setupA || !setupB || !chapter || !figure) return res.status(400).json({ error: 'setupA, setupB, chapter, figure are required.' });
+  if (!winner) return res.status(400).json({ error: 'winner is required.' });
+
+  try {
+    const existing = loadPairwiseResult(setupA, setupB, chapter, figure) || { setupA, setupB, chapter, figure, humanEvals: [] };
+    const humanEval = { winner, notes: notes || '', submittedAt: new Date().toISOString() };
+    const record = { ...existing, humanEvals: [...(existing.humanEvals || []), humanEval] };
+    savePairwiseResult(setupA, setupB, chapter, figure, record);
+    return res.json({ success: true, humanEval });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/pairwise/human-evaluate ──────────────────────────────────────
+// Body: { setupA, setupB, chapter, figure }
+app.delete('/api/pairwise/human-evaluate', (req, res) => {
+  const { setupA, setupB, chapter, figure } = req.body;
+  if (!setupA || !setupB || !chapter || !figure) return res.status(400).json({ error: 'setupA, setupB, chapter, figure are required.' });
+
+  try {
+    const existing = loadPairwiseResult(setupA, setupB, chapter, figure);
+    if (!existing) return res.json({ success: true });
+    savePairwiseResult(setupA, setupB, chapter, figure, { ...existing, humanEvals: [] });
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
   }
 });
 

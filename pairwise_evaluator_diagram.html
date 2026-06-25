@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Pairwise Evaluator Design</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f8f9fb;
+      padding: 40px;
+      color: #1a1a2e;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a1a2e;
+      margin-bottom: 6px;
+      letter-spacing: -0.3px;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 40px;
+    }
+
+    /* ── Main left-to-right layout ── */
+    .diagram {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      min-height: 460px;
+    }
+
+    /* ── Input column ── */
+    .input-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .figure-box {
+      background: #fff;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 22px;
+      text-align: center;
+      min-width: 110px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    }
+
+    .figure-box .icon {
+      font-size: 24px;
+      margin-bottom: 4px;
+    }
+
+    .figure-box .label {
+      font-weight: 700;
+      font-size: 14px;
+      color: #1a1a2e;
+    }
+
+    .figure-box .sublabel {
+      font-size: 10px;
+      color: #9ca3af;
+      margin-top: 2px;
+    }
+
+    .vs-badge {
+      background: #f1f5f9;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 11px;
+      color: #64748b;
+    }
+
+    .ref-divider {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: #d97706;
+      text-align: center;
+      margin: 6px 0 2px;
+    }
+
+    .figure-box.ref {
+      border: 1.5px dashed #d97706;
+      background: #fffbeb;
+    }
+
+    .figure-box.ref .label {
+      color: #92400e;
+    }
+
+    /* ── SVG connectors ── */
+    .connector {
+      flex-shrink: 0;
+    }
+
+    /* ── Agent column ── */
+    .agents-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .agent-box {
+      width: 260px;
+      background: #fff;
+      border-radius: 10px;
+      border: 1.5px solid;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      overflow: hidden;
+    }
+
+    .agent-header {
+      padding: 8px 12px;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .agent-body {
+      padding: 6px 12px 8px;
+      font-size: 10.5px;
+      color: #4b5563;
+      border-top: 1px solid;
+      line-height: 1.6;
+    }
+
+    .agent-body .field {
+      margin-bottom: 1px;
+    }
+
+    .agent-body .field span {
+      font-weight: 600;
+    }
+
+    .geo {
+      border-color: #6366f1;
+    }
+
+    .geo .agent-header {
+      background: #eef2ff;
+      color: #4338ca;
+    }
+
+    .geo .agent-body {
+      border-color: #e0e7ff;
+    }
+
+    .inter {
+      border-color: #0ea5e9;
+    }
+
+    .inter .agent-header {
+      background: #e0f2fe;
+      color: #0369a1;
+    }
+
+    .inter .agent-body {
+      border-color: #bae6fd;
+    }
+
+    .faith {
+      border-color: #10b981;
+    }
+
+    .faith .agent-header {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .faith .agent-body {
+      border-color: #a7f3d0;
+    }
+
+    .lbls {
+      border-color: #f59e0b;
+    }
+
+    .lbls .agent-header {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .lbls .agent-body {
+      border-color: #fde68a;
+    }
+
+    .concept {
+      border-color: #ec4899;
+    }
+
+    .concept .agent-header {
+      background: #fce7f3;
+      color: #9d174d;
+    }
+
+    .concept .agent-body {
+      border-color: #fbcfe8;
+    }
+
+    /* ── Combined Aggregator + Output ── */
+    .combined-box {
+      width: 210px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(79, 70, 229, 0.18);
+      border: 2px solid #4f46e5;
+    }
+
+    .combined-top {
+      background: #1e1b4b;
+      padding: 16px 18px 18px;
+      color: #fff;
+    }
+
+    .agg-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #a5b4fc;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .agg-subtitle {
+      font-size: 10px;
+      color: #6b7280;
+      line-height: 1.5;
+    }
+
+    .combined-divider {
+      height: 2px;
+      background: linear-gradient(to right, #4f46e5, #10b981);
+    }
+
+    .combined-bottom {
+      background: #fff;
+      padding: 14px 18px;
+      border-top: none;
+    }
+
+    .output-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #065f46;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .output-field {
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 7px;
+      padding: 8px 10px;
+      font-size: 11px;
+      margin-bottom: 7px;
+      min-height: 36px;
+    }
+
+    .output-field:last-child {
+      margin-bottom: 0;
+    }
+
+    .output-field .key {
+      font-weight: 600;
+      color: #065f46;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Stage labels ── */
+    .stage-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: #9ca3af;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .col-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Stage 3: Ranking ── */
+    .ranking-section {
+      margin-top: 36px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .ranking-card {
+      display: flex;
+      flex-direction: row;
+      gap: 0;
+      border: 2px solid #4f46e5;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(79, 70, 229, 0.12);
+      max-width: 860px;
+      width: 100%;
+    }
+
+    .ranking-col {
+      flex: 1;
+      padding: 18px 22px;
+      background: #fff;
+    }
+
+    .ranking-col+.ranking-col {
+      border-left: 1.5px solid #e0e7ff;
+    }
+
+    .ranking-col-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #4338ca;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .ranking-col-title.green {
+      color: #065f46;
+    }
+
+    .bt-formula {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #1e1b4b;
+      background: #eef2ff;
+      border: 1px solid #c7d2fe;
+      border-radius: 7px;
+      padding: 10px 14px;
+      margin: 8px 0 10px;
+      letter-spacing: 0.3px;
+    }
+
+    .bt-legend {
+      font-size: 10.5px;
+      color: #4b5563;
+      line-height: 1.7;
+    }
+
+    .bt-legend .term {
+      font-weight: 600;
+      color: #4338ca;
+    }
+
+    .conf-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 9px;
+    }
+
+    .conf-badge {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-radius: 5px;
+      padding: 3px 6px;
+      white-space: nowrap;
+      margin-top: 1px;
+      flex-shrink: 0;
+    }
+
+    .conf-badge.agg {
+      background: #eef2ff;
+      color: #4338ca;
+      border: 1px solid #c7d2fe;
+    }
+
+    .conf-badge.bt {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #6ee7b7;
+    }
+
+    .conf-text {
+      font-size: 10.5px;
+      color: #4b5563;
+      line-height: 1.5;
+    }
+
+    /* ── Paper citations ── */
+    .papers-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 36px;
+    }
+
+    .paper-chip {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 11px;
+      color: #475569;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      max-width: 190px;
+    }
+
+    .paper-chip .paper-name {
+      font-weight: 700;
+      color: #1a1a2e;
+      margin-bottom: 2px;
+    }
+
+    .paper-chip .paper-supports {
+      color: #6b7280;
+    }
+
+    .paper-chip a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .paper-chip a:hover {
+      text-decoration: underline;
+      color: #4338ca;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Pairwise Evaluator — System Design</h1>
+  <p class="subtitle">Dimension-specific agents → LLM aggregator → single pairwise winner</p>
+
+  <div class="diagram">
+
+    <!-- Col 0: Inputs -->
+    <div class="col-wrap">
+      <div class="stage-label">Stage 0 — Inputs</div>
+      <div class="input-col">
+        <div class="figure-box">
+          <div class="icon">🖼</div>
+          <div class="label">Figure A</div>
+          <div class="sublabel">screenshot + HTML</div>
+        </div>
+        <div class="vs-badge">VS</div>
+        <div class="figure-box">
+          <div class="icon">🖼</div>
+          <div class="label">Figure B</div>
+          <div class="sublabel">screenshot + HTML</div>
+        </div>
+        <div class="ref-divider">reference</div>
+        <div class="figure-box ref">
+          <div class="icon">📄</div>
+          <div class="label">Original Figure</div>
+          <div class="sublabel">textbook source</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fan connector: 1 → 5 -->
+    <!-- Agent centers at y=41,131,221,311,401 in a 442px tall column, center=221 -->
+    <svg class="connector" width="80" height="442" viewBox="0 0 80 442">
+      <!-- stem from center -->
+      <line x1="0" y1="221" x2="24" y2="221" stroke="#cbd5e1" stroke-width="2" />
+      <!-- vertical bus -->
+      <line x1="24" y1="41" x2="24" y2="401" stroke="#cbd5e1" stroke-width="2" />
+      <!-- branches to each agent -->
+      <line x1="24" y1="41" x2="74" y2="41" stroke="#6366f1" stroke-width="2" />
+      <line x1="24" y1="131" x2="74" y2="131" stroke="#0ea5e9" stroke-width="2" />
+      <line x1="24" y1="221" x2="74" y2="221" stroke="#10b981" stroke-width="2" />
+      <line x1="24" y1="311" x2="74" y2="311" stroke="#f59e0b" stroke-width="2" />
+      <line x1="24" y1="401" x2="74" y2="401" stroke="#ec4899" stroke-width="2" />
+      <!-- arrowheads -->
+      <polygon points="68,35 74,41 68,47" fill="#6366f1" />
+      <polygon points="68,125 74,131 68,137" fill="#0ea5e9" />
+      <polygon points="68,215 74,221 68,227" fill="#10b981" />
+      <polygon points="68,305 74,311 68,317" fill="#f59e0b" />
+      <polygon points="68,395 74,401 68,407" fill="#ec4899" />
+    </svg>
+
+    <!-- Col 1: Agents -->
+    <div class="col-wrap">
+      <div class="stage-label">Stage 1 — Dimension Agents (parallel)</div>
+      <div class="agents-col">
+
+        <div class="agent-box geo">
+          <div class="agent-header">Geometry</div>
+          <div class="agent-body">
+            <div class="field"><span>Focus:</span> 3D shape accuracy vs. textbook</div>
+            <div class="field"><span>Sees:</span> ??? need to decide if multiple angle screenshots or just HTML</div>
+            <div class="field"><span>Outputs:</span> A / B / tie + confidence + rationale</div>
+          </div>
+        </div>
+
+        <div class="agent-box inter">
+          <div class="agent-header">Interactivity</div>
+          <div class="agent-body">
+            <div class="field"><span>Focus:</span> controls work as intended</div>
+            <div class="field"><span>Sees:</span> html</div>
+            <div class="field"><span>Outputs:</span> A / B / tie + confidence + rationale</div>
+          </div>
+        </div>
+
+        <div class="agent-box faith">
+          <div class="agent-header">Faithfulness</div>
+          <div class="agent-body">
+            <div class="field"><span>Focus:</span> match to source material</div>
+            <div class="field"><span>Sees:</span> original figure + screenshots</div>
+            <div class="field"><span>Outputs:</span> A / B / tie + confidence + rationale</div>
+          </div>
+        </div>
+
+        <div class="agent-box lbls">
+          <div class="agent-header">Labels</div>
+          <div class="agent-body">
+            <div class="field"><span>Focus:</span> text labels correct + readable</div>
+            <div class="field"><span>Sees:</span> original figure + screenshots</div>
+            <div class="field"><span>Outputs:</span> A / B / tie + confidence + rationale</div>
+          </div>
+        </div>
+
+        <div class="agent-box concept">
+          <div class="agent-header">Concept</div>
+          <div class="agent-body">
+            <div class="field"><span>Focus:</span> pedagogical clarity</div>
+            <div class="field"><span>Sees:</span> html</div>
+            <div class="field"><span>Outputs:</span> A / B / tie + confidence + rationale</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Merge connector: 5 → 1 -->
+    <svg class="connector" width="80" height="442" viewBox="0 0 80 442">
+      <!-- branches from each agent -->
+      <line x1="6" y1="41" x2="56" y2="41" stroke="#6366f1" stroke-width="2" />
+      <line x1="6" y1="131" x2="56" y2="131" stroke="#0ea5e9" stroke-width="2" />
+      <line x1="6" y1="221" x2="56" y2="221" stroke="#10b981" stroke-width="2" />
+      <line x1="6" y1="311" x2="56" y2="311" stroke="#f59e0b" stroke-width="2" />
+      <line x1="6" y1="401" x2="56" y2="401" stroke="#ec4899" stroke-width="2" />
+      <!-- vertical bus -->
+      <line x1="56" y1="41" x2="56" y2="401" stroke="#4f46e5" stroke-width="2" />
+      <!-- stem to aggregator -->
+      <line x1="56" y1="221" x2="80" y2="221" stroke="#4f46e5" stroke-width="2" />
+      <polygon points="74,215 80,221 74,227" fill="#4f46e5" />
+    </svg>
+
+    <!-- Col 2: Combined Aggregator + Output -->
+    <div class="col-wrap">
+      <div class="stage-label">Stage 2 — Aggregator &amp; Output</div>
+      <div class="combined-box">
+        <div class="combined-top">
+          <div class="agg-title"><span>🧠</span> LLM Aggregator</div>
+          <div class="agg-subtitle">Receives all agents' A/B preferences, confidences, and rationales — weights
+            higher-confidence agents more heavily when synthesizing
+          </div>
+        </div>
+        <div class="combined-divider"></div>
+        <div class="combined-bottom">
+          <div class="output-title"><span>✅</span> Final Judgment</div>
+          <div class="output-field">
+            <div class="key">Winner</div>
+          </div>
+          <div class="output-field">
+            <div class="key">Confidence</div>
+          </div>
+          <div class="output-field">
+            <div class="key">Disagreement flag</div>
+          </div>
+          <div class="output-field">
+            <div class="key">Explanation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Stage 3: Global Ranking -->
+  <div class="ranking-section">
+    <div class="stage-label" style="margin-bottom: 10px;">Stage 3 — Global Ranking (across many comparisons)</div>
+    <div class="ranking-card">
+
+      <div class="ranking-col">
+        <div class="ranking-col-title">📐 Bradley-Terry Model</div>
+        <div class="bt-formula">β<sub>i</sub> = W<sub>i</sub> / Σ<sub>j≠i</sub> [ n<sub>ij</sub> / (β<sub>i</sub> +
+          β<sub>j</sub>) ]</div>
+        <div class="bt-legend">
+          <div><span class="term">β<sub>i</sub></span> — latent strength of setup i (what we solve for)</div>
+          <div><span class="term">W<sub>i</sub></span> — total wins by setup i</div>
+          <div><span class="term">n<sub>ij</sub></span> — number of comparisons between i and j</div>
+          <div style="margin-top:6px; color:#9ca3af;">Iterate MM update until convergence → ranked list of setups by β
+            score.</div>
+        </div>
+      </div>
+
+      <div class="ranking-col">
+        <div class="ranking-col-title green">🎯 Using Agent Confidence Scores</div>
+        <div class="conf-row">
+          <div class="conf-badge agg">In Aggregator</div>
+          <div class="conf-text">The LLM aggregator receives each agent's confidence alongside its A/B preference —
+            explicitly instructed to up-weight high-confidence agent votes when synthesizing the final judgment.</div>
+        </div>
+        <div class="conf-row">
+          <div class="conf-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">Disagree Flag</div>
+          <div class="conf-text">If agents disagree <em>and</em> each has high individual confidence, flag the
+            comparison as genuinely ambiguous — down-weight further or surface for human review.</div>
+        </div>
+      </div>
+
+      <div class="ranking-col" style="flex: 0.7; background: #f8fafc;">
+        <div class="ranking-col-title">🏆 Output</div>
+        <div style="font-size:10.5px; color:#4b5563; line-height:1.7;">
+          <div style="margin-bottom:8px;">Ranked list of experimental setups:</div>
+          <div
+            style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:8px 10px;font-family:monospace;font-size:11px;color:#1e1b4b;line-height:1.8;">
+            #1 β=1.84 gpt-5.5 / few-shot-on<br>
+            #2 β=1.21 gpt-4o / few-shot-on<br>
+            #3 β=0.71 claude / base<br>
+            #4 β=0.43 gpt-4o / no-planner
+          </div>
+          <div style="margin-top:8px;color:#9ca3af;font-size:10px;">~5–10 comparisons per pair for stable estimates.
+            Sparse pairs are fine — BT handles missing matchups.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+
+</html>

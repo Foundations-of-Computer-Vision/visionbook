@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import BENCHMARK_FIGURES from './benchmarkFigures';
 
 const FALLBACK_PROMPT = '(Loading system prompt from server…)';
@@ -195,7 +195,7 @@ async function runGenerationLoop(payload, { pollMs = 2000, maxPolls = 600 } = {}
   throw new Error('Loop generation timed out while waiting for completion.');
 }
 
-const VALID_TABS = ['generator', 'viewer', 'results', 'dashboard', 'preview'];
+const VALID_TABS = ['generator', 'viewer', 'results', 'dashboard', 'preview', 'pairwise'];
 const tabFromHash = () => {
   const h = window.location.hash.slice(1);
   return VALID_TABS.includes(h) ? h : 'generator';
@@ -568,13 +568,13 @@ export default function App() {
       <header style={styles.header}>
         <span style={styles.logo}>3D Figure Generator</span>
         <nav style={styles.nav}>
-          {['generator', 'viewer', 'results', 'dashboard', 'preview'].map((t) => (
+          {['generator', 'viewer', 'results', 'dashboard', 'preview', 'pairwise'].map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               style={{ ...styles.navBtn, ...(tab === t ? styles.navBtnActive : {}) }}
             >
-              {({ 'preview': 'Chapter Preview' }[t] || (t.charAt(0).toUpperCase() + t.slice(1)))}
+              {({ 'preview': 'Chapter Preview', 'pairwise': 'Pairwise' }[t] || (t.charAt(0).toUpperCase() + t.slice(1)))}
             </button>
           ))}
         </nav>
@@ -644,6 +644,9 @@ export default function App() {
         )}
         {tab === 'preview' && (
           <ChapterPreviewTab />
+        )}
+        {tab === 'pairwise' && (
+          <PairwiseTab availableModels={models} />
         )}
       </main>
     </div>
@@ -3965,4 +3968,482 @@ const styles = {
   generatorTextInput: { width: '100%', fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '9px 12px', background: '#fff', color: '#333' },
   generatorExperimentControls: { display: 'flex', flexDirection: 'column', gap: 8 },
   generatorHint: { fontSize: 12, color: '#6b7280', margin: '2px 0 0' },
+
+  // Pairwise tab
+  pwRoot: { maxWidth: 1100, margin: '0 auto', padding: '28px 20px', display: 'flex', flexDirection: 'column', gap: 24 },
+  pwCard: { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '18px 20px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' },
+  pwCardTitle: { fontSize: 13, fontWeight: 700, color: '#1a1a2e', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 },
+  pwRow: { display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' },
+  pwLabel: { fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 },
+  pwSelect: { fontSize: 13, border: '1px solid #ddd', borderRadius: 6, padding: '8px 10px', background: '#fff', color: '#333', cursor: 'pointer', minWidth: 220 },
+  pwStack: { display: 'flex', flexDirection: 'column' },
+  pwMatchCount: { fontSize: 12, color: '#6b7280', alignSelf: 'flex-end', paddingBottom: 8 },
+  pwRunBtn: { padding: '9px 18px', fontSize: 13, fontWeight: 600, borderRadius: 7, border: 'none', background: '#4f46e5', color: '#fff', cursor: 'pointer' },
+  pwRunBtnDisabled: { background: '#a5b4fc', cursor: 'not-allowed' },
+  pwProgress: { marginTop: 12 },
+  pwProgressBar: { height: 6, borderRadius: 3, background: '#e0e7ff', overflow: 'hidden', marginBottom: 6 },
+  pwProgressFill: { height: '100%', background: '#4f46e5', transition: 'width 0.2s' },
+  pwProgressLog: { fontSize: 11, color: '#6b7280', maxHeight: 80, overflowY: 'auto', fontFamily: 'monospace' },
+  pwTable: { width: '100%', borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed' },
+  pwTh: { padding: '8px 10px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '2px solid #e2e8f0' },
+  pwTd: { padding: '8px 10px', borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' },
+  pwWinnerBadge: { display: 'inline-block', padding: '2px 7px', borderRadius: 4, fontSize: 10, fontWeight: 700, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  pwBadgeA: { background: '#ede9fe', color: '#5b21b6' },
+  pwBadgeTie: { background: '#f1f5f9', color: '#64748b' },
+  pwBadgeB: { background: '#dcfce7', color: '#166534' },
+  pwDisagreeFlag: { color: '#f59e0b', fontWeight: 700, fontSize: 11 },
+  pwAddBtn: { fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #4f46e5', color: '#4f46e5', background: '#fff', cursor: 'pointer' },
+  pwHumanPanel: { background: '#f8faff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '16px 18px', marginTop: 8 },
+  pwIframeRow: { display: 'flex', gap: 12, marginBottom: 16 },
+  pwIframeWrap: { flex: 1, display: 'flex', flexDirection: 'column', gap: 6 },
+  pwIframeLabel: { fontSize: 11, fontWeight: 700, color: '#4338ca', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center' },
+  pwIframe: { width: '100%', height: 320, border: '1px solid #c7d2fe', borderRadius: 6, background: '#fff' },
+  pwDimRow: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 },
+  pwDimName: { fontSize: 12, fontWeight: 600, color: '#374151', width: 110, flexShrink: 0 },
+  pwDimRationale: { fontSize: 10, color: '#9ca3af', flex: 1, fontStyle: 'italic' },
+  pwToggleGroup: { display: 'flex', gap: 4 },
+  pwToggleBtn: { padding: '4px 12px', fontSize: 11, fontWeight: 600, borderRadius: 5, border: '1px solid #ddd', background: '#fff', color: '#555', cursor: 'pointer' },
+  pwToggleBtnActive: { background: '#4f46e5', color: '#fff', borderColor: '#4f46e5' },
+  pwNotesArea: { width: '100%', fontSize: 12, border: '1px solid #ddd', borderRadius: 6, padding: '8px 10px', resize: 'vertical', minHeight: 56, boxSizing: 'border-box', marginBottom: 10 },
+  pwSubmitBtn: { padding: '8px 20px', fontSize: 13, fontWeight: 600, borderRadius: 7, border: 'none', background: '#10b981', color: '#fff', cursor: 'pointer' },
+  pwSubmitBtnDisabled: { background: '#6ee7b7', cursor: 'not-allowed' },
+  pwEmptyMsg: { fontSize: 13, color: '#9ca3af', textAlign: 'center', padding: '24px 0' },
 };
+
+// ── Pairwise Tab ───────────────────────────────────────────────────────────────
+
+const PAIRWISE_DEFAULT_EVAL_MODEL = 'gpt-4o';
+const DIMENSIONS = ['geometry', 'interactivity', 'faithfulness', 'labels', 'concept'];
+
+function winnerBadgeStyle(winner, setupA, setupB) {
+  if (winner === 'tie') return { ...styles.pwWinnerBadge, ...styles.pwBadgeTie };
+  if (winner === setupA) return { ...styles.pwWinnerBadge, ...styles.pwBadgeA };
+  return { ...styles.pwWinnerBadge, ...styles.pwBadgeB };
+}
+
+function shortSetup(id) {
+  return id.split('/')[0] || id;
+}
+
+function sideLabel(winner, setupA, setupB) {
+  if (winner === 'tie') return 'Tie';
+  if (winner === setupA) return 'A';
+  if (winner === setupB) return 'B';
+  return winner;
+}
+
+function PairwiseTab({ availableModels }) {
+  const [setups, setSetups] = useState([]);
+  const [setupA, setSetupA] = useState('');
+  const [setupB, setSetupB] = useState('');
+  const [matchingFigures, setMatchingFigures] = useState(null);
+  const [evalModel, setEvalModel] = useState(PAIRWISE_DEFAULT_EVAL_MODEL);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0, log: [] });
+  const [results, setResults] = useState([]);
+  const [machineTableOpen, setMachineTableOpen] = useState(false);
+  const [humanTableOpen, setHumanTableOpen] = useState(false);
+  const [humanPanelFig, setHumanPanelFig] = useState(null); // { name, chapter, ...result }
+  const [humanWinner, setHumanWinner] = useState(null);
+  const [humanNotes, setHumanNotes] = useState('');
+  const [humanSubmitting, setHumanSubmitting] = useState(false);
+  // iframe order randomized per open: { left: setupId, right: setupId }
+  const [iframeOrder, setIframeOrder] = useState(null);
+  const [iframeHtmlA, setIframeHtmlA] = useState(null);
+  const [iframeHtmlB, setIframeHtmlB] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/pairwise/setups')
+      .then(r => r.json())
+      .then(d => setSetups(d.setups || []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!setupA || !setupB || setupA === setupB) { setMatchingFigures(null); return; }
+    fetch(`/api/pairwise/setups?setupA=${encodeURIComponent(setupA)}&setupB=${encodeURIComponent(setupB)}`)
+      .then(r => r.json())
+      .then(d => setMatchingFigures(d.matchingFigures || []))
+      .catch(() => setMatchingFigures([]));
+  }, [setupA, setupB]);
+
+  useEffect(() => {
+    if (!setupA || !setupB || setupA === setupB) { setResults([]); return; }
+    fetch(`/api/pairwise/results/${encodeURIComponent(setupA)}/${encodeURIComponent(setupB)}`)
+      .then(r => r.json())
+      .then(d => setResults(Array.isArray(d) ? d : []))
+      .catch(() => setResults([]));
+  }, [setupA, setupB]);
+
+  const runMachineEval = useCallback(async () => {
+    if (!matchingFigures || matchingFigures.length === 0 || running) return;
+    setRunning(true);
+    setProgress({ done: 0, total: matchingFigures.length, log: [] });
+
+    const body = JSON.stringify({ setupA, setupB, figures: matchingFigures, evalModel });
+    const res = await fetch('/api/pairwise/batch-evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line);
+          setProgress(p => ({
+            done: p.done + 1,
+            total: p.total,
+            log: [...p.log, `${parsed.status === 'ok' ? '✓' : '✗'} ${parsed.chapter}/${parsed.name}`],
+          }));
+          if (parsed.status === 'ok' && parsed.result) {
+            setResults(prev => {
+              const idx = prev.findIndex(r => r.chapter === parsed.chapter && r.figure === parsed.name);
+              const updated = { setupA, setupB, chapter: parsed.chapter, figure: parsed.name, machineEval: parsed.result, humanEvals: [] };
+              if (idx >= 0) { const next = [...prev]; next[idx] = { ...prev[idx], machineEval: parsed.result }; return next; }
+              return [...prev, updated];
+            });
+          }
+        } catch { /* malformed line */ }
+      }
+    }
+    setRunning(false);
+  }, [matchingFigures, setupA, setupB, evalModel, running]);
+
+  const openHumanPanel = useCallback(async (result) => {
+    setHumanPanelFig(result);
+    setHumanWinner(null);
+    setHumanNotes('');
+    setIframeHtmlA(null);
+    setIframeHtmlB(null);
+    setIframeOrder(Math.random() < 0.5 ? { left: setupA, right: setupB } : { left: setupB, right: setupA });
+
+    const matchFig = matchingFigures && (
+      matchingFigures.find(f => f.name === result.figure && f.chapter === result.chapter) ||
+      matchingFigures.find(f => f.name === result.figure)
+    );
+    if (!matchFig) return;
+
+    const toUrl = (htmlPath, resultId) => {
+      if (htmlPath) return `/api/experiments/html?path=${encodeURIComponent(htmlPath)}`;
+      if (resultId) return `/api/result/${encodeURIComponent(resultId)}/html`;
+      return null;
+    };
+    const urlA = toUrl(matchFig.htmlPathA, matchFig.resultIdA);
+    const urlB = toUrl(matchFig.htmlPathB, matchFig.resultIdB);
+
+    const [htmlA, htmlB] = await Promise.all([
+      urlA ? fetch(urlA).then(r => r.ok ? r.text() : null).catch(() => null) : Promise.resolve(null),
+      urlB ? fetch(urlB).then(r => r.ok ? r.text() : null).catch(() => null) : Promise.resolve(null),
+    ]);
+    setIframeHtmlA(htmlA);
+    setIframeHtmlB(htmlB);
+  }, [setupA, setupB, matchingFigures]);
+
+  const closeHumanPanel = useCallback(() => {
+    setHumanPanelFig(null);
+    setIframeOrder(null);
+    setIframeHtmlA(null);
+    setIframeHtmlB(null);
+  }, []);
+
+  const pickWinner = useCallback((side) => {
+    if (!iframeOrder) return;
+    const resolved = side === 'tie' ? 'tie' : (side === 'left' ? iframeOrder.left : iframeOrder.right);
+    setHumanWinner(resolved);
+  }, [iframeOrder]);
+
+  const submitHumanEval = useCallback(async () => {
+    if (!humanPanelFig || !humanWinner) return;
+    setHumanSubmitting(true);
+    try {
+      await fetch('/api/pairwise/human-evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          setupA, setupB,
+          chapter: humanPanelFig.chapter,
+          figure: humanPanelFig.figure,
+          winner: humanWinner,
+          notes: humanNotes,
+        }),
+      });
+      const newEval = { winner: humanWinner, notes: humanNotes, submittedAt: new Date().toISOString() };
+      setResults(prev => {
+        const idx = prev.findIndex(r => r.chapter === humanPanelFig.chapter && r.figure === humanPanelFig.figure);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], humanEvals: [...(updated[idx].humanEvals || []), newEval] };
+          return updated;
+        }
+        return [...prev, { setupA, setupB, chapter: humanPanelFig.chapter, figure: humanPanelFig.figure, humanEvals: [newEval] }];
+      });
+      closeHumanPanel();
+    } catch (err) {
+      alert('Submit failed: ' + err.message);
+    } finally {
+      setHumanSubmitting(false);
+    }
+  }, [humanPanelFig, humanWinner, humanNotes, setupA, setupB, closeHumanPanel]);
+
+  const canSubmitHuman = !!humanWinner;
+
+  const clearHumanEvals = useCallback(async (r) => {
+    try {
+      await fetch('/api/pairwise/human-evaluate', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setupA, setupB, chapter: r.chapter, figure: r.figure }),
+      });
+      setResults(prev => {
+        const idx = prev.findIndex(x => x.chapter === r.chapter && x.figure === r.figure);
+        if (idx < 0) return prev;
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], humanEvals: [] };
+        return updated;
+      });
+    } catch (err) {
+      alert('Clear failed: ' + err.message);
+    }
+  }, [setupA, setupB]);
+
+  const progressPct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+
+  // Merge matchingFigures (all pairs) with stored results so "Add" is always visible
+  const mergedRows = useMemo(() => {
+    if (!matchingFigures) return results;
+    const resultMap = new Map(results.map(r => [`${r.chapter}__${r.figure}`, r]));
+    return matchingFigures.map(f => {
+      const key = `${f.chapter}__${f.name}`;
+      return resultMap.get(key) || { figure: f.name, chapter: f.chapter, humanEvals: [] };
+    });
+  }, [matchingFigures, results]);
+
+
+  return (
+    <div style={styles.pwRoot}>
+      {/* Panel 1 — Setup Selector */}
+      <div style={styles.pwCard}>
+        <div style={styles.pwCardTitle}>Compare Experiment Setups</div>
+        <div style={styles.pwRow}>
+          <div style={styles.pwStack}>
+            <div style={styles.pwLabel}>Setup A</div>
+            <select style={styles.pwSelect} value={setupA} onChange={e => setSetupA(e.target.value)}>
+              <option value=''>— select —</option>
+              {setups.map(s => <option key={s.id} value={s.id}>{s.experiment} / {s.model}</option>)}
+            </select>
+          </div>
+          <div style={styles.pwStack}>
+            <div style={styles.pwLabel}>Setup B</div>
+            <select style={styles.pwSelect} value={setupB} onChange={e => setSetupB(e.target.value)}>
+              <option value=''>— select —</option>
+              {setups.filter(s => s.id !== setupA).map(s => <option key={s.id} value={s.id}>{s.experiment} / {s.model}</option>)}
+            </select>
+          </div>
+          <div style={styles.pwStack}>
+            <div style={styles.pwLabel}>Eval Model</div>
+            <select style={styles.pwSelect} value={evalModel} onChange={e => setEvalModel(e.target.value)}>
+              {(availableModels || []).map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </div>
+          {matchingFigures && (
+            <div style={styles.pwMatchCount}>{matchingFigures.length} figure{matchingFigures.length !== 1 ? 's' : ''} in common</div>
+          )}
+          <button
+            style={{ ...styles.pwRunBtn, ...(!matchingFigures || matchingFigures.length === 0 || running ? styles.pwRunBtnDisabled : {}) }}
+            disabled={!matchingFigures || matchingFigures.length === 0 || running}
+            onClick={runMachineEval}
+          >
+            {running ? 'Running…' : 'Run Machine Evaluation'}
+          </button>
+        </div>
+        {(running || progress.done > 0) && progress.total > 0 && (
+          <div style={styles.pwProgress}>
+            <div style={styles.pwProgressBar}>
+              <div style={{ ...styles.pwProgressFill, width: `${progressPct}%` }} />
+            </div>
+            <div style={styles.pwProgressLog}>
+              {progress.log.map((l, i) => <div key={i}>{l}</div>)}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Panel 2 — Machine Results Table */}
+      {setupA && setupB && setupA !== setupB && (
+        <div style={styles.pwCard}>
+          <div style={{ ...styles.pwCardTitle, cursor: 'pointer', userSelect: 'none' }} onClick={() => setMachineTableOpen(o => !o)}>
+            {machineTableOpen ? '▾' : '▸'} Machine Results — {shortSetup(setupA)} vs {shortSetup(setupB)}
+          </div>
+          {machineTableOpen && (mergedRows.length === 0 ? (
+            <div style={styles.pwEmptyMsg}>Select two setups with overlapping figures to begin.</div>
+          ) : (
+            <table style={{ ...styles.pwTable, tableLayout: 'fixed' }}>
+              <thead>
+                <tr>
+                  <th style={{ ...styles.pwTh, width: '25%' }}>Figure</th>
+                  {DIMENSIONS.map(d => <th key={d} style={{ ...styles.pwTh, width: '10%' }}>{{ geometry: 'Geo', interactivity: 'Inter', faithfulness: 'Faith', labels: 'Labels', concept: 'Concept' }[d]}</th>)}
+                  <th style={{ ...styles.pwTh, width: '15%' }}>Overall</th>
+                  <th style={{ ...styles.pwTh, width: '7%' }}>Conf</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mergedRows.map(r => {
+                  const me = r.machineEval;
+                  return (
+                    <tr key={`${r.chapter}__${r.figure}__machine`}>
+                      <td style={styles.pwTd}>
+                        <div style={{ fontWeight: 600 }}>{r.figure}</div>
+                        <div style={{ fontSize: 10, color: '#9ca3af' }}>{r.chapter}</div>
+                      </td>
+                      {DIMENSIONS.map(d => (
+                        <td key={d} style={styles.pwTd}>
+                          {me?.dimensions?.[d]
+                            ? <span style={winnerBadgeStyle(me.dimensions[d].winner, setupA, setupB)} title={me.dimensions[d].rationale}>
+                                {sideLabel(me.dimensions[d].winner, setupA, setupB)}
+                              </span>
+                            : <span style={{ color: '#d1d5db' }}>—</span>}
+                        </td>
+                      ))}
+                      <td style={styles.pwTd}>
+                        {me?.aggregator
+                          ? <span style={winnerBadgeStyle(me.aggregator.winner, setupA, setupB)} title={me.aggregator.explanation}>
+                              {sideLabel(me.aggregator.winner, setupA, setupB)}
+                            </span>
+                          : <span style={{ color: '#d1d5db' }}>—</span>}
+                      </td>
+                      <td style={styles.pwTd}>{me?.aggregator ? (me.aggregator.confidence * 100).toFixed(0) + '%' : '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ))}
+        </div>
+      )}
+
+      {/* Panel 3 — Human Results Table */}
+      {setupA && setupB && setupA !== setupB && (
+        <div style={styles.pwCard}>
+          <div style={{ ...styles.pwCardTitle, cursor: 'pointer', userSelect: 'none' }} onClick={() => setHumanTableOpen(o => !o)}>
+            {humanTableOpen ? '▾' : '▸'} Human Results — {shortSetup(setupA)} vs {shortSetup(setupB)}
+          </div>
+          {humanTableOpen && (mergedRows.length === 0 ? (
+            <div style={styles.pwEmptyMsg}>Select two setups with overlapping figures to begin.</div>
+          ) : (
+            <table style={styles.pwTable}>
+              <thead>
+                <tr>
+                  <th style={{ ...styles.pwTh, width: '40%' }}>Figure</th>
+                  <th style={{ ...styles.pwTh, width: '10%' }}>Winner</th>
+                  <th style={{ ...styles.pwTh, width: '40%' }}>Notes</th>
+                  <th style={{ ...styles.pwTh, width: '10%' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {mergedRows.map(r => {
+                  const he = (r.humanEvals || [])[0];
+                  const humanSide = he ? sideLabel(he.winner, setupA, setupB) : null;
+                  const isOpen = humanPanelFig && humanPanelFig.figure === r.figure && humanPanelFig.chapter === r.chapter;
+                  return (
+                    <React.Fragment key={`${r.chapter}__${r.figure}`}>
+                      <tr>
+                        <td style={styles.pwTd}>
+                          <div style={{ fontWeight: 600 }}>{r.figure}</div>
+                          <div style={{ fontSize: 10, color: '#9ca3af' }}>{r.chapter}</div>
+                        </td>
+                        <td style={styles.pwTd}>
+                          {he
+                            ? <span style={winnerBadgeStyle(he.winner, setupA, setupB)}>{humanSide}</span>
+                            : <span style={{ color: '#d1d5db' }}>—</span>}
+                        </td>
+                        <td style={{ ...styles.pwTd, fontSize: 11, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {he?.notes || ''}
+                        </td>
+                        <td style={styles.pwTd}>
+                          {he
+                            ? <button
+                                style={{ ...styles.pwAddBtn, background: '#fee2e2', color: '#b91c1c', borderColor: '#fca5a5' }}
+                                onClick={() => clearHumanEvals(r)}
+                                title='Delete human evaluation'
+                              >Delete</button>
+                            : <button style={styles.pwAddBtn} onClick={() => isOpen ? closeHumanPanel() : openHumanPanel(r)}>
+                                Add
+                              </button>
+                          }
+                        </td>
+                      </tr>
+                      {isOpen && iframeOrder && (
+                        <tr>
+                          <td colSpan={4} style={{ padding: 0 }}>
+                            <div style={styles.pwHumanPanel}>
+                              <div style={styles.pwIframeRow}>
+                                {[iframeOrder.left, iframeOrder.right].map((setup, idx) => (
+                                  <div key={setup} style={styles.pwIframeWrap}>
+                                    <div style={styles.pwIframeLabel}>{idx === 0 ? 'Left' : 'Right'}</div>
+                                    <iframe
+                                      style={styles.pwIframe}
+                                      srcDoc={setup === setupA ? (iframeHtmlA || '') : (iframeHtmlB || '')}
+                                      title={`${idx === 0 ? 'Left' : 'Right'} figure`}
+                                      sandbox='allow-scripts allow-same-origin'
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              <div style={styles.pwDimRow}>
+                                <div style={styles.pwDimName}>Overall winner</div>
+                                <div style={styles.pwToggleGroup}>
+                                  {['left', 'tie', 'right'].map(side => {
+                                    const resolved = side === 'tie' ? 'tie' : (side === 'left' ? iframeOrder.left : iframeOrder.right);
+                                    const isActive = humanWinner === resolved;
+                                    return (
+                                      <button
+                                        key={side}
+                                        style={{ ...styles.pwToggleBtn, ...(isActive ? styles.pwToggleBtnActive : {}) }}
+                                        onClick={() => pickWinner(side)}
+                                      >
+                                        {side === 'tie' ? 'Tie' : side.charAt(0).toUpperCase() + side.slice(1)}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                              <textarea
+                                style={styles.pwNotesArea}
+                                placeholder='Optional notes…'
+                                value={humanNotes}
+                                onChange={e => setHumanNotes(e.target.value)}
+                              />
+                              <button
+                                style={{ ...styles.pwSubmitBtn, ...(!canSubmitHuman || humanSubmitting ? styles.pwSubmitBtnDisabled : {}) }}
+                                disabled={!canSubmitHuman || humanSubmitting}
+                                onClick={submitHumanEval}
+                              >
+                                {humanSubmitting ? 'Submitting…' : 'Submit'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
