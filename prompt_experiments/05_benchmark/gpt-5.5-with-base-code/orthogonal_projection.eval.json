@@ -3,26 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main axes, projection plane, dashed parallel rays, projected colored shape, and stepped colored object. However, the source's italic v annotation on/near the projected image is absent. The initial view is more compact and rotated differently: the X axis is too shallow, Z is not as horizontally aligned, and the projection plane/object spacing is much shorter than in the source. The projection plane is also much smaller relative to the object and the long depth rays compared with the reference.",
+          "failure_modes": [
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Missing-Labels: the source includes an important italic v label near the projected figure that is not present. Camera-Wrong: the initial orientation does not match the source view, especially the X/Z axis angles and plane silhouette. Scale-Wrong: the plane, object, axes, and dashed projection distance are noticeably compressed relative to the wide textbook diagram.",
+          "geometry_accuracy_analysis": "The scene constructs a real 3D orthographic-projection setup: a grey projection plane, a stepped/block object with actual depth, dashed parallel projection rays, global X/Y/Z axes, image-plane x/y axes, labels, and a colored projected image on the plane. The major topology is recognizable and not fake 3D, but the projected colored footprint does not fully match the 3D object's X-Y extent, and some axis/label placements are approximate rather than tightly source-matched.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 3,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 3.8
+          "geometry_accuracy_reasoning": "All major geometric elements are present as true 3D objects with plausible relationships, but the projection shape and some placements have noticeable minor-to-moderate mismatches.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as meaningful interaction. A visible compact Depth button cycles near/far/farther states, animating the object along Z, updating dashed projection rays, highlighting the object, and showing an explanatory popup; this visibly functions and is pedagogically useful. The scene also registers hover/click interactions on the projection plane, projected image, 3D object, and projection rays: hover shows tooltips and click opens explanatory popups, with the object click additionally flashing a highlight; these are functional concept explanations, though thin dashed rays may be harder to select. Escape hides popups, and a Reset button has a handler but is hidden so it is not practically usable. The UI is small in the lower-left corner and does not cover important geometry; the top-right popup is modest and nonintrusive.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional pedagogical interactions including a step-through depth animation and multiple click/hover explanations, with compact UI that does not obscure the figure.",
+          "faithfulness_analysis": "The rendered scene contains the same broad concept—axes, a projection plane, dashed projection lines, and colored 3D blocks—but the default view is much more zoomed out and compressed, with the entire diagram occupying a small central area instead of the source's large, edge-to-edge textbook composition. The camera angle, aspect ratio, block proportions, plane size/crop, line weights, label sizes/positions, and whitespace differ substantially, and there is visible UI chrome at the bottom left.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in theme, the crop, zoom, proportions, and composition match well under 65% of the source, so it is not a faithful drop-in replacement.",
+          "label_quality_analysis": "Source labels: uppercase Y on the vertical world axis, uppercase X on the diagonal world axis, uppercase Z on the horizontal world axis, lowercase y on/near the projection-plane vertical direction, lowercase x on/near the projection-plane slanted direction, and the text “Projection plane” below the plane. In the generated figure all six labels appear with correct text and are readable, but the lowercase x/y and especially “Projection plane” are much smaller than in the source; “Projection plane” is also placed close to the plane/axis rather than prominently below it. The uppercase axis labels are mostly clear, though their relative size and placement do not fully match the source’s large textbook-style labels.",
+          "label_quality": 3,
+          "label_quality_reasoning": "All labels are present and legible, but several have significant font-size and placement mismatches relative to the source, especially the projection-plane label and the lowercase x/y labels.",
+          "concept_accuracy_analysis": "The figure is intended to illustrate orthographic projection: a 3D stepped block projects onto an X-Y image plane by parallel rays along Z, with depth changes not altering image size. The tooltips and popup text are mostly figure-specific and correctly mention parallel rays, the projection plane, x = X and y = Y, and the contrast with perspective projection. However, the projected colored footprint on the plane does not match the full X-Y extent of the 3D block or the ray endpoints, and the green image-plane x-axis is drawn diagonally in X-Y despite the explanation that image coordinates share X/Y directions. Overall the main concept is present and well explained, but there are notable geometric inconsistencies in the projected shape and axes.",
+          "concept_accuracy": 3,
+          "concept_accuracy_reasoning": "The core orthographic-projection idea and explanations are specific and mostly correct, but the projection footprint and image-axis geometry contain multiple inaccuracies, so this fits the rubric for a score of 3.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:43:59.902Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:38:21.442Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

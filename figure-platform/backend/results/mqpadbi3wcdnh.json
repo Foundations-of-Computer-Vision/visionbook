@@ -477,81 +477,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3x3 grid of Markov Random Field nodes using an oblique projection, where horizontal lines are perfectly horizontal, vertical lines go straight up, and depth lines recede up and right. The viewpoint is from the front-left, looking slightly down at the grid.",
-          "viewing_angle_rendered": "The rendered screenshot matches the source's oblique projection precisely, utilizing an orthographic camera view where horizontal grid lines remain horizontal and depth lines recede at a matching angle.",
-          "viewing_angle_comparison": "The viewing angles are practically identical, successfully capturing the exact 3D grid perspective and alignment of the textbook illustration.",
-          "shape_comparison": [
-            {
-              "element": "latent nodes (x)",
-              "source_shape": "flat circle with black outline",
-              "rendered_shape": "3D sphere with black outline shader effect",
-              "match": true
-            },
-            {
-              "element": "observed nodes (y)",
-              "source_shape": "flat grey circle with black outline",
-              "rendered_shape": "3D grey sphere with black outline shader effect",
-              "match": true
-            },
-            {
-              "element": "grid edges",
-              "source_shape": "thin lines",
-              "rendered_shape": "cylinders",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The x1, x2, and x3 labels overlap slightly with the diagonal grid lines and nodes, whereas they are cleanly separated in the source.",
-            "The grid lines (cylinders) are relatively thick compared to the thin lines in the source.",
-            "The center node has an interactive yellow highlight/glow that is not present in the static source image."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent interactive reproduction of the MRF diagram with extremely faithful orthographic camera alignment, though label placement could be slightly adjusted.",
-          "action_items": [
-            "Adjust the offset of x1, x2, and x3 labels to prevent them from overlapping the diagonal grid lines.",
-            "Slightly reduce the radius of the cylinder geometries used for the grid edges to match the thin line aesthetic of the original diagram.",
-            "Disable or dim the yellow center node highlight on initial load (Joint state) so it starts in a state that matches the clean original textbook figure perfectly."
-          ],
-          "visual_aesthetics": 4.3,
-          "overall_average": 4.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:03:42.843Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated figure reproduces the basic 3x3 latent/observed lattice with white and gray circular nodes, black edges, and labels y1–y3 / x1–x3. However, it adds visible UI controls, a reset button, a translucent yellow highlight/ring around the center node, and code for colored halos/particles/conditioning states that are not present in the source. The latent-grid depth spacing and observation-edge proportions appear compressed/exaggerated compared with the source, and the generated x labels are lowercase rather than the uppercase X labels shown in the original.",
+          "failure_modes": [
+            "Hallucination",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Hallucination applies because the rendered output includes non-source elements such as the control panel and the yellow center-node conditioning highlight, with additional colored/animated explanatory elements in the code. Scale-Wrong applies because the relative proportions of the lattice are noticeably altered, especially the observation links and compressed latent-row spacing compared with the original diagram.",
+          "geometry_accuracy_analysis": "The scene constructs a real 3D layered MRF graph: a 3×3 lower lattice of latent spherical nodes, a matching elevated 3×3 layer of observed spherical nodes, vertical observation links, horizontal/receding spatial links, boundary stubs, and labels for x1–x3 and y1–y3. The main topology and relative placement are plausible, with nodes and edges connected correctly in 3D. Minor deviations include the added halos, particles, and conditioned highlight that are not core textbook geometry, and the lattice uses an explicit skewed basis that may be more stylized than a clean square grid viewed by the camera, but it is not merely a flat texture or billboard.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major graph elements are present and connected with plausible 3D geometry, with only minor stylization/alignment issues rather than missing or wrong topology.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, which function for camera drag/zoom but do not count as meaningful interaction. Meaningful controls include a φ slider that updates the displayed value and visibly changes halo strength, edge opacity/thickness, particle scale/speed; a conditioning-state dropdown that visibly switches between Joint, Observe Y, and Fix Center X with node color/halo/highlight and particle changes; hover handling on registered nodes/edges/highlight that shows an internal tooltip; and click handling on registered nodes/edges/highlight that triggers explanatory popups via parent postMessage and often changes the scene through goToStep. There is also a Reset View button that visibly resets the camera, plus continuous particle animation when non-Joint states are selected. A guided demo is implemented as demoSteps/goToStep, but it is not exposed with visible next/step buttons, so it is only indirectly accessible by clicking scene objects or externally calling the function. The UI is compact in the lower-left corner and only minimally overlaps a small boundary stub, not important geometry.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "interactivity_usability_reasoning": "There are multiple functional, pedagogically useful interactions with compact UI, but the guided demo is not directly exposed as a usable step-through interface, so this merits 4 rather than 5.",
+          "faithfulness_analysis": "The rendered figure reproduces the basic lattice structure with white and gray circular nodes, black connecting lines, and labels y1–y3/x1–x3 in roughly corresponding positions. However, it is much more zoomed out with large whitespace around the diagram, the source is tightly cropped with parts of lines/nodes extending off the edges, the labels are far smaller and positioned differently, and visible UI controls at the lower left are not in the original and alter the apparent crop.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The general diagram is recognizable, but the under-zoomed composition, extra margins, smaller typography, and UI chrome make it only a moderate match rather than a near drop-in replacement.",
+          "label_quality_analysis": "Source labels are y1, y2, y3 above the three top gray nodes, and x1, x2, x3 beside the three upper white nodes on the horizontal row. The generated figure includes all six labels with correct text/subscripts. The y labels are unobstructed and roughly correctly placed above the top nodes, but they are noticeably smaller than in the source. The x labels are also present, but they are much smaller than the source labels and are placed close to or overlapping line geometry, making them less prominent and somewhat cluttered compared with the original.",
+          "label_quality": 3,
+          "label_quality_reasoning": "All labels are present and readable, but the font size is consistently too small relative to the source and the x labels have placement/clutter issues, so this fits a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates a 2D Markov Random Field with hidden/latent X nodes in a spatial grid, observed Y nodes attached above them, pairwise spatial compatibility φ, unary observation potentials ψ, and conditioning/evidence effects. The tooltips and popups are figure-specific and mostly accurate, describing latent variables, observations, spatial smoothing, unary evidence, and conditional independence; the only notable caveat is that fixing a single center node in a 3x3 grid does not generally separate all opposite-side variables because alternate paths around the center remain, though the explanation qualifies this as paths through the center.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main MRF concept and interactions are accurate and specific, with one minor potential overstatement about conditional independence/separation in the grid.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:34:04.431Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:35:17.707Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

@@ -3,28 +3,42 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The screenshot includes most core objects and labels, but the initial view is substantially different from the source: the world X axis points left instead of diagonally up-right, Z is slanted rather than horizontal, and the right inset plane is viewed obliquely instead of front-on. The two left planes overlap and the point/ray geometry is compressed; the right-hand virtual-camera-plane panel is much smaller than in the source and some text is crowded/truncated. Extra UI buttons and interactive popup/highlight machinery are present, but the interactions appear functional and meaningful.",
           "failure_modes": [
-            "Scale-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
           ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial viewpoint/orientation does not match the source figure, especially the world axes and the right inset perspective. Scale-Wrong applies because panel proportions and spacing are noticeably off, with the right panel too small and the left geometry compressed/overlapping. Hallucination applies because UI buttons and interactive highlighting/mapping elements are added that do not appear in the original textbook figure.",
+          "geometry_accuracy_analysis": "The scene contains the main pinhole-camera geometry: a 3D pinhole at the origin, world coordinate axes, front virtual camera plane, rear projection plane, local x/y axes on both planes, a 3D point P, its virtual and inverted image points, and a collinear projection ray through the pinhole. It also includes the right-hand coordinate-mapping inset with camera/image coordinate axes and point p. The construction is genuine 3D rather than a pasted or skewed flat texture; however, the inset is essentially a separate flat diagram panel and some proportions/placements are schematic rather than tightly matching a textbook figure.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present and correctly connected in 3D, with only minor schematic positioning/proportion issues and a flat inset diagram preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, which visibly functions but does not count as meaningful interaction. Meaningful interactions include a Rays button that toggles the projection/ray guide group on and off, a Map button that toggles yellow/blue/green mapping-highlight geometry and opens an explanatory popup, hover handlers on registered planes/points that show tooltips and highlight geometry by opacity/scale changes, click handlers on those same scene objects that open explanatory popups, clicks on P/p points that trigger a visible pulsing projection line, and Escape/canvas-click behavior to dismiss popups. These interactions are functional and pedagogically relevant, and the UI is compact in the top-right without covering geometry; however, there is no guided step-through demo.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.6
+          "interactivity_usability_reasoning": "There are multiple functional, useful interactions with compact UI, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered scene includes the main conceptual components (projection plane, virtual camera plane, pinhole, axes, points p/P, and a camera/image coordinate inset), but the first frame is not a close visual match. The source is a very wide, tightly composed two-part textbook diagram with large labels and a large rectangular right panel, while the render uses a narrower aspect ratio, much smaller objects with excessive whitespace, different camera perspective, overlapping/shifted planes on the left, a tilted right panel instead of a large rectangular inset, and visible UI buttons in the top-right.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in theme, the aspect ratio, zoom, crop, margins, object proportions, label scale, and UI chrome differ substantially, so it matches well under 65% as a drop-in replacement.",
+          "label_quality_analysis": "Source labels include World coordinates, X, Y, Z, P, p (world/camera point), p on the projection/image plane, x, y axes on projection plane, x, y axes on virtual camera plane, (0,0,0), (0,0), f labels, Pinhole, Projection plane, Virtual camera plane, Camera coordinates, Image coordinates, m, n, and panel labels (a), (b). The generated figure includes many of these labels with roughly correct text: World coordinates, X/Y/Z, P, p, x/y, f, Pinhole, Projection plane, Virtual camera plane, Camera coordinates, Image coordinates, m/n, and origin labels. However, nearly all labels are much smaller than the source figure scale, several are crowded around the pinhole and central planes, the right-side 'Camera coordinates' label is clipped/truncated at the edge, and the panel labels (a) and (b) are missing. Overall the label set is mostly present but the font sizing is consistently too small relative to the source, with notable clutter and some clipping/missing labels.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels are present but fail the source-scale font size check and several are cluttered, clipped, or missing, so this fits score 2 rather than 3.",
+          "concept_accuracy_analysis": "The figure illustrates pinhole camera projection: a 3D point P, the pinhole/origin, the real image plane at Z = -f with inverted projection, the virtual plane at Z = f with p = (fX/Z, fY/Z), and a secondary inset for converting metric camera-plane coordinates to image/pixel coordinates. Most labels and popups are figure-specific and correctly explain collinearity, inversion, and the virtual-plane convention, but there are notable issues: the main 3D coordinate axes are labeled \"World coordinates\" while the popup says the pinhole is the camera-coordinate origin, and the image-coordinate inset shows a separate yellow pixel point at a different physical location from p rather than clearly representing the same point under an affine coordinate change; it also omits the actual affine formula or scale/origin parameters.",
+          "concept_accuracy": 3,
+          "concept_accuracy_reasoning": "The core pinhole projection concept is present and mostly correct, with specific explanations, but 2-3 conceptual/details issues in coordinate-frame labeling and the camera-to-image coordinate mapping prevent a higher score.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:44:17.280Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:39:42.885Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

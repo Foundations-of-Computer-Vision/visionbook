@@ -706,94 +706,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D cuboid frame with horizontal planes stacked vertically, viewed from an elevated orthographic isometric angle (down-left) with the front vertical edge closest to the viewer. There is ample white space around the main geometry for labels at the top, bottom, and sides.",
-          "viewing_angle_rendered": "The rendered screenshot uses an orthographic projection from a similar isometric angle, but the camera is zoomed in too closely, leaving almost no vertical whitespace.",
-          "viewing_angle_comparison": "While the isometric perspective is mathematically similar, the framing is extremely tight, causing the top and bottom labels ('Embedding' and 'Data') to collide with and overlap the cuboid's wireframe edges.",
-          "shape_comparison": [
-            {
-              "element": "cuboid frame",
-              "source_shape": "thin lines",
-              "rendered_shape": "thick cylinders",
-              "match": false
-            },
-            {
-              "element": "horizontal layers",
-              "source_shape": "translucent rectangles with gray borders",
-              "rendered_shape": "translucent planes with gray borders",
-              "match": true
-            },
-            {
-              "element": "mapping paths",
-              "source_shape": "gently curved dashed lines with arrowheads",
-              "rendered_shape": "dashed tube curves with cones",
-              "match": true
-            },
-            {
-              "element": "flow direction arrows",
-              "source_shape": "long vertical line with single arrowhead",
-              "rendered_shape": "cylinder shaft with cone arrowhead",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The 'Embedding' label overlaps with the top edge of the cuboid wireframe.",
-            "The 'Data' label is clipped at the bottom and overlaps with the bottom wireframe edge.",
-            "The cylinders used for the cuboid wireframe edges are too thick compared to the elegant, thin lines of the source.",
-            "The curves representing the mapping paths are too straight and vertical compared to the more expressive, sweeping curves in the source."
-          ],
-          "failure_modes": [
-            "Scale-Wrong",
-            "Camera-Wrong"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "The 3D reconstruction is geometrically accurate and highly interactive, but suffers from poor framing, resulting in label overlaps and clipping.",
-          "action_items": [
-            "Adjust the camera zoom or heightFraction in setCameraView to add more top and bottom margins, preventing label clipping and overlapping.",
-            "Reduce the radius of the cylinders forming the cuboid wireframe to make the structure look less bulky and more like clean lines.",
-            "Increase the lateral control point offsets of the CubicBezierCurve3 paths to give the curves a more pronounced, graceful bend.",
-            "Increase the offset of the 'Embedding' and 'Data' labels so they sit clearly outside the wireframe box boundaries."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T13:58:37.683Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main cuboid/layer stack and dashed upward paths, but the rendered view is cropped in a landscape frame: the Embedding label is cut off at the top, the Data label is partly cut off at the bottom, and the large vertical side labels for Representation learning and Generative modeling are not visible. The initial camera/framing differs from the source's tall, centered textbook composition, and visible UI controls appear in the lower-left corner even though the source figure has no such controls. The cuboid and labels are proportioned/positioned poorly relative to the canvas, causing clipping and missing annotations.",
           "failure_modes": [
-            "Missing-Labels"
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
           ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
+          "failure_modes_reasoning": "Missing-Labels applies because the side text labels are absent from the rendered view and the Data/Embedding labels are clipped. Camera-Wrong applies because the initial viewpoint/framing does not match the tall centered source figure and crops key text. Scale-Wrong applies because the figure and labels are sized/positioned so that major labels are cut off and the composition proportions differ noticeably. Hallucination applies because the visible Flow/Layer UI controls are extra elements not present in the original figure.",
+          "geometry_accuracy_analysis": "OBSERVE: The scene constructs a true 3D vertical stack: a black wireframe cuboid, horizontal data/intermediate/embedding planes at distinct Y levels, five bottom sample dots, five curved dashed paths through the stack, cone arrowheads at the top endpoints, and two external vertical side arrows with labels. The geometry is clean and symmetric in 3D, with depth coming from camera placement rather than a pasted/skewed flat drawing. Minor limitations are that the top embedding plane is represented mostly by the cuboid's top outline rather than a distinct visible plane border, and the text labels are HTML overlays rather than 3D text, but the main spatial layout is present and plausible. CHARACTERIZE: The geometry accurately represents the intended layered representation-learning/generative-modeling diagram with correct 3D topology, proportions, and placement of the main structural elements.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are present as real 3D geometry with plausible positions and connections, with only minor non-geometric label/outline simplifications, matching the score-5 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but those do not count as meaningful interaction. Meaningful controls include a Flow dropdown that changes the direction of animated particles along the dashed mapping paths and starts the animation; a Layer range slider that visibly highlights one horizontal layer and updates its readout; hover/click handlers on many scene objects that show short tooltips and send explanatory popup messages; and clickable side arrows that call goToStep to switch between representation-learning and generative-modeling guided states. The reset button exists but is hidden, so it is not usable. Overall, the interactions are pedagogically relevant and mostly compact; the small bottom-left UI overlaps only a minor area near the side arrow and does not significantly cover the main geometry, though the guided demo is somewhat hidden because there are no explicit step buttons.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are at least three functional, pedagogically useful interactions plus a guided-demo mechanism, and the UI is compact with no major geometry obstruction, satisfying the score-5 rubric.",
+          "faithfulness_analysis": "The rendered frame preserves the rough idea of an isometric cube with layered planes, dotted upward arrows, and side direction arrows, but the composition is not a drop-in match. The source is a very wide figure with generous horizontal whitespace, large vertical side labels, complete top and bottom labels, and a cube occupying the central area; the render is much narrower and over-zoomed, crops the 'Embedding' and 'Data' labels, omits the vertical side text labels, changes the cube proportions/view, and includes UI controls in the lower-left corner.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general cube-and-arrows concept is recognizable, the aspect ratio, crop, zoom, missing labels, and visible UI make it match well under 65% of the original.",
+          "label_quality_analysis": "Source labels: \"Embedding\" at the top center; \"Data\" at the bottom center; vertical \"Representation learning\" along the left side; vertical \"Generative modeling\" along the right side. In the generated figure, \"Embedding\" appears with roughly large serif text but is placed too high and partially clipped/overlapping the cube top; \"Data\" appears at the bottom but is partially cut off by the screenshot edge; \"Representation learning\" is absent; \"Generative modeling\" is absent. Extra small UI labels such as \"Flow\", \"Representation (Up)\", \"Layer\", and \"0\" appear at bottom-left but are not part of the source figure. Overall, only half of the source label set is present, and both present labels have placement/clipping problems while the two vertical side labels are completely missing.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels are missing or poorly placed/clipped, so the label set substantially fails the source despite two recognizable labels being present.",
+          "concept_accuracy_analysis": "The figure clearly illustrates a layered neural-network hierarchy with Data at the bottom, Embedding at the top, upward representation learning, and downward generative modeling. Tooltips and popups are specific to the depicted elements—data samples, embedding endpoints, intermediate feature planes, nonlinear paths, and side arrows—and generally describe the intended bottom-up encoding and top-down decoding relationship accurately, though the claim that the same mapping is simply read downward slightly oversimplifies generative modeling as an inverse of representation learning.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3.3,
+          "concept_accuracy_reasoning": "The main concept is accurate and the explanations are figure-specific, with only a minor oversimplification about generative modeling being the same mapping reversed.",
+          "visual_aesthetics": 3,
           "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:30:49.727Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:41:46.303Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

@@ -3,30 +3,43 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered view is a very shallow, landscape, edge-on camera angle: the image plane appears as a thin tilted slab at the far right rather than the large central vertical plane in the source. The fan of green projection rays and the projected birds are compressed into nearly parallel lines, the bird silhouettes are tiny and hard to recognize, and the O label is not visible in the initial screenshot. A visible Trace button and translucent hit/interaction geometry appear that are not part of the original figure.",
           "failure_modes": [
-            "Camera-Wrong",
             "Missing-Labels",
-            "Wrong-Primitives"
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 3,
-          "visual_aesthetics": 3,
-          "overall_average": 3
+          "failure_modes_reasoning": "Missing-Labels applies because the important camera center label O is absent from the rendered initial view. Camera-Wrong applies because the initial viewpoint is edge-on and landscape rather than the source’s tall oblique diagram with the image plane central and readable. Scale-Wrong applies because birds, arrows, rays, and the image plane proportions are noticeably compressed and misplaced relative to the source. Hallucination applies because extra UI and faint translucent interaction geometry are visible despite not appearing in the original figure.",
+          "geometry_accuracy_analysis": "The scene contains a real 3D construction with a camera center O, a rectangular image plane, green projection rays, a 3D straight-line bird trajectory, projected shrinking birds on the plane, red velocity arrows, and a vanishing point. The main geometry is coherent and depth is genuinely produced by 3D positions rather than a pasted flat texture, though the birds themselves are flat silhouette shapes and the image plane/framing and some label/arrow placements are only approximate to the likely textbook sketch. Overall it captures the intended projective-geometry layout well, with minor proportional and orientation simplifications.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as real 3D geometry with plausible positions and connections, but simplified flat bird silhouettes and approximate alignment/proportions prevent a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for mouse rotation/zoom, but this does not count as a meaningful interaction under the rubric. A visible bottom-left “Trace” button toggles a highlighted convergence state: green rays brighten, the vanishing point enlarges, projected birds scale up, and an explanatory popup appears, so it visibly functions. Many scene objects are registered with raycaster hover/click handlers: hovering shows tooltips and clicking the image plane, camera center, birds, vanishing point, velocity path, and velocity ray opens short explanatory popups and sometimes triggers highlighting/trace emphasis; these are pedagogically relevant and should function through the transparent hit meshes. A Reset View button has a click handler but is styled display:none, so it is not usable. The UI is compact and located in the bottom-left corner without covering important geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are two functional, pedagogically useful meaningful interactions—a Trace toggle and hover/click explanatory object interactions—with compact non-intrusive UI, matching the rubric for score 4.",
+          "faithfulness_analysis": "The source is a very tall portrait crop with a large central image plane, a prominent vanishing point near the lower middle, large pedestrian silhouettes and red motion arrows, and green rays spreading broadly across the page. The rendered frame is a landscape view from a different oblique 3D angle, zoomed far out so most elements are tiny, with the plane pushed to the right edge, green lines nearly parallel across the canvas, large mismatched whitespace, and a visible UI 'Trace' button.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although it contains similar conceptual elements, the camera angle, aspect ratio, crop, scale, and composition differ substantially, making it a poor inline replacement matching well under 65% of the original.",
+          "label_quality_analysis": "The source figure contains labels: an upper \"v\" near the moving object arrows, a lower/right \"v\" near the red velocity arrow, the large text \"Vanishing point\" near the convergence point, and an \"O\"-like label below the camera/eye point. In the generated figure, two \"v\" labels and \"Vanishing point\" are present with correct text, but they are much smaller than the source labels; the vanishing point label is especially tiny and crowded near the plane/lines, and the \"O\" label is absent. Overall the label set is only partially complete and the rendered font scale is consistently too small relative to the source.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most present labels are readable but significantly undersized compared with the source, and one source label is missing, so this fits a score of 2.",
+          "concept_accuracy_analysis": "The figure illustrates central projection of a bird moving along a straight 3D velocity direction, with its image positions shrinking and converging to a vanishing point on the image plane. The labels and interactions are mostly specific and correct, including camera center O, projection rays, velocity V, the image plane, and the vanishing point formula p∞=(fVx/Vz,fVy/Vz); however, the 3D bird glyphs are scaled with time despite a tooltip saying the bird stays the same physical size, and the red velocity arrow near the vanishing point is a somewhat ambiguous 3D-direction marker rather than a clearly planar image-motion vector.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main vanishing-point concept and explanations are accurate and figure-specific, with only minor visual/semantic inconsistencies that could slightly confuse students.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:44:07.656Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:31:41.565Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

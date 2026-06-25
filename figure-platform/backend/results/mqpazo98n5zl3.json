@@ -656,95 +656,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
+    "legacy_unknown": {
+      "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows the scene from an elevated, slightly right-of-center perspective looking down-left. The camera coordinate origin and its green axes (XL, YL, ZL) are at the bottom-left, with projection rays extending to the upper-right, passing through an image plane to a larger orange 3D world triangle.",
-          "viewing_angle_rendered": "The rendered screenshot shows the scene from an angle that places the camera coordinate origin and axes on the far right, projecting to the left. The scene is heavily zoomed in, cropping out a significant portion of the world triangle on the left and top.",
-          "viewing_angle_comparison": "The viewing angles are almost completely mirrored horizontally. The source has the origin on the left projecting right, while the render has the origin on the right projecting left. The render is also over-zoomed, causing major cropping of key elements like P1.",
-          "shape_comparison": [
-            {
-              "element": "World triangle",
-              "source_shape": "flat orange triangle",
-              "rendered_shape": "flat orange triangle",
-              "match": true
-            },
-            {
-              "element": "Projected triangle",
-              "source_shape": "flat orange triangle",
-              "rendered_shape": "flat orange triangle",
-              "match": true
-            },
-            {
-              "element": "Image plane",
-              "source_shape": "flat rectangle outline",
-              "rendered_shape": "flat rectangle outline",
-              "match": true
-            },
-            {
-              "element": "Coordinate axes",
-              "source_shape": "2D green arrows",
-              "rendered_shape": "3D green cylinder-cone arrows",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The layout is horizontally mirrored: the coordinate origin is on the right instead of the left.",
-            "The camera zoom is much too close, cropping out the top-left of the world triangle (P1) and the bottom-left (P2).",
-            "Labels like 'p2' and 'p'2' are overlapping at the bottom of the image plane, becoming unreadable as 'p2p'2'.",
-            "The overall composition fails to replicate the clean, spacious diagonal layout of the original textbook diagram."
-          ],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered view is strongly cropped and oriented differently from the source: the large 3D triangle is cut off at the top/left, while the image plane appears on the right instead of the left/center composition of the reference. Several important labels such as the large P1/P2/P3 annotations and YL are missing or offscreen, and visible labels around the small triangle overlap and are much smaller than in the source. The generated output also adds visible calibration/noise sliders that do not appear in the original figure.",
           "failure_modes": [
+            "Missing-Labels",
             "Camera-Wrong",
-            "Scale-Wrong"
+            "Scale-Wrong",
+            "Hallucination"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
+          "failure_modes_reasoning": "Missing-Labels applies because important source annotations are absent or clipped in the rendered screenshot. Camera-Wrong applies because the initial viewpoint/framing is not aligned with the reference and places/crops the main objects differently. Scale-Wrong applies because the world triangle is oversized and clipped while the image-plane triangle/labels are too small and crowded. Hallucination applies because the visible UI sliders for calibration error and sensor noise are not part of the original figure.",
+          "geometry_accuracy_analysis": "The scene constructs a real 3D setup: a camera-coordinate origin with three green axes, a rectangular image plane at finite depth, 3D points P1/P2/P3 connected as an orange triangle, dashed projection rays from the origin toward the 3D points, projected/observed image-plane point markers, a projected image triangle, and red reprojection-error segments. The geometry is not a flat pasted texture or baked perspective billboard. Minor issues include the lack of an explicit camera/pinhole marker or camera body at the origin, and the dashed rays correspond to the ideal origin-to-3D-point lines rather than dynamically terminating at the displayed estimated projections, but the main spatial relationships and topology are correct and recognizable.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements of the reprojection-error calibration diagram are present as true 3D geometry with only minor omissions/alignment inconsistencies, matching the score-4 rubric.",
+          "interactivity_usability_analysis": "The code includes two visible sliders: Calibration Error updates the estimated projected triangle/points and red residual segments, and Sensor Noise moves the measured p′ points and residuals; both should have clear visible effects. OrbitControls are enabled for camera drag/zoom but do not count as meaningful interaction. A hidden Reset View button has a click handler but is not visible/usable. Pointer hover raycasting is registered on the world triangle/points, projected group, observed group, error segments, and ray group, showing compact tooltips; clicking these objects posts explanatory popups, and several clicks trigger goToStep demo steps that animate slider values and geometry. There is also Escape to hide popups/tooltips. The UI is small, transparent, and located in the bottom-left without substantially covering important geometry; the interactions are pedagogically useful, including guided explanations of reprojection error, calibration, noise, rays, and 3D points.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are more than three meaningful functional interactions, including two sliders plus hover/click explanations and animated guided demo steps, with compact non-intrusive UI.",
+          "faithfulness_analysis": "The rendered frame has a completely different landscape aspect ratio and is heavily zoomed/cropped compared with the tall portrait source. Major parts of the large orange triangle and labels are cut off, the projection plane appears on the right instead of occupying the central-left composition, the green coordinate axes are shifted to the right, and UI sliders at the bottom-left add unwanted chrome; although some colored points, dashed lines, and orange triangles are present, the crop, scale, and layout are far from the original.",
           "faithfulness": 2,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "notes": "The underlying mathematical projection model is correct, but the camera viewpoint is completely mirrored and over-zoomed, severely hurting faithfulness and readability.",
-          "action_items": [
-            "Rotate the camera azimuth/elevation in setCameraView so the coordinate origin is in the bottom-left and projects towards the top-right.",
-            "Reduce the camera zoom/adjust target so the entire scene (including all of the large orange world triangle) is fully visible without clipping.",
-            "Adjust the HTML label offsets to prevent overlaps, particularly separating p2 and p'2.",
-            "Position the XL, YL, ZL labels cleanly around the origin to avoid clipping into the image plane boundaries."
-          ],
+          "faithfulness_reasoning": "The figure is recognizable only by shared elements, but the wrong aspect ratio, severe over-zoom/cropping, shifted composition, and visible UI make it match well under 65% of the source.",
+          "label_quality_analysis": "Source labels include P1, P2, P3 for the 3D points; p1, p2, p3 and p′1, p′2, p′3 for projected/image points; and coordinate-axis labels XL, YL, ZL. In the generated figure, P1 and P3 are not visible, P2 is only partially visible/cut off near the bottom. The projection labels are present only in a small, cluttered form: p1/p′1 are crowded near the red point, p3/p′3 overlap near the green point, and p2/p′2 appear merged together at the bottom. XL and ZL are visible but much smaller than in the source, while YL is not visible. Overall, the label set is incomplete, consistently too small relative to the source’s large serif labels, and several labels overlap points/geometry or each other.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels are missing, clipped, overlapped, or rendered at a much smaller scale than the source, so this fits a score of 2 rather than a partial-match score.",
+          "concept_accuracy_analysis": "The figure illustrates camera calibration reprojection error: known 3D points Pᵢ project to image-plane estimates pᵢ, measured detections p′ᵢ are shown separately, and red segments represent residual distances minimized during calibration. The labels, sliders, and popups are mostly figure-specific and correctly describe calibration error, sensor noise, and squared reprojection residuals, though the dashed projection rays represent ideal pinhole rays while the displayed pᵢ may be perturbed estimated projections, and the measured-point explanation slightly overstates their fixed nature despite the noise slider moving them.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "Main concept and interactions are accurate and specific, with only minor imprecision about ideal rays versus estimated projections and how measured points change under the noise control.",
           "visual_aesthetics": 2.7,
           "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:21:05.804Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
-    "legacy_unknown": {
-      "criticVersion": "legacy_unknown",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3,
-          "overall_average": 3.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:39:46.752Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:24:45.298Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

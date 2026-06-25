@@ -252,86 +252,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a camera calibration setup with a tilted rectangular image plane on the left, a 3D target triangle on the right, and an origin coordinate system at the bottom-left camera center. The viewpoint is orthographic/isometric, looking from a slightly elevated and rightward position to clearly show the spatial separation between the image plane and the 3D points.",
-          "viewing_angle_rendered": "The rendered screenshot matches this perspective closely using an orthographic camera view from a nearly identical azimuth and elevation, showing the image plane on the left, the coordinate axes at the bottom left, and the 3D triangle on the right with the same spatial layout.",
-          "viewing_angle_comparison": "The viewing angles are extremely well-aligned. The orthographic projection settings successfully replicate the diagrammatic look and feel of the original 2D textbook figure.",
-          "shape_comparison": [
-            {
-              "element": "Image Plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle made of black tubes",
-              "match": true
-            },
-            {
-              "element": "Triangles (world and image)",
-              "source_shape": "flat triangles",
-              "rendered_shape": "flat triangular meshes with tube borders",
-              "match": true
-            },
-            {
-              "element": "Coordinate Axes",
-              "source_shape": "2D arrows",
-              "rendered_shape": "3D cylinder shafts with cone arrowheads",
-              "match": true
-            },
-            {
-              "element": "Point Markers",
-              "source_shape": "2D circles with black borders",
-              "rendered_shape": "3D spheres with outer black sphere shells",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The label 'p2' at the bottom of the image plane is slightly crowded near the Z_L axis label.",
-            "The tiny green coordinate frame inside the image triangle is much smaller and less visible in the render compared to the source."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "notes": "An exceptionally faithful recreation of the textbook figure with excellent interactive controls, highly accurate labels, and perfect conceptual clarity.",
-          "action_items": [
-            "Adjust the offset of the 'p2' label to prevent minor crowding with the Z_L axis lines/labels.",
-            "Slightly increase the scale and thickness of the local green coordinate frame inside the image plane triangle to improve visibility.",
-            "Ensure the 'err' slider labels are slightly more polished in terms of CSS alignment if possible."
-          ],
-          "visual_aesthetics": 5,
-          "overall_average": 5
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:12:08.251Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 5,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The figure includes the main triangles, image plane frame, colored point markers, dashed rays, red residuals, and labels. However, the code places the image plane at one nearly constant z value while the image points/triangles are offset in z and then views the scene almost straight-on, making the geometry essentially a flattened 2D construction rather than a true 3D perspective relationship. The initial rendered view is also much more front-facing and compressed than the oblique textbook view.",
+          "failure_modes": [
+            "Depth-Wrong",
+            "Camera-Wrong"
+          ],
+          "failure_modes_reasoning": "Depth-Wrong applies because the 3D projection geometry is largely flattened and the image points are not actually coplanar with the image plane. Camera-Wrong applies because the starting camera/view is a straight-on orthographic view rather than the more oblique perspective orientation of the source figure.",
+          "geometry_accuracy_analysis": "Present elements include an image-plane frame, orange measured-image triangle, orange object triangle, dashed projection rays, red reprojection residuals, point markers, green coordinate arrows, and labels. However, the geometry is essentially a flat 2D construction: nearly all vertices are hardcoded in the XY plane with only tiny Z offsets, the camera is set to look straight along Z with orthographic projection, the image plane is an asymmetrically skewed quadrilateral rather than a true rectangular plane viewed in perspective, and even the labeled Z_L axis is drawn as an in-plane diagonal arrow rather than true depth. There is no real unwarped 3D camera/projection setup; the perspective appearance is baked into flat coordinates.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Despite including many named figure elements, it fails the critical Fake 3D check because the scene is flattened with baked-in skewed 2D coordinates rather than constructed as true 3D geometry.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but those do not count. Meaningful interactions include an errScale range slider that visibly changes the red reprojection residual lengths and moves the p′ markers, a showRays checkbox that visibly hides/shows the dashed projection rays, hover tooltips on many registered scene objects via raycasting, and click handlers on triangles, rays, image plane, axes, points, and residuals that post explanatory popups and in some cases visibly tint or magnify elements. The UI is very compact and transparent in the lower-left corner and does not substantially cover the geometry. The interactions are pedagogically useful, but there is no guided step-through demo or tour.",
           "interactivity_usability": 4,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 5,
-          "overall_average": 4.8
+          "interactivity_usability_reasoning": "There are multiple functional pedagogical interactions with compact UI, but no guided demo is present, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered scene contains the same basic conceptual elements: a large orange 3D triangle, a projected smaller orange triangle on an image plane, colored point markers, dashed rays, and green coordinate axes. However, the source is a tall portrait composition with the figure filling the page vertically and the large triangle extending far to the upper-right, while the render is a landscape canvas with much smaller, more compressed geometry, different margins, different label placement/scale, thinner simplified styling, and visible UI controls at the bottom-left that are absent from the source.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in broad structure, the aspect ratio, crop, zoom, whitespace, label styling, and UI chrome differ substantially, so it matches well under 65% as a drop-in replacement.",
+          "label_quality_analysis": "Source labels: P1, P2, P3; p1, p2, p3; p′1, p′2, p′3; and coordinate axes XL, YL, ZL. The generated figure includes all of these labels with correct text/prime/subscript intent and they are generally readable. Placement is mostly near the correct points, but several image-plane labels are crowded against edges/lines, especially p2/ZL and p′2, and the overall label font is noticeably smaller relative to the geometry than in the source, where labels are very large and prominent.",
+          "label_quality": 3,
+          "label_quality_reasoning": "The label set is complete and mostly readable, but the consistently undersized font relative to the source plus some crowding/overlap around the image-plane labels warrants a score of 3 rather than 4 or 5.",
+          "concept_accuracy_analysis": "The figure is intended to illustrate camera calibration/reprojection error: known 3D points Pᵢ project to measured image points pᵢ, estimated projections p′ᵢ differ by red residuals, and optimization adjusts camera parameters to reduce those residuals. The labels and popups are figure-specific and mostly correct, but the underlying 3D construction is not geometrically consistent: pᵢ and p′ᵢ are not actually on the rectangular image plane, the rays are drawn as kinked segments rather than truly collinear optical-center–image–object projection lines, and p′ᵢ are arbitrary offsets rather than projections from a camera model.",
+          "concept_accuracy": 3,
+          "concept_accuracy_reasoning": "The main reprojection-error concept is present and the explanations are specific, but several important geometric relationships are implemented incorrectly, so it fits the rubric’s middle category rather than a fully accurate figure.",
+          "visual_aesthetics": 2,
+          "overall_average": 2.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:24:01.764Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:14:53.531Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

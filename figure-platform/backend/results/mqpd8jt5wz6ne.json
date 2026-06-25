@@ -322,96 +322,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
+    "legacy_unknown": {
+      "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure uses an oblique axonometric projection from an elevated, right-of-center viewpoint. The Z-axis runs horizontally to the right, the Y-axis points vertically upwards, and the X-axis projects diagonally down-right. This layout keeps both the horizontal (green) and vertical (cyan) triangles clearly visible on both sides of the origin.",
-          "viewing_angle_rendered": "The rendered screenshot is taken from a lower elevation angle, looking more closely along the horizontal plane. As a result, the horizontal green triangles are heavily foreshortened and appear extremely thin, while the vertical cyan triangles are highly dominant.",
-          "viewing_angle_comparison": "The rendered viewpoint is at a much lower elevation compared to the source, causing severe foreshortening of the horizontal green triangles. Raising the camera elevation and adjusting the azimuth would make the green triangles on both sides of the origin as broad and clear as they are in the source figure.",
-          "shape_comparison": [
-            {
-              "element": "world point P",
-              "source_shape": "sphere",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "projected point p",
-              "source_shape": "sphere",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "similar triangles",
-              "source_shape": "flat triangle",
-              "rendered_shape": "flat triangle",
-              "match": true
-            },
-            {
-              "element": "active dimensions (red bars)",
-              "source_shape": "thick line",
-              "rendered_shape": "cylinder",
-              "match": true
-            },
-            {
-              "element": "image plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat plane",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The green triangles are too narrow and squashed due to the low camera elevation angle compared to the source.",
-            "The red world point (P) is positioned too high and far to the right, making the guide lines form a very stretched, non-uniform box.",
-            "The focal length (f) label is slightly too low and overlaps with the guide lines."
-          ],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main pinhole projection elements: image plane, world point, projected point, ray, colored similar triangles, red coordinate segments, axes, and labels X/Y/Z/x/y/f. However the initial view is noticeably different from the source: the source has a much wider side-elevation composition with the X axis nearly horizontal and the image/world planes filling the frame, while the generated render is more compact and viewed from a different oblique angle. The relative sizes are also off: the grey image plane, colored planes, red dimension edges, and labels appear much smaller and less dominant than in the reference.",
           "failure_modes": [
             "Camera-Wrong",
             "Scale-Wrong"
           ],
-          "geometry_accuracy": 4,
+          "failure_modes_reasoning": "Camera-Wrong applies because the starting orientation/framing does not match the source figure's wide side-view layout. Scale-Wrong applies because the planes and annotations are noticeably undersized and compressed relative to the reference, where they occupy most of the canvas.",
+          "geometry_accuracy_analysis": "The scene constructs a real 3D pinhole projection diagram: origin/pinhole sphere, X/Y/Z axes, an image plane at z = -f with border and local axes, a world point P, projected point p, dashed projection ray through p–O–P, similar-triangle surfaces, red coordinate/dimension segments, guide lines, and labels are all present. Geometry is not a flat pasted texture or baked perspective; depth is represented with actual coordinates along Z. Minor possible issues include somewhat stylized/thick red dimension cylinders and image-plane axes/dimensions placed in the negative directions, but the topology and spatial relationships are consistent with a standard virtual-image-plane perspective-projection figure.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are represented as true 3D geometry with plausible positions, proportions, and connections, with only minor stylistic alignment choices.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but these do not count as meaningful interactions. Two visible sliders, Object Depth (Z) and Focal Length (f), have input listeners that update point positions, projection rays, similar-triangle meshes, red dimension segments, labels, and numeric readouts; these should visibly function and are pedagogically relevant. The scene also registers multiple raycast interactive objects: the pinhole origin, red world point, brown projected point, image plane, green triangle, and cyan triangle; hovering shows a tooltip and clicking sends explanatory popups, with several clicks also triggering guided demo steps/animated transitions through window.goToStep. A hidden Reset View button has a listener but is not usable because it is display:none. The interactions are useful for exploring depth, focal length, projection, and similar-triangle relationships, and the bottom-left UI is small/transparent and does not significantly cover the geometry.",
           "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "notes": "Excellent pedagogical interactivity and clear labeling, but the camera angle heavily squashes the horizontal projection triangles.",
-          "action_items": [
-            "Increase the camera elevation angle (e.g. elevationDeg around 30-35) to make the horizontal green triangles wider and clearly visible.",
-            "Adjust the default coordinates of the world point P (X, Y, Z) so the projection box has proportions closer to the original figure (wider X, slightly lower Y relative to Z).",
-            "Reposition the 'f' label slightly to prevent overlapping with the projection lines near the image plane."
-          ],
-          "visual_aesthetics": 4.3,
-          "overall_average": 4.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:23:59.177Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
-    "legacy_unknown": {
-      "criticVersion": "legacy_unknown",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically meaningful interactions including two sliders, click/hover explanations, and guided demo transitions, with compact non-intrusive UI, matching the score-5 rubric.",
+          "faithfulness_analysis": "The rendered scene shows the same general camera/projection setup with red image/object rectangles, translucent cyan/green planes, axes, and labels, but the first frame is much more zoomed out with large empty margins and a different apparent crop. The source is a tightly cropped textbook illustration with oversized labels, thick strokes, a large left image plane partly off-canvas, and no UI; the render is simplified, thinner, smaller, and includes slider controls occupying the lower-left area.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the concept is recognizable, the zoom/crop/proportions, label scale, missing detail, and visible UI controls make it substantially less than a 65% drop-in match.",
+          "label_quality_analysis": "Source labels: lowercase x appears near the small left image-plane x direction; lowercase y appears near the lower-left green direction; f appears along the slanted focal line; uppercase X appears at the right object-plane horizontal direction; uppercase Y appears by the right vertical red edge; uppercase Z appears inside the large cyan/green depth plane. In the generated figure all six labels appear with correct text and generally appropriate/unobstructed placement, but all are much smaller than the large italic labels in the source; x/y/f are especially tiny on the left, and X/Y/Z are readable but underscaled. The generated screenshot also includes extra UI/control text at the bottom left that is not part of the source figure.",
+          "label_quality": 3,
+          "label_quality_reasoning": "The label set is complete and mostly correctly positioned, but the font size is consistently too small relative to the source, which fits the rubric for a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates pinhole-camera perspective projection using similar triangles: a 3D point P=(X,Y,Z), projection through the origin, an image plane at distance f, and the relationships x/f = X/Z and y/f = Y/Z. The geometry, sliders for depth and focal length, labels, and popups are largely figure-specific and correctly explain inverse-depth scaling and focal-length magnification; the only notable ambiguity is that the image plane is placed behind the pinhole with inverted coordinates while being called a “virtual image plane,” which could confuse sign conventions, though the displayed axes make the magnitude relationships coherent.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "Main concept and interactions are accurate and specific, with only a minor sign/terminology ambiguity about the image plane and projected coordinate orientation.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:40:16.458Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:02:20.387Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

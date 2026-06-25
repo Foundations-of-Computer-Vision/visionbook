@@ -300,97 +300,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D coordinate system where the horizontal coordinate axis (labeled 'w') points to the right, the vertical axis ('y') points upwards, and the depth axis ('x') points obliquely up-and-right. The w=0 plane is on the left, and the w=1 plane is on the right, viewed from a slightly elevated front-right perspective.",
-          "viewing_angle_rendered": "The rendered screenshot shows the coordinate system mirrored: the horizontal axis ('w') points to the left-down, the 'y' axis points upwards, and the 'x' axis points into the depth. The w=0 plane is on the right, and the w=1 plane is on the left.",
-          "viewing_angle_comparison": "The viewing angle in the rendered screenshot is reversed/mirrored compared to the source figure. This causes the entire layout (planes, axes, and points) to be flipped horizontally, which directly contradicts the source figure's orientation.",
-          "shape_comparison": [
-            {
-              "element": "w=0 plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "w=1 plane",
-              "source_shape": "open wireframe rectangle",
-              "rendered_shape": "open wireframe rectangle",
-              "match": true
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "lines with arrowheads",
-              "rendered_shape": "cylinders with cones",
-              "match": true
-            },
-            {
-              "element": "points",
-              "source_shape": "red circles with black outlines",
-              "rendered_shape": "black spheres containing red spheres",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The camera angle is mirrored: the 'w' axis points to the left instead of the right, and the planes are flipped.",
-            "The 'Homogeneous' label severely overlaps with the '(x,y,1)' label, making both unreadable.",
-            "The red dots appear almost entirely black and lack the vibrant red fill seen in the source figure.",
-            "The 'Heterogeneous' label is placed on the right side of the plane instead of the far left margin.",
-            "The overall spacing is too compact, causing the labels to clash with the geometric elements."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Color-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 4,
-          "notes": "The figure's layout is completely mirrored compared to the source, and severe label overlap makes key annotations unreadable.",
-          "action_items": [
-            "Adjust the camera's azimuth and target to flip the view so that the w-axis points to the right, matching the source orientation.",
-            "Reposition the 'Homogeneous' and 'Heterogeneous' titles to the outer edges of the canvas to avoid cluttering the central 3D geometry.",
-            "Increase the size/exposure of the inner red sphere of the points so they are clearly visible as red dots with a thin black outline rather than appearing as solid black blobs.",
-            "Fix label offsets to prevent overlaps, particularly around the '(x,y,1)' point."
-          ],
-          "visual_aesthetics": 2.3,
-          "overall_average": 2.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:21:07.583Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main axes, planes, dashed ray, points, and most labels, plus working sliders for λ and x. However, the initial camera view is substantially different from the source: the w-axis points down-left instead of horizontally right, the homogeneous/heterogeneous regions appear visually swapped, and the composition is compressed near the center. The red points from the source render mostly as black dots because the larger black backing sphere encloses the red sphere. The x-axis label is not visible in the screenshot, and the large labels overlap the geometry heavily.",
           "failure_modes": [
             "Camera-Wrong",
-            "Color-Wrong"
+            "Scale-Wrong",
+            "Color-Wrong",
+            "Missing-Labels"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
-          "label_quality": 2,
+          "failure_modes_reasoning": "Camera-Wrong: the viewpoint/orientation does not match the source, with the w-axis and planes projected in the wrong screen direction. Scale-Wrong: labels and geometry proportions are off, with oversized overlapping text and a compressed figure. Color-Wrong: the red points appear black rather than red with black outlines. Missing-Labels: the important x-axis label is absent or not visible in the rendered view.",
+          "geometry_accuracy_analysis": "The scene constructs true 3D geometry: three orthogonal coordinate axes with arrowheads, a translucent w=0 heterogeneous plane, a parallel w=1 wireframe plane, red/black spherical points for (x,y), (x,y,1), and (λx,λy,λ), a dashed ray from the origin through the homogeneous points, and a solid connector parallel to the w-axis. Tick marks and labels are included; no major source elements appear absent, and the planes/ray/points are positioned consistently in 3D rather than baked into a flat image.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are represented as correct, unwarped 3D geometry with plausible positions, proportions, and connections, matching the intended homogeneous-coordinate diagram.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as a meaningful interaction. There are two visible bottom-left sliders: λ changes the scaled homogeneous point along the dashed ray, and x changes the point/ray geometry; both appear functional and pedagogically relevant. Multiple scene objects are registered for hover/click interaction: planes, ray, connector, and red points show hover tooltips and clicking them posts explanatory popup content; several clicks also trigger goToStep animations/tweens for λ or x. A guided demo structure exists through demoSteps and object-triggered goToStep calls, although there is no explicit next/previous demo UI. The reset-view button has a listener but is hidden, so it is not usable. The UI chrome is compact and placed in the lower-left corner without covering important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional pedagogical interactions—two sliders plus object hover/click explanations with animated demo steps—and the UI is compact, so this meets the score-5 rubric despite the hidden reset button.",
+          "faithfulness_analysis": "The rendered frame is a compact 3D perspective view rather than the wide textbook-style diagram: the aspect ratio, zoom, crop, and whitespace are very different, and the figure is shifted into the center with large unused margins. The labels are effectively reversed in placement compared with the source, the red highlighted points are rendered as black, the w-axis direction/composition differs, the planes are much smaller and differently oriented, and visible UI sliders at the bottom-left add chrome not present in the original. It conveys a related homogeneous-coordinate idea but is not a close drop-in replacement.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "The general concept is recognizable, but major mismatches in camera angle, layout, label placement, colors, crop/aspect ratio, and added UI chrome make it match well under 65% of the source.",
+          "label_quality_analysis": "Source labels are: “Heterogeneous”, “Homogeneous”, axis labels “y”, “x”, “w”, point labels “(x,y)”, “(x,y,1)”, “(λx,λy,λ)”, and tick label “1”. In the generated figure, “Heterogeneous” and “Homogeneous” appear but are effectively swapped/mispositioned relative to the source, with “Homogeneous” overlapping the central geometry. “y” appears and is readable; “x” is missing or not visible; “w” appears but is placed on the lower-left rather than at the right end of the horizontal axis. “(x,y)”, “(x,y,1)”, “(λx,λy,λ)”, and “1” appear, but the homogeneous point label is on the left instead of upper-right, and the central labels are somewhat cluttered/overlapping. Font sizes are generally readable and close to source scale, though the large region labels dominate and interfere with the drawing.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Most labels are present and readable, but several key labels are missing or substantially misplaced, with noticeable clutter around the central point labels, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure clearly illustrates homogeneous coordinates for a 2D point: the ordinary point (x,y), its normalized representative (x,y,1) on the w=1 plane, and scaled representatives (λx,λy,λ) lying on the same ray through the origin. Tooltips and popups are figure-specific and correctly discuss λ scaling, division by w, the w=1 slice, and the ray relationship, though the use of “heterogeneous” instead of the standard “inhomogeneous”/ordinary coordinates is a minor terminology issue.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 2.7,
-          "overall_average": 3
+          "concept_accuracy_reasoning": "The main homogeneous-coordinate concept and interactions are accurate and specific, with only a minor terminology/visualization ambiguity around the ordinary 2D plane.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:41:31.636Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:46:11.071Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

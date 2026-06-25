@@ -268,90 +268,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D isometric projection of bilinear interpolation. The base plane is viewed from a moderately high elevation, showing a clear, open quadrilateral base with depth. The camera is positioned looking from the front-right-above towards the back-left-down.",
-          "viewing_angle_rendered": "The rendered screenshot views the 3D scene from a very low elevation angle. The base plane is squashed almost flat into a single horizontal line, causing depth to be severely compressed and elements along the depth axis to overlap.",
-          "viewing_angle_comparison": "The rendered view has a much lower elevation angle (is too flat) compared to the source figure. This extreme foreshortening causes the bottom-left labels and nodes to pile up and overlap heavily.",
-          "shape_comparison": [
-            {
-              "element": "Base plane nodes",
-              "source_shape": "flat horizontal ellipses",
-              "rendered_shape": "flat horizontal ellipsoids",
-              "match": true
-            },
-            {
-              "element": "Vertical stems",
-              "source_shape": "thin solid/dashed lines",
-              "rendered_shape": "thick cylinders",
-              "match": false
-            },
-            {
-              "element": "Interpolation edges",
-              "source_shape": "green lines",
-              "rendered_shape": "thick green cylinders",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "Severe label overlapping on the bottom-left corner of the bilinear panel where 'n,m' and 'n,m+1' are rendered directly on top of each other.",
-            "The camera angle is too low, causing the 3D base rectangle to appear nearly flat/squashed.",
-            "The green interpolation edges and black/dashed stems are excessively thick compared to the clean, thin lines of the original textbook illustration.",
-            "The left panel (Linear interpolation) is pushed too far to the left margin, clipping some visual elements."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 1,
-          "faithfulness": 3,
-          "label_quality": 2,
-          "concept_accuracy": 4,
-          "notes": "The 3D visualization is technically correct but severely hampered by a flat camera viewpoint, thick primitives, and overlapping labels.",
-          "action_items": [
-            "Increase the camera elevation angle (elevationDeg) so the base plane is viewed from further above, resolving the foreshortening and separating the overlapping labels.",
-            "Significantly reduce the radius of all cylinders representing lines and dashed segments to match the thin line style of the original diagram.",
-            "Add interactive HTML range sliders for parameters 'a' and 'b' to allow users to dynamically change the interpolation position in real-time.",
-            "Adjust the HTML label positions and offsets to eliminate text overlaps, particularly at the corner nodes."
-          ],
-          "visual_aesthetics": 2.7,
-          "overall_average": 2.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:14:46.374Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene recreates the main interpolation structures with black/red nodes, green interpolation lines, dashed projection guides, and a translucent bilinear surface. However, the rendered view is badly framed: the left linear-interpolation panel is partially offscreen, its left endpoint and labels are clipped, the bottom title is cut off, and several right-panel labels/geometry are truncated at the canvas edges. The bilinear panel dominates the frame compared with the source, while the two-panel layout in the reference is much wider and fully visible.",
           "failure_modes": [
+            "Missing-Labels",
             "Camera-Wrong",
-            "Interaction-Missing"
+            "Scale-Wrong"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 2,
-          "faithfulness": 3,
-          "label_quality": 3,
+          "failure_modes_reasoning": "Missing-Labels applies because important annotations and captions are absent or clipped in the rendered view, including parts of the linear panel labels/title and some right-side labels. Camera-Wrong applies because the initial view/framing does not match the source: the content is cropped and shifted rather than showing the full two-panel textbook layout. Scale-Wrong applies because the right bilinear diagram is oversized relative to the left panel and the overall proportions do not match the wide balanced reference figure.",
+          "geometry_accuracy_analysis": "The scene contains two separate constructions: a planar linear-interpolation panel with base axis, stems, input/output ellipsoid nodes, green interpolation segment, dashed projection, and labels; and a true 3D bilinear-interpolation panel with a rectangular base in XZ, four sample stems, corner samples, green interpolation edges/lines, dashed projection guides, red output/base nodes, labels, and a translucent bilinear surface. The bilinear portion is real 3D geometry rather than a flat pasted or skewed billboard, though one expected interpolated row marker such as the upper l_out(a,m+1) node/base guide point appears absent or underrepresented, and some node/guide placements are stylized rather than exact.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric components are present and constructed as genuine 3D primitives with plausible proportions and connections, with only minor omissions or alignment/styling inaccuracies preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom (functional but not counted), a hidden Reset View button with a click handler (not visible, so not usable), hover tooltips via pointermove/raycasting over registered objects, click handlers on registered scene objects that post explanatory popups, pointerleave/Escape handlers to hide tooltip/popup. Three scene targets are registered: the linear interpolation group, the bilinear surface mesh, and the bilinear group/final-value region; these should visibly show hover tooltips and trigger explanatory text when clicked, though the popup depends on the parent frame handling the postMessage. There are no sliders, toggles, parameter controls, or guided step-through animation; UI chrome is minimal and does not cover geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are at least two functional pedagogical hover/click explanation interactions with compact UI, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered scene uses similar green lines/plane, black/red points, and math labels, so the interpolation concept is recognizable. However the default frame has a very different aspect ratio and crop from the source: the wide textbook figure is squeezed into a much narrower view, with the left linear panel cut off at the left and bottom caption cropped, while the right bilinear panel is over-zoomed and clipped at the top/right with several labels truncated or misplaced relative to the source.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the main idea is present, the severe aspect-ratio, zoom, and cropping mismatches make it a poor drop-in replacement, matching well under 65% of the original composition.",
+          "label_quality_analysis": "Source labels include, in panel (a): ℓ_in[n], ℓ_out(a), ℓ_in[n+1], bottom labels n, a, n+1, and caption “(a) Linear interpolation”; in panel (b): ℓ_in[n,m], ℓ_in[n,m+1], ℓ_in[n+1,m], ℓ_in[n+1,m+1], ℓ_out(n,b), ℓ_out(a,m), ℓ_out(a,m+1), ℓ_out(a,b), point label I(a,b), bottom/grid labels n,m, n,m+1, n+1,m, n+1,m+1, and caption “(b) Bilinear interpolation”. The generated figure shows some correct labels such as ℓ_out(a), ℓ_in[n+1], a, n+1, several bilinear ℓ labels, n,m, n,m+1, (a,b), and the bilinear caption, with generally readable font size. However, multiple source labels are missing or cropped off, including ℓ_in[n], bottom n, the “(a)” caption prefix, I(a,b), and several right-side bilinear labels are truncated or absent; some labels overlap or sit very close to geometry and the image crop cuts off text at the edges. Overall the label set is only partially complete, with acceptable font size but many missing/cropped labels and imperfect placement.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most of the full source label set is incomplete or clipped despite some readable correct labels, so this fits score 2 rather than 3.",
+          "concept_accuracy_analysis": "The figure clearly illustrates 1D linear interpolation and 2D bilinear interpolation with labeled input samples, output samples, base coordinates, projection guides, and a bilinear patch. The hover/click explanations are figure-specific and correctly describe the red interpolated samples, weighted averaging, the four-corner bilinear surface, and the two-step interpolation process; the only minor omission is that exact weights/equations such as (1-a), a, (1-b), b are not stated explicitly.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3,
-          "overall_average": 3
+          "concept_accuracy_reasoning": "Main concepts and interactions are accurate and specific, with only a minor missing detail in the lack of explicit interpolation formulas/weights.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:26:41.109Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:11:06.983Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

@@ -3,26 +3,43 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene captures the general stacked diamond-sheet idea with colored points and dotted trajectories, and the main “ViT block x3” labels are present. However, the initial crop/view is much more zoomed out and centered than the source, the planes/labels are proportioned differently, the plot is sparser and narrower, the black plane outlines are much thinner/lighter, and extra UI controls plus a small t-SNE title appear that are not in the source figure.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Color-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the source is a tall cropped composition with the stack large on the right and labels far left, while the render shows the whole stack smaller and more centered/overlapped. Scale-Wrong applies because planes, labels, point spread, and trajectory density/proportions differ noticeably from the source. Color-Wrong applies because the source has heavy dark black outlines and label strokes, while the generated plane outlines are thin and grayish. Hallucination applies due to the visible Trace/Sep UI and the added 't-SNE of high-dimensional embeddings' annotation that are not in the source.",
+          "geometry_accuracy_analysis": "The scene is constructed as real 3D geometry: five stacked horizontal square t-SNE sheets, colored point clusters on each sheet, dashed inter-layer trajectories, gray guide/axis lines on the planes, and vertical arrow/label elements at the left indicating repeated ViT blocks. Major elements appear present and arranged in the intended tall stack, with camera perspective producing the diamond-sheet view rather than baked-in flat skewing. Minor inaccuracies include synthetic/random cluster layouts that likely do not match the source exactly, HTML overlay labels rather than integrated 3D text/boxes, and somewhat generic square planes/guides rather than precise textbook proportions.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric components are present as plausible true 3D geometry, but exact point distributions, proportions, and label integration are only approximate, so this fits a score of 4 rather than 5.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as a meaningful interaction. Visible UI interactions include a Trace button that toggles highlighting of one semantic class, enlarging its points, fading others, and showing an explanatory popup; this should visibly function. A Sep range slider changes the separationAmount, recomputes point and dashed-line positions, and shows a tooltip, so it has a visible effect on the cluster layout. There are pointermove/click handlers with raycasting for point meshes and layer planes: hovering shows tooltips, clicking points selects/traces that class and clicking planes shows layer explanations/reset selection; these are pedagogically useful, though small points may be somewhat hard to target. There is also an Escape key handler to clear popup/selection. A Reset View button has a click handler but is hidden with display:none, so it is not usable. The UI is compact in the upper-left and does not cover important geometry.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
+          "interactivity_usability_reasoning": "Multiple meaningful interactions are functional and useful with compact UI, but there is no clear guided step-through demo, so it falls short of the score-5 rubric.",
+          "faithfulness_analysis": "The rendered frame contains the same broad concept of stacked diamond planes with multicolored dashed trajectories and repeated “ViT block x3” labels with arrows, but the composition is very different from the source. The source is a tall, zoomed-in crop with large labels on the far left, thick dark plane outlines on the right, generous white space, and no UI; the render is a landscape, force-fit overview with small centered labels, thin plane outlines, an added title, and visible controls in the top-left.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although recognizable in theme, the wrong aspect ratio, zoom/crop, label placement, line thickness, added title, and UI chrome make it a poor drop-in match well below 65% faithfulness.",
+          "label_quality_analysis": "Source labels: four identical rounded-box labels reading \"ViT block x3\" along the left vertical arrow chain. Generated figure includes all four \"ViT block x3\" labels with correct text, readable size, and generally appropriate boxed styling. Their placement is similar but more compressed and closer to/partly overlapping the 3D stack than in the source, and there is an extra small label \"t-SNE of high-dimensional embeddings\" near the top that is not present in the source. Overall, the main label set is complete and clear, but positioning is less faithful and the extra title label slightly reduces label fidelity.",
           "label_quality": 4,
+          "label_quality_reasoning": "All four required labels are present and legible with only minor placement/extra-label issues, matching the rubric for a score of 4.",
+          "concept_accuracy_analysis": "The figure illustrates a stack of 2D t-SNE projections of high-dimensional ViT embeddings at successive depths, with arrows labeled “ViT block x3” and colored datapoints becoming more semantically clustered in later layers. Tooltips and popups are mostly figure-specific, correctly referring to t-SNE sheets, sampled ViT depths, same datapoints across layers, and tracing a semantic class, though the actual class identities and point layouts are synthetic/generic color classes rather than specific semantic categories or measured data.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main concept is accurate and the interactions are specific, but the data/classes are fabricated and generic rather than tied to concrete source categories or exact t-SNE structure, which is a minor conceptual limitation.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:43:36.162Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:52:50.277Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

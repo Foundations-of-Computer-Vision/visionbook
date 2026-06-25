@@ -262,84 +262,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure depicts two 3D coordinate systems with the imaginary axis pointing vertically, the real axis pointing up-right, and the sequence index axis pointing down-right. The viewpoint is elevated and looking from the left-front, rendering the helical structures in clear isometric-like perspective.",
-          "viewing_angle_rendered": "The rendered screenshot matches the elevated orthographic perspective well. The vertical imaginary axis, diagonal real axis, and diagonal sequence index axis align closely with the source figure's layout.",
-          "viewing_angle_comparison": "Both viewing angles are highly consistent, utilizing a matching orthographic elevation and azimuth to render the twin panels side-by-side.",
-          "shape_comparison": [
-            {
-              "element": "complex exponential path",
-              "source_shape": "connected cylinders",
-              "rendered_shape": "connected cylinders",
-              "match": true
-            },
-            {
-              "element": "real component wave",
-              "source_shape": "thin red line",
-              "rendered_shape": "thin red tube",
-              "match": true
-            },
-            {
-              "element": "discrete sample marks",
-              "source_shape": "black circles with ticks",
-              "rendered_shape": "black spheres with crosses",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The label 'n' in panel (a) appears corrupted or overlapped with other text.",
-            "The tick marks/crosses on the black sample spheres are brown instead of black.",
-            "The label '1' overlaps slightly with the 'R' label in panel (a)."
-          ],
-          "failure_modes": [
-            "Color-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "notes": "Excellent side-by-side reconstruction with functional wave parameters, though text overlaps slightly clutter the visual presentation.",
-          "action_items": [
-            "Increase the visual offset of labels to prevent overlapping of '1' and 'R'.",
-            "Resolve the text rendering glitch of the 'n' axis label in panel (a).",
-            "Change the color of the sample crosses from brown to black to align with the original aesthetic."
-          ],
-          "visual_aesthetics": 3.7,
-          "overall_average": 3.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:59:33.013Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated figure includes the two panels, axes, tick labels, red/green component curves, black sampled complex paths, dots/crosses, and panel labels. However the rendered panels are much smaller than in the reference and shifted toward the upper-left, leaving large unused blank space; several labels are oversized relative to the curves and overlap or crowd nearby elements, especially the n/40 labels. The viewing/framing also differs from the source, making the panels appear more compressed and less like the original side-projected textbook layout.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial framing/viewpoint does not match the reference composition, with the panels shifted and compressed relative to the source. Scale-Wrong applies because label sizes and overall panel scale are noticeably off, causing crowding/overlap and leaving excessive blank space compared with the original.",
+          "geometry_accuracy_analysis": "The scene contains two true 3D panels with Re, Im, and n axes, arrowheads, tick marks, black helical/sample paths, black sample dots with small crosses, and red/green projected sinusoidal curves. The major spatial structure is present and constructed as real 3D geometry rather than a flat pasted or skewed billboard. The main geometric weakness is that the helix and projected wave amplitudes have radius about 0.74 while the axes are labeled and ticked at ±1, so the curves do not actually reach the unit ticks; otherwise positions, connectivity, and panel layout are plausible.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as real 3D geometry, with only minor-to-moderate proportional/alignment inaccuracies such as the amplitude not matching the ±1 ticks.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as a meaningful interaction. A visible k(b) slider updates panel (b)'s frequency and visibly changes the black sample path plus red/green sinusoidal projections. A visible red/green checkbox toggles the waveform projections on and off in both panels. Scene objects are registered for hover/click interaction: hovering should show compact tooltips for axes, complex exponential path, samples, and real/imaginary curves, while clicking sends a popup explanation via postMessage; the hover tooltips are locally visible, though the click popup depends on the parent environment. A Reset View button has a listener but is hidden, so it is not usable. The UI is compact and placed in the bottom-left blank area without covering important geometry; interactions are pedagogically relevant but there is no guided demo or step-through animation.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
+          "interactivity_usability_reasoning": "At least two meaningful interactions are functional and useful with compact UI, but there is no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The generated image contains the same two-panel 3D curve concept with black marker curves, red/green guide curves, axes, labels, and panel captions, so the subject is recognizable. However, the rendered frame has a much different aspect ratio and crop: the panels are smaller, closer together, shifted upward with excessive bottom whitespace, and visible UI controls occupy the lower-left area; the source is a wide textbook layout with larger panels and clean margins.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "Recognizable overall layout and elements, but significant zoom/aspect/margin mismatch plus UI chrome make it only a moderate drop-in match, around the 65–70% range.",
+          "label_quality_analysis": "Source labels include, for panel (a): I on the vertical axis, tick labels 1 and -1, slanted-axis -1, R, n, numeric labels 1, 20, 40, and (a); for panel (b): I, tick labels 1 and -1, slanted-axis -1, R, n, numeric labels 1, 20, 40, and (b). The generated figure includes essentially all of these labels with correct text, but the overall figure and labels are noticeably smaller than the source, several labels are crowded or partially overlapping geometry/other labels, especially n/40 in panel (a) and 20/40 among curves in panel (b), and the extra UI text at the bottom adds non-source clutter. Overall the label set is mostly complete and readable, but sizing and placement are only moderately faithful to the source.",
           "label_quality": 3,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3.7,
-          "overall_average": 3.8
+          "label_quality_reasoning": "Although nearly all source labels are present, consistent scale mismatch plus several crowded/overlapping placements make this a score-3 rather than a higher-quality match.",
+          "concept_accuracy_analysis": "The figure illustrates discrete complex exponentials/DFT basis sequences for N=40, comparing k=1 and k=3, with a 3D helix-like complex path versus sample index n plus red real and green imaginary projections. The interactive explanations are mostly figure-specific and include correct formulas for exp(2πjkn/40), cos, and sin, but the plotted radius is 0.74 while the axes are labeled ±1 and the popups call it A=1/unit circle, the panel B popup title remains k=3 even when the k(b) slider changes it, and the imaginary-axis glyph appears nonstandard/ambiguous rather than clearly ℑ/Im.",
+          "concept_accuracy": 3,
+          "concept_accuracy_reasoning": "The core complex-exponential concept is present with specific explanations, but several details are inaccurate or potentially misleading, especially the amplitude/unit-circle mismatch and stale k label under interaction.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:23:20.354Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:26:41.824Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

@@ -690,102 +690,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a perspective projection scene from an elevated, slightly left-of-center camera viewpoint. The image plane is a tilted rectangle near the bottom-left, the projection center O is a solid black sphere in the foreground, and the bird's flight trajectory recedes steeply upwards and to the right into the background.",
-          "viewing_angle_rendered": "The rendered screenshot shows the scene from a much flatter, more horizontal viewpoint. The image plane on the left is extremely tall and narrow, and the bird's flight trajectory extends almost entirely horizontally to the right with very little upward slant.",
-          "viewing_angle_comparison": "The rendered view has a much lower elevation and a wider, flatter perspective than the source, causing the bird trajectory to appear nearly horizontal instead of steeply rising to the upper right.",
-          "shape_comparison": [
-            {
-              "element": "projection center O",
-              "source_shape": "flat circle",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "image plane",
-              "source_shape": "flat tilted rectangle",
-              "rendered_shape": "flat upright rectangle",
-              "match": true
-            },
-            {
-              "element": "birds",
-              "source_shape": "2D gull silhouettes",
-              "rendered_shape": "3D outline gulls",
-              "match": true
-            },
-            {
-              "element": "projection rays",
-              "source_shape": "thin lines",
-              "rendered_shape": "thick lines/tubes",
-              "match": false
-            },
-            {
-              "element": "velocity arrows",
-              "source_shape": "flat red arrows",
-              "rendered_shape": "3D cone/cylinder arrows",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The bird flight path is nearly horizontal instead of rising steeply to the upper right.",
-            "The image plane is excessively tall and narrow compared to the balanced rectangular frame in the source.",
-            "The green projection lines are too thick and dense, cluttering the space near the image plane.",
-            "The 'Vanishing point' label is positioned too low, overlapping the bottom frame of the image plane."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "The concept of perspective vanishing points is well illustrated, but the visual proportions, camera angle, and trajectory slope deviate significantly from the source.",
-          "action_items": [
-            "Increase the vertical slope of the bird trajectory vector (V) to match the steep upward diagonal path of the source.",
-            "Adjust the image plane aspect ratio to be wider and more rectangular (less vertically stretched).",
-            "Reduce the thickness of the green projection rays/lines to restore the clean vector diagram aesthetic.",
-            "Reposition the camera angle (setCameraView) to look down and across the scene with a steeper oblique angle.",
-            "Shift the 'Vanishing point' label upwards slightly to avoid colliding with the bottom edge of the image plane frame."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:02:28.467Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered view is a shallow landscape 3D view with the image plane cropped at the left/bottom and the bird trajectory compressed into a nearly horizontal band, unlike the tall source diagram where rays fan broadly from O through the plane toward large receding birds. Key annotations are poorly visible: the O label is not visible in the screenshot and the vanishing-point label is tiny/near the edge. The colors and general elements are mostly present, and the sliders/click handlers appear to provide meaningful interaction.",
           "failure_modes": [
+            "Missing-Labels",
             "Camera-Wrong",
             "Scale-Wrong"
           ],
+          "failure_modes_reasoning": "Missing-Labels: important source labels such as O are absent from the rendered view or effectively hidden/cropped, and other labels are much less legible. Camera-Wrong: the initial viewpoint/aspect is a low oblique landscape view rather than the source's tall diagram with origin low and rays rising/fanning to the upper right. Scale-Wrong: relative proportions are off, with the plane cropped/oversized, birds and labels too small, and the green projection rays visually collapsed compared with the broad fan in the source.",
+          "geometry_accuracy_analysis": "The scene constructs a genuine 3D setup: a rectangular image plane at finite depth, an origin/projection center O, a vanishing point on the plane, a green direction ray, a receding 3D bird trajectory with repeated bird silhouettes, projection rays from O to the birds, projected bird silhouettes on the image plane, and red velocity/apparent-motion arrows. No source image is pasted and the main geometry is not just a baked skewed flat drawing. Minor issues are that the birds are essentially flat tube/billboard silhouettes rather than volumetric birds, the image-plane frame is offset relative to the projection coordinate system, and the projected image path itself is not explicitly drawn as a clean line to the vanishing point, but the major spatial relationships are plausible and recognizable.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 3.7,
-          "overall_average": 4
+          "geometry_accuracy_reasoning": "All major geometric elements are present in a real 3D construction with plausible connections, with only minor shape/alignment omissions preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but those do not count. Meaningful controls include a Yaw slider that updates the flight direction/vanishing point, a t slider that moves the active bird/projection along the path, and multiple registered hover/click targets on the origin, image plane, vanishing point, velocity arrows, and bird/projection group; hovering should show an in-page tooltip and clicking posts explanatory popups, with some clicks triggering the guided goToStep tween animation. There is also a Reset View button, which likely works but is a view utility rather than pedagogical. The interactions are generally useful for understanding how velocity direction and time affect the projected bird and vanishing point, and the guided demo exists through clickable scene elements, though it is not exposed as an obvious step-by-step UI. The control panel is compact and mostly transparent, but in the screenshot it sits over the origin/green ray area, causing minor occlusion rather than severe coverage.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically meaningful interactions including sliders, hover/click explanations, and guided animated steps, with only minor UI occlusion, so this meets the score-5 rubric.",
+          "faithfulness_analysis": "The source is a tall portrait composition with a large vertical image plane near the center, a prominent vanishing point and label in the lower middle, and green rays fanning broadly across a mostly white page with red arrows and camera icons extending upward/right. The render is a wide landscape view with the entire scene compressed into a thin diagonal band, much smaller objects, different crop and zoom, the plane shifted left, labels tiny/misplaced, and visible UI controls in the lower-left that cover content.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the basic concept of rays, cameras, arrows, and a vanishing point is present, the aspect ratio, camera angle/zoom, crop, proportions, label scale, and UI intrusion differ substantially, matching well under 65% of the original.",
+          "label_quality_analysis": "Source labels include multiple velocity labels \"v\" near red arrows (one high near the upper trajectory and one lower/right near the bottom trajectory), the camera-center label \"O\" below the black point, and the large text label \"Vanishing point\" near the convergence point. In the generated figure, two \"v\" labels and \"Vanishing point\" appear with correct text and generally corresponding placement, but they are far smaller than the source-scale labels; \"Vanishing point\" is especially undersized and tucked near the image-plane edge. The \"O\" label is not visible or is obscured by the UI overlay near the camera point. Overall, the label set is only partially complete and the rendered font sizes are consistently much too small relative to the source, making the labels weak and easy to miss.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels are either missing/obstructed or rendered at a severely undersized font relative to the source, so this fits the score-2 rubric.",
+          "concept_accuracy_analysis": "The figure illustrates perspective projection of a bird moving along a straight 3D path: rays from the camera center O intersect an image plane, projected bird silhouettes shrink and move toward a vanishing point determined by the motion direction V. The labels, sliders, popups, and demo narration are mostly specific and correctly describe the relationship between 3D velocity direction, projection rays, image-plane motion, and the vanishing point, though the stated formula x∞ = fVx/Vz, y∞ = fVy/Vz appears to have a sign-convention mismatch with the implemented image plane at z = -f, and the red-arrow explanation slightly conflates 3D velocity arrows with projected image-motion arrows.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main concept is accurately and specifically conveyed with figure-relevant interactions, but there are minor issues in the vanishing-point sign convention and in describing all red arrows as motion parallel to V.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:39:26.917Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:36:07.887Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

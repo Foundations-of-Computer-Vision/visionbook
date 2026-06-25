@@ -308,103 +308,41 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a side-by-side comparison of two projection setups, (a) and (b), viewed from a slightly elevated perspective looking down and to the left. In both panels, the projection wall is located on the far left, and the tree is located on the far right, with light rays tracing from right to left.",
-          "viewing_angle_rendered": "The rendered screenshot shows a single 3D scene where the tree is in the foreground on the left, the black barrier is in the center, and the projection wall is in the background on the far right. The camera looks from the front-left towards the back-right.",
-          "viewing_angle_comparison": "The viewing angle and spatial layout are completely reversed (mirrored horizontally) compared to the source figure. In the source, light travels from right (tree) to left (wall), whereas in the rendered scene, light travels from left (tree) to right (wall).",
-          "shape_comparison": [
-            {
-              "element": "Wall",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "Pinhole Barrier",
-              "source_shape": "flat rectangle with circle cutout",
-              "rendered_shape": "flat rectangle with circle cutout",
-              "match": true
-            },
-            {
-              "element": "Tree Trunk",
-              "source_shape": "curved trunk silhouette",
-              "rendered_shape": "3D cylinders",
-              "match": true
-            },
-            {
-              "element": "Tree Canopy",
-              "source_shape": "overlapping green cloud outlines",
-              "rendered_shape": "overlapping 3D spheres",
-              "match": true
-            },
-            {
-              "element": "Rays",
-              "source_shape": "thin lines with arrowheads",
-              "rendered_shape": "thin lines without arrowheads",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The layout is horizontally flipped: the tree is on the left and the wall is on the right, which is the exact opposite of the original diagram.",
-            "Panel (a) showing the projection without a pinhole barrier is completely missing from the default layout (it can only be simulated via interactivity, rather than presented side-by-side).",
-            "Light rays are missing their arrowheads.",
-            "The projected inverted image of the tree on the wall is misaligned and composed of disconnected translucent shapes, making it look less like an inverted tree and more like floating green circles."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Color-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 2,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "notes": "The scene is interactive and conceptually accurate regarding pinhole physics, but the horizontal flipping of the layout and the lack of side-by-side panels (a) and (b) make it unfaithful to the textbook illustration.",
-          "action_items": [
-            "Mirror the scene horizontally by swapping the X-coordinates of the tree and wall, so that the wall is on the left and the tree is on the right.",
-            "Adjust the camera viewpoint to look from the right-front towards the left, matching the perspective of the original figure.",
-            "Implement a side-by-side two-panel layout to show both (a) and (b) simultaneously, rather than relying solely on a toggle.",
-            "Add cone meshes as arrowheads on the line segments representing light rays to indicate direction.",
-            "Refine the projected tree image on the wall so that it closely resembles a coherent, upside-down silhouette of the tree."
-          ],
-          "visual_aesthetics": 2.7,
-          "overall_average": 3.2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:21:42.754Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered scene shows only the pinhole/barrier case corresponding roughly to panel (b), while the reference is a two-panel comparison with both the no-pinhole wall case (a) and pinhole case (b) visible simultaneously. The initial camera/view is mirrored and compressed relative to the source: the tree appears on the left of the black barrier and the wall is off to the right/back, whereas the reference panel (b) places the wall at left, barrier in the middle, and tree at right in a wide side-perspective layout. The source panel label (a) and the second Wall label are absent, and visible UI controls are added that are not part of the textbook figure.",
           "failure_modes": [
+            "Missing-Labels",
             "Camera-Wrong",
-            "Missing-Labels"
+            "Scale-Wrong",
+            "Hallucination",
+            "Concept-Misunderstood"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3,
-          "overall_average": 3.4
+          "failure_modes_reasoning": "Missing-Labels applies because panel (a) and its associated labeling are absent. Camera-Wrong applies because the initial viewpoint/orientation does not match the reference layout and appears mirrored. Scale-Wrong applies because the generated composition is a compact single scene rather than the wide two-panel layout with comparable wall/tree proportions. Hallucination applies because extra UI controls and explanatory interactive elements appear in the rendered output. Concept-Misunderstood applies because the key side-by-side comparison between no pinhole and pinhole projection is not represented in the initial figure.",
+          "geometry_accuracy_analysis": "The scene contains a true 3D setup with separated X positions for the projection wall, pinhole barrier, and tree object; depth is generated by camera/viewing, not by a flat pasted or skewed texture. Present elements include a bordered projection wall, a black pinhole barrier with a circular aperture, a torus rim, a 3D tree made from cylinders and spheres, ray bundles crossing through the aperture, and an inverted projected pattern on the wall. The main geometry is plausible and correctly arranged, though the projected tree image is simplified into translucent circular disks rather than a more accurate inverted tree silhouette, and the trunk projection is not very tree-like.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present as real 3D objects with plausible spatial relationships, but the wall projection is noticeably simplified, so this fits score 4 rather than 5.",
+          "interactivity_usability_analysis": "Interactions in the code include OrbitControls for rotate/zoom (present but not counted), a visible 'Pinhole Barrier' checkbox that toggles the black barrier and changes the ray/projection behavior, a visible aperture-size slider with readout that updates the pinhole radius, ray bundle, projection brightness, and blur circles, hover tooltips on registered scene objects via raycasting, and click handlers on the wall, barrier, aperture, tree, and projected image that trigger explanatory popups and animated demo steps through window.goToStep. A hidden Reset View button has a click handler but is not visible or usable. The meaningful controls are pedagogically useful for showing why a pinhole forms an inverted image and how aperture size affects blur; the UI is compact in the lower-left corner and does not cover important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically meaningful interactions including controls, hover/click explanations, and guided demo animations, with compact non-intrusive UI, matching the score-5 rubric.",
+          "faithfulness_analysis": "The source is a wide two-panel textbook figure with large cropped wall frames, labels, rays, trees, and panel markers (a) and (b) filling most of the canvas. The rendered screenshot shows only a single small 3D pinhole scene corresponding roughly to panel (b), at a different perspective and zoom, missing the entire left panel, with much different proportions, margins, object placement, and UI controls visible in the lower left.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although some elements of panel (b) are recognizable, the missing panel (a), incorrect crop/zoom/aspect, altered perspective, and UI chrome make it a significantly poor drop-in match under 65%.",
+          "label_quality_analysis": "The source figure labels are: 'Wall' in panel (a), 'Wall' in panel (b), 'Pinhole' in panel (b), '(a)' beneath the left panel, and '(b)' beneath the right panel. In the generated figure, 'Pinhole', one 'Wall', and '(b)' appear, but the second 'Wall' and '(a)' are missing; the visible labels are much smaller than the large serif labels in the source, and there are extra UI text labels ('Pinhole Barrier', 'Aperture', '0.10') not present in the source. Overall, the label set is incomplete and the rendered font scale is consistently too small relative to the textbook figure, though the few main labels that appear are readable and roughly near the intended objects.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Several source labels are missing and the present labels are significantly undersized compared with the source, so most of the label set is problematic.",
+          "concept_accuracy_analysis": "The figure illustrates camera obscura/pinhole projection: a tree, a wall/screen, a barrier with a pinhole, ray paths crossing through the aperture, an inverted projected image, and increasing aperture blur/circles of confusion. The labels, controls, tooltips, and popups are specific and scientifically appropriate, explaining ray overlap without a barrier, inversion through the pinhole, and the brightness–sharpness trade-off with larger apertures; only minor simplifications in the constructed projected image/blur geometry are apparent.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All main concepts are accurate and the interactions/explanations are figure-specific, with no substantive misinformation.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:38:10.808Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:05:06.114Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

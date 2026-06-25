@@ -645,87 +645,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows four 3D plot panels arranged in a single horizontal 1x4 row. Each plot is viewed from a slightly elevated, front-right perspective, showing the positive u-axis pointing to the right and the v-axis pointing diagonally back-right.",
-          "viewing_angle_rendered": "The rendered screenshot shows only two panels overlapping diagonally. The camera is placed at an angle that views them along their diagonal alignment, causing severe occlusion and leaving two of the panels completely out of view.",
-          "viewing_angle_comparison": "The rendered view completely fails to replicate the horizontal 1x4 panel layout of the source. By placing the panels along a 3D diagonal and viewing them at an angle, the plots overlap and become obscured, unlike the clean, side-by-side comparison in the source.",
-          "shape_comparison": [
-            {
-              "element": "3D surfaces",
-              "source_shape": "Solid shaded surface with grid lines",
-              "rendered_shape": "Transparent line-segment wireframe",
-              "match": false
-            },
-            {
-              "element": "Coordinate axes",
-              "source_shape": "Thin black vector arrows",
-              "rendered_shape": "Thick 3D cylinders with cones",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "Only two of the four panels are visible in the viewport, while the source shows all four (a, b, c, d) side-by-side.",
-            "The 3D surfaces are rendered as transparent wireframes rather than solid, color-gradient-shaded surfaces.",
-            "The coordinate axes are too thick and bulky compared to the thin, sharp lines in the original figure.",
-            "Labels like 'c)' are floating out of place and others are missing entirely due to the incorrect layout."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Wrong-Primitives",
-            "Missing-Labels"
-          ],
-          "geometry_accuracy": 2,
-          "interactivity_usability": 1,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 3,
-          "notes": "The horizontal 1x4 panel layout is broken due to diagonal positioning, and the surfaces lack solid faces, making them transparent wireframes.",
-          "action_items": [
-            "Position the four panels in a straight horizontal line along the X-axis (e.g. spacing them along [X, 0, 0]) instead of a diagonal vector.",
-            "Render the surfaces using a solid, double-sided Mesh with vertex colors to match the solid shaded look of the textbook.",
-            "Overlay a clean, dark wireframe grid on top of the solid meshes instead of relying purely on LineSegments.",
-            "Reduce the thickness of the axis cylinders significantly to make them look like sharp vector lines.",
-            "Adjust the orthographic camera frame to encompass all four horizontal panels side-by-side with appropriate padding."
-          ],
-          "visual_aesthetics": 2,
-          "overall_average": 2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:00:02.579Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered view shows only two of the four subfigures from the reference, with panels a/b/d and their labels not visible in the screenshot. The source is a wide four-panel textbook figure with distinct surfaces and axes in each panel, while the generated camera/framing presents a cropped two-panel view and the visible surfaces are proportionally simplified, with panel placement/orientation not matching the original panoramic layout. Labels u and v appear on the visible panels, but important panel labels and subfigures are absent from the rendered view. Interactive click targets are implemented beyond OrbitControls.",
           "failure_modes": [
-            "Camera-Wrong",
             "Missing-Labels",
+            "Camera-Wrong",
             "Scale-Wrong"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 2,
-          "faithfulness": 2,
+          "failure_modes_reasoning": "Missing-Labels applies because several panel labels and annotations from the four-part source figure are not visible. Camera-Wrong applies because the initial rendered view crops the scene to two panels instead of matching the wide four-panel source layout. Scale-Wrong applies because the generated framing and proportions make the panels too large and omit the intended spacing/relative layout across all four subfigures.",
+          "geometry_accuracy_analysis": "The scene constructs four real 3D colored wire-grid response surfaces with separate axes and labels for panels a), b), c), and d). The main geometries are present: a bowl-like surface, a smooth mound, a circular plateau/cutoff, and an anisotropic wavy response, each with u/v/vertical axes. The surfaces are true 3D meshes/line segments with height variation along Y, not flat pasted textures or baked skewed billboards. Minor inaccuracies include approximate rather than exact surface profiles, relatively simplified/short v-axes, and possible alignment/proportion differences between the four panels and the source layout.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are represented as plausible 3D geometry, but the response shapes and panel/axis proportions are approximations rather than exact matches, fitting a score of 4.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom/pan, but this does not count as a meaningful interaction. A Reset View button has a click listener, but the button is styled with display:none, so it is not usable. There are pointermove, pointerleave, click, and Escape key handlers for registered interactive objects: transparent pick meshes over each surface show a hover tooltip and clicking them posts a 2-sentence explanatory popup; the axis groups are also registered so hovering/clicking axes provides a tooltip and axes explanation. There are no sliders, toggles, parameter controls, guided animation, or step-through demo. The interaction UI is compact and mostly transparent, and it does not cover the geometry, though the click popup depends on the parent page handling the posted message.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Two pedagogically useful interaction categories are present and functional in code—click/hover explanations for surfaces and for axes—with compact UI, but there is no guided demo or parameter control, so this fits score 4.",
+          "faithfulness_analysis": "The source is an ultra-wide four-panel figure (a–d) with four distinct wireframe surfaces spanning the full width, large black axes, and labels near each subplot. The rendered output has a much taller/narrower aspect ratio and shows only two surfaces, with different shapes and placements; panels a, b, and d are effectively missing, the crop/zoom and whitespace are very different, and the labels/axes do not align with the original composition.",
+          "faithfulness": 1,
+          "faithfulness_reasoning": "Because the generated first frame omits half or more of the original figure and uses a substantially different aspect ratio, layout, surfaces, and crop, it is not recognizable as a drop-in replacement.",
+          "label_quality_analysis": "Source figure labels: four panel labels \"a)\", \"b)\", \"c)\", \"d)\" at the bottom left of each subfigure; each of the four subfigures also has an italic \"u\" near the horizontal axis arrow and an italic \"v\" near the diagonal axis arrow. In the generated figure, only two subfigures are shown: visible labels include \"u\" and \"v\" for each of the two shown plots, plus a single misplaced \"c)\" near the bottom center; the panel labels \"a)\", \"b)\", and \"d)\" are absent, and the missing two subfigures also mean their corresponding \"u\"/\"v\" labels are absent. The visible u/v labels are reasonably readable but smaller and differently positioned than the source, while the panel label is not matched to the correct source layout.",
           "label_quality": 2,
-          "concept_accuracy": 3,
+          "label_quality_reasoning": "Most of the source label set is missing or mismatched, with only a subset of u/v labels and one misplaced panel label present, so this fits score 2.",
+          "concept_accuracy_analysis": "The figure appears to illustrate four frequency-response surfaces over a u-v plane: a high-pass-like bowl, a smooth low-pass mound, an ideal/abrupt circular passband, and an anisotropic directional response. The interactive popups are mostly figure-specific and correctly relate height/color to response magnitude and the u-v frequency plane, but the vertical axis is not labeled in the scene and the explanations omit any original equations, cutoff radii, or transfer-function notation that would make the relationships fully precise.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main frequency-response concepts are accurately conveyed with specific interactions, but one important detail—the vertical response axis/notation and quantitative definitions—is missing or only described verbally.",
           "visual_aesthetics": 2.3,
-          "overall_average": 2.4
+          "overall_average": 3
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:40:07.018Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:39:50.250Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

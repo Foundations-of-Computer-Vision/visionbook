@@ -256,89 +256,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D stem plot viewed from an elevated front-left perspective. The vertical axis is positioned on the far-left corner of the grid box, while the 'm' axis extends down-left and the 'n' axis extends down-right.",
-          "viewing_angle_rendered": "The rendered screenshot shows the plot from a highly skewed and zoomed-in angle. The vertical axis line is positioned in the middle-right area, and the grid is rotated such that the overall coordinate system is misaligned compared to the original.",
-          "viewing_angle_comparison": "The viewing angles are significantly different. The rendered camera is rotated too far to the right, causing the axes to swap positions relative to the viewer, and it is zoomed in too tightly, cutting off elements.",
-          "shape_comparison": [
-            {
-              "element": "coefficient stems",
-              "source_shape": "thin vertical lines",
-              "rendered_shape": "thin vertical lines",
-              "match": true
-            },
-            {
-              "element": "sample endpoints",
-              "source_shape": "solid blue circles",
-              "rendered_shape": "solid blue spheres",
-              "match": true
-            },
-            {
-              "element": "grid box",
-              "source_shape": "3D rectangular wireframe grid",
-              "rendered_shape": "3D rectangular wireframe grid",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The camera angle is rotated incorrectly, placing the vertical axis on the right instead of the left.",
-            "The camera zoom is too high, causing parts of the grid and labels to be cropped or awkwardly positioned.",
-            "The label 'b2,2 [n, m]' is rotated vertical but placed in the middle of the plot, overlapping grid lines.",
-            "The 'm' and 'n' axis labels are misaligned and do not match the positions shown in the original figure."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 1,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 4,
-          "notes": "The viewing angle and zoom are completely off, and the labels are poorly positioned, making it a poor representation of the source figure.",
-          "action_items": [
-            "Adjust the initial camera rotation (azimuth and elevation) to match the source figure's perspective where the vertical axis is on the left.",
-            "Decrease camera zoom to frame the entire 3D grid and its labels cleanly within the viewport.",
-            "Reposition the HTML labels (m, n, and b2,2) to match their exact relative locations in the textbook figure.",
-            "Add a pedagogical interactive element (such as a slider to change the binomial order or a toggle to show/hide 1D projections) to improve interactivity beyond standard OrbitControls."
-          ],
-          "visual_aesthetics": 2.3,
-          "overall_average": 2.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:54:26.975Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated plot uses the correct blue stems/markers and gray 3D grid, and it includes code for the main labels. However, the rendered view is rotated/mirrored relative to the source: the vertical axis and b-label appear near the middle/right instead of on the left, and the base axes are oriented differently. The framing is also oversized/cropped, causing important axis labeling such as the n label and some ticks to be absent or not clearly visible in the screenshot.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong"
           ],
-          "geometry_accuracy": 4,
+          "failure_modes_reasoning": "Missing-Labels applies because some important annotations visible in the source, especially the n-axis label and upper/tick labels, are not clearly visible in the rendered screenshot. Camera-Wrong applies because the initial viewpoint is substantially different from the source, with the vertical axis on the wrong side and the plot orientation rotated. Scale-Wrong applies because the scene is zoomed/framed too large and partially cropped compared with the compact source figure.",
+          "geometry_accuracy_analysis": "The scene constructs a real 3D stem plot: a gridded floor/back/right wireframe frame, black axes and tick marks, nine blue vertical stems at a 3×3 lattice, and blue spherical markers with heights matching the binomial coefficient pattern 1-2-1 / 2-4-2 / 1-2-1. The n, m, coefficient, and tick labels are present as HTML overlays. The geometry is clean, symmetric, and genuinely 3D rather than a flat perspective-baked drawing; any issues are minor label/axis styling choices rather than missing geometry.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major geometric elements of the 3D coefficient stem plot are present with correct topology, positions, and relative heights, satisfying the score-5 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for camera drag/zoom, which works but does not count as a meaningful interaction. A hidden Reset View button has a click handler, but the button is display:none so it is not usable. The meaningful interaction is object-based hover/click: blue coefficient markers are registered for raycast hover tooltips showing b₂,₂[n,m] values and clicks post a popup explaining the coefficient; the whole sample group is also registered for a general explanation when clicked. There are no sliders, toggles, animations, or guided step-through demo, and the small transparent UI area does not cover the geometry.",
           "interactivity_usability": 3,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3.3,
+          "interactivity_usability_reasoning": "There is one functional pedagogical object-inspection interaction via hover/click explanations, with no guided demo or parameter controls, so it fits rubric score 3.",
+          "faithfulness_analysis": "The rendered scene contains a similar blue 3D stem plot with light gray gridlines, but the first frame is much wider than the square source, heavily zoomed/cropped, and the plot fills the canvas rather than sitting with the same compact margins. The camera angle and axis placement differ substantially: the vertical axis and label appear near the center/right instead of along the left edge, markers are much larger, and portions of the axes/grid are cut off or stretched compared with the original.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general stem-plot idea is recognizable, the aspect ratio, zoom/crop, marker scale, margins, and axis placement differ enough that it matches well under 65% as a drop-in replacement.",
+          "label_quality_analysis": "Source labels include the main vertical axis label b_{2,2}[n,m], axis labels n and m, and numeric tick labels on the axes including z ticks 0, 1, 2, 4 and horizontal-axis ticks such as -1, 0, 1. In the generated figure, b_{2,2}[n,m] appears but is smaller and repositioned on the right side rather than clearly along the left vertical axis; the n label is not clearly visible, and the m label appears tiny and cluttered near the axis intersection rather than placed like the source. Some numeric tick labels are present, but several are missing or obscured/misaligned, and the overall font scale is much smaller than the source.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels are missing, misplaced, cluttered, or too small relative to the source, so the label quality fits score 2.",
+          "concept_accuracy_analysis": "The figure illustrates a 3×3 2-D binomial filter coefficient stem plot b₂,₂[n,m] with values arranged as [1,2,1]ᵀ[1,2,1], including n and m axes, coefficient-height axis, and tick labels. The hover/click explanations are figure-specific and correctly identify each coefficient value, the separable binomial-product structure, the largest center coefficient, total sum/DC gain of 16, and normalization by 16 for brightness preservation.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All displayed concepts and interactive explanations are accurate, specific to the binomial-filter stem plot, and contain no evident misinformation.",
+          "visual_aesthetics": 3,
           "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:16:39.256Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:32:58.170Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

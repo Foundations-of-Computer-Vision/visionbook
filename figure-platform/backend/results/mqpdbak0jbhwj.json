@@ -325,93 +325,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
+    "legacy_unknown": {
+      "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows the camera system on the left and the planar surface on the right. The camera center is located at the top-left, and projection rays extend to the right towards a tilted planar surface at the bottom-right. The view is from a slightly elevated, front-right perspective.",
-          "viewing_angle_rendered": "The rendered screenshot shows the camera center at the top-right and the planar surface at the bottom-left. The layout is mirrored horizontally compared to the original figure.",
-          "viewing_angle_comparison": "The viewing angle/layout is horizontally flipped (left-to-right reversed). The camera center and plane belong on the left, and the planar surface belongs on the right.",
-          "shape_comparison": [
-            {
-              "element": "camera center",
-              "source_shape": "flat circle",
-              "rendered_shape": "sphere",
-              "match": true
-            },
-            {
-              "element": "camera plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "planar surface",
-              "source_shape": "flat quadrilateral",
-              "rendered_shape": "flat quadrilateral",
-              "match": true
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "arrows",
-              "rendered_shape": "arrows",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The overall layout is mirrored: camera center and plane are on the right, while the planar surface is on the left (opposite of the source image).",
-            "The green coordinate axes on the camera plane are misplaced and oriented incorrectly compared to the clean green axes at the bottom-left of the camera plane in the source.",
-            "The labels are floating in incorrect relative positions due to the mirrored layout."
-          ],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the main planes, camera center, dashed projection rays, cyan points, and labels, and the sliders/click interactions appear implemented. However, the initial rendered viewpoint is substantially different from the source: the source is a wide left-to-right perspective with the camera center on the left and the planar surface far to the right, while the generated view is more top-down/isometric with the camera center near the top and the world plane below. The spatial proportions are also compressed compared with the source, where the planar surface is much larger and much farther from the camera/image plane with long projection rays.",
           "failure_modes": [
             "Camera-Wrong",
             "Scale-Wrong"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 2,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "notes": "The simulation's spatial layout is completely mirrored, putting the camera on the right instead of the left, which severely harms faithfulness to the source diagram.",
-          "action_items": [
-            "Invert the X-coordinates of the scene layout (or adjust the camera azimuth/target) to place the camera center on the left and the planar surface on the right.",
-            "Realign the green coordinate axes (x, y) to the bottom-left corner of the camera plane as shown in the original.",
-            "Reposition the labels ('(x,y)', '(X,Y,0)', 'planar surface') so they match the text positioning and aesthetic style of the original illustration.",
-            "Adjust the initial camera zoom and perspective to ensure the layout matches the original textbook diagram closely without extreme empty space."
-          ],
-          "visual_aesthetics": 2.7,
-          "overall_average": 3.2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:26:07.152Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
-    "legacy_unknown": {
-      "criticVersion": "legacy_unknown",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [
-            "Camera-Wrong"
-          ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial orientation and composition do not match the source figure’s left-to-right perspective layout. Scale-Wrong applies because the relative separation and size of the world planar surface versus the camera plane are noticeably reduced compared with the original.",
+          "geometry_accuracy_analysis": "The scene contains real 3D geometry for the camera center, camera/image plane, planar world surface, local/world coordinate axes, world point and image point, projection ray, boundary rays to plane corners, and projected quadrilateral on the camera plane. The planes are constructed as oriented quads in 3D with ray intersections computed geometrically, not as a pasted flat perspective drawing. Overall, all major elements of a planar homography / pinhole projection diagram are present with plausible spatial relationships; only minor possible issues are stylization choices such as the camera represented solely by a sphere and slight label/axis placement simplifications.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 4,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3.7,
+          "geometry_accuracy_reasoning": "All major geometric components are present and correctly connected in true 3D, with only minor representation/alignment simplifications preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but these do not count as meaningful interactions. There are three visible sliders: Point X and Point Y move the cyan world point on the planar surface and update the projected image point/ray, and Tilt rotates the planar surface and updates the projected quadrilateral; these are functional and visibly meaningful. The canvas has pointermove hover handling over registered objects that shows a tooltip, and click handlers on the world plane, camera plane, projected quadrilateral, world/image points, projection ray, and camera center that send explanatory popups and in several cases trigger animated demo steps via goToStep. A guided three-step demo exists in code and is invoked by clicking scene objects rather than by explicit step buttons, so it is somewhat discoverable through tooltips but not strongly guided. The UI is compact and transparent in the bottom-left and does not significantly cover the geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions including sliders, hover/click explanations, and animated demo steps, with compact non-intrusive UI, satisfying the score-5 rubric.",
+          "faithfulness_analysis": "The rendered frame contains the same conceptual elements (camera center, camera plane, rays, cyan point correspondences, planar surface, and axes), but the composition is substantially different: the source is a wide, close-cropped oblique diagram with the camera on the left and a large planar surface extending to the lower right, while the render is zoomed far out, centered in a 3D view, with the camera near the upper right and the planar surface small and lower-left/center. Text placement, label scale, aspect ratio, ray geometry, plane proportions, and margins do not match, and visible slider UI controls occupy the lower-left area, making it unsuitable as an inline replacement.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the main objects are recognizable, the wrong camera angle, much smaller/zoomed-out crop, different layout, label placement, and UI chrome make it match well under 65% of the original.",
+          "label_quality_analysis": "Source labels: “Camera center” appears in the generated figure near the camera dot, readable but much smaller than in the source; “Camera plane” appears, readable but horizontal rather than diagonally aligned and smaller than the source; cyan “(x,y)” appears on the camera plane, readable though small; lowercase “x” and “y” appear near the small camera-coordinate axes, but they are very small; “planar surface” appears near the gray plane, readable but positioned to the left rather than along the right edge as in the source; cyan “(X,Y,0)” appears on the planar surface, readable but smaller; uppercase “X”, “Y”, and “Z” appear by the red axes and are readable, though smaller and less prominent than the source. Extra UI labels on the left (“Point X”, “Point Y”, “Tilt”) are not part of the source and add clutter. Overall, the label set is largely complete, but font sizes are consistently reduced relative to the source and several placements/orientations differ noticeably.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Although most source labels are present and readable, the consistently smaller font scale, orientation/placement mismatches, and extra UI label clutter make this a score-3 match rather than a high-quality reproduction.",
+          "concept_accuracy_analysis": "The figure illustrates pinhole projection of a planar world surface Z=0 onto a camera image plane, emphasizing that the mapping from planar coordinates (X,Y) to image coordinates (x,y) is a homography. Labels and interactive popups are figure-specific: they correctly identify the camera center, image plane, projection ray, planar surface, projected quadrilateral, and the role of tilting/moving points; the explanations accurately describe ray intersection and planar 2D-to-2D projective mapping, with no clear conceptual misinformation.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "All core homography-from-a-plane concepts are accurately represented and the interactive explanations are specific to the geometry and variables shown.",
+          "visual_aesthetics": 3,
           "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:36:13.274Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T04:59:08.396Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

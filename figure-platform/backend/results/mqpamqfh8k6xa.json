@@ -667,89 +667,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a rectangular camera box viewed from an elevated, front-right perspective. The front-facing side (containing the pinhole) and the top of the box are visible, while the left and back boundaries of the projection plane are drawn with dashed lines to show internal structure.",
-          "viewing_angle_rendered": "The rendered screenshot shows the same camera box from an elevated, front-right perspective, matching the layout, visible faces, and perspective of the original figure.",
-          "viewing_angle_comparison": "The viewing angles are highly aligned, both capturing the oblique orthographic layout with matching elevations and azimuths.",
-          "shape_comparison": [
-            {
-              "element": "camera box",
-              "source_shape": "rectangular prism",
-              "rendered_shape": "rectangular prism (translucent faces)",
-              "match": true
-            },
-            {
-              "element": "pinhole / camera center",
-              "source_shape": "flat ellipse",
-              "rendered_shape": "flattened sphere",
-              "match": true
-            },
-            {
-              "element": "axes (X, Y, Z)",
-              "source_shape": "thin arrowed lines",
-              "rendered_shape": "ArrowHelper (cylinder + cone)",
-              "match": true
-            },
-            {
-              "element": "focal length arrow",
-              "source_shape": "double-headed thin arrow",
-              "rendered_shape": "double-headed arrow line with cone heads",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "An interactive red 3D point P, blue projected point p, and a gray light ray have been added to demonstrate projection.",
-            "The callout arrows (pointing to the pinhole and optical axis) are colored teal and use distinct 3D cones instead of simple thin 2D lines.",
-            "The double-headed red arrow for focal length 'f' is slightly thick and uses bulky 3D cones."
-          ],
-          "failure_modes": [
-            "Hallucination"
-          ],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "notes": "Excellent interactive recreation with highly faithful label styling, despite minor decorative additions like the projection ray and point.",
-          "action_items": [
-            "Reduce the scale/bulkiness of the red cone arrowheads on the focal length 'f' indicator to make it look sleeker.",
-            "Make the teal callout arrows thinner and less visually dominant, closer to the original neutral gray lines.",
-            "Ensure the blue projected point 'p' has an option to be toggled off if a pure textbook replication is desired."
-          ],
-          "visual_aesthetics": 4.7,
-          "overall_average": 4.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:11:02.093Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 5,
-          "faithfulness": 5,
-          "label_quality": 5,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The main pinhole camera geometry, axes, focal-length arrow, and major labels are present, and the slider/checkbox/drag interactions appear implemented. However, the rendered view is more compact and isometric than the source: the Z axis slopes downward rather than appearing nearly horizontal, and the camera box/labels are framed quite differently. The output also adds extra explanatory elements not present in the original, including a red world point P, blue projected point p, projection ray, shadow, and visible UI controls.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong: the initial orientation/framing does not closely match the source figure, especially the axis directions and overall oblique viewpoint. Hallucination: the generated scene includes additional P/p points, a projection ray, a shadow, and interactive UI controls that are not in the original textbook figure.",
+          "geometry_accuracy_analysis": "The scene constructs a genuine 3D pinhole-camera geometry: a rectangular camera box with translucent faces, a projection plane behind the pinhole at z = -f, coordinate axes, optical/principal axis, focal-length indicator, pinhole/camera center, 3D point P, projected point p, and the projection ray connecting P through the pinhole to the plane. The geometry is clean and symmetric rather than a flat skewed drawing; only minor issues are that the pinhole is represented as a flattened sphere rather than an actual aperture and the camera housing is a simplified rectangular box rather than a physically detailed camera body.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as true 3D geometry with plausible positions and connections, with only minor primitive/simplification issues, matching the score-4 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but this does not count as a meaningful interaction. Meaningful controls include a visible focal length slider that updates f, moves the projection plane, focal arrow, projected point, and camera depth; a visible checkbox that toggles the camera box faces/edges; drag handling on the red point P that moves it and visibly updates the ray and blue projected point; hover tooltips on registered scene objects; and click handlers on many objects that send explanatory popup messages and sometimes trigger demo-step changes via window.goToStep. There is also a hidden Reset View button, so it is not usable. The UI is compact and placed in the lower-left corner without covering the main geometry, and the interactions are pedagogically relevant, though the guided demo is not exposed through clear step controls and click popups depend on parent-page support.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are multiple functional, useful interactions with compact UI, but the guided demo is not clearly presented as an accessible step-through interface, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered frame contains the same basic pinhole-camera concept with a translucent box, projection plane, pinhole, axes, and labels, but it is substantially zoomed out compared with the source, leaving much more whitespace and making the diagram and labels much smaller. The camera angle/proportions differ, the Z axis is not the long horizontal dominant arrow from the source, there are extra red point/ray elements, and UI controls appear in the lower-left, so it is not a clean inline replacement.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The general figure is recognizable, but significant zoom, whitespace, camera-angle/proportion differences, extra elements, and visible UI chrome limit the match to roughly the 65–75% range.",
+          "label_quality_analysis": "Source labels are: “Pinhole camera,” “Projection plane,” “World coordinates,” “Optical / principal axis,” “Pinhole / camera center,” axis labels “X,” “Y,” “Z,” and focal length label “f.” All of these appear in the generated figure with correct text and are generally unobstructed and near the intended elements. However, the generated labels are consistently much smaller relative to the figure than in the source, and there are extra labels “P” and “p” not present in the reference, adding mild clutter.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Although the full source label set is present and readable, the font scale is consistently too small compared with the source and extra labels are introduced, matching a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates standard pinhole camera geometry: a 3D point P projects along a ray through the pinhole/camera center to an image point p on a projection plane located a focal distance f behind the pinhole, with X/Y/Z axes and the optical/principal axis labeled. The tooltips and popups are specific and largely correct, explicitly describing the ray intersection, inversion of the image point, focal length effects, and the role of the projection plane; no substantive conceptual misinformation is apparent.",
           "concept_accuracy": 5,
-          "visual_aesthetics": 5,
-          "overall_average": 5
+          "concept_accuracy_reasoning": "All core relationships of the pinhole projection are accurately represented and the interactive explanations are figure-specific, using the correct variables and geometry.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:41:30.594Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:31:05.054Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

@@ -809,87 +809,35 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a two-panel layout. Panel (a) is a flat 2D side view of linear interpolation with a perfectly horizontal baseline. Panel (b) is a 3D perspective projection of bilinear interpolation, viewed from an elevated front-right angle looking down-left at the grid plane.",
-          "viewing_angle_rendered": "The rendered screenshot shows both panels in a single 3D scene viewed through an orthographic camera from an elevated, slightly turned angle. Consequently, Panel (a)'s baseline is tilted/oblique, while Panel (b) matches the original 3D perspective layout well.",
-          "viewing_angle_comparison": "Panel (b)'s viewing angle is highly faithful to the source. However, Panel (a) is tilted in 3D space rather than being perfectly flat/horizontal as in the source, due to sharing the same camera view.",
-          "shape_comparison": [
-            {
-              "element": "baselines and pillars",
-              "source_shape": "thin lines",
-              "rendered_shape": "thin cylinders",
-              "match": true
-            },
-            {
-              "element": "interpolation markers (endpoints / query)",
-              "source_shape": "flat ovals",
-              "rendered_shape": "flat cylinder ovals",
-              "match": true
-            },
-            {
-              "element": "bilinear surface",
-              "source_shape": "curved translucent surface",
-              "rendered_shape": "tessellated BufferGeometry mesh",
-              "match": true
-            },
-            {
-              "element": "height lines",
-              "source_shape": "thin solid/dashed lines",
-              "rendered_shape": "thin cylinders",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "Panel (a) baseline is tilted in 3D projection, whereas in the original it is a perfectly horizontal 2D baseline.",
-            "The label 'n+1' in Panel (a) slightly overlaps with the caption '(a) Linear interpolation'.",
-            "The label 'n+1, m' in Panel (b) overlaps with the caption '(b) Bilinear interpolation'."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent implementation of both linear and bilinear interpolation with high-fidelity math labels and highly interactive guided steps, only marred by minor label overlap and Panel A's tilt.",
-          "action_items": [
-            "Slightly adjust the vertical positions of the captions '(a) Linear interpolation' and '(b) Bilinear interpolation' downwards to eliminate overlaps with the coordinate labels.",
-            "Align the elements of Panel (a) parallel to the camera view plane or billboard them so that Panel (a) looks perfectly horizontal and 2D regardless of the 3D camera angle.",
-            "Improve the gradient style of the translucent green surface mesh to match the soft gradient fade towards the back shown in the source."
-          ],
-          "visual_aesthetics": 4,
-          "overall_average": 4.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:25:52.589Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes both linear and bilinear interpolation panels with the main green interpolation lines/surface, red query markers, black sample markers, dashed guides, and most mathematical labels. The labels and geometry generally match the source, and the sliders/clickable elements appear implemented and meaningful. The main visible differences are minor layout/label placement issues and the added control sliders, but these do not clearly break the figure concept.",
           "failure_modes": [],
-          "geometry_accuracy": 5,
+          "failure_modes_reasoning": "No listed failure mode clearly applies: the interpolation concept, primitives, colors, labels, depth structure, camera view, and interactions are all broadly consistent with the reference.",
+          "geometry_accuracy_analysis": "The scene contains the main expected geometry for a two-panel interpolation figure: panel (a) has a baseline, two sample height pillars, black/red sample markers, a green interpolation segment, a dashed vertical guide at a, and labels; panel (b) has a square ground grid, four vertical corner pillars, a translucent bilinear surface, green boundary/slice curves, dashed coordinate guides, a red vertical output marker, and annotations. The 3D construction is genuine rather than a flat skewed billboard: the bilinear panel uses x/z ground coordinates with y as height and a tessellated surface. Minor issues are that many line-art elements are rendered as relatively thick cylinders/ovals and some label/slice choices may not exactly match the textbook drawing, but the spatial topology and proportions are largely correct.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as plausible 3D geometry with only minor stylistic/thickness and alignment discrepancies, so this fits the score-4 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but these do not count as meaningful interactions. There are three visible sliders: a moves the interpolation coordinate and red markers/slices in both panels, b moves the bilinear coordinate and associated dashed/red/green slice elements, and h-var changes the corner height variation and visibly warps the bilinear surface and line heights. The canvas also has pointermove hover tooltips and click handlers registered on the linear interpolation segment, bilinear surface, two slice lines, and final red point; these display tooltips and send explanatory popups while triggering predefined demo steps through goToStep. A hidden Reset View button has a click listener but is not visible, so it is not usable. Overall, the visible sliders and object click explanations are pedagogically relevant, and the small transparent control stack in the upper-left is compact and does not cover important geometry.",
           "interactivity_usability": 5,
-          "faithfulness": 5,
-          "label_quality": 5,
+          "interactivity_usability_reasoning": "There are 3+ meaningful functional interactions plus guided explanatory click/demo behavior, with compact non-intrusive UI, satisfying the score-5 rubric.",
+          "faithfulness_analysis": "The rendered scene contains the same broad subject—linear interpolation on the left and bilinear interpolation on the right with green geometry, black/red points, dashed guides, and math labels—but the first frame is not composed like the source. The source is a very wide, tightly cropped textbook figure with large diagrams and captions filling the page, while the render is a narrower 3D canvas with large whitespace, much smaller figures, visible UI sliders in the upper-left, different scaling/proportions, and several labels displaced or overlapping. As a drop-in replacement it is recognizable conceptually but visually mismatched in aspect ratio, crop, zoom level, and presentation.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the main interpolation structures are present, the wrong aspect ratio, excessive whitespace/under-zoom, UI chrome, and altered proportions make it match well under 65% of the original composition.",
+          "label_quality_analysis": "Source labels include left panel: ℓ_in[n], ℓ_out(a), ℓ_in[n+1], n, a, n+1, and “(a) Linear interpolation”; right panel: ℓ_in[n,m+1], ℓ_out(n,b), ℓ_out(a,m+1), ℓ_in[n+1,m+1], ℓ_in[n,m], ℓ_out(a,b), ℓ_in[n+1,m], n,m, n,m+1, n+1,m, n+1,m+1, (a,b), and “(b) Bilinear interpolation.” The generated figure includes most of these labels with generally correct text, but several right-panel labels are too small relative to the source, some are crowded against geometry or captions, and the upper-right ℓ_in[n+1,m+1] label is partially clipped at the canvas edge; additional slider labels a, b, h-var also appear and are not part of the source. Overall the label set is mostly complete, but font scale is consistently reduced and the right panel has noticeable placement/cropping/clutter problems.",
+          "label_quality": 3,
+          "label_quality_reasoning": "Although most labels are present, the generated labels are generally smaller than the source and several right-panel labels are crowded, clipped, or overlapping nearby elements, so this fits the score-3 rubric.",
+          "concept_accuracy_analysis": "The figure illustrates 1D linear interpolation and 2D bilinear interpolation using sample heights, query coordinates a and b, green interpolation lines/surface, dashed guides, and red output markers. The labels and popups are specific to the interpolation concept, correctly describing ℓin samples, ℓout(a), ℓout(a,b), the bilinear patch from four corner values, and the two-successive-1D-interpolation interpretation; minor omissions include not labeling every intermediate bilinear value explicitly.",
           "concept_accuracy": 5,
-          "visual_aesthetics": 5,
-          "overall_average": 5
+          "concept_accuracy_reasoning": "All main relationships are accurate and the interactive explanations are figure-specific, with no substantive misinformation.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:36:58.382Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:20:09.713Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

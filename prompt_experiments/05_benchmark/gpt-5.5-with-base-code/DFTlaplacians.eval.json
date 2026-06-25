@@ -3,28 +3,43 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene shows the four plots as small surfaces arranged in a single diagonal 3D row, rather than as four large, horizontally separated subfigures filling the wide frame. The initial camera angle and framing differ strongly from the source; the generated view is much more compact and receding in depth. The color map includes prominent red caps not present in the reference's yellow/orange-green-blue wireframes, and a visible 'rings' UI button appears in the rendered image despite not being part of the source figure.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Color-Wrong",
+            "Hallucination"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
+          "failure_modes_reasoning": "Camera-Wrong applies because the source is a wide horizontal strip of separate oblique views, while the generated output uses a diagonal clustered global view. Scale-Wrong applies because the plots occupy much less of the canvas and have noticeably different relative framing and spacing. Color-Wrong applies because the generated surfaces use saturated red/orange maxima instead of the source's mostly yellow/orange high regions. Hallucination applies because the visible 'rings' button is an extra element not present in the original figure.",
+          "geometry_accuracy_analysis": "The scene constructs a genuine 3D layout with four separate wireframe surface plots, each on its own u/v axes with arrowheads and panel labels a–d. The LoG spectra are represented as radial height fields with central zeros and annular peaks that move inward as sigma increases, which matches the expected geometry reasonably well. The five-point Laplacian surface is present but its central region is artificially lifted, making the DC response nonzero and distorting the expected bowl/rising-to-corners topology. Some textbook details such as exact base grids, tick marks, vertical-axis labeling, and precise sampled DFT shape are absent or simplified, but the main four-panel 3D geometry is recognizable and not fake 3D.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as true 3D geometry with plausible layout and proportions, but there are noticeable surface-shape simplifications and an incorrect lifted center in the five-point Laplacian panel.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but this does not count as a meaningful interaction. A visible “rings” button toggles orange peak-frequency guide rings and updates an explanatory note; this should have a visible effect and is pedagogically useful. Each surface has an invisible raycast mesh with pointermove hover behavior that shows a tooltip and slightly scales/highlights the panel; this is functional, though the highlight is subtle. Clicking a surface selects it and displays a short explanatory note in the bottom-right; Escape clears the selection/note. A Reset View button and handler exist, but the button is hidden with display:none, so it is not usable. The UI chrome is compact: the rings button is tiny in the lower-left, and the note/tooltip are small overlays that should not significantly cover geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are multiple functional pedagogical interactions—ring toggle, hover tooltips/highlight, and click-to-explain—but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The source is an ultra-wide four-panel figure with separate side-by-side wireframe surfaces, large black axes, generous horizontal spacing, and large labels a)–d) near the bottom. The rendered output uses a much narrower canvas, arranges the four surfaces diagonally in one perspective scene, uses filled rainbow-shaded surfaces rather than clean wireframe-only plots, has small/overlapping labels, different camera angles and zoom, and includes a visible UI button at bottom left.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the four surface types are vaguely recognizable, the aspect ratio, panel layout, camera/crop, rendering style, labels, and added UI differ substantially, matching well under 65% of the original.",
+          "label_quality_analysis": "Source labels are four large panel labels “a)”, “b)”, “c)”, “d)” at the lower left of each subfigure, plus an italic “u” near the horizontal axis arrow in each subfigure. In the generated figure, the “u” labels are present near the axes but are much smaller than the source and some are close to geometry/axis clutter. The panel labels appear only as tiny labels near the axes/surfaces, seemingly preceded by an extra “v” (e.g., “v a)”, “v b)”), not at the lower-left panel positions and far smaller than the source labels. Overall the label set is partially recognizable but has severe size and placement mismatches, with extra incorrect text.",
           "label_quality": 2,
+          "label_quality_reasoning": "Most labels are present only in undersized, misplaced, or incorrectly combined form, failing the source-scale font and placement requirements.",
+          "concept_accuracy_analysis": "The figure illustrates frequency-domain magnitude surfaces for Laplacian-of-Gaussian filters at sigma = 1/2, 1, and 2, plus the five-point discrete Laplacian. The LoG formulas, peak-ring relationship r = sqrt(2)/sigma, and explanations about increasing sigma shifting the band inward are accurate and figure-specific; the five-point response formula is correct, but the code artificially lifts the center of that surface, visually contradicting the stated zero-DC response and the true discrete Laplacian spectrum.",
           "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "Main concept and interactive explanations are mostly accurate and specific, but the fabricated central lift in the five-point Laplacian panel is a notable conceptual visual error.",
           "visual_aesthetics": 2.7,
-          "overall_average": 3
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:43:53.497Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:26:03.622Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

@@ -643,95 +643,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows two side-by-side 3D plots of discrete complex exponential helices. The camera is positioned at an elevated perspective from the right, looking down towards the origin of each panel, showing the horizontal n-axis, the vertical imaginary axis, and the depth-projecting real axis.",
-          "viewing_angle_rendered": "The rendered screenshot shows both panels, but they are extremely zoomed-in and severely clipped. The left panel is cut off on the left edge, and the right panel is cut off on the right edge, preventing a proper side-by-side view.",
-          "viewing_angle_comparison": "While the elevation and azimuth match the original 3D perspective reasonably well, the framing is completely broken due to an excessively tight camera zoom and incorrect panel spacing, leading to massive clipping of key elements.",
-          "shape_comparison": [
-            {
-              "element": "axes",
-              "source_shape": "thin lines with arrowheads",
-              "rendered_shape": "lines with cone arrowheads",
-              "match": true
-            },
-            {
-              "element": "helix",
-              "source_shape": "discrete segments connecting sample dots",
-              "rendered_shape": "cylindrical segments connecting sample dots",
-              "match": true
-            },
-            {
-              "element": "sample dots",
-              "source_shape": "black circles with a textured/hatched pattern",
-              "rendered_shape": "black spheres with amber cores",
-              "match": false
-            },
-            {
-              "element": "projection lines",
-              "source_shape": "selective thin connection lines",
-              "rendered_shape": "dense cage-like grid of red and green lines",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "Severe camera framing and zoom issues: both panels are heavily clipped on the left and right borders of the canvas.",
-            "Grid clutter: there are far too many projection lines (red and green vertical/horizontal guides) compared to the original, creating a busy 'cage' effect instead of clean curves.",
-            "Sample dots have unrealistic amber/brown centers instead of being solid textured black circles.",
-            "Axis labels (e.g., 'R', 'I', 'n') overlap with the geometry and are not positioned cleanly."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Color-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 2,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "notes": "The underlying mathematical geometry is correct, but the camera zoom and panel spacing severely clip the figures, and the dense guide lines clutter the visualization.",
-          "action_items": [
-            "Adjust the orthographic camera zoom and target so that both panel (a) and panel (b) fit completely inside the viewport without any clipping.",
-            "Reduce the density or opacity of the red and green projection lines to match the selective, clean style of the original textbook figure.",
-            "Remove the amber cores from the sample spheres; make them solid black to match the original style.",
-            "Reposition the 3D HTML labels ('I', 'R', '1', '-1') so they do not overlap with the axis lines or curve segments."
-          ],
-          "visual_aesthetics": 2.7,
-          "overall_average": 3.2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:08:52.950Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes both complex-exponential panels with axes, labels, black sampled helix, red/green component curves, and interactive sliders/selectors. However the initial rendered view is badly framed: the left panel is cut off on the left edge and the right panel is cut off on the right edge, unlike the source where both panels are fully visible. The generated figure also adds many dense red and green projection/grid guide lines, especially in panel (a), that are not present in the original drawing. Overall the main problems are camera/framing and extra visual elements; the core helix/projection concept is mostly represented.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
           ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial viewpoint/framing crops substantial parts of both panels instead of showing the full source composition. Scale-Wrong applies because the panels are effectively too large/spread out for the canvas, causing clipped content and proportions relative to the page layout to differ from the source. Hallucination applies because the generated figure includes dense red/green guide-line fences and extra projection lines not shown in the original, particularly in panel (a).",
+          "geometry_accuracy_analysis": "The scene contains two true 3D panels with n, imaginary I, and real ℝ axes, arrowheads, tick marks at ±1 and 20/40, black helical complex exponential curves, black sample dots, red cosine and green sine projection curves, and projection guide lines from samples to the component planes. The geometry is genuinely 3D with varying x/y/z coordinates and camera-generated depth, not a pasted texture or flat skewed billboard. Overall it accurately represents the likely source figure; only minor issues include somewhat thick cylindrical helix segments, view-dependent panel offsetting, and possible clutter from guide lines at every sample.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "geometry_accuracy_reasoning": "All major elements are present and spatially coherent as real 3D geometry, with only minor proportional/rendering and alignment issues preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but these do not count as meaningful interaction. Meaningful controls include a Frequency (k) slider that updates panel (a)'s helix/wave frequency and visibly changes the geometry, a Show Components dropdown that toggles real/cosine and imaginary/sine projection visibility, hover tooltips on registered scene elements, and click handlers on axes/helix/dots/projection groups that post explanatory popups; clicking helix or sample dots also advances a three-step guided demo by changing the controls and narration. A Reset View button is also present and functional but mainly navigational. The UI is compact and mostly transparent in the lower-left corner, though it slightly overlaps the caption area rather than important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions including parameter controls, component toggling, explanatory object interactions, and a guided demo, with only minor non-intrusive UI overlap.",
+          "faithfulness_analysis": "The rendered frame has a similar two-panel mathematical 3D curve concept with black sampled curves, red and green auxiliary curves, axes, and labels, but the crop and zoom are substantially wrong: the left panel is cut off at the left edge and the right panel is cut off at the right edge. The canvas aspect ratio is taller than the source, the figure is force-filled/over-zoomed compared with the source's generous margins, and UI controls at the bottom-left intrude into the figure area; additionally the rendered red/green mesh-like lines are denser than in the source.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the subject is recognizable, the first frame is not a drop-in replacement due to severe horizontal cropping, over-zoom, aspect/margin mismatch, intrusive UI, and noticeable line-detail differences, matching well under 65% of the original composition.",
+          "label_quality_analysis": "The source figure labels include, for each panel, the axis/quantity labels I, R, n, tick/value labels 1 and −1, internal numeric labels 1, 20, 40, and panel labels (a) and (b). In the generated figure, many of these labels are present and readable, including R, n, 20, 40, some 1/−1 labels, and (a)/(b), but the left panel is partially cropped so several labels are missing or cut off, the right panel is also partly cropped at the edge, and the math-style labels I/R/n are rendered as plain text rather than matching the source style. Overall the label set is only partially complete and positioning is inconsistent due to cropping, though the visible labels are mostly readable and roughly appropriate in size.",
+          "label_quality": 3,
+          "label_quality_reasoning": "About half the labels are present and readable, but cropping, missing labels, and imperfect math-style/text placement prevent a higher score.",
+          "concept_accuracy_analysis": "The figure illustrates discrete complex exponentials as helices over sample index n, with real cosine and imaginary sine projections, including panels (a) and (b), integer sample dots, axes, tick labels, and controls for frequency k and component visibility. The interactive tooltips/popups are specific and mathematically appropriate, correctly referencing e[n] = exp(2πjkn/N), N=40, k rotations, and the cosine/sine projections; only a minor contextual issue is that the root popup describes panel (a) as one-rotation even after the slider changes it.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main concept and figure-specific explanations are accurate, with one minor dynamic-description inconsistency when the adjustable panel is no longer k=1.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:33:04.695Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:34:21.188Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

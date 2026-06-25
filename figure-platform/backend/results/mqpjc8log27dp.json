@@ -258,89 +258,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
+    "legacy_unknown": {
+      "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure displays three 3D surface plots side-by-side: a Gaussian envelope (a), a cosine Gabor (b), and a sine Gabor (c). The camera viewpoint is elevated at approximately 30 degrees, looking down and slightly from the right, providing a clear perspective of the front-facing oscillating waves and zero-planes.",
-          "viewing_angle_rendered": "The rendered screenshot shows the same three surface plots from a similar elevated, slightly right-rotated angle. However, the spacing between the plots is tighter and the overall aspect ratio feels compressed.",
-          "viewing_angle_comparison": "The viewing angles are highly comparable and capture the correct 3D perspective, but the horizontal placement/spacing of the plots and the positioning of the labels are misaligned.",
-          "shape_comparison": [
-            {
-              "element": "Gaussian envelope (a)",
-              "source_shape": "smooth 3D bell curve with rectangular base",
-              "rendered_shape": "faceted 3D bell curve with warped base",
-              "match": false
-            },
-            {
-              "element": "Cosine Gabor (b)",
-              "source_shape": "smooth wave oscillating through a flat grid plane",
-              "rendered_shape": "faceted wave oscillating through a flat grid plane",
-              "match": false
-            },
-            {
-              "element": "Sine Gabor (c)",
-              "source_shape": "smooth asymmetric wave oscillating through a flat grid plane",
-              "rendered_shape": "faceted asymmetric wave oscillating through a flat grid plane",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "Severe label drift: The labels (a), (b), and (c) are shifted far to the left. Label (b) is placed directly under plot (a), and label (c) is placed directly under plot (b).",
-            "Surface resolution: The rendered meshes are low-resolution and use flat shading (faceted appearance), whereas the source figure shows very smooth, high-resolution continuous surfaces.",
-            "Grid density and lines: The grids on the planes and surfaces in the original are finer and match the surface geometry much more cleanly."
-          ],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the three labeled Gabor/Gaussian surface panels with gridded height fields and zero planes for (b) and (c), and it has functional-looking sliders/click hover interactions. However, the surfaces are noticeably flatter and broader than the reference: the Gaussian in (a) lacks the tall steep peak, and the Gabor peaks/troughs in (b) and (c) are much less sharp and vertically exaggerated differently. The initial view is also lower and framed differently than the source, with the panels appearing more side-on and spread low in the canvas rather than matching the elevated oblique textbook view.",
           "failure_modes": [
-            "Scale-Wrong",
-            "Color-Wrong",
-            "Wrong-Primitives"
+            "Camera-Wrong",
+            "Scale-Wrong"
           ],
+          "failure_modes_reasoning": "Camera-Wrong: the rendered viewpoint is a lower, more side-on oblique angle and different framing from the reference figure's elevated oblique presentation. Scale-Wrong: the height-to-width proportions and lobe sharpness are off; peaks are too broad/low compared with the tall narrow reference surfaces, especially in panels (a) and (b).",
+          "geometry_accuracy_analysis": "The scene constructs three real 3D sampled height-field surfaces: a positive Gaussian mound, a Gaussian-windowed cosine surface, and a Gaussian-windowed sine surface, arranged as panels (a), (b), and (c). The cosine and sine panels include actual horizontal zero planes with grid lines, and all surfaces have overlaid surface grids and colored vertices; labels are also present. The geometry is not a flat billboard or baked perspective drawing: the surfaces vary in height along the Y axis and are viewed with a camera. Minor issues include uncertain exact frequency/proportion matching to the source and the Gaussian panel lacking a base plane if the original showed one, but the main topology and spatial layout are accurately represented.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as true 3D geometry with plausible positions and proportions, with only minor potential mismatches in exact lobe spacing/base-plane treatment.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for drag/zoom, but these do not count as meaningful interactions. There is a hidden Reset View button with a click handler, but because it is display:none it is not usable. Two visible sliders control u₀/frequency and σ/Gaussian width; their input handlers update readouts and recompute all three surface geometries, so they should visibly change the lobes/wavelength and envelope width. The scene also registers each panel group for raycast hover/click: hovering should show a small tooltip, and clicking posts a conceptual explanation popup message, though the popup depends on an external parent listener rather than rendering directly in the page. The controls are compact and placed in the lower-left corner without covering the main geometry.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 2,
-          "concept_accuracy": 5,
-          "notes": "The underlying mathematical representation and interactive controls are excellent, but severe label drifting and low-poly/faceted mesh rendering detract from the visual quality.",
-          "action_items": [
-            "Correct the X-coordinates of the labels (a), (b), and (c) to align vertically under their respective plots.",
-            "Increase the sample resolution of the Gabor surfaces (e.g., from 57 to 120 samples) and set flatShading to false for smooth shading.",
-            "Adjust the color interpolation to match the vibrant transitions from blue to red seen in the original textbook plots.",
-            "Increase spacing between the three panels to avoid overcrowding and match the original figure layout."
-          ],
-          "visual_aesthetics": 3,
+          "interactivity_usability_reasoning": "There are at least two functional, pedagogically useful controls with minimal UI intrusion, plus hover/click explainers, but no guided demo, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered output contains three labeled colored mesh surfaces, so the broad concept is recognizable, but it does not match the source as a drop-in figure. The aspect ratio is different, there is excessive top whitespace, the surfaces are smaller and lower in the frame, the camera angles and relative zoom differ, the peaks are much less tall/sharp, labels are shifted, and visible UI sliders occupy the lower-left corner.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the three-panel surface layout is present, major mismatches in crop, whitespace, camera angle, proportions, peak shapes, and UI chrome make it a significantly non-faithful replacement below the 65% threshold.",
+          "label_quality_analysis": "Source labels: “(a)” appears in the generated figure with correct text, large readable black serif style, but slightly higher/closer to the plot area than in the source; “(b)” appears with correct text and readable size, positioned below the middle region but not aligned as low as the source; “(c)” appears with correct text and readable size, but is noticeably shifted leftward relative to the rightmost plot compared with the source. The generated figure also includes extra small slider labels at the lower left that are not present in the source. Overall, the main label set is complete and clear with roughly appropriate font scale, but positioning is imperfect and there are minor extraneous UI labels.",
+          "label_quality": 4,
+          "label_quality_reasoning": "All three source labels are present and legible at an appropriate size, but 1-2 have noticeable placement issues and there are minor extra UI labels, fitting a score of 4.",
+          "concept_accuracy_analysis": "The figure illustrates a Gaussian window and its cosine- and sine-phase Gabor filters as three 3D height-field panels, with sliders for carrier frequency u₀ and Gaussian width σ. The popups are largely figure-specific and correctly explain the Gaussian envelope, the real cosine Gabor with a positive central lobe, the imaginary sine Gabor with odd symmetry, and the zero-response plane; minor issues are that the Gaussian popup states σ = 1 even though σ is interactive, and the generic panel tooltip implies u₀ affects every panel although the Gaussian envelope is independent of u₀.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main Gabor-filter concept and relationships are correct and specifically explained, with only minor wording inaccuracies related to the interactive parameters.",
+          "visual_aesthetics": 3.3,
           "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:14:48.972Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
-    "legacy_unknown": {
-      "criticVersion": "legacy_unknown",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [
-            "Concept-Misunderstood",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 2,
-          "concept_accuracy": 3,
-          "visual_aesthetics": 2.7,
-          "overall_average": 3
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:51:20.212Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:10:14.616Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

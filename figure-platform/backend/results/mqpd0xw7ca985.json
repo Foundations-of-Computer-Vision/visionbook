@@ -323,98 +323,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure is viewed from a slightly elevated position to the left, looking down and to the right. The projection origin O is located on the bottom-left, the image plane is positioned in the mid-left vertical area, and the 3D bird trajectory extends from the upper-left towards the far upper-right.",
-          "viewing_angle_rendered": "The rendered screenshot is viewed from an elevated position to the right, looking down-left. The image plane is positioned on the right side, and the 3D trajectory extends from the top-left down towards the bottom-right.",
-          "viewing_angle_comparison": "The viewing angle in the rendered screenshot is nearly mirrored/flipped compared to the source figure. The camera azimuth is set such that the image plane is on the right and the trajectory goes to the left, which is the exact opposite of the source layout.",
-          "shape_comparison": [
-            {
-              "element": "Projection origin O",
-              "source_shape": "black sphere",
-              "rendered_shape": "black sphere",
-              "match": true
-            },
-            {
-              "element": "Image plane",
-              "source_shape": "flat rectangle outline",
-              "rendered_shape": "semi-transparent rectangle with a thick black border",
-              "match": true
-            },
-            {
-              "element": "Vanishing point",
-              "source_shape": "small black dot",
-              "rendered_shape": "red sphere",
-              "match": false
-            },
-            {
-              "element": "Projected birds",
-              "source_shape": "2D bird silhouettes",
-              "rendered_shape": "overlapping curved wireframe lines",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The camera viewpoint is mirrored, placing the image plane on the right and the flight trajectory on the left, which reverses the entire composition.",
-            "The vanishing point is represented as a red sphere, whereas in the source it is a small black dot.",
-            "The projection origin 'O' and its label are off-screen or obscured at this camera angle.",
-            "The projected birds on the image plane look like messy, overlapping black lines rather than clear, progressively smaller bird silhouettes.",
-            "The green parallel ray and its red arrow 'V' are partially clipped by the image plane or poorly aligned in perspective."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Color-Wrong",
-            "Missing-Labels"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 2,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "notes": "The underlying mathematical projection setup is correct, but the mirrored camera angle completely flips the composition, and key styling differences (like the red vanishing point) reduce faithfulness.",
-          "action_items": [
-            "Adjust the initial camera azimuth and target in `setCameraView` so that the origin O is on the left and the 3D trajectory extends to the right, matching the source layout.",
-            "Change the vanishing point sphere color from red to black and reduce its scale to match the source figure's small black dot.",
-            "Ensure the projection origin O is clearly visible on the left and that its 'O' label is properly rendered near it.",
-            "Simplify the projected bird geometry on the image plane to make them look like clean, distinct bird silhouettes.",
-            "Adjust the positions and offsets of the 'V' labels to prevent overlap with the trajectory lines."
-          ],
-          "visual_aesthetics": 2.7,
-          "overall_average": 3
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:18:04.183Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered view shows the projection plane on the far right with the camera origin/O and most of the lower construction cropped or offscreen; the important O label is not visible. The initial viewpoint is a landscape oblique 3D view rather than the tall portrait side-perspective composition of the source, and the proportions are noticeably different: the image plane is too boxy/large relative to the rays, the birds and projected birds are tiny/clustered, and the vanishing point is shown as a red dot rather than the black point in the reference. The core vanishing-point geometry is present and the sliders/click interactions appear functional, but the composition and scaling do not match the source figure well.",
           "failure_modes": [
+            "Missing-Labels",
             "Camera-Wrong",
-            "Missing-Labels"
+            "Scale-Wrong",
+            "Color-Wrong"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
+          "failure_modes_reasoning": "Missing-Labels applies because the O label is important in the source but is not visible in the rendered screenshot. Camera-Wrong applies because the initial framing/orientation is substantially different from the source and crops the origin area. Scale-Wrong applies because the plane, rays, birds, and projected bird sequence have noticeably different relative proportions and visibility from the reference. Color-Wrong applies because the vanishing point is rendered as a red sphere while the reference uses a small black point, and the generated plane has a gray fill not present in the original.",
+          "geometry_accuracy_analysis": "The scene contains a true 3D projection setup: a camera/projection origin O, a rectangular image plane with border, a receding straight 3D bird trajectory, multiple simplified 3D birds, green projection rays from O to the birds, red velocity arrows, projected bird glyphs and projected trajectory on the image plane, a parallel velocity ray, and a red vanishing point. The main geometry is not a pasted texture or flat skewed billboard; depth is represented with actual 3D coordinates. Minor issues include simplified bird shapes, some artificial depth-based scaling of the 3D birds rather than relying purely on perspective, and possible clutter/positioning ambiguity from thick tubes and labels, but the intended vanishing-point projection geometry is clearly represented.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major geometric elements are present and plausibly connected in a true 3D scene, with only minor proportional and representational inaccuracies.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but these do not count as meaningful interactions. There are two visible sliders: Flight Angle (V) changes the velocity direction/vanishing point/path, and Start Offset shifts the bird trajectory; both should produce visible scene updates. The code also registers hover/click interaction for the image plane, origin sphere, vanishing point sphere, and dynamic bird/projection group: hover tooltips should appear locally, while click explanations are sent via window.parent.postMessage rather than rendered directly in the page, so their visibility depends on the embedding environment. A reset button has a listener but is hidden. There is a demoSteps/goToStep guided-demo mechanism, but no visible step-through controls; only some object clicks trigger limited steps. The UI is compact in the lower-left and does not cover important geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Two functional pedagogical sliders plus object hover/click explanations provide multiple useful interactions, but the guided demo is not exposed as a clear usable step-through UI and click popups may depend on an external parent handler, so this falls short of a 5.",
+          "faithfulness_analysis": "The source is a tall portrait-format figure with a large white margin, a vertical dark frame near the lower center-left, many green perspective curves/rays sweeping broadly to the right, repeated large bird silhouettes with red velocity arrows, and prominent labels including a large “Vanishing point.” The rendered screenshot is landscape, much more zoomed/cropped differently, uses a different 3D camera angle with the frame on the right, has thin straight green lines instead of the broad curved fan, tiny/incorrect bird marks, misplaced labels, and visible UI sliders in the lower-left that are absent from the source.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although it includes a plane, vanishing-point idea, green rays, red arrows, and bird motifs, the aspect ratio, camera/crop, proportions, line geometry, labeling, and UI chrome differ substantially, so it matches well under 65% of the original.",
+          "label_quality_analysis": "Source figure labels: two lowercase 'v' labels (one near the upper red/green ray, one near the lower/right red ray), a large 'Vanishing point' label near the bottom vanishing-point region, and an 'O' label beneath the black point. In the generated figure, both 'v' labels appear with correct text and generally appropriate placement, though they are smaller than the source. 'Vanishing point' appears but is much smaller than the source label and placed on/near the image plane rather than prominently below the vanishing point area. The 'O' label is missing. Extra UI text labels appear in the lower-left outside the figure area.",
           "label_quality": 3,
+          "label_quality_reasoning": "About half the source label set is missing or significantly mis-scaled/poorly positioned, so this fits a score of 3.",
+          "concept_accuracy_analysis": "The figure illustrates perspective projection of a bird moving along a straight 3D trajectory and the resulting optical-flow/vanishing point: rays from camera center O intersect an image plane, projected bird images shrink and approach the red vanishing point determined by the velocity direction V. The labels, sliders, tooltips, and popups are figure-specific and correctly explain that the vanishing point is the intersection of the image plane with the ray from O parallel to V, and that changing direction moves it while changing starting offset does not; minor issues include a popup claiming equal spacing despite nonuniform distance samples and the 3D bird models themselves being scaled with depth, which could slightly blur the distinction between physical size and projected size.",
           "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The main geometric concept and explanations are accurate and specific, with only minor inaccuracies/ambiguities that do not substantially mislead.",
           "visual_aesthetics": 3,
-          "overall_average": 3.2
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:46:07.398Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:49:51.208Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

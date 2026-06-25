@@ -681,93 +681,39 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D orthographic projection setup from a front-right-elevated viewpoint. The projection plane is on the left, oriented vertically, and the coordinate axes are positioned such that the Z-axis points horizontally to the right, the Y-axis points straight up, and the X-axis points diagonally up-left. The projection rays are strictly horizontal dashed lines parallel to the Z-axis.",
-          "viewing_angle_rendered": "The rendered screenshot shows the setup from an elevated viewpoint where the Z-axis points diagonally up-right, the Y-axis points straight up, and the X-axis points diagonally down-left. Consequently, the projection rays are slanted diagonally up-right rather than horizontal, and the projection plane is turned at a different angle.",
-          "viewing_angle_comparison": "The viewing angles and coordinate system orientations differ significantly. In the source, the projection direction (Z-axis) is perfectly horizontal, whereas in the rendered version, the Z-axis is tilted upwards and to the right, causing the projection rays to run at a steep angle.",
-          "shape_comparison": [
-            {
-              "element": "projection plane",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "3D step block",
-              "source_shape": "L-shaped prism",
-              "rendered_shape": "L-shaped prism",
-              "match": true
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "thin lines with arrowheads",
-              "rendered_shape": "thick cylinders with cones",
-              "match": true
-            },
-            {
-              "element": "projection rays",
-              "source_shape": "dashed lines",
-              "rendered_shape": "dashed cylinders",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The Z-axis points diagonally up-right instead of horizontally to the right.",
-            "The projection rays are slanted instead of strictly horizontal.",
-            "The X-axis points down-left instead of up-left.",
-            "The green projection plane axis 'x' points up-left instead of up-right.",
-            "The step-block is taller and narrower in the rendered version compared to the wider, squashed proportion of the source block."
-          ],
-          "failure_modes": [
-            "Camera-Wrong"
-          ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 5,
-          "faithfulness": 4,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "Excellent interactive features and conceptual representation, but the coordinate axis alignment and camera perspective slant the projection rays compared to the horizontal layout of the source.",
-          "action_items": [
-            "Rotate the entire coordinate system so that the Z-axis points horizontally to the right and the projection rays run horizontally.",
-            "Adjust the X-axis orientation to point diagonally up-left.",
-            "Re-orient the green projection plane 'x' axis to point up-right as in the source figure.",
-            "Adjust the geometry of the step-block to match the wider, flatter proportions of the source figure.",
-            "Refine the position of the labels to match the new axis directions."
-          ],
-          "visual_aesthetics": 4,
-          "overall_average": 4.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:11:28.652Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene includes the main projection plane, colored step block, dashed projection rays, axes, and labels, and the sliders/click handlers appear functional. However the initial camera/framing differs substantially from the source: the source is a wide textbook-style oblique projection with the object far to the right, Z nearly horizontal, Y vertical, and X diagonal upward, while the render is a compact 3D view with the X axis pointing left and the whole composition compressed. The relative scale and spacing are also off: the source has a very large projection plane and long ray distances to a large right-side object, whereas the generated object/plane/rays are much smaller and closer together; visible UI sliders are extra non-source elements.",
+          "failure_modes": [
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
+          ],
+          "failure_modes_reasoning": "Camera-Wrong applies because the starting viewpoint and axis orientation do not match the source figure's oblique 2D projection layout. Scale-Wrong applies because the projection plane, object size, and long horizontal projection-ray spacing are noticeably compressed compared with the reference. Hallucination applies because visible Yaw and Z distance UI sliders are present in the rendered output but not in the original figure.",
+          "geometry_accuracy_analysis": "The scene contains the major intended 3D elements: a translucent projection plane with outline, world X/Y/Z axes with arrowheads, green image-plane axes, a colored stepped L-shaped prism with red/green/cyan faces, dashed parallel projection rays, and a projected 2D footprint on the plane. The construction is mostly true 3D rather than a pasted texture: the block has depth, rays extend along Z, and the plane is a clean rectangular PlaneGeometry viewed by the camera. However, the image-plane x-axis is geometrically questionable because it is hardcoded as a diagonal line within the XY projection plane rather than an orthogonal in-plane coordinate direction, making the projected coordinate geometry somewhat inconsistent with the actual projection mapping.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 4,
+          "geometry_accuracy_reasoning": "All major elements are present and recognizable as a 3D orthographic projection diagram, but the image-plane axis alignment/projection-plane coordinate geometry has noticeable minor-to-moderate spatial inaccuracies.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but that does not count as meaningful interaction. Two visible sliders are present: Yaw changes the block rotation and recomputes projected faces/rays, and Z dist moves the block along depth while updating ray lengths; both should visibly function. A hidden Reset View button has a click handler but is display:none, so it is not usable. The scene registers multiple hover/click interactive objects: projection plane, 3D block, projection rays, projected 2D image, and the green x/y axes; hovering shows local tooltips, and clicking triggers explanatory popups via postMessage plus guided demo steps/animations that adjust the sliders and scene. The interactions are pedagogically useful for orthographic projection, depth independence, rotation, and coordinate axes, and the bottom-left UI is compact and does not obscure important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions including sliders, hover/click explanations, and guided animated demo steps, with compact non-intrusive UI, matching the score-5 rubric.",
+          "faithfulness_analysis": "The rendered scene contains the same conceptual elements (projection plane, axes, dashed projection lines, and colored block shapes), but the first-frame composition is very different from the source. The source is a wide, close-cropped textbook diagram with very large objects, thick black axes, a huge slanted projection plane extending off the bottom, and the right object occupying much of the right half; the render is zoomed far out, uses a different 3D camera angle, has much thinner lines, smaller labels, different object proportions/positions, and includes visible UI sliders in the lower-left that are absent from the source.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the general idea is recognizable, the camera angle, zoom/crop, proportions, label scale, line weights, and UI chrome differ substantially, so it is not a near drop-in replacement and matches well under 65%.",
+          "label_quality_analysis": "Source labels are X, Y, Z, lowercase x, lowercase y, and “Projection plane.” The generated figure includes all six with correct text: X, Y, and Z are readable and placed near their corresponding axes; x and y are present near the small green projection-plane axes but are somewhat small and close to geometry; “Projection plane” is present below the plane but noticeably smaller and less prominent than in the source. There are also extra UI/control labels at bottom left, though they are separate from the figure. Overall the label set is complete and mostly clear, but the projection-plane and lowercase labels do not fully match the source’s large scale and prominence.",
           "label_quality": 4,
+          "label_quality_reasoning": "All required labels are present and readable, with only minor-to-moderate size/placement issues for a few labels, so this fits score 4 rather than 5.",
+          "concept_accuracy_analysis": "The figure illustrates orthographic projection of a colored 3D step-like block onto a projection plane using parallel dashed rays, with controls for yaw and depth. The popups and tooltips are mostly specific and correctly explain depth independence, projection along the Z direction, face collapse, and rotation-dependent foreshortening, but the green image x-axis is geometrically inconsistent with the implemented mapping because it is drawn diagonally in the plane while vertices are projected by simply discarding Z into world X/Y coordinates.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main orthographic projection concept and interactive explanations are accurate and figure-specific, with one notable geometric inconsistency in the displayed image x-axis relative to the projection mapping.",
+          "visual_aesthetics": 3.3,
+          "overall_average": 3.8
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:39:07.167Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:29:31.809Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

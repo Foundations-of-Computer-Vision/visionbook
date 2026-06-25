@@ -3,28 +3,41 @@
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated figure includes the correct basic node/edge types and the x1-x3/y1-y3 labels, with functional-looking UI controls. However, the rendered lattice is much more vertically compressed and zoomed out than the reference, with diagonal grid directions and y-link heights not matching the source projection; the original fills the frame with a taller, steeper projected lattice while the generated version is a small, shallow band centered in large whitespace.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong"
           ],
-          "geometry_accuracy": 3,
+          "failure_modes_reasoning": "Camera-Wrong applies because the initial viewpoint/projection angle is noticeably different: the source has steep diagonal lattice lines and a tall crop, while the generated view is shallow and flattened. Scale-Wrong applies because vertical separations, y-link lengths, and overall figure size relative to the canvas are noticeably off compared with the reference.",
+          "geometry_accuracy_analysis": "The scene contains the main expected MRF geometry: a slanted 3x3 lattice of white hidden x nodes, pairwise connections between neighboring x nodes, gray observed y nodes lifted above each x node, vertical unary connections from each x to its y, labels for x1-x3 and y1-y3, and cropped continuation stubs. The construction uses real 3D spheres and cylinders with camera-generated depth rather than a pasted flat texture or baked 2D perspective. Minor issues include the use of fully spherical/rod primitives rather than flatter textbook node-and-edge glyphs, and the crop/continuation geometry may not exactly match the original panel, but the topology and spatial relationships are largely correct.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements and connections are present with plausible 3D placement; only minor stylistic/proportional and crop-alignment differences prevent a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/pan/zoom, but this does not count as a meaningful interaction. Meaningful interactions include: a visible 'y' button that toggles the gray observed nodes/unary vertical links and y-labels with an explanatory popup; a visible 'x2' button that highlights the Markov blanket of x2 with colored nodes/edges and an explanatory popup; hover tooltips on latent and observed node objects via raycasting; click handlers on latent nodes that highlight their local dependencies and open a pedagogical popup; click handlers on observed nodes that highlight the associated unary factor and open a pedagogical popup. Popup close, Escape, and blank-canvas click dismiss/reset UI state. The hidden Reset button has a handler but is not visible, so it is not usable. The interactions are compact, visibly useful, and do not cover the geometry, but there is no guided step-through demo or animation sequence.",
           "interactivity_usability": 4,
-          "faithfulness": 3,
+          "interactivity_usability_reasoning": "There are multiple functional pedagogical interactions with compact UI, but no guided demo is present, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered figure shows the same general lattice concept with white and gray circular nodes, black connecting lines, and x/y labels, but it is drastically under-zoomed and compressed vertically compared with the source. The source is a close-cropped, large diagram filling the frame with some elements cut off at the top and edges, while the render sits small in the middle with very large whitespace and visible UI buttons at bottom left; label size/placement and proportions also differ noticeably.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the structure is recognizable, the first frame has a significantly wrong zoom/crop, excessive whitespace, altered proportions, and UI chrome, so it is not a close drop-in replacement and matches well under the score-3/4 range.",
+          "label_quality_analysis": "Source labels are x₁, x₂, x₃, y₁, y₂, and y₃. The generated figure includes all six with correct text and they are readable, but the y labels are positioned much lower than in the source rather than above the top gray nodes, and the x labels sit somewhat low/close to the lower horizontal lines compared with the source. Font size is generally readable but slightly smaller relative to the node scale than the source, and there are also small extraneous UI text elements at the bottom left.",
           "label_quality": 3,
+          "label_quality_reasoning": "All required labels are present and legible, but several have noticeable placement/scale mismatches relative to the source, so this fits a score of 3 rather than 4 or 5.",
+          "concept_accuracy_analysis": "The figure illustrates a 2D lattice Markov random field with hidden image states x_i, observed y_i nodes, pairwise spatial couplings between neighboring x nodes, and unary observation/evidence links. The explanations are mostly figure-specific, naming local conditional dependence, pairwise factors φ_ij, unary factors ψ_i(x_i,y_i), p(x|y), and the Markov blanket of x2; the main omission is that only nodes/observation nodes are interactive while edges/factors themselves are not separately explained, but the concept is otherwise accurately conveyed.",
           "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "Main MRF structure and relationships are correct with specific explanations, with only minor omissions in factor/edge-specific interaction detail.",
           "visual_aesthetics": 3,
           "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-23T15:40:15.314Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T19:35:14.067Z",
           "criticVersion": "legacy_unknown",
-          "criticModel": "gemini-3.5-flash",
+          "criticModel": "gpt-5.5",
           "source": "external"
         }
       },
-      "criticModel": "gemini-3.5-flash"
+      "criticModel": "gpt-5.5"
     }
   }
 }

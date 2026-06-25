@@ -732,92 +732,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows three separate 3D surface plots side-by-side, labeled (a), (b), and (c), viewed from an elevated oblique angle looking down. All three panels are fully visible and framed together in a horizontal row.",
-          "viewing_angle_rendered": "The rendered screenshot is extremely zoomed in on the middle panel, causing the left and right panels to be cut off at the viewport edges. The camera height is lower, making the angle flatter and the perspective much wider.",
-          "viewing_angle_comparison": "The rendered view is far too close, completely failing to frame all three plots together in a single clean row as shown in the source. The camera zoom and positioning are incorrect.",
-          "shape_comparison": [
-            {
-              "element": "Base plane (a)",
-              "source_shape": "flat rectangle",
-              "rendered_shape": "flat rectangle",
-              "match": true
-            },
-            {
-              "element": "Height-field surface (a)",
-              "source_shape": "3D smooth Gaussian surface",
-              "rendered_shape": "3D smooth Gaussian surface",
-              "match": true
-            },
-            {
-              "element": "Height-field surface (b)",
-              "source_shape": "3D Gabor wave surface",
-              "rendered_shape": "3D Gabor wave surface",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The camera is extremely over-zoomed, cutting off the left and right panels completely.",
-            "The panels are arranged in the wrong horizontal order or reversed (blue base plane is on the right in the render, but on the left in the source).",
-            "A grey wireframe dome (envelope) is hallucinated over the Gabor surfaces, which is absent in the original figure.",
-            "The labels (a), (b), and (c) are misaligned and truncated because of the extreme zoom.",
-            "The colors of the base planes and grid outlines do not match the original (e.g., panel a should have a solid blue base, not yellow)."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Color-Wrong",
-            "Hallucination"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 4,
-          "notes": "The mathematical Gabor and Gaussian formulas are correct, but the layout, camera framing, and ordering completely ruin the faithfulness to the textbook figure.",
-          "action_items": [
-            "Adjust camera zoom and position to fit all three panels (a, b, and c) fully inside the viewport side-by-side.",
-            "Correct the horizontal order of panels to match the source: (a) on the left, (b) in the middle, (c) on the right.",
-            "Remove the translucent wireframe envelope lines that were added as a hallucination.",
-            "Make the base plane of panel (a) solid blue and ensure the grid colors match the original illustration.",
-            "Reposition and scale the HTML labels so they sit neatly below their respective panels."
-          ],
-          "visual_aesthetics": 2.3,
-          "overall_average": 2.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:24:11.637Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered view is zoomed/framed so the middle Gabor panel dominates while the left and right panels are mostly cropped off the canvas. The panel labels are not correctly visible in the expected positions: only large partial/misplaced labels such as “(c)” and “(b)” appear, with “(a)” effectively absent. A UI control panel and extra translucent envelope/wire overlay are visible even though they are not part of the source textbook figure. The underlying height-field surface primitives and general colors are mostly consistent, and the provided controls appear functional.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
           ],
+          "failure_modes_reasoning": "Missing-Labels applies because the required panel labels are clipped/mispositioned and “(a)” is not visible. Camera-Wrong applies because the initial view/framing does not match the source layout showing all three panels clearly. Scale-Wrong applies because the middle panel is far too large relative to the canvas and side panels. Hallucination applies due to the visible UI controls and extra envelope overlay not present in the original figure.",
+          "geometry_accuracy_analysis": "The scene constructs three true 3D height-field surface panels: a Gaussian envelope on the left, a cosine/real Gabor in the center, and a sine/imaginary Gabor on the right, each with square base plane, grid, surface wireframe, central axes, and labels (a), (b), (c). The surfaces use symmetric x/z domain coordinates with y as height, so this is not a flat pasted or baked-perspective illustration; however, label placement is HTML overlay rather than 3D geometry, the panel spacing is camera-oriented rather than naturally arranged, and the added envelope wire overlays/control-driven middle panel may not exactly match a static textbook figure. Overall, the major geometry and spatial relationships are present and recognizable with only minor alignment/proportion/extraneous-detail issues.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major 3D elements are present as real height-field geometry with plausible positions, but minor layout and fidelity issues prevent a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but those do not count as meaningful interactions. Meaningful interactions present: a component dropdown changes the middle panel among Gaussian envelope, cosine Gabor, and sine Gabor and should visibly reshape/recolor the surface; an orientation slider updates θ and visibly rotates the sinusoidal modulation; a frequency slider updates f and visibly changes the number of lobes; hover raycasting over the three surfaces shows a tooltip; clicking each surface triggers explanatory behavior, including changing demo steps and animating parameter changes, with popup text sent via postMessage. The Reset View button has a click handler but is hidden, so it is not usable. Overall the interactions are compact, functional, and pedagogically relevant, with a guided step-through demo embedded in the surface click behavior; the small translucent UI sits in the lower-right corner and does not significantly cover the geometry.",
           "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 5,
-          "visual_aesthetics": 3.3,
-          "overall_average": 4
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions plus a guided demo, and the UI is compact and minimally intrusive, matching the rubric for score 5.",
+          "faithfulness_analysis": "The rendered frame is a heavily zoomed/cropped view centered on the middle surface, with the left and right panels only partially visible at the edges, whereas the source shows all three complete surfaces evenly spaced across a wide canvas with large white margins and labels below each panel. The generated output also includes UI controls in the lower-right, extra translucent/wireframe outlines, partially cut-off labels, and a different apparent ordering/crop, so it is not a drop-in replacement.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the central surface resembles one source panel, the overall composition, crop, margins, labels, and UI intrusion differ substantially, matching well under 65% of the original.",
+          "label_quality_analysis": "Source figure labels are three panel labels: “(a)” at the bottom left under the first surface, “(b)” at the bottom center under the second surface, and “(c)” at the bottom right under the third surface. In the generated figure, “(c)” appears near the lower left and “(b)” near the lower right, but both are partially cut off by the bottom edge and do not correspond to the source panel positions; “(a)” is missing. There are also extra UI text labels such as “Comp.” and “Cosine Gabor (Real)” that are not part of the source. Overall, the label set is incomplete, mispositioned, and partially obstructed despite the visible labels having roughly similar large font size.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most source labels are either missing, incorrectly positioned, or cut off, with extra non-source UI text present, so this fits a score of 2.",
+          "concept_accuracy_analysis": "The figure illustrates a 2D Gabor filter decomposition: a Gaussian envelope, a real cosine-phase Gabor, and an imaginary sine-phase Gabor, with controls for component, orientation, and frequency. The explanations are figure-specific and mostly correct, explicitly describing Gaussian localization, cosine even symmetry, sine odd symmetry/zero crossing, and orientation steering; the main limitation is that the frequency parameter is implemented as an angular carrier coefficient without clarifying units or the usual 2π factor, but this is a minor abstraction rather than a misleading error.",
+          "concept_accuracy": 4,
+          "concept_accuracy_reasoning": "The core Gabor/Gaussian relationships and interactive explanations are accurate and specific, with only a minor missing clarification about the spatial-frequency parameterization.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:35:32.412Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:21:42.851Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

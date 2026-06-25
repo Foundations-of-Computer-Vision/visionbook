@@ -260,90 +260,38 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows a 3D stem plot from a viewpoint that places the vertical value axis on the far-left. The horizontal 'm' axis runs from the front-left to back-right, and the 'n' axis runs from left to right along the bottom-right.",
-          "viewing_angle_rendered": "The rendered screenshot shows the plot from an angle where the vertical value axis is placed on the far-right, and the coordinate grid is rotated/mirrored relative to the original source.",
-          "viewing_angle_comparison": "The viewing angle in the rendered screenshot is rotated by approximately 180 degrees around the vertical axis, causing the vertical axis to appear on the right side instead of the left, and reversing the depth of the grid axes.",
-          "shape_comparison": [
-            {
-              "element": "stems",
-              "source_shape": "thin vertical lines",
-              "rendered_shape": "thin cylinders",
-              "match": true
-            },
-            {
-              "element": "sample points",
-              "source_shape": "filled circles",
-              "rendered_shape": "spheres",
-              "match": true
-            },
-            {
-              "element": "grid",
-              "source_shape": "orthogonal lines forming a floor grid and partial back-planes",
-              "rendered_shape": "wireframe cage defining a 3D box support",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The vertical axis is positioned on the right instead of the left due to an incorrect camera viewpoint.",
-            "The grid structure has extra wireframe cage lines enclosing the entire 3D volume, whereas the source has open, cleaner back planes.",
-            "Labels are extremely small and difficult to read.",
-            "Axis labels (n, m, and vertical axis) are positioned on the wrong sides of the plot."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 1,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 4,
-          "notes": "The 3D scene is rotated incorrectly, placing the vertical axis on the wrong side, and the labels are too small to read.",
-          "action_items": [
-            "Adjust the initial camera position (azimuth and elevation) so the vertical axis is on the left side of the plot as in the source figure.",
-            "Re-orient the n and m axes so their values (-1, 0, 1) and label directions match the original layout.",
-            "Increase the font size of all text labels and tick marks to improve legibility.",
-            "Simplify the grid geometry to remove the front and top bounding box wireframes, keeping only the floor grid and back-plane grid lines.",
-            "Add interactive UI controls, such as a dropdown to switch between different kernel types (e.g., Box, Gaussian, Identity) or a slider to adjust the kernel size."
-          ],
-          "visual_aesthetics": 2.3,
-          "overall_average": 2.4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:53:25.011Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated plot uses the correct stem-and-dot primitives, blue samples, gray grid, and includes the main axis/tick labels. However, the initial view is rotated/mirrored relative to the reference: the vertical value axis and label appear on the right side instead of the left, and the n/m axes are oriented differently from the source. The plot also appears more horizontally stretched and loosely framed than the compact reference.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Camera-Wrong",
+            "Scale-Wrong"
           ],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 2,
-          "faithfulness": 3,
-          "label_quality": 3,
-          "concept_accuracy": 4,
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.2
+          "failure_modes_reasoning": "Camera-Wrong: the initial viewpoint does not match the reference orientation, with the vertical axis on the opposite side and base axes rotated differently. Scale-Wrong: the generated plot is noticeably wider and more spread out compared with the compact proportions of the source figure.",
+          "geometry_accuracy_analysis": "OBSERVE: The scene constructs a true 3D stem plot with a floor grid and rear/right reference grid lines, three black coordinate axes, tick marks, nine blue vertical cylinder stems at n,m ∈ {-1,0,1}, and blue spherical markers at height 1. Labels for the value axis, n and m axes, and tick values are present as HTML overlays. No source-image texture or flattened billboard is used; the base plane lies in XZ with vertical Y height, so depth is generated by the camera. Minor possible issues are that the grid cage/axis placement and label offsets may not exactly match the textbook perspective/crop, but the main topology and sample positions are correct. CHARACTERIZE: The geometry is a faithful real 3D representation of a 3×3 box-filter stem plot, with correct equal-height samples and plausible axes/grid structure. Any discrepancies are minor alignment or styling differences rather than missing geometry.",
+          "geometry_accuracy": 5,
+          "geometry_accuracy_reasoning": "All major elements are present as correct unwarped 3D geometry with plausible positions, connections, and proportions, so it fits the score-5 rubric.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, which should function but does not count as meaningful interaction. A hidden Reset View button has a click listener but is display:none, so it is not usable. Pointermove raycasting is registered for interactive objects and should visibly show a small tooltip when hovering over dots, stems/sample group, grid, or axes. Click handlers are registered for the same objects and send explanatory popup content via window.parent.postMessage; this may work only if the embedding parent handles the alex-popup message, and there is no in-page popup shown by the code itself. No sliders, toggles, parameter controls, animation controls, or guided demo are present. The tooltip/UI chrome is compact and does not cover the geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "There are multiple functional hover/click explanatory interactions on scene objects and the UI is compact, but there is no guided demo or parameter control, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered output shows the same basic blue 3D stem-plot concept, but the camera is rotated so the vertical axis appears on the right instead of the left, and the axes/labels are not in the same visual positions as the source. The render is much wider with large whitespace and a zoomed-out crop, whereas the source is a compact nearly square figure with the plot filling most of the frame.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the plotted stems are recognizable, the camera angle, aspect ratio, crop, and margins differ substantially, making it a poor inline replacement under the <65% match criterion.",
+          "label_quality_analysis": "Source labels include axis label n, axis label m, vertical label box_{1,1} [n,m], and tick labels -1, 0, 1 on the horizontal axes plus 0 and 1 on the vertical axis. In the generated figure, n is present and readable but smaller and not in the same lower-right placement; m is present but very small and placed near the middle of the plot rather than at the front-left; box_{1,1} [n,m] is present on the right vertical axis but much smaller than the source and less prominent. Several tick labels are present, but they are tiny, faint, and some are difficult to read at screenshot scale. Overall the label set is mostly present, but the font sizes are consistently too small relative to the source and positioning differs substantially.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Most labels are technically present but are undersized and/or poorly positioned compared with the source, with tick labels especially difficult to read, matching a score of 2.",
+          "concept_accuracy_analysis": "The figure illustrates a 2D discrete box filter kernel box₁,₁[n,m] as a 3×3 stem plot with all nine coefficients at value 1 over n,m ∈ {−1,0,1}. Labels, tick marks, axes, and interactive tooltips/popups are specific to the kernel, support grid, coefficient values, and normalization/averaging interpretation; the only slight extrapolation is mentioning blur/normalization beyond the plotted unnormalized coefficients, but it is not misleading.",
+          "concept_accuracy": 5,
+          "concept_accuracy_reasoning": "The main concept and all interactive explanations are accurate, figure-specific, and correctly describe the 3×3 support and unit-valued box-filter samples.",
+          "visual_aesthetics": 3,
+          "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:17:48.293Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:38:02.639Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

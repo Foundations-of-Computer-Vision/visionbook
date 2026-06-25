@@ -302,90 +302,41 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure consists of four side-by-side 3D plots (panels a, b, c, d). In each plot, the vertical axis points straight up, the u-axis extends to the right and slightly forward, and the v-axis extends towards the bottom-left viewer direction.",
-          "viewing_angle_rendered": "The rendered screenshot shows a single 3D plot with the u-axis extending towards the bottom-left and the v-axis extending towards the middle-left, viewed from a high-elevation angle looking down.",
-          "viewing_angle_comparison": "The viewing angle in the rendered version is rotated and flipped relative to the source. In the source, the u-axis goes to the right, whereas in the rendered version, the u-axis points towards the front-left.",
-          "shape_comparison": [
-            {
-              "element": "frequency response surface",
-              "source_shape": "four separate smooth 3D surfaces with grid lines showing different filter responses",
-              "rendered_shape": "a single interactive 3D surface with grid lines, switchable via UI",
-              "match": false
-            },
-            {
-              "element": "coordinate axes",
-              "source_shape": "thin black arrows pointing along u, v, and vertical axes",
-              "rendered_shape": "thicker black cylinder-based arrows",
-              "match": true
-            },
-            {
-              "element": "slicing plane",
-              "source_shape": "none",
-              "rendered_shape": "translucent cyan plane cutting through the surface",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "The 4-panel side-by-side layout (a, b, c, d) of the original figure is collapsed into a single plot with a dropdown menu.",
-            "A vertical slicing plane (cyan) and its intersection curve (red) have been hallucinated and are not present in the original figure.",
-            "The coordinate axes are rotated compared to the original, with the 'u' and 'v' directions pointing differently.",
-            "The main label is '|H(u,v)|' instead of the specific panel labels like '|D_0(u,v)|' or '|D_1(u,v)|'.",
-            "Panel labels (a, b, c, d) are missing."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Hallucination",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 5,
-          "faithfulness": 3,
-          "label_quality": 4,
-          "concept_accuracy": 5,
-          "notes": "The code creates an excellent interactive tool for exploring filter responses but fails as a direct visual replacement for the 4-panel static textbook figure.",
-          "action_items": [
-            "Reconstruct the visual layout to feature four side-by-side viewports/canvases (or a 2x2 grid) showing all four operators simultaneously.",
-            "Align the camera angles and axes orientations in all panels to match the source (u axis pointing right, v axis pointing front-left).",
-            "Remove the slice plane and slicing curve by default to match the clean presentation of the original figures.",
-            "Add labels for each panel corresponding to a), b), c), d) and use the exact math labels like '|D_0(u,v)|' and '|D_1(u,v)|' above each plot."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 4
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:16:21.463Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated output shows only a single interactive frequency-response surface labeled |H(u,v)|, while the source is a four-panel figure (a–d) with separate wireframe surfaces and panel labels. The generated scene adds a UI dropdown/slider, translucent cyan slice plane, and red highlighted slice that do not appear in the source. The camera orientation differs: the source has u roughly to the right and v diagonal, while the generated view has u down-left and v leftward. Important annotations such as a), b), c), d) and the specific |D0(u,v)| / |D1(u,v)| labels are missing or replaced by a generic label.",
           "failure_modes": [
-            "Missing-Labels"
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination",
+            "Concept-Misunderstood"
           ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
-          "label_quality": 3,
+          "failure_modes_reasoning": "Missing-Labels applies because panel letters and specific operator labels from the source are absent or replaced. Camera-Wrong applies because the initial viewpoint and axis directions do not match the source. Scale-Wrong applies because the source is a wide four-panel comparison, but the generated figure displays one enlarged plot. Hallucination applies because the UI controls, cyan slice plane, red slice curve, and generic |H(u,v)| label are not present in the original. Concept-Misunderstood applies because the original illustrates four side-by-side response surfaces for comparison, whereas the generated version presents only one selectable surface at a time.",
+          "geometry_accuracy_analysis": "The scene constructs a genuine 3D frequency-response surface: a sampled height-field mesh over u-v coordinates with a colored wire lattice, three arrow axes, labels for u, v, and |H(u,v)|, plus a translucent vertical v-slice plane and highlighted slice curve. The geometry is not a flat texture or billboard; depth comes from actual x/y/z vertex positions and the camera. However, it represents only one operator surface at a time via a UI selector, so if the source figure shows multiple response surfaces simultaneously, those separate panels are absent; tick marks, numeric frequency labels, and any boxed/grid reference frame are also missing.",
+          "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major 3D plot elements are plausibly constructed with real 3D geometry, but there are minor omissions such as ticks/numeric labels and possible absence of simultaneous multi-surface panels.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom, but this does not count as a meaningful interaction. Meaningful controls include an operator dropdown with four options; changing it triggers a visible animated morph of the frequency-response surface. A v-slice range slider visibly moves the translucent slice plane and highlighted cross-section curve. Several scene objects are registered for hover/click interaction: the surface, slice plane, magnitude axis, u-axis, and v-axis show tooltips on hover and post explanatory popups on click; clicking the surface also advances through a four-step guided demo with narration and operator changes. The reset-view button has a click handler but is hidden, so it is not usable. Overall the interactions are compact, pedagogically relevant, and the small transparent UI in the lower-left does not cover important geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions including parameter controls, object explanations, and a guided click-through demo, with compact non-intrusive UI, matching the rubric for 5.",
+          "faithfulness_analysis": "The source is a very wide four-panel figure labeled a)–d), with separate rainbow wireframe surface plots, black u/v/vertical axes, large top labels |D0(u,v)| and |D1(u,v)|, and substantial horizontal spacing. The rendered output shows only a single plot labeled |H(u,v)| in a standard 4:3 canvas, uses mostly solid translucent surfaces rather than the original wireframe style, has a different camera angle/zoom, and includes visible UI controls in the lower-left corner.",
+          "faithfulness": 1,
+          "faithfulness_reasoning": "Because the generated frame omits three of the four subfigures, uses different labels and geometry/style, and adds UI chrome, it is not a recognizable drop-in replacement for the original.",
+          "label_quality_analysis": "Source labels include the main surface titles |D0(u,v)| above panel a and |D1(u,v)| above panel b, axis labels u and v on the plotted coordinate axes, and panel labels a), b), c), and d). In the generated figure, u and v appear once and are readable/appropriately placed for a single 3D axis, but the main title is incorrect as |H(u,v)| instead of the source D labels, the second title |D1(u,v)| is absent, all panel labels a)–d) are absent, and the source’s repeated multi-panel labeling is not represented; small UI/control text also appears that is not part of the source figure.",
+          "label_quality": 2,
+          "label_quality_reasoning": "Only the basic u/v axis labels are correct while most source labels are missing or replaced with incorrect text, so the label set is largely incomplete.",
+          "concept_accuracy_analysis": "The figure illustrates 3D Fourier magnitude response surfaces |H(u,v)| for several discrete derivative/edge operators, with axes u, v, and |H(u,v)|, a movable fixed-v slice, and operator selection among d0, d1, Roberts, and Sobel. The explanations are figure-specific and mostly correct: d0 and d1 are described with appropriate sinusoidal responses, Sobel is correctly characterized as a horizontal derivative with orthogonal binomial smoothing, and the slice/axis popups refer to the plotted variables; the main caveat is that 'Roberts Cross' is represented as a single diagonal derivative response rather than the combined two-kernel Roberts cross magnitude, which may oversimplify or misrepresent the named operator.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 3,
-          "overall_average": 3.4
+          "concept_accuracy_reasoning": "The main concept and most interactions are accurate and specific, but the Roberts Cross response is potentially incomplete/misnamed as only one diagonal component, so this warrants a minor-to-moderate penalty rather than full credit.",
+          "visual_aesthetics": 2.3,
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:42:59.687Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:53:50.260Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

@@ -624,87 +624,35 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure shows four vertical stacks of seven diamond-shaped planes aligned horizontally, viewed from an orthographic, elevated perspective looking down and slightly from the right. The stacks represent training progress from left to right, with a process flowchart aligned vertically on the far left.",
-          "viewing_angle_rendered": "The rendered screenshot shows the same four vertical stacks of diamond-shaped planes with a vertical flowchart on the left, viewed from an orthographic, elevated perspective looking down from the front-right.",
-          "viewing_angle_comparison": "The viewing angles are highly consistent, both capturing the parallel vertical stacks from a clean orthographic, slightly elevated angle.",
-          "shape_comparison": [
-            {
-              "element": "layer planes",
-              "source_shape": "flat diamond/polygon",
-              "rendered_shape": "flat diamond/polygon",
-              "match": true
-            },
-            {
-              "element": "flowchart nodes",
-              "source_shape": "rounded rectangles",
-              "rendered_shape": "rounded rectangles (HTML overlay)",
-              "match": true
-            },
-            {
-              "element": "data paths",
-              "source_shape": "curved/bent lines confined to plane stacks",
-              "rendered_shape": "wildly flaring lines spilling into empty space",
-              "match": false
-            }
-          ],
-          "discrepancies": [
-            "In stacks 3 and 4 of the rendered figure, the red and blue data paths flare extremely wide, completely escaping the boundaries of the diamond representation planes and floating in empty space. In the source, they remain strictly inside or projected onto the diamond planes.",
-            "The rendered figure features prominent 3x3 inner grid lines on every single diamond plane, which makes the layers look cluttered; the source figure has a much cleaner, un-gridded appearance inside the diamonds.",
-            "The spacing and distribution of points at the bottom input layer is too uniform in the rendered version, whereas the source shows specific clustered densities.",
-            "The step-by-step description logic ('goToStep') exists in code but has no visible interactive UI buttons or controls on screen for users to trigger."
-          ],
-          "failure_modes": [
-            "Concept-Misunderstood",
-            "Scale-Wrong",
-            "Interaction-Missing"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 3,
-          "label_quality": 4,
-          "concept_accuracy": 3,
-          "notes": "The overall architecture and flowchart are beautifully rendered, but the data paths wildly violate the physical boundary of the representation planes in later epochs.",
-          "action_items": [
-            "Modify the `warp2D` function to strictly clamp or scale transformed coordinates so they stay within the [-planeHalf, planeHalf] boundaries of the diamond planes.",
-            "Rework the separation formula in later layers of stacks 3 and 4 so they fold and stretch elegantly within the boundaries, replicating the neat 'wings' of the source image rather than shooting off into infinity.",
-            "Faint out or completely remove the grid lines on the diamond planes to match the clean visual style of the textbook source.",
-            "Expose UI buttons (e.g., 'Snapshot 1', 'Snapshot 2', etc.) to trigger the animated narration and `goToStep` function already built into the code."
-          ],
-          "visual_aesthetics": 3.3,
-          "overall_average": 3.2
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:15:23.396Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The rendered screenshot closely matches the reference: seven stacked diamond layer planes per snapshot, four training snapshots, red/blue dashed trajectories and points, gray scaffolding, left-side operation labels with arrows, and the bottom training-iteration arrow are all present with matching orientation, scale, and colors. The code includes OrbitControls plus meaningful hover/click interactions for points, planes, labels/arrows, and training progression, so interaction is not missing or broken.",
           "failure_modes": [],
+          "failure_modes_reasoning": "No clear failure modes apply; the generated figure visually and conceptually matches the source and includes meaningful interactive behavior beyond basic rotation.",
+          "geometry_accuracy_analysis": "The scene contains the major 3D structures implied by the figure: four horizontally separated training snapshots, each with seven stacked representation planes, diamond-like plane outlines produced by the camera view, faint grids, vertical/dashed scaffold lines, red and blue datapoint spheres, dashed trajectories through layers, left-side operation arrows and labels, and a bottom training-iteration arrow with ellipses. The geometry is built as real 3D objects with layers separated in Y and panels separated in X/Z, not as a pasted flat texture or single skewed billboard. Minor issues include approximate/random datapoint layouts rather than an exact match, simplified square planes and grids, and some labels/arrows implemented as HTML overlays rather than fully 3D geometry, but the overall topology and spatial arrangement are recognizable and plausible.",
           "geometry_accuracy": 4,
+          "geometry_accuracy_reasoning": "All major elements are present as true 3D geometry with plausible positions and connections, with only minor simplifications and alignment/detail inaccuracies.",
+          "interactivity_usability_analysis": "The code includes OrbitControls, but these do not count as meaningful interaction. A hidden Reset View button has a click handler but is styled display:none, so it is not usable. Registered invisible plane pick meshes support hover tooltips and click popups explaining each representation plane; layer-operation arrowheads and the training-iteration arrow similarly support hover/click explanatory popups. Datapoint spheres have a separate hover interaction that visibly highlights the corresponding trajectory by changing path/point opacity and scale, plus a click popup explaining the datapoint trajectory. Escape hides popups/tooltips. A window.goToStep guided-step function exists, but there is no visible UI control to invoke it, so it is not an accessible guided demo. The interactions are pedagogically relevant and compact, with essentially no UI chrome covering the geometry.",
           "interactivity_usability": 4,
-          "faithfulness": 4,
-          "label_quality": 4,
+          "interactivity_usability_reasoning": "Multiple functional hover/click explanatory interactions and datapoint highlighting are present, but there is no usable guided demo UI, so this fits score 4 rather than 5.",
+          "faithfulness_analysis": "The rendered first frame matches the source figure essentially exactly: same camera angle, zoom, crop, whitespace, layer spacing, arrows, labels, colors, dashed connection lines, and overall proportions. It functions as a near drop-in replacement with no visible UI chrome or composition shift.",
+          "faithfulness": 5,
+          "faithfulness_reasoning": "The output matches the original at or above 95% across composition, crop, colors, proportions, and whitespace.",
+          "label_quality_analysis": "Source labels are: “softmax” at the top left, then “linear”, “relu”, “linear”, “relu”, “linear” down the left vertical stack, plus “Training iteration” along the bottom horizontal arrow with ellipsis marks. In the generated figure, all of these labels appear with the same text, matching relative font size, clear rounded-box styling for the left labels, and unobstructed placement; the bottom label and ellipses are also correctly positioned and readable. Overall the label set matches the source essentially exactly in completeness, scale, and positioning.",
+          "label_quality": 5,
+          "label_quality_reasoning": "All labels are present, correct, clear, appropriately sized, and well placed, satisfying the score-5 rubric.",
+          "concept_accuracy_analysis": "The figure illustrates how a feed-forward neural network transforms 2D datapoints through successive linear, ReLU, and softmax layers, with multiple left-to-right snapshots showing training progressively separating red and blue classes. The hover/click explanations are mostly figure-specific and correctly refer to representation planes, datapoint trajectories, layer operations, and training iteration, though they are schematic rather than tied to real learned weights or exact softmax geometry and several layer-operation popups reuse broad wording.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 4
+          "concept_accuracy_reasoning": "The main neural-network representation/transformation concept is accurate and the interactions are mostly specific, but the mathematical details are schematic and mildly generic rather than fully precise.",
+          "visual_aesthetics": 4.7,
+          "overall_average": 4.4
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T14:34:53.426Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T05:26:02.809Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

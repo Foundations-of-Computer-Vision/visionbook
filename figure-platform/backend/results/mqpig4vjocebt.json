@@ -86,79 +86,37 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure is a 2D diagram representing a 3D geometry setup. It shows two image planes tilted in perspective with camera centers at the bottom, and a 3D point P at the top, presented from a flat orthographic-like front-on perspective.",
-          "viewing_angle_rendered": "The rendered screenshot matches the source perfectly using an orthographic camera looking directly along the Z-axis, projecting the 3D-constructed lines, points, and curves onto a flat 2D plane.",
-          "viewing_angle_comparison": "The viewing angles are identical, successfully mimicking the exact 2D projection of the original textbook illustration.",
-          "shape_comparison": [
-            {
-              "element": "Image planes l1, l2",
-              "source_shape": "skewed flat rectangles",
-              "rendered_shape": "skewed flat rectangles (tube outlines)",
-              "match": true
-            },
-            {
-              "element": "Camera centers / Points",
-              "source_shape": "solid circles",
-              "rendered_shape": "flat circular discs",
-              "match": true
-            },
-            {
-              "element": "Grey mapping arrows",
-              "source_shape": "curved arrows",
-              "rendered_shape": "curved tubes with flat arrowheads",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The arrow for p'=KP curves slightly further out from the point p' compared to the original, leaving a small visual gap before pointing to the red circle."
-          ],
-          "failure_modes": [],
-          "geometry_accuracy": 5,
-          "interactivity_usability": 3,
-          "faithfulness": 5,
-          "label_quality": 5,
-          "concept_accuracy": 5,
-          "notes": "Excellent and highly faithful reproduction of the textbook figure with clean typography and accurate geometry, though it lacks deep procedural interactivity like sliders.",
-          "action_items": [
-            "Add interactive sliders or a step-by-step animation button showing the lifting of p to P, the transition from P to P', and the projection to p'.",
-            "Add controls to vary the translation vector T or rotation R to show how the reference frame and projected point p' dynamically shift.",
-            "Slightly adjust the curve path of the p'=KP arrow so its tip aligns more closely with the center of the red point p'."
-          ],
-          "visual_aesthetics": 5,
-          "overall_average": 4.6
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T17:49:51.151Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
-          "failure_modes": [],
-          "geometry_accuracy": 4,
-          "interactivity_usability": 3,
-          "faithfulness": 4,
+        "gpt-5.5": {
+          "failure_modes_analysis": "The screenshot visually recreates most of the 2D schematic: both image frames, dashed rays, red/black points, grey arrows, and the main labels/equations are present with matching colors. However, the code places essentially all geometry on the same z plane and uses a front orthographic view, so the camera frames, rays, and 3D point relationship are only a flat drawing rather than a real 3D projective configuration.",
+          "failure_modes": [
+            "Depth-Wrong"
+          ],
+          "failure_modes_reasoning": "All major objects use nearly identical z values and the initial camera is front-on orthographic, so the implied 3D camera/image-plane geometry from the source is collapsed into a 2D billboard rather than represented with actual depth.",
+          "geometry_accuracy_analysis": "The scene contains two skewed rectangular frame outlines, red/black disks for points, dashed tube segments for rays, thin spokes, grey curved arrows, a circular arrow, and HTML labels. However, these are all constructed as a flat 2D diagram: nearly every vertex is specified in XY coordinates with z fixed around 0–0.14, and the image frames are hardcoded as asymmetric skewed quadrilaterals rather than clean 3D planes viewed by a camera. There are no true 3D camera/image-plane relationships, no real depth geometry for P or projection rays, and the perspective appearance is baked into flat coordinates.",
+          "geometry_accuracy": 1,
+          "geometry_accuracy_reasoning": "Per the critical Fake 3D check, the principal geometry is flattened along one axis and uses baked-in skewed coordinates to mimic the source illustration, so it must score 1.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotate/zoom, but these do not count as meaningful interactions. A hidden Reset View button has a click listener but is display:none, so it is not usable. There are pointermove, pointerleave, click, and Escape handlers for registered scene objects: target frame ℓ₂, reference frame ℓ₁, dashed rays, grey arrows, and point group; hovering should show a small tooltip and clicking sends a 2-3 sentence explanatory popup via postMessage, so these are meaningful pedagogical object interactions if the parent popup handler is present. There are no sliders, toggles, parameter controls, animations, or guided step-through demo. The tooltip/UI chrome is compact and does not cover the geometry.",
+          "interactivity_usability": 4,
+          "interactivity_usability_reasoning": "Multiple functional click/hover explanations are present and useful, but there is no guided demo or parameter control, so this merits 4 rather than 5.",
+          "faithfulness_analysis": "The rendered figure contains the same conceptual elements—two image planes, red/black points, dashed projection rays, gray transformation arrows, and the same labels—but the first frame is much more compact and horizontally compressed compared with the source. The source has large, bold textbook typography and fills the canvas vertically with prominent bottom labels, while the render is zoomed out with smaller text, different aspect ratio, altered arrow sizes/positions, and noticeably different spacing around the top point and planes.",
+          "faithfulness": 3,
+          "faithfulness_reasoning": "The layout is recognizable, but significant differences in zoom, aspect ratio, typography scale, spacing, and arrow placement make it only a moderate match of roughly 65–75% rather than a near drop-in replacement.",
+          "label_quality_analysis": "Source labels: P, P’=MP, P=zK^{-1}p, p’=KP, p, p’, ℓ1, ℓ2, Target frame, Reference frame, and R, T. All of these appear in the generated figure with correct text and generally readable serif styling; font sizes are mostly consistent with the source scale. Placement is mostly appropriate, though the top labels around P/P’=MP are somewhat cramped near the red point and dashed lines, and p’=KP is closer to the geometry than in the source.",
           "label_quality": 4,
+          "label_quality_reasoning": "All labels are present and readable with broadly correct sizing, but a few have minor crowding/placement issues, matching the score-4 rubric.",
+          "concept_accuracy_analysis": "The figure illustrates view reconstruction / image warping between a target and reference frame: lift target pixel p by depth as P = zK⁻¹p, transform by camera motion R,T or M, then project to p′ in the reference frame. The labels and popups are mostly figure-specific and mention ℓ₁/ℓ₂, p, p′, P, K, depth z, and camera motion, but the geometry conflates P and P′ into a single 3D point and one visible label says p′ = KP instead of p′ = KP′, which weakens the transformation relationship.",
           "concept_accuracy": 4,
-          "visual_aesthetics": 4,
-          "overall_average": 3.8
+          "concept_accuracy_reasoning": "Main concept and explanations are accurate and specific, with minor conceptual/notation issues around distinguishing P from transformed P′ and the projection equation label.",
+          "visual_aesthetics": 2.7,
+          "overall_average": 3.2
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T18:22:03.633Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-23T21:39:10.283Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }

@@ -336,96 +336,40 @@
     }
   ],
   "evaluationVersions": {
-    "benchmark": {
-      "criticVersion": "benchmark",
-      "evaluationResults": {
-        "gemini-3.5-flash": {
-          "viewing_angle_source": "The source figure displays two panels side-by-side. Panel (a) on the left is a flat 2D plot viewed from the side, with horizontal base coordinates $n, a, n+1$ and vertical lines denoting function values. Panel (b) on the right is a 3D isometric representation of a square grid with vertical heights forming a bilinear surface, viewed from a slightly elevated, front-right perspective.",
-          "viewing_angle_rendered": "The rendered screenshot shows the two panels swapped: Panel (b) is on the left, and Panel (a) is on the right. Furthermore, both panels are rendered under the same global 3D orthographic perspective, causing the 1D linear interpolation in Panel (a) to appear skewed and tilted in 3D space rather than flat 2D.",
-          "viewing_angle_comparison": "The viewing angles are highly inconsistent with the source: the layout is swapped (right-to-left), and the 1D diagram (a) is incorrectly presented with 3D perspective tilt instead of being orthographic/flat.",
-          "shape_comparison": [
-            {
-              "element": "1D coordinate base line",
-              "source_shape": "line",
-              "rendered_shape": "cylinder",
-              "match": true
-            },
-            {
-              "element": "sample nodes (black dots)",
-              "source_shape": "flat ellipse",
-              "rendered_shape": "flattened ellipsoid",
-              "match": true
-            },
-            {
-              "element": "bilinear surface",
-              "source_shape": "shaded quad mesh",
-              "rendered_shape": "shaded quad mesh",
-              "match": true
-            },
-            {
-              "element": "vertical interpolation guide",
-              "source_shape": "dashed line",
-              "rendered_shape": "dashed line",
-              "match": true
-            }
-          ],
-          "discrepancies": [
-            "The panels are swapped: (b) Bilinear interpolation is on the left, and (a) Linear interpolation is on the right.",
-            "Panel (a) is drawn in skewed 3D perspective instead of being a flat, front-facing 2D diagram.",
-            "Severe label overlapping: the title '(b) Bilinear interpolation' overlaps with coordinate label '(n+1,m)' and UI sliders.",
-            "Labels in panel (a) like 'l_in[n+1]' and 'l_out(a)' overlap each other.",
-            "The orientation and camera angle of the bilinear grid in panel (b) is rotated compared to the source, putting '(n+1, m+1)' at the bottom-left instead of top-right."
-          ],
-          "failure_modes": [
-            "Camera-Wrong",
-            "Scale-Wrong"
-          ],
-          "geometry_accuracy": 3,
-          "interactivity_usability": 3,
-          "faithfulness": 2,
-          "label_quality": 2,
-          "concept_accuracy": 4,
-          "notes": "The panels are swapped, the 1D plot is rendered in skewed 3D, and there is severe label overlap.",
-          "action_items": [
-            "Swap the positions of the two groups: place linearGroup on the left and bilinearGroup on the right.",
-            "Render Panel (a) as a flat 2D orthographic diagram without 3D depth tilt.",
-            "Fix severe HTML label collisions, particularly around '(b) Bilinear interpolation' and the interactive parameter sliders.",
-            "Adjust the coordinate rotation of the bilinear grid in Panel (b) to align with the source layout, where (n,m) is bottom-left and (n+1, m+1) is top-right.",
-            "Ensure labels in Panel (a) are separated and clearly readable."
-          ],
-          "visual_aesthetics": 2.3,
-          "overall_average": 2.8
-        }
-      },
-      "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:29:19.110Z",
-          "criticVersion": "benchmark",
-          "criticModel": "gemini-3.5-flash",
-          "source": "loop"
-        }
-      },
-      "criticModel": "gemini-3.5-flash"
-    },
     "legacy_unknown": {
       "criticVersion": "legacy_unknown",
       "evaluationResults": {
-        "gemini-3.5-flash": {
+        "gpt-5.5": {
+          "failure_modes_analysis": "The generated scene contains the basic black/red sample points, green interpolation lines, and translucent green bilinear surface, but the composition is very different from the source: the bilinear diagram dominates the left foreground while the linear interpolation diagram is small and pushed to the upper right, instead of linear on the left and bilinear on the right. Several important bilinear input-value labels from the source, such as ℓ_in[n,m], ℓ_in[n+1,m], ℓ_in[n,m+1], and ℓ_in[n+1,m+1], are absent. The visible sliders for a and b are extra UI elements not present in the reference image. Overall the interpolation concept is recognizable, but the initial viewpoint/layout and relative scale are substantially off.",
           "failure_modes": [
-            "Camera-Wrong"
+            "Missing-Labels",
+            "Camera-Wrong",
+            "Scale-Wrong",
+            "Hallucination"
           ],
+          "failure_modes_reasoning": "Missing-Labels applies because key source annotations for the bilinear corner input values are not shown. Camera-Wrong applies because the initial viewpoint/layout reverses the intended placement and orientation, putting the bilinear figure left/front and the linear figure small at upper right. Scale-Wrong applies because the linear diagram is much too small relative to the bilinear diagram compared with the source. Hallucination applies because visible a/b sliders are extra elements not present in the textbook figure.",
+          "geometry_accuracy_analysis": "The scene constructs real 3D geometry rather than a flat pasted/skewed drawing: the bilinear panel uses X/Z ground coordinates with Y-valued heights, and the camera supplies the viewing angle. Present elements include the 1D linear interpolation baseline, endpoint samples, vertical guide rods, green interpolation segment, red target point and dashed projection; the bilinear side includes a square ground cell, four corner sample poles, top sample points, a translucent bilinear surface, green boundary/cross-section interpolation lines, red target pole/point, dashed ground guides, and coordinate/output labels. Minor issues include some labels for individual corner input values being absent or simplified, slightly stylized flattened sphere markers, and the bilinear surface/green cross-lines being more elaborate than a simple textbook line diagram, but the spatial construction and topology are largely correct.",
           "geometry_accuracy": 4,
-          "interactivity_usability": 4,
-          "faithfulness": 3,
+          "geometry_accuracy_reasoning": "All major geometric elements are present as true 3D objects with plausible positions and connections, with only minor omissions/stylization and alignment/labeling simplifications preventing a perfect score.",
+          "interactivity_usability_analysis": "The code includes OrbitControls for rotation/zoom, but this does not count as a meaningful interaction. There are two visible sliders, a and b, each with input listeners that update red interpolation points, dashed guides, green cross-section lines, and labels in both the linear and bilinear diagrams, so both visibly function. A hidden Reset View button has a click listener but is not usable because it is display:none. The canvas has pointermove, pointerleave, click, and Escape handlers for registered interactive objects: hovering over the linear group, bilinear surface, and red output nodes shows a tooltip, and clicking them posts explanatory popups and triggers demo steps/animations through goToStep. The goToStep function defines a four-step guided explanation with narration and animated parameter changes, though it is accessed by clicking scene elements rather than by visible next/previous buttons. The UI is compact in the lower-left corner and does not significantly cover the geometry.",
+          "interactivity_usability": 5,
+          "interactivity_usability_reasoning": "There are 3+ functional, pedagogically useful interactions including two sliders, hover/click explanations, and animated guided demo steps, with compact non-intrusive UI, satisfying the score-5 rubric.",
+          "faithfulness_analysis": "The rendered frame contains recognizable linear and bilinear interpolation elements with green lines/surface, black/red points, and some labels, but the composition is very different from the source. The source is a wide two-panel textbook figure with linear interpolation on the left and bilinear interpolation on the right, extensive whitespace and large mathematical labels; the render swaps their positions and relative sizes, uses a much narrower aspect ratio, omits many annotations, changes camera/crop, and includes visible slider UI in the lower-left.",
+          "faithfulness": 2,
+          "faithfulness_reasoning": "Although the subject matter is recognizable, the layout, aspect ratio, panel ordering, label density, crop, and added UI differ substantially, so it matches well under 65% of the original.",
+          "label_quality_analysis": "Source labels include, for (a) Linear interpolation: ℓ_in[n], ℓ_out(a), ℓ_in[n+1], bottom labels n, a, n+1, and caption “(a) Linear interpolation”. In the generated figure these are mostly present in the small right-hand inset, but several are tiny, crowded, or unclear; the bottom labels and caption overlap, and n+1 is not clearly readable/placed. For (b) Bilinear interpolation, the source includes ℓ_in[n,m], ℓ_out(a,b), ℓ_out(n,b), ℓ_out(a,m+1), ℓ_in[n,m+1], ℓ_in[n+1,m], ℓ_in[n+1,m+1], coordinate labels n,m; n+1,m; n,m+1; n+1,m+1; (a,b), and caption “(b) Bilinear interpolation”. The generated figure has ℓ_out(a,b), ℓ_out(n,b), and ℓ_out(a,m+1), but ℓ_out(n,b) and ℓ_out(a,m+1) appear swapped relative to the source, the ℓ_in[...] labels for the bilinear panel are missing, and several coordinate labels are small or partially obstructed by geometry/caption. Overall, many labels are missing or mispositioned, and the font sizes are generally smaller than the source, especially in the linear inset.",
           "label_quality": 2,
+          "label_quality_reasoning": "Most of the bilinear ℓ_in labels are absent and many remaining labels are too small, overlapped, or incorrectly positioned, so this fits the score-2 rubric despite some readable correct labels.",
+          "concept_accuracy_analysis": "The figure illustrates 1D linear interpolation and its extension to bilinear interpolation over a grid cell: the left panel shows a red output point moving along a green segment between two samples, and the right panel shows a translucent bilinear surface defined by four corner samples with the output at (a,b). The slider interactions and popup/tooltips are figure-specific and correctly describe variables a, b, ℓout(a), ℓout(a,b), cross-sections, corner samples, and interpolation along each coordinate; no substantive misinformation is apparent.",
           "concept_accuracy": 5,
-          "visual_aesthetics": 3,
+          "concept_accuracy_reasoning": "All core concepts are accurately represented and the interactive explanations are specific to linear/bilinear interpolation and the displayed geometry.",
+          "visual_aesthetics": 2.7,
           "overall_average": 3.6
         }
       },
       "evaluationMeta": {
-        "gemini-3.5-flash": {
-          "evaluatedAt": "2026-06-22T15:44:19.093Z",
+        "gpt-5.5": {
+          "evaluatedAt": "2026-06-24T04:53:38.580Z",
           "criticVersion": "legacy_unknown",
           "source": "external"
         }
