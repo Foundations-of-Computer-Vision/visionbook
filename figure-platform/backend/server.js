@@ -18,6 +18,9 @@ const {
   loadPairwiseResult,
   savePairwiseResult,
   loadAllPairwiseResults,
+  loadAllPairsForRanking,
+  clearMachineEval,
+  clearAllMachineEvals,
   canonicalizePair,
 } = require('./pairwise_evaluator');
 const { planForFigure, planChapter, PLANNER_MODEL } = require('./planner');
@@ -1209,122 +1212,6 @@ app.delete('/api/result/:id', (req, res) => {
   }
 });
 
-// ── DELETE /api/result/:id/evaluation ────────────────────────────────────────
-app.delete('/api/result/:id/evaluation', (req, res) => {
-  const filePath = path.join(RESULTS_DIR, `${req.params.id}.json`);
-  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Result not found.' });
-  try {
-    const record = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    record.evaluationResults = {};
-    record.evaluationMeta = {};
-    record.evaluationVersions = {};
-    saveRecord(record, filePath);
-    refreshHistoryManifestSafe();
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// ── DELETE /api/results/evaluations?experiment=X[&chapter=Y] ─────────────────
-app.delete('/api/results/evaluations', (req, res) => {
-  const { experiment, chapter } = req.query;
-  if (!experiment) return res.status(400).json({ error: 'experiment query param required.' });
-  try {
-    const files = fs.readdirSync(RESULTS_DIR).filter(f => f.endsWith('.json') && f !== 'manifest.json');
-    let cleared = 0;
-    for (const file of files) {
-      const filePath = path.join(RESULTS_DIR, file);
-      let record;
-      try { record = JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch { continue; }
-      if (record.experiment !== experiment) continue;
-      if (chapter && (record.chapter || null) !== chapter) continue;
-      record.evaluationResults = {};
-      record.evaluationMeta = {};
-      record.evaluationVersions = {};
-      saveRecord(record, filePath);
-      cleared++;
-    }
-    refreshHistoryManifestSafe();
-    return res.json({ cleared });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// ── DELETE /api/experiment-figure/evaluation ─────────────────────────────────
-app.delete('/api/experiment-figure/evaluation', (req, res) => {
-  const { htmlPath } = req.body;
-  if (!htmlPath) return res.status(400).json({ error: 'htmlPath required.' });
-  const evalPath = htmlPath.replace(/\.html$/, '.eval.json');
-  const resolved = path.resolve(evalPath);
-  if (!resolved.startsWith(path.resolve(EXPERIMENTS_DIR))) {
-    return res.status(403).json({ error: 'Path outside experiments directory.' });
-  }
-  try {
-    if (fs.existsSync(resolved)) fs.unlinkSync(resolved);
-    return res.json({ success: true });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// ── DELETE /api/experiment-chapter/evaluations ───────────────────────────────
-app.delete('/api/experiment-chapter/evaluations', (req, res) => {
-  const { experiment, model, chapter } = req.body;
-  if (!experiment || !model) return res.status(400).json({ error: 'experiment and model required.' });
-  const dir = chapter
-    ? path.join(EXPERIMENTS_DIR, experiment, model, chapter)
-    : path.join(EXPERIMENTS_DIR, experiment, model);
-  const resolved = path.resolve(dir);
-  if (!resolved.startsWith(path.resolve(EXPERIMENTS_DIR))) {
-    return res.status(403).json({ error: 'Path outside experiments directory.' });
-  }
-  try {
-    let cleared = 0;
-    if (fs.existsSync(resolved)) {
-      const walk = (d) => {
-        for (const f of fs.readdirSync(d)) {
-          const full = path.join(d, f);
-          if (fs.statSync(full).isDirectory()) walk(full);
-          else if (f.endsWith('.eval.json')) { fs.unlinkSync(full); cleared++; }
-        }
-      };
-      walk(resolved);
-    }
-    return res.json({ cleared });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// ── DELETE /api/experiment-entry/evaluations ─────────────────────────────────
-app.delete('/api/experiment-entry/evaluations', (req, res) => {
-  const { experiment } = req.body;
-  if (!experiment) return res.status(400).json({ error: 'experiment required.' });
-  const dir = path.join(EXPERIMENTS_DIR, experiment);
-  const resolved = path.resolve(dir);
-  if (!resolved.startsWith(path.resolve(EXPERIMENTS_DIR))) {
-    return res.status(403).json({ error: 'Path outside experiments directory.' });
-  }
-  try {
-    let cleared = 0;
-    if (fs.existsSync(resolved)) {
-      const walk = (d) => {
-        for (const f of fs.readdirSync(d)) {
-          const full = path.join(d, f);
-          if (fs.statSync(full).isDirectory()) walk(full);
-          else if (f.endsWith('.eval.json')) { fs.unlinkSync(full); cleared++; }
-        }
-      };
-      walk(resolved);
-    }
-    return res.json({ cleared });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
 // ── GET /api/base-scaffold ────────────────────────────────────────────────────
 app.get('/api/base-scaffold', (req, res) => {
   res.json({ content: BASE_SCAFFOLD });
@@ -1723,6 +1610,12 @@ app.post('/api/pairwise/batch-evaluate', async (req, res) => {
   for (const fig of figures) {
     const { name, chapter, htmlPathA, resultIdA, imagePathA, htmlPathB, resultIdB, imagePathB } = fig;
     try {
+      const existingResult = loadPairwiseResult(setupA, setupB, chapter, name);
+      if (existingResult?.machineEval) {
+        res.write(JSON.stringify({ name, chapter, status: 'skipped' }) + '\n');
+        continue;
+      }
+
       const assetsA = readFigureAssets(htmlPathA, resultIdA, imagePathA);
       const assetsB = readFigureAssets(htmlPathB, resultIdB, imagePathB);
       if (!assetsA || !assetsB) {
@@ -1783,6 +1676,126 @@ app.delete('/api/pairwise/human-evaluate', (req, res) => {
     if (!existing) return res.json({ success: true });
     savePairwiseResult(setupA, setupB, chapter, figure, { ...existing, humanEvals: [] });
     return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/pairwise/machine-eval/:setupA/:setupB ────────────────────────
+// Clears machineEval from all figures for the pair.
+app.delete('/api/pairwise/machine-eval/:setupA/:setupB', (req, res) => {
+  try {
+    clearAllMachineEvals(req.params.setupA, req.params.setupB);
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/pairwise/machine-eval/:setupA/:setupB/:chapter/:figure ───────
+// Clears machineEval from a single figure.
+app.delete('/api/pairwise/machine-eval/:setupA/:setupB/:chapter/:figure', (req, res) => {
+  const { setupA, setupB, chapter, figure } = req.params;
+  try {
+    clearMachineEval(setupA, setupB, chapter, figure);
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/pairwise/rankings ────────────────────────────────────────────────
+
+function computeBradleyTerry(matchups) {
+  // matchups: [{a, b, aWins}] where aWins ∈ {0, 0.5, 1}
+  // Returns sorted [{id, score, wins, losses, ties, comparisons}]
+  const setupSet = new Set(matchups.flatMap(m => [m.a, m.b]));
+  const setups = [...setupSet];
+  if (setups.length === 0) return [];
+
+  const W = Object.fromEntries(setups.map(s => [s, 0]));
+  const rawWins   = Object.fromEntries(setups.map(s => [s, 0]));
+  const rawLosses = Object.fromEntries(setups.map(s => [s, 0]));
+  const rawTies   = Object.fromEntries(setups.map(s => [s, 0]));
+  const Nij = {};
+  for (const s of setups) Nij[s] = Object.fromEntries(setups.map(t => [t, 0]));
+
+  for (const { a, b, aWins } of matchups) {
+    W[a] += aWins;
+    W[b] += (1 - aWins);
+    Nij[a][b]++;
+    Nij[b][a]++;
+    if (aWins === 1)        { rawWins[a]++;   rawLosses[b]++; }
+    else if (aWins === 0)   { rawLosses[a]++; rawWins[b]++;   }
+    else                    { rawTies[a]++;   rawTies[b]++;   }
+  }
+
+  const p = Object.fromEntries(setups.map(s => [s, 1]));
+  for (let iter = 0; iter < 500; iter++) {
+    const newP = {};
+    for (const i of setups) {
+      let denom = 0;
+      for (const j of setups) {
+        if (j !== i) denom += Nij[i][j] / (p[i] + p[j]);
+      }
+      newP[i] = denom > 0 ? W[i] / denom : p[i];
+    }
+    const total = setups.reduce((acc, s) => acc + newP[s], 0);
+    let maxChange = 0;
+    for (const s of setups) {
+      const norm = total > 0 ? newP[s] / total : 1 / setups.length;
+      maxChange = Math.max(maxChange, Math.abs(norm - p[s]));
+      p[s] = norm;
+    }
+    if (maxChange < 1e-8) break;
+  }
+
+  return setups
+    .map(id => ({
+      id,
+      score: p[id],
+      wins:        rawWins[id],
+      losses:      rawLosses[id],
+      ties:        rawTies[id],
+      comparisons: rawWins[id] + rawLosses[id] + rawTies[id],
+    }))
+    .sort((a, b) => b.score - a.score);
+}
+
+app.get('/api/pairwise/rankings', (req, res) => {
+  try {
+    const allResults = loadAllPairsForRanking();
+    const DIMS = ['geometry', 'interactivity', 'faithfulness', 'labels', 'concept'];
+
+    function buildMachineMatchups(getWinner) {
+      return allResults.flatMap(r => {
+        const w = getWinner(r);
+        if (!w || !r.setupA || !r.setupB) return [];
+        if (w !== r.setupA && w !== r.setupB && w !== 'tie') return [];
+        return [{ a: r.setupA, b: r.setupB, aWins: w === r.setupA ? 1 : w === 'tie' ? 0.5 : 0 }];
+      });
+    }
+
+    const machine = {
+      overall: computeBradleyTerry(buildMachineMatchups(r => r.machineEval?.aggregator?.winner)),
+    };
+    for (const d of DIMS) {
+      machine[d] = computeBradleyTerry(buildMachineMatchups(r => r.machineEval?.dimensions?.[d]?.winner));
+    }
+
+    const humanMatchups = allResults.flatMap(r =>
+      (r.humanEvals || []).flatMap(h => {
+        if (!h.winner || !r.setupA || !r.setupB) return [];
+        if (h.winner !== r.setupA && h.winner !== r.setupB && h.winner !== 'tie') return [];
+        return [{ a: r.setupA, b: r.setupB, aWins: h.winner === r.setupA ? 1 : h.winner === 'tie' ? 0.5 : 0 }];
+      })
+    );
+
+    return res.json({
+      machine,
+      human: { overall: computeBradleyTerry(humanMatchups) },
+      totalFigures: allResults.length,
+    });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

@@ -1895,7 +1895,7 @@ function ViewerTab({ record, html, onBack, backLabel, onNew, onDelete, evaluatio
                 <>
                   <p style={styles.viewerPlanTitle}>Planner Output</p>
                   {selectedPlan.chapterName && <p style={styles.viewerPlanMeta}>Chapter: {selectedPlan.chapterName}</p>}
-                  <details style={styles.planFieldsDetails}>
+                  <details open style={styles.planFieldsDetails}>
                     <summary style={styles.planFieldsSummary}>Plan details</summary>
                     <PlanFields data={planPayload} excludeKeys={['contextChunk', 'chapterName']} />
                   </details>
@@ -2282,7 +2282,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
       {modeToggle}
       {selector}
       <div style={styles.evalHeader}>
-        <span style={styles.evalTitle}>Evaluator feedback</span>
+        <span style={styles.evalTitle}>Critic feedback</span>
         <span style={{ ...styles.evalOverall, color: scoreTextColor(evaluation.overall_average) }}>
           {evaluation.overall_average}/5
         </span>
@@ -2290,35 +2290,20 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
       <p style={styles.evalMeta}>Model: {selectedModelLabel}</p>
 
       {METRICS.map(({ key, label }) => (
-        <div key={key}>
-          <div style={styles.evalRow}>
-            <span style={styles.evalLabel}>{label}</span>
-            <div style={styles.evalBarBg}>
-              <div
-                style={{
-                  ...styles.evalBar,
-                  width: `${((evaluation[key] ?? 0) / 5) * 100}%`,
-                  background: scoreBarColor(evaluation[key] ?? 0),
-                }}
-              />
-            </div>
-            <span style={{ ...styles.evalScore, color: scoreTextColor(evaluation[key] ?? 0) }}>
-              {evaluation[key]}
-            </span>
+        <div key={key} style={styles.evalRow}>
+          <span style={styles.evalLabel}>{label}</span>
+          <div style={styles.evalBarBg}>
+            <div
+              style={{
+                ...styles.evalBar,
+                width: `${((evaluation[key] ?? 0) / 5) * 100}%`,
+                background: scoreBarColor(evaluation[key] ?? 0),
+              }}
+            />
           </div>
-          {evaluation[`${key}_reasoning`] && (
-            <p style={{ fontSize: 10, color: '#777', margin: '1px 0 2px', fontStyle: 'italic', lineHeight: 1.4 }}>
-              {evaluation[`${key}_reasoning`]}
-            </p>
-          )}
-          {evaluation[`${key}_analysis`] && (
-            <details style={{ margin: '0 0 6px' }}>
-              <summary style={{ fontSize: 9, color: '#aaa', cursor: 'pointer', userSelect: 'none', listStyle: 'none' }}>▸ analysis</summary>
-              <p style={{ fontSize: 10, color: '#888', margin: '3px 0 0', lineHeight: 1.5 }}>
-                {evaluation[`${key}_analysis`]}
-              </p>
-            </details>
-          )}
+          <span style={{ ...styles.evalScore, color: scoreTextColor(evaluation[key] ?? 0) }}>
+            {evaluation[key]}
+          </span>
         </div>
       ))}
 
@@ -2342,19 +2327,6 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
               >show less</span>
             )}
           </div>
-          {evaluation.failure_modes_reasoning && (
-            <p style={{ fontSize: 10, color: '#777', margin: '6px 0 2px', fontStyle: 'italic', lineHeight: 1.4 }}>
-              {evaluation.failure_modes_reasoning}
-            </p>
-          )}
-          {evaluation.failure_modes_analysis && (
-            <details style={{ margin: '0' }}>
-              <summary style={{ fontSize: 9, color: '#aaa', cursor: 'pointer', userSelect: 'none', listStyle: 'none' }}>▸ analysis</summary>
-              <p style={{ fontSize: 10, color: '#888', margin: '3px 0 0', lineHeight: 1.5 }}>
-                {evaluation.failure_modes_analysis}
-              </p>
-            </details>
-          )}
         </div>
       )}
 
@@ -2366,7 +2338,7 @@ function EvaluationPanel({ evaluation, evaluationModel, evaluationModels, evalua
         <summary style={styles.planFieldsSummary}>Full evaluation details</summary>
         <PlanFields
           data={evaluation}
-          excludeKeys={['geometry_accuracy', 'interactivity_usability', 'faithfulness', 'label_quality', 'concept_accuracy', 'visual_aesthetics', 'overall_average', 'failure_modes', 'failure_modes_reasoning', 'failure_modes_analysis', 'notes', 'geometry_accuracy_reasoning', 'geometry_accuracy_analysis', 'interactivity_usability_reasoning', 'interactivity_usability_analysis', 'faithfulness_reasoning', 'faithfulness_analysis', 'label_quality_reasoning', 'label_quality_analysis', 'concept_accuracy_reasoning', 'concept_accuracy_analysis']}
+          excludeKeys={['geometry_accuracy', 'interactivity_usability', 'faithfulness', 'label_quality', 'concept_accuracy', 'visual_aesthetics', 'overall_average', 'failure_modes', 'notes']}
         />
       </details>
 
@@ -2566,7 +2538,6 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
   const [selected, setSelected] = React.useState(null);
   const [evaluatingKey, setEvaluatingKey] = React.useState(null);
   const [evaluatingAll, setEvaluatingAll] = React.useState(null); // chapter being batch-evaluated
-  const [evaluatingExperiment, setEvaluatingExperiment] = React.useState(null); // experiment being batch-evaluated
   const [baseScaffold, setBaseScaffold] = React.useState(null);
   const [openChapters, setOpenChapters] = React.useState(new Set());
   const [filterChapter, setFilterChapter] = React.useState('');
@@ -2918,120 +2889,6 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
     setEvaluatingKey(null);
   };
 
-  const handleEvalExperiment = async (expName) => {
-    const evalModelId = evaluatorModel || DEFAULT_EVALUATION_MODEL;
-    const versionId = evaluationCriticVersion || currentCriticVersion || 'legacy_unknown';
-    const allItems = activeTab === 'api'
-      ? Object.entries(apiTree[expName] || {}).flatMap(([modelName, recs]) =>
-        recs.map(r => {
-          const view = selectedRecordView(r);
-          return { key: `api/${r.id}`, type: 'api', id: r.id, evaluationResults: view.evaluationResults || {}, evaluationMeta: view.evaluationMeta || {} };
-        })
-      )
-      : expTree.flatMap(e => e.experiment !== expName ? [] : e.models.flatMap(m => m.figures.map(f => ({ ...f, type: 'experiment', key: `${e.experiment}/${m.model}/${f.name}`, model: m.model }))));
-    const pending = allItems.filter(item => !filterExternalEvals(item.evaluationResults || {}, item.evaluationMeta || {}).results[evalModelId]);
-    if (!pending.length) return;
-    setEvaluatingExperiment(expName);
-    for (const item of pending) {
-      setEvaluatingKey(item.key);
-      try {
-        if (item.type === 'api') {
-          const res = await apiFetch('/api/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: item.id, evalModel: evalModelId, criticVersion: evaluationCriticVersion || undefined }) });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error);
-          setApiRecords(prev => prev.map(r => r.id === item.id ? { ...upsertVersionedEvaluation(r, evalModelId, data, { criticVersion: versionId }) } : r));
-        } else {
-          const res = await apiFetch('/api/experiments/evaluate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath, imagePath: item.imagePath, evalModel: evalModelId, criticVersion: evaluationCriticVersion || undefined }) });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error);
-          const [eN, mN, fN] = item.key.split('/');
-          setExpTree(prev => prev.map(exp => exp.experiment !== eN ? exp : {
-            ...exp,
-            models: exp.models.map(m => m.model !== mN ? m : {
-              ...m,
-              figures: m.figures.map(f => f.name !== fN ? f : { ...upsertVersionedEvaluation(f, evalModelId, data, { criticVersion: versionId }) })
-            })
-          }));
-        }
-      } catch { }
-    }
-    setEvaluatingExperiment(null);
-    setEvaluatingKey(null);
-  };
-
-  const handleClearFigureEval = async (e, item) => {
-    e.stopPropagation();
-    if (!window.confirm(`Clear evaluation for '${item.figure}'?`)) return;
-    try {
-      if (item.type === 'api') {
-        await apiFetch(`/api/result/${item.id}/evaluation`, { method: 'DELETE' });
-        setApiRecords(prev => prev.map(r => r.id === item.id ? { ...r, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} } : r));
-      } else {
-        await apiFetch('/api/experiment-figure/evaluation', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ htmlPath: item.htmlPath }) });
-        const [eN, mN, fN] = item.key.split('/');
-        setExpTree(prev => prev.map(exp => exp.experiment !== eN ? exp : {
-          ...exp,
-          models: exp.models.map(m => m.model !== mN ? m : {
-            ...m,
-            figures: m.figures.map(f => f.name !== fN ? f : { ...f, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} })
-          })
-        }));
-      }
-    } catch (err) { console.error('Clear eval failed:', err); }
-  };
-
-  const handleClearChapterEvals = async (e, groupKey, items) => {
-    e.stopPropagation();
-    if (!window.confirm(`Clear all evaluations in '${groupKey}'?`)) return;
-    const evalModelId = evaluatorModel || DEFAULT_EVALUATION_MODEL;
-    const withEvals = items.filter(i => filterExternalEvals(i.evaluationResults || {}, i.evaluationMeta || {}).results[evalModelId]);
-    if (!withEvals.length) return;
-    try {
-      if (activeTab === 'api') {
-        for (const item of withEvals) {
-          await apiFetch(`/api/result/${item.id}/evaluation`, { method: 'DELETE' });
-        }
-        const itemIds = new Set(withEvals.map(i => i.id));
-        setApiRecords(prev => prev.map(r => itemIds.has(r.id) ? { ...r, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} } : r));
-      } else {
-        const combos = [...new Map(withEvals.map(i => {
-          const [eN, mN] = i.key.split('/');
-          return [`${eN}/${mN}/${i.chapter || ''}`, { experiment: eN, model: mN, chapter: i.chapter || null }];
-        })).values()];
-        for (const combo of combos) {
-          await apiFetch('/api/experiment-chapter/evaluations', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(combo) });
-        }
-        const figKeys = new Set(withEvals.map(i => i.key));
-        setExpTree(prev => prev.map(exp => ({
-          ...exp,
-          models: exp.models.map(m => ({
-            ...m,
-            figures: m.figures.map(f => figKeys.has(`${exp.experiment}/${m.model}/${f.name}`) ? { ...f, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} } : f)
-          }))
-        })));
-      }
-    } catch (err) { console.error('Clear chapter evals failed:', err); }
-  };
-
-  const handleClearExperimentEvals = async (expName) => {
-    if (!window.confirm(`Clear all evaluations in experiment '${expName}'?`)) return;
-    try {
-      if (activeTab === 'api') {
-        await apiFetch(`/api/results/evaluations?experiment=${encodeURIComponent(expName)}`, { method: 'DELETE' });
-        setApiRecords(prev => prev.map(r => r.experiment === expName ? { ...r, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} } : r));
-      } else {
-        await apiFetch('/api/experiment-entry/evaluations', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ experiment: expName }) });
-        setExpTree(prev => prev.map(exp => exp.experiment !== expName ? exp : {
-          ...exp,
-          models: exp.models.map(m => ({
-            ...m,
-            figures: m.figures.map(f => ({ ...f, evaluationResults: {}, evaluationMeta: {}, evaluationVersions: {} }))
-          }))
-        }));
-      }
-    } catch (err) { console.error('Clear experiment evals failed:', err); }
-  };
-
   const sc = s => s >= 4 ? '#2e7d32' : s >= 3 ? '#e65100' : '#c00';
 
   // Prompt to show when a model row is selected
@@ -3284,7 +3141,7 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
                     onSelect: () => setSelected({ experiment: expName, model: modelName }),
                   })),
                 }))
-                : [...expTree].reverse().map(exp => ({
+                : expTree.map(exp => ({
                   group: exp.experiment,
                   items: exp.models.map(m => ({
                     modelName: m.model, evalCount: m.figures.filter(f => hasSelectedEvaluation(f)).length, total: m.figures.length,
@@ -3374,19 +3231,6 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
                   </>
                 )}
               </div>
-              {selected?.experiment && (
-                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                  <button
-                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid #d0d8e8', background: '#f2f6fb', color: '#5878a0', cursor: 'pointer', fontWeight: 600 }}
-                    disabled={evaluatingExperiment === selected.experiment}
-                    onClick={() => handleEvalExperiment(selected.experiment)}
-                  >{evaluatingExperiment === selected.experiment ? `Evaluating…` : 'Evaluate all'}</button>
-                  <button
-                    style={{ fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid #e8c8c8', background: '#fbedf0', color: '#a05878', cursor: 'pointer', fontWeight: 600 }}
-                    onClick={() => handleClearExperimentEvals(selected.experiment)}
-                  >Clear all evals</button>
-                </div>
-              )}
               {selectedPrompt && (
                 <details style={{ marginBottom: 8 }}>
                   <summary style={{ fontSize: 11, color: '#888', cursor: 'pointer', fontWeight: 600 }}>Prompt</summary>
@@ -3431,13 +3275,6 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
                               : `Evaluate all (${items.filter(i => !filterExternalEvals(i.evaluationResults || {}, i.evaluationMeta || {}).results[evaluatorModel || DEFAULT_EVALUATION_MODEL]).length} pending)`}
                           </button>
                         )}
-                        {items.some(i => Object.keys(i.evaluationResults || {}).length > 0) && (
-                          <button
-                            style={{ marginLeft: items.some(i => !filterExternalEvals(i.evaluationResults || {}, i.evaluationMeta || {}).results[evaluatorModel || DEFAULT_EVALUATION_MODEL]) ? 0 : 'auto', fontSize: 10, padding: '1px 8px', borderRadius: 4, border: '1px solid #e8c8c8', background: '#fbedf0', color: '#a05878', cursor: 'pointer', fontWeight: 600 }}
-                            onClick={e => handleClearChapterEvals(e, groupKey, items)}
-                            title="Clear all evaluations in this chapter"
-                          >✕ evals</button>
-                        )}
                       </summary>
                       <div style={{ ...styles.historyGrid, marginTop: 10 }}>
                         {items.map(item => {
@@ -3478,14 +3315,7 @@ function ResultsTab({ onOpen, evaluatorModel, onEvaluatorModelChange, availableM
                                 {item.generationDurationMs != null && <p style={{ ...styles.cardTs, marginBottom: 3 }}>Time: {formatDuration(item.generationDurationMs)}</p>}
                                 {evalEntries.length ? (
                                   <>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                      <span style={{ ...styles.sourceBadge, background: ev.overall_average >= 4 ? '#e8f5e9' : ev.overall_average >= 3 ? '#fff3e0' : '#ffebee', color: sc(ev.overall_average) }}>{ev.overall_average}/5</span>
-                                      <button
-                                        style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, border: '1px solid #e8c8c8', background: '#fbedf0', color: '#a05878', cursor: 'pointer', lineHeight: 1.4 }}
-                                        onClick={e => handleClearFigureEval(e, item)}
-                                        title="Clear evaluation"
-                                      >✕</button>
-                                    </div>
+                                    <span style={{ ...styles.sourceBadge, background: ev.overall_average >= 4 ? '#e8f5e9' : ev.overall_average >= 3 ? '#fff3e0' : '#ffebee', color: sc(ev.overall_average) }}>{ev.overall_average}/5</span>
                                     <p style={styles.cardEvalModel}>Latest eval: {evalEntries[0].modelLabel}</p>
                                     <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
                                       {evalEntries.map(({ modelId, modelLabel, result }) => (
@@ -4182,7 +4012,7 @@ const styles = {
 
 // ── Pairwise Tab ───────────────────────────────────────────────────────────────
 
-const PAIRWISE_DEFAULT_EVAL_MODEL = 'gpt-4o';
+const PAIRWISE_DEFAULT_EVAL_MODEL = 'gemini-3.1-pro';
 const DIMENSIONS = ['geometry', 'interactivity', 'faithfulness', 'labels', 'concept'];
 
 function winnerBadgeStyle(winner, setupA, setupB) {
@@ -4213,6 +4043,11 @@ function PairwiseTab({ availableModels }) {
   const [results, setResults] = useState([]);
   const [machineTableOpen, setMachineTableOpen] = useState(false);
   const [humanTableOpen, setHumanTableOpen] = useState(false);
+  const [rankingsOpen, setRankingsOpen] = useState(false);
+  const [rankings, setRankings] = useState(null);
+  const [rankingsDim, setRankingsDim] = useState('overall');
+  const [rankingsSrc, setRankingsSrc] = useState('machine');
+  const [rankingsLoading, setRankingsLoading] = useState(false);
   const [humanPanelFig, setHumanPanelFig] = useState(null); // { name, chapter, ...result }
   const [humanWinner, setHumanWinner] = useState(null);
   const [humanNotes, setHumanNotes] = useState('');
@@ -4271,10 +4106,11 @@ function PairwiseTab({ availableModels }) {
         if (!line.trim()) continue;
         try {
           const parsed = JSON.parse(line);
+          const icon = parsed.status === 'ok' ? '✓' : parsed.status === 'skipped' ? '⏭' : '✗';
           setProgress(p => ({
             done: p.done + 1,
             total: p.total,
-            log: [...p.log, `${parsed.status === 'ok' ? '✓' : '✗'} ${parsed.chapter}/${parsed.name}`],
+            log: [...p.log, `${icon} ${parsed.chapter}/${parsed.name}${parsed.status === 'skipped' ? ' (skipped)' : ''}`],
           }));
           if (parsed.status === 'ok' && parsed.result) {
             setResults(prev => {
@@ -4387,6 +4223,42 @@ function PairwiseTab({ availableModels }) {
     }
   }, [setupA, setupB]);
 
+  const deleteMachineEval = useCallback(async (r) => {
+    try {
+      await fetch(`/api/pairwise/machine-eval/${encodeURIComponent(setupA)}/${encodeURIComponent(setupB)}/${encodeURIComponent(r.chapter)}/${encodeURIComponent(r.figure)}`, { method: 'DELETE' });
+      setResults(prev => {
+        const idx = prev.findIndex(x => x.chapter === r.chapter && x.figure === r.figure);
+        if (idx < 0) return prev;
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], machineEval: null };
+        return updated;
+      });
+    } catch (err) {
+      alert('Delete failed: ' + err.message);
+    }
+  }, [setupA, setupB]);
+
+  const deleteAllMachineEvals = useCallback(async () => {
+    try {
+      await fetch(`/api/pairwise/machine-eval/${encodeURIComponent(setupA)}/${encodeURIComponent(setupB)}`, { method: 'DELETE' });
+      setResults(prev => prev.map(r => ({ ...r, machineEval: null })));
+    } catch (err) {
+      alert('Delete failed: ' + err.message);
+    }
+  }, [setupA, setupB]);
+
+  const loadRankings = useCallback(async () => {
+    setRankingsLoading(true);
+    try {
+      const data = await fetch('/api/pairwise/rankings').then(r => r.json());
+      setRankings(data);
+    } catch (err) {
+      alert('Failed to load rankings: ' + err.message);
+    } finally {
+      setRankingsLoading(false);
+    }
+  }, []);
+
   const progressPct = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
   // Merge matchingFigures (all pairs) with stored results so "Add" is always visible
@@ -4402,7 +4274,97 @@ function PairwiseTab({ availableModels }) {
 
   return (
     <div style={styles.pwRoot}>
-      {/* Panel 1 — Setup Selector */}
+      {/* Panel 1 — Rankings (Bradley-Terry) */}
+      <div style={styles.pwCard}>
+        <div style={{ ...styles.pwCardTitle, cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+             onClick={() => {
+               const next = !rankingsOpen;
+               setRankingsOpen(next);
+               if (next && !rankings) loadRankings();
+             }}>
+          <span>{rankingsOpen ? '▾' : '▸'} Rankings (Bradley-Terry)</span>
+          {rankingsOpen && (
+            <button style={{ fontSize: 11, color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}
+                    onClick={e => { e.stopPropagation(); loadRankings(); }}>↻ Refresh</button>
+          )}
+        </div>
+        {rankingsOpen && (
+          <div>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={styles.pwToggleGroup}>
+                {['machine', 'human'].map(src => (
+                  <button key={src}
+                          style={{ ...styles.pwToggleBtn, ...(rankingsSrc === src ? styles.pwToggleBtnActive : {}) }}
+                          onClick={() => { setRankingsSrc(src); if (src === 'human') setRankingsDim('overall'); }}>
+                    {src.charAt(0).toUpperCase() + src.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <div style={styles.pwToggleGroup}>
+                {['overall', ...DIMENSIONS].map(d => {
+                  const label = { overall: 'Overall', geometry: 'Geo', interactivity: 'Inter', faithfulness: 'Faith', labels: 'Labels', concept: 'Concept' }[d];
+                  const disabled = d !== 'overall' && rankingsSrc === 'human';
+                  return (
+                    <button key={d}
+                            style={{ ...styles.pwToggleBtn, fontSize: 10, padding: '3px 9px', ...(rankingsDim === d ? styles.pwToggleBtnActive : {}), ...(disabled ? { opacity: 0.4, cursor: 'not-allowed' } : {}) }}
+                            disabled={disabled}
+                            onClick={() => !disabled && setRankingsDim(d)}
+                            title={disabled ? 'Human evals only have an overall ranking' : ''}>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {rankingsLoading ? (
+              <div style={styles.pwEmptyMsg}>Loading…</div>
+            ) : (() => {
+              const rows = rankings?.[rankingsSrc]?.[rankingsDim] ?? [];
+              if (rows.length === 0) return <div style={styles.pwEmptyMsg}>No data yet — run machine evaluations first.</div>;
+              const maxScore = rows[0]?.score ?? 1;
+              return (
+                <table style={{ ...styles.pwTable, tableLayout: 'fixed' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...styles.pwTh, width: 32 }}>#</th>
+                      <th style={styles.pwTh}>Setup</th>
+                      <th style={{ ...styles.pwTh, width: '22%' }}>BT Score</th>
+                      <th style={{ ...styles.pwTh, width: 40 }}>W</th>
+                      <th style={{ ...styles.pwTh, width: 40 }}>L</th>
+                      <th style={{ ...styles.pwTh, width: 40 }}>T</th>
+                      <th style={{ ...styles.pwTh, width: 40 }}>N</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => (
+                      <tr key={row.id}>
+                        <td style={{ ...styles.pwTd, fontWeight: 700, color: i === 0 ? '#4f46e5' : '#9ca3af', fontSize: 12 }}>{i + 1}</td>
+                        <td style={styles.pwTd}>
+                          <div style={{ fontWeight: 600, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.id}>{row.id}</div>
+                        </td>
+                        <td style={styles.pwTd}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ flex: 1, height: 6, background: '#e0e7ff', borderRadius: 3, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${(row.score / maxScore) * 100}%`, background: '#4f46e5', borderRadius: 3 }} />
+                            </div>
+                            <span style={{ fontSize: 10, color: '#6b7280', width: 34, textAlign: 'right', flexShrink: 0 }}>{(row.score * 100).toFixed(1)}</span>
+                          </div>
+                        </td>
+                        <td style={{ ...styles.pwTd, color: '#166534', fontWeight: 600, fontSize: 11 }}>{row.wins}</td>
+                        <td style={{ ...styles.pwTd, color: '#b91c1c', fontWeight: 600, fontSize: 11 }}>{row.losses}</td>
+                        <td style={{ ...styles.pwTd, color: '#64748b', fontSize: 11 }}>{row.ties}</td>
+                        <td style={{ ...styles.pwTd, color: '#9ca3af', fontSize: 11 }}>{row.comparisons}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            })()}
+          </div>
+        )}
+      </div>
+
+      {/* Panel 2 — Setup Selector */}
       <div style={styles.pwCard}>
         <div style={styles.pwCardTitle}>Compare Experiment Setups</div>
         <div style={styles.pwRow}>
@@ -4452,8 +4414,10 @@ function PairwiseTab({ availableModels }) {
       {/* Panel 2 — Machine Results Table */}
       {setupA && setupB && setupA !== setupB && (
         <div style={styles.pwCard}>
-          <div style={{ ...styles.pwCardTitle, cursor: 'pointer', userSelect: 'none' }} onClick={() => setMachineTableOpen(o => !o)}>
-            {machineTableOpen ? '▾' : '▸'} Machine Results — {shortSetup(setupA)} vs {shortSetup(setupB)}
+          <div style={{ ...styles.pwCardTitle, cursor: 'pointer', userSelect: 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} onClick={() => setMachineTableOpen(o => !o)}>
+            <span>{machineTableOpen ? '▾' : '▸'} Machine Results — {shortSetup(setupA)} vs {shortSetup(setupB)}</span>
+            <button style={{ fontSize: 11, color: '#b91c1c', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}
+                    onClick={e => { e.stopPropagation(); deleteAllMachineEvals(); }}>Delete All</button>
           </div>
           {machineTableOpen && (mergedRows.length === 0 ? (
             <div style={styles.pwEmptyMsg}>Select two setups with overlapping figures to begin.</div>
@@ -4465,6 +4429,7 @@ function PairwiseTab({ availableModels }) {
                   {DIMENSIONS.map(d => <th key={d} style={{ ...styles.pwTh, width: '10%' }}>{{ geometry: 'Geo', interactivity: 'Inter', faithfulness: 'Faith', labels: 'Labels', concept: 'Concept' }[d]}</th>)}
                   <th style={{ ...styles.pwTh, width: '15%' }}>Overall</th>
                   <th style={{ ...styles.pwTh, width: '7%' }}>Conf</th>
+                  <th style={{ ...styles.pwTh, width: 30 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -4493,10 +4458,52 @@ function PairwiseTab({ availableModels }) {
                           : <span style={{ color: '#d1d5db' }}>—</span>}
                       </td>
                       <td style={styles.pwTd}>{me?.aggregator ? (me.aggregator.confidence * 100).toFixed(0) + '%' : '—'}</td>
+                      <td style={styles.pwTd}>
+                        {me && <button style={{ ...styles.pwAddBtn, background: '#fee2e2', color: '#b91c1c', borderColor: '#fca5a5', padding: '2px 6px' }}
+                                       onClick={() => deleteMachineEval(r)} title="Delete machine eval">×</button>}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
+              <tfoot>
+                <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                  <td style={{ ...styles.pwTd, fontWeight: 700, color: '#374151', fontSize: 11 }}>Summary</td>
+                  {DIMENSIONS.map(d => {
+                    const evald = mergedRows.filter(r => r.machineEval?.dimensions?.[d]);
+                    const aW = evald.filter(r => r.machineEval.dimensions[d].winner === setupA).length;
+                    const bW = evald.filter(r => r.machineEval.dimensions[d].winner === setupB).length;
+                    const tW = evald.filter(r => r.machineEval.dimensions[d].winner === 'tie').length;
+                    return (
+                      <td key={d} style={{ ...styles.pwTd, fontSize: 10 }}>
+                        {evald.length === 0
+                          ? <span style={{ color: '#d1d5db' }}>—</span>
+                          : <><span style={{ color: '#5b21b6' }}>A:{aW}</span>{' · '}<span style={{ color: '#166534' }}>B:{bW}</span>{tW > 0 && <>{' · '}<span style={{ color: '#64748b' }}>T:{tW}</span></>}</>}
+                      </td>
+                    );
+                  })}
+                  {(() => {
+                    const evald = mergedRows.filter(r => r.machineEval?.aggregator);
+                    const aW = evald.filter(r => r.machineEval.aggregator.winner === setupA).length;
+                    const bW = evald.filter(r => r.machineEval.aggregator.winner === setupB).length;
+                    const tW = evald.filter(r => r.machineEval.aggregator.winner === 'tie').length;
+                    const avgConf = evald.length > 0 ? evald.reduce((s, r) => s + r.machineEval.aggregator.confidence, 0) / evald.length : null;
+                    return (
+                      <>
+                        <td style={{ ...styles.pwTd, fontSize: 10 }}>
+                          {evald.length === 0
+                            ? <span style={{ color: '#d1d5db' }}>—</span>
+                            : <><span style={{ color: '#5b21b6' }}>A:{aW}</span>{' · '}<span style={{ color: '#166534' }}>B:{bW}</span>{tW > 0 && <>{' · '}<span style={{ color: '#64748b' }}>T:{tW}</span></>}</>}
+                        </td>
+                        <td style={{ ...styles.pwTd, fontSize: 11, color: '#6b7280' }}>
+                          {avgConf !== null ? (avgConf * 100).toFixed(0) + '%' : '—'}
+                        </td>
+                        <td style={styles.pwTd} />
+                      </>
+                    );
+                  })()}
+                </tr>
+              </tfoot>
             </table>
           ))}
         </div>
@@ -4609,6 +4616,26 @@ function PairwiseTab({ availableModels }) {
                   );
                 })}
               </tbody>
+              <tfoot>
+                {(() => {
+                  const evald = mergedRows.filter(r => (r.humanEvals || []).length > 0);
+                  const aW = evald.filter(r => r.humanEvals[0].winner === setupA).length;
+                  const bW = evald.filter(r => r.humanEvals[0].winner === setupB).length;
+                  const tW = evald.filter(r => r.humanEvals[0].winner === 'tie').length;
+                  return (
+                    <tr style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                      <td style={{ ...styles.pwTd, fontWeight: 700, color: '#374151', fontSize: 11 }}>Summary</td>
+                      <td style={{ ...styles.pwTd, fontSize: 10 }}>
+                        {evald.length === 0
+                          ? <span style={{ color: '#d1d5db' }}>—</span>
+                          : <><span style={{ color: '#5b21b6' }}>A:{aW}</span>{' · '}<span style={{ color: '#166534' }}>B:{bW}</span>{tW > 0 && <>{' · '}<span style={{ color: '#64748b' }}>T:{tW}</span></>}</>}
+                      </td>
+                      <td style={styles.pwTd} />
+                      <td style={styles.pwTd} />
+                    </tr>
+                  );
+                })()}
+              </tfoot>
             </table>
           ))}
         </div>

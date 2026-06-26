@@ -11,7 +11,7 @@ const path = require('path');
 const { generateWithModel } = require('./models');
 
 const PAIRWISE_DEFAULT_MODEL = 'gpt-4o';
-const PAIRWISE_MAX_TOKENS = 2048;
+const PAIRWISE_MAX_TOKENS = 4096;
 const PAIRWISE_RESULTS_DIR = path.join(__dirname, 'pairwise_results');
 
 // ── Pair & position helpers ────────────────────────────────────────────────────
@@ -258,11 +258,39 @@ function loadAllPairwiseResults(setupA, setupB) {
   return Object.values(loadPairFile(setupA, setupB));
 }
 
+function loadAllPairsForRanking() {
+  if (!fs.existsSync(PAIRWISE_RESULTS_DIR)) return [];
+  return fs.readdirSync(PAIRWISE_RESULTS_DIR)
+    .filter(f => f.endsWith('.json'))
+    .flatMap(f => {
+      try { return Object.values(JSON.parse(fs.readFileSync(path.join(PAIRWISE_RESULTS_DIR, f), 'utf-8'))); }
+      catch { return []; }
+    });
+}
+
+function clearMachineEval(setupA, setupB, chapter, figure) {
+  const dict = loadPairFile(setupA, setupB);
+  const key = `${chapter}__${figure}`;
+  if (dict[key]) {
+    delete dict[key].machineEval;
+    savePairFile(setupA, setupB, dict);
+  }
+}
+
+function clearAllMachineEvals(setupA, setupB) {
+  const dict = loadPairFile(setupA, setupB);
+  for (const key of Object.keys(dict)) delete dict[key].machineEval;
+  savePairFile(setupA, setupB, dict);
+}
+
 module.exports = {
   pairwiseEvaluateFigure,
   loadPairwiseResult,
   savePairwiseResult,
   loadAllPairwiseResults,
+  loadAllPairsForRanking,
+  clearMachineEval,
+  clearAllMachineEvals,
   pairKey,
   canonicalizePair,
 };
