@@ -4064,6 +4064,17 @@ function ComparisonViewer({ figure, result, setupA, setupB, htmlA, htmlB, loadin
         </div>
       </div>
 
+      {(figure?.imagePathA || figure?.imagePathB) && (
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Figure</div>
+          <img
+            src={`/api/experiments/imageurl?path=${encodeURIComponent(figure.imagePathA || figure.imagePathB)}`}
+            alt="Original reference figure"
+            style={{ maxHeight: 220, maxWidth: '100%', border: '1px solid #e5e7eb', borderRadius: 6, display: 'block', margin: '0 auto' }}
+          />
+        </div>
+      )}
+
       <div style={styles.pwCompIframeRow}>
         {[
           { setup: setupA, html: htmlA, side: 'A', figNum: figNumA, badgeStyle: { ...styles.pwWinnerBadge, ...styles.pwBadgeA } },
@@ -4453,10 +4464,15 @@ function PairwiseTab({ availableModels }) {
   const mergedRows = useMemo(() => {
     if (!matchingFigures) return results;
     const resultMap = new Map(results.map(r => [`${r.chapter}__${r.figure}`, r]));
-    return matchingFigures.map(f => {
-      const key = `${f.chapter}__${f.name}`;
-      return resultMap.get(key) || { figure: f.name, chapter: f.chapter, humanEvals: [] };
-    });
+    return [...matchingFigures]
+      .sort((a, b) => {
+        const c = a.chapter.localeCompare(b.chapter);
+        return c !== 0 ? c : a.name.localeCompare(b.name);
+      })
+      .map(f => {
+        const key = `${f.chapter}__${f.name}`;
+        return resultMap.get(key) || { figure: f.name, chapter: f.chapter, humanEvals: [] };
+      });
   }, [matchingFigures, results]);
 
   const compViewerResult = useMemo(() => {
