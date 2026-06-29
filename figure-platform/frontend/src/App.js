@@ -3560,34 +3560,11 @@ function DashTable({ stats, groupKey }) {
   );
 }
 
-function SourceSection({ title, color, records, groupKey, criticVersion }) {
-  const stats = React.useMemo(() => computeStats(records, groupKey, criticVersion), [records, groupKey, criticVersion]);
-  const n = records.filter(r => hasAnyEvaluation(getVersionedEvaluationState(r, criticVersion))).length;
-  if (!stats.length) return null;
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{
-          fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 5,
-          background: color === 'agent' ? '#e8f0fe' : '#f3e8ff',
-          color: color === 'agent' ? '#1a56cc' : '#7c3aed'
-        }}>
-          {title}
-        </span>
-        <span style={{ fontSize: 11, color: '#bbb' }}>{n} evaluated</span>
-      </div>
-      <div style={{ border: '1px solid #e8e8e8', borderRadius: 8, overflow: 'hidden' }}>
-        <DashTable stats={stats} groupKey={groupKey} />
-      </div>
-    </div>
-  );
-}
-
 function DashboardTab({ currentCriticVersion }) {
   const [apiRecords, setApiRecords] = React.useState([]);
   const [expTree, setExpTree] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [view, setView] = React.useState('models');
+  const [view, setView] = React.useState('experiments');
   React.useEffect(() => {
     Promise.all([
       apiFetch('/api/history-index').then(r => r.json()),
@@ -3597,7 +3574,7 @@ function DashboardTab({ currentCriticVersion }) {
       .catch(() => setLoading(false));
   }, []);
 
-  const { agentRecords, copilotRecords } = React.useMemo(() => {
+  const allRecords = React.useMemo(() => {
     const agent = apiRecords.map(r => ({
       source: 'agent', experiment: r.experiment || 'base_scene_robust',
       model: r.model || DEFAULT_GENERATION_MODEL,
@@ -3617,10 +3594,10 @@ function DashboardTab({ currentCriticVersion }) {
             evaluationMeta: fig.evaluationMeta || {},
             evaluationVersions: fig.evaluationVersions || {},
           });
-    return { agentRecords: agent, copilotRecords: copilot };
+    return [...agent, ...copilot];
   }, [apiRecords, expTree]);
 
-  const totalEval = [...agentRecords, ...copilotRecords]
+  const totalEval = allRecords
     .filter(r => hasAnyEvaluation(getVersionedEvaluationState(r, ''))).length;
 
   if (loading) return <div style={styles.empty}>Loading…</div>;
@@ -3647,8 +3624,9 @@ function DashboardTab({ currentCriticVersion }) {
         </span>
       </div>
 
-      <SourceSection title="Agent" color="agent" records={agentRecords} groupKey={groupKey} criticVersion="" />
-      <SourceSection title="Copilot" color="copilot" records={copilotRecords} groupKey={groupKey} criticVersion="" />
+      <div style={{ border: '1px solid #e8e8e8', borderRadius: 8, overflow: 'hidden' }}>
+        <DashTable stats={computeStats(allRecords, groupKey, '')} groupKey={groupKey} />
+      </div>
     </div>
   );
 }
@@ -4008,6 +3986,21 @@ const styles = {
   pwSubmitBtn: { padding: '8px 20px', fontSize: 13, fontWeight: 600, borderRadius: 7, border: 'none', background: '#10b981', color: '#fff', cursor: 'pointer' },
   pwSubmitBtnDisabled: { background: '#6ee7b7', cursor: 'not-allowed' },
   pwEmptyMsg: { fontSize: 13, color: '#9ca3af', textAlign: 'center', padding: '24px 0' },
+  pwCompRoot: { maxWidth: 1400, margin: '0 auto', padding: '28px 24px', display: 'flex', flexDirection: 'column', gap: 24 },
+  pwCompHeader: { display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 16, borderBottom: '1px solid #e2e8f0' },
+  pwCompBack: { padding: '6px 14px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: '1px solid #ddd', background: '#fff', color: '#374151', cursor: 'pointer', flexShrink: 0 },
+  pwCompFigName: { fontSize: 15, fontWeight: 700, color: '#1a1a2e', margin: 0 },
+  pwCompFigChapter: { fontSize: 11, color: '#9ca3af', margin: 0 },
+  pwCompNavGroup: { display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 },
+  pwCompNavBtn: { padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: '1px solid #ddd', background: '#fff', color: '#374151', cursor: 'pointer' },
+  pwCompNavCounter: { fontSize: 12, color: '#6b7280', minWidth: 52, textAlign: 'center' },
+  pwCompIframeRow: { display: 'flex', gap: 16 },
+  pwCompIframeCol: { flex: 1, display: 'flex', flexDirection: 'column', gap: 8 },
+  pwCompIframeLabel: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#374151' },
+  pwCompIframePlaceholder: { height: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8faff', border: '1px solid #c7d2fe', borderRadius: 6, color: '#9ca3af', fontSize: 13 },
+  pwCompIframe: { width: '100%', height: 600, border: '1px solid #c7d2fe', borderRadius: 6, background: '#fff' },
+  pwCompRationaleBtn: { marginLeft: 6, fontSize: 10, color: '#4f46e5', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' },
+  pwCompNoEval: { textAlign: 'center', color: '#9ca3af', padding: '20px 0', fontSize: 13 },
 };
 
 // ── Pairwise Tab ───────────────────────────────────────────────────────────────
@@ -4030,6 +4023,157 @@ function sideLabel(winner, setupA, setupB) {
   if (winner === setupA) return 'A';
   if (winner === setupB) return 'B';
   return winner;
+}
+
+function ComparisonViewer({ figure, result, setupA, setupB, htmlA, htmlB, loading, figureIndex, totalFigures, onBack, onPrev, onNext }) {
+  const me = result?.machineEval;
+  const humanEvals = result?.humanEvals || [];
+  const figNumA = me?.figure1Setup ? (me.figure1Setup === setupA ? '1' : '2') : null;
+  const figNumB = me?.figure1Setup ? (me.figure1Setup === setupB ? '1' : '2') : null;
+  const dimRows = DIMENSIONS.map(d => ({
+    key: d,
+    label: { geometry: 'Geometry', interactivity: 'Interactivity', faithfulness: 'Faithfulness', labels: 'Labels', concept: 'Concept' }[d],
+    data: me?.dimensions?.[d] ?? null,
+  }));
+  const overallRow = {
+    key: 'overall', label: 'Overall',
+    data: me?.aggregator ? { winner: me.aggregator.winner, confidence: me.aggregator.confidence, rationale: me.aggregator.explanation } : null,
+  };
+  const allRows = [...dimRows, overallRow];
+
+  return (
+    <div style={styles.pwCompRoot}>
+      <div style={styles.pwCompHeader}>
+        <button style={styles.pwCompBack} onClick={onBack}>← Back</button>
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <div style={styles.pwCompFigName}>{figure?.name}</div>
+          <div style={styles.pwCompFigChapter}>{figure?.chapter}</div>
+        </div>
+        <div style={styles.pwCompNavGroup}>
+          <button
+            style={{ ...styles.pwCompNavBtn, ...(figureIndex <= 0 ? { opacity: 0.4, cursor: 'not-allowed' } : {}) }}
+            disabled={figureIndex <= 0}
+            onClick={onPrev}
+          >← Prev</button>
+          <span style={styles.pwCompNavCounter}>{figureIndex + 1} / {totalFigures}</span>
+          <button
+            style={{ ...styles.pwCompNavBtn, ...(figureIndex >= totalFigures - 1 ? { opacity: 0.4, cursor: 'not-allowed' } : {}) }}
+            disabled={figureIndex >= totalFigures - 1}
+            onClick={onNext}
+          >Next →</button>
+        </div>
+      </div>
+
+      <div style={styles.pwCompIframeRow}>
+        {[
+          { setup: setupA, html: htmlA, side: 'A', figNum: figNumA, badgeStyle: { ...styles.pwWinnerBadge, ...styles.pwBadgeA } },
+          { setup: setupB, html: htmlB, side: 'B', figNum: figNumB, badgeStyle: { ...styles.pwWinnerBadge, ...styles.pwBadgeB } },
+        ].map(({ setup, html, side, figNum, badgeStyle }) => (
+          <div key={setup} style={styles.pwCompIframeCol}>
+            <div style={styles.pwCompIframeLabel}>
+              <span style={badgeStyle}>{side}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={setup}>
+                {shortSetup(setup)}
+              </span>
+              <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {setup.includes('/') ? setup.split('/').slice(1).join('/') : ''}
+              </span>
+              {figNum && (
+                <span style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 9, fontWeight: 600, background: '#f3f4f6', border: '1px solid #e5e7eb', color: '#6b7280', borderRadius: 3, padding: '1px 5px', letterSpacing: 0.2 }}>
+                  Fig {figNum}
+                </span>
+              )}
+            </div>
+            {loading
+              ? <div style={styles.pwCompIframePlaceholder}>Loading…</div>
+              : <iframe
+                  style={styles.pwCompIframe}
+                  srcDoc={html || ''}
+                  title={`Setup ${side} — ${setup}`}
+                  sandbox="allow-scripts allow-same-origin"
+                />
+            }
+          </div>
+        ))}
+      </div>
+
+      {me ? (
+        <div style={styles.pwCard}>
+          <div style={styles.pwCardTitle}>
+            Pairwise Evaluation Results
+            {me.evalModel && <span style={{ fontSize: 10, color: '#9ca3af', marginLeft: 8, textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>evaluated by {me.evalModel}</span>}
+          </div>
+          <table style={{ ...styles.pwTable, tableLayout: 'fixed' }}>
+            <thead>
+              <tr>
+                <th style={{ ...styles.pwTh, width: '16%' }}>Dimension</th>
+                <th style={{ ...styles.pwTh, width: '10%' }}>Winner</th>
+                <th style={{ ...styles.pwTh, width: '10%' }}>Confidence</th>
+                <th style={styles.pwTh}>Rationale</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allRows.map(({ key, label, data }) => {
+                const rationale = data?.rationale || '';
+                return (
+                  <tr key={key} style={key === 'overall' ? { background: '#f8fafc', borderTop: '2px solid #e2e8f0' } : {}}>
+                    <td style={{ ...styles.pwTd, fontWeight: key === 'overall' ? 700 : 600 }}>{label}</td>
+                    <td style={styles.pwTd}>
+                      {data
+                        ? <span style={winnerBadgeStyle(data.winner, setupA, setupB)}>{sideLabel(data.winner, setupA, setupB)}</span>
+                        : <span style={{ color: '#d1d5db' }}>—</span>}
+                    </td>
+                    <td style={{ ...styles.pwTd, color: '#6b7280' }}>
+                      {data ? `${(data.confidence * 100).toFixed(0)}%` : '—'}
+                    </td>
+                    <td style={{ ...styles.pwTd, fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>
+                      {rationale || <span style={{ color: '#d1d5db' }}>—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div style={styles.pwCard}>
+          <div style={styles.pwCompNoEval}>
+            No machine evaluation for this figure yet.{!loading && ' Select it in the setup panel and run Machine Evaluation.'}
+          </div>
+        </div>
+      )}
+
+      {humanEvals.length > 0 && (
+        <div style={styles.pwCard}>
+          <div style={styles.pwCardTitle}>Human Evaluations</div>
+          <table style={{ ...styles.pwTable, tableLayout: 'fixed' }}>
+            <thead>
+              <tr>
+                <th style={{ ...styles.pwTh, width: '20%' }}>Submitted</th>
+                <th style={{ ...styles.pwTh, width: '10%' }}>Winner</th>
+                <th style={styles.pwTh}>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {humanEvals.map((he, i) => (
+                <tr key={i}>
+                  <td style={{ ...styles.pwTd, color: '#6b7280', fontSize: 11 }}>
+                    {he.submittedAt ? new Date(he.submittedAt).toLocaleString() : '—'}
+                  </td>
+                  <td style={styles.pwTd}>
+                    <span style={winnerBadgeStyle(he.winner, setupA, setupB)}>{sideLabel(he.winner, setupA, setupB)}</span>
+                  </td>
+                  <td style={{ ...styles.pwTd, fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>
+                    {he.notes || <span style={{ color: '#d1d5db' }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function PairwiseTab({ availableModels }) {
@@ -4056,6 +4200,19 @@ function PairwiseTab({ availableModels }) {
   const [iframeOrder, setIframeOrder] = useState(null);
   const [iframeHtmlA, setIframeHtmlA] = useState(null);
   const [iframeHtmlB, setIframeHtmlB] = useState(null);
+  const [humanFigOriginalPath, setHumanFigOriginalPath] = useState(null);
+  const [compViewerFigIndex, setCompViewerFigIndex] = useState(null);
+  const [compViewerHtmlA, setCompViewerHtmlA] = useState(null);
+  const [compViewerHtmlB, setCompViewerHtmlB] = useState(null);
+  const [compViewerLoading, setCompViewerLoading] = useState(false);
+
+  const sortedMatchingFigures = useMemo(() => {
+    if (!matchingFigures) return [];
+    return [...matchingFigures].sort((a, b) => {
+      const c = a.chapter.localeCompare(b.chapter);
+      return c !== 0 ? c : a.name.localeCompare(b.name);
+    });
+  }, [matchingFigures]);
 
   useEffect(() => {
     fetch('/api/pairwise/setups')
@@ -4079,6 +4236,34 @@ function PairwiseTab({ availableModels }) {
       .then(d => setResults(Array.isArray(d) ? d : []))
       .catch(() => setResults([]));
   }, [setupA, setupB]);
+
+  useEffect(() => {
+    setCompViewerFigIndex(null);
+  }, [setupA, setupB]);
+
+  useEffect(() => {
+    if (compViewerFigIndex === null) return;
+    const fig = sortedMatchingFigures[compViewerFigIndex];
+    if (!fig) return;
+    let cancelled = false;
+    setCompViewerLoading(true);
+    setCompViewerHtmlA(null);
+    setCompViewerHtmlB(null);
+    const toUrl = (htmlPath, resultId) => {
+      if (htmlPath) return `/api/experiments/html?path=${encodeURIComponent(htmlPath)}`;
+      if (resultId) return `/api/result/${encodeURIComponent(resultId)}/html`;
+      return null;
+    };
+    const urlA = toUrl(fig.htmlPathA, fig.resultIdA);
+    const urlB = toUrl(fig.htmlPathB, fig.resultIdB);
+    Promise.all([
+      urlA ? fetch(urlA).then(r => r.ok ? r.text() : null).catch(() => null) : Promise.resolve(null),
+      urlB ? fetch(urlB).then(r => r.ok ? r.text() : null).catch(() => null) : Promise.resolve(null),
+    ]).then(([htmlA, htmlB]) => {
+      if (!cancelled) { setCompViewerHtmlA(htmlA); setCompViewerHtmlB(htmlB); setCompViewerLoading(false); }
+    });
+    return () => { cancelled = true; };
+  }, [compViewerFigIndex, sortedMatchingFigures]);
 
   const runMachineEval = useCallback(async () => {
     if (!matchingFigures || matchingFigures.length === 0 || running) return;
@@ -4132,6 +4317,7 @@ function PairwiseTab({ availableModels }) {
     setHumanNotes('');
     setIframeHtmlA(null);
     setIframeHtmlB(null);
+    setHumanFigOriginalPath(null);
     setIframeOrder(Math.random() < 0.5 ? { left: setupA, right: setupB } : { left: setupB, right: setupA });
 
     const matchFig = matchingFigures && (
@@ -4139,6 +4325,7 @@ function PairwiseTab({ availableModels }) {
       matchingFigures.find(f => f.name === result.figure)
     );
     if (!matchFig) return;
+    setHumanFigOriginalPath(matchFig.imagePathA || matchFig.imagePathB || null);
 
     const toUrl = (htmlPath, resultId) => {
       if (htmlPath) return `/api/experiments/html?path=${encodeURIComponent(htmlPath)}`;
@@ -4161,6 +4348,7 @@ function PairwiseTab({ availableModels }) {
     setIframeOrder(null);
     setIframeHtmlA(null);
     setIframeHtmlB(null);
+    setHumanFigOriginalPath(null);
   }, []);
 
   const pickWinner = useCallback((side) => {
@@ -4271,8 +4459,30 @@ function PairwiseTab({ availableModels }) {
     });
   }, [matchingFigures, results]);
 
+  const compViewerResult = useMemo(() => {
+    if (compViewerFigIndex === null) return null;
+    const fig = sortedMatchingFigures[compViewerFigIndex];
+    if (!fig) return null;
+    return results.find(r => r.figure === fig.name && r.chapter === fig.chapter) ?? null;
+  }, [compViewerFigIndex, sortedMatchingFigures, results]);
 
   return (
+    compViewerFigIndex !== null ? (
+      <ComparisonViewer
+        figure={sortedMatchingFigures[compViewerFigIndex]}
+        result={compViewerResult}
+        setupA={setupA}
+        setupB={setupB}
+        htmlA={compViewerHtmlA}
+        htmlB={compViewerHtmlB}
+        loading={compViewerLoading}
+        figureIndex={compViewerFigIndex}
+        totalFigures={sortedMatchingFigures.length}
+        onBack={() => setCompViewerFigIndex(null)}
+        onPrev={() => setCompViewerFigIndex(i => Math.max(0, i - 1))}
+        onNext={() => setCompViewerFigIndex(i => Math.min(sortedMatchingFigures.length - 1, i + 1))}
+      />
+    ) : (
     <div style={styles.pwRoot}>
       {/* Panel 1 — Rankings (Bradley-Terry) */}
       <div style={styles.pwCard}>
@@ -4301,8 +4511,8 @@ function PairwiseTab({ availableModels }) {
                 ))}
               </div>
               <div style={styles.pwToggleGroup}>
-                {['overall', ...DIMENSIONS].map(d => {
-                  const label = { overall: 'Overall', geometry: 'Geo', interactivity: 'Inter', faithfulness: 'Faith', labels: 'Labels', concept: 'Concept' }[d];
+                {['overall', ...DIMENSIONS, 'all'].map(d => {
+                  const label = { overall: 'Overall', geometry: 'Geo', interactivity: 'Inter', faithfulness: 'Faith', labels: 'Labels', concept: 'Concept', all: 'All Scores' }[d];
                   const disabled = d !== 'overall' && rankingsSrc === 'human';
                   return (
                     <button key={d}
@@ -4319,6 +4529,53 @@ function PairwiseTab({ availableModels }) {
             {rankingsLoading ? (
               <div style={styles.pwEmptyMsg}>Loading…</div>
             ) : (() => {
+              if (rankingsDim === 'all') {
+                const overallRows = rankings?.[rankingsSrc]?.overall ?? [];
+                if (overallRows.length === 0) return <div style={styles.pwEmptyMsg}>No data yet — run machine evaluations first.</div>;
+                const dimScores = {};
+                for (const d of DIMENSIONS) {
+                  for (const row of (rankings?.[rankingsSrc]?.[d] ?? [])) {
+                    if (!dimScores[row.id]) dimScores[row.id] = {};
+                    dimScores[row.id][d] = row.score;
+                  }
+                }
+                const DIM_LABELS = { geometry: 'Geo', interactivity: 'Inter', faithfulness: 'Faith', labels: 'Labels', concept: 'Concept' };
+                return (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ ...styles.pwTable, tableLayout: 'auto', minWidth: 480 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...styles.pwTh, width: 28 }}>#</th>
+                          <th style={styles.pwTh}>Setup</th>
+                          <th style={{ ...styles.pwTh, textAlign: 'right' }}>Overall</th>
+                          {DIMENSIONS.map(d => (
+                            <th key={d} style={{ ...styles.pwTh, textAlign: 'right' }}>{DIM_LABELS[d]}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {overallRows.map((row, i) => (
+                          <tr key={row.id}>
+                            <td style={{ ...styles.pwTd, fontWeight: 700, color: i === 0 ? '#4f46e5' : '#9ca3af', fontSize: 11 }}>{i + 1}</td>
+                            <td style={styles.pwTd}>
+                              <div style={{ fontWeight: 600, fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.id}>{row.id}</div>
+                            </td>
+                            <td style={{ ...styles.pwTd, textAlign: 'right', fontWeight: 700, color: '#4f46e5', fontSize: 11 }}>{(row.score * 100).toFixed(1)}</td>
+                            {DIMENSIONS.map(d => {
+                              const s = dimScores[row.id]?.[d];
+                              return (
+                                <td key={d} style={{ ...styles.pwTd, textAlign: 'right', fontSize: 11, color: s != null ? '#374151' : '#d1d5db' }}>
+                                  {s != null ? (s * 100).toFixed(1) : '—'}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              }
               const rows = rankings?.[rankingsSrc]?.[rankingsDim] ?? [];
               if (rows.length === 0) return <div style={styles.pwEmptyMsg}>No data yet — run machine evaluations first.</div>;
               const maxScore = rows[0]?.score ?? 1;
@@ -4429,7 +4686,7 @@ function PairwiseTab({ availableModels }) {
                   {DIMENSIONS.map(d => <th key={d} style={{ ...styles.pwTh, width: '10%' }}>{{ geometry: 'Geo', interactivity: 'Inter', faithfulness: 'Faith', labels: 'Labels', concept: 'Concept' }[d]}</th>)}
                   <th style={{ ...styles.pwTh, width: '15%' }}>Overall</th>
                   <th style={{ ...styles.pwTh, width: '7%' }}>Conf</th>
-                  <th style={{ ...styles.pwTh, width: 30 }}></th>
+                  <th style={{ ...styles.pwTh, width: 80 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -4459,8 +4716,22 @@ function PairwiseTab({ availableModels }) {
                       </td>
                       <td style={styles.pwTd}>{me?.aggregator ? (me.aggregator.confidence * 100).toFixed(0) + '%' : '—'}</td>
                       <td style={styles.pwTd}>
-                        {me && <button style={{ ...styles.pwAddBtn, background: '#fee2e2', color: '#b91c1c', borderColor: '#fca5a5', padding: '2px 6px' }}
-                                       onClick={() => deleteMachineEval(r)} title="Delete machine eval">×</button>}
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <button
+                            style={styles.pwAddBtn}
+                            onClick={() => {
+                              const idx = sortedMatchingFigures.findIndex(f => f.name === r.figure && f.chapter === r.chapter);
+                              setCompViewerFigIndex(idx >= 0 ? idx : 0);
+                            }}
+                          >View</button>
+                          {me && (
+                            <button
+                              style={{ ...styles.pwAddBtn, background: '#fee2e2', color: '#b91c1c', borderColor: '#fca5a5', padding: '2px 6px' }}
+                              onClick={() => deleteMachineEval(r)}
+                              title="Delete machine eval"
+                            >×</button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -4564,6 +4835,16 @@ function PairwiseTab({ availableModels }) {
                         <tr>
                           <td colSpan={4} style={{ padding: 0 }}>
                             <div style={styles.pwHumanPanel}>
+                              {humanFigOriginalPath && (
+                                <div style={{ marginBottom: 14, textAlign: 'center' }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Figure</div>
+                                  <img
+                                    src={`/api/experiments/imageurl?path=${encodeURIComponent(humanFigOriginalPath)}`}
+                                    alt="Original reference figure"
+                                    style={{ maxHeight: 220, maxWidth: '100%', border: '1px solid #e5e7eb', borderRadius: 6, display: 'block', margin: '0 auto' }}
+                                  />
+                                </div>
+                              )}
                               <div style={styles.pwIframeRow}>
                                 {[iframeOrder.left, iframeOrder.right].map((setup, idx) => (
                                   <div key={setup} style={styles.pwIframeWrap}>
@@ -4641,6 +4922,7 @@ function PairwiseTab({ availableModels }) {
         </div>
       )}
     </div>
+    )
   );
 }
 

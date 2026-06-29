@@ -2,8 +2,8 @@
  * pairwise_evaluator.js — head-to-head comparison of two generated figures.
  *
  * Runs 5 parallel dimension agents then a single aggregator call.
- * Position assignment (which setup is "Figure A") is randomized per call and
- * resolved to setup names in memory — nothing about ordering is written to disk.
+ * Position assignment (Figure 1 vs Figure 2) is randomized once per figure,
+ * then held fixed across all 5 dimension agents and the aggregator.
  */
 
 const fs = require('fs');
@@ -27,15 +27,14 @@ function pairKey(setupA, setupB) {
 }
 
 function randomizeOrder(setupA, setupB) {
-  if (Math.random() < 0.5) {
-    return { setupForA: setupA, setupForB: setupB };
-  }
-  return { setupForA: setupB, setupForB: setupA };
+  return Math.random() < 0.5
+    ? { figure1: setupA, figure2: setupB }
+    : { figure1: setupB, figure2: setupA };
 }
 
-function resolveWinner(llmWinner, setupForA, setupForB) {
-  if (llmWinner === 'A') return setupForA;
-  if (llmWinner === 'B') return setupForB;
+function resolveWinner(llmWinner, figure1, figure2) {
+  if (llmWinner === '1') return figure1;
+  if (llmWinner === '2') return figure2;
   return 'tie';
 }
 
@@ -49,10 +48,11 @@ function parseAgentJson(raw) {
 
 // ── Dimension agent prompts ────────────────────────────────────────────────────
 
-const SHARED_PREAMBLE = `You are a strict evaluator comparing two Three.js 3D figure implementations (Figure A and Figure B) of the same textbook figure.
+const SHARED_PREAMBLE = `You are a strict evaluator comparing two Three.js 3D figure implementations (Figure 1 and Figure 2) of the same textbook figure.
 Be critical and honest. Only call "tie" when both figures are genuinely indistinguishable on this dimension — default to picking the better one.
+Your rationale must be comparative: explain specifically what the winner does better AND what the loser does worse — not just why the winner is good in isolation.
 Respond ONLY with valid JSON — no explanation, no markdown:
-{"winner":"A"|"B"|"tie","confidence":0.0-1.0,"rationale":"<one sentence>"}`;
+{"winner":"1"|"2"|"tie","confidence":0.0-1.0,"rationale":"<one sentence comparing both figures>"}`;
 
 const DIMENSION_PROMPTS = {
   geometry: `${SHARED_PREAMBLE}
@@ -60,7 +60,7 @@ const DIMENSION_PROMPTS = {
 DIMENSION: Geometric accuracy — which figure better reconstructs the 3D geometry of the original.
 Evaluate: correct 3D shapes/primitives, spatial relationships, element counts, proportions, depth/perspective, and initial camera viewpoint matching the source.
 Watch for: incorrect 3D perspective, wrong shapes for the concept, initial viewpoint differing from the source, proportions noticeably off. Take special note of 2D canvases in 3D space - this automatically loses.
-Figure A and Figure B are provided as HTML/JavaScript source code.`,
+Figure 1 and Figure 2 are provided as HTML/JavaScript source code.`,
 
   interactivity: `${SHARED_PREAMBLE}
 
@@ -68,35 +68,36 @@ DIMENSION: Interactivity and usability — which figure provides better develope
 CRITICAL: OrbitControls (mouse drag to rotate/zoom) does NOT count as a meaningful interaction. Meaningful = buttons, sliders, toggles, step-through animations, parameter controls built by the developer.
 Evaluate: number of meaningful interactions, whether they are functional, and whether they are pedagogically useful.
 Watch for: controls present in code but non-functional, only OrbitControls with no developer-built interactions.
-Figure A and Figure B are provided as HTML/JavaScript source code.`,
+Figure 1 and Figure 2 are provided as HTML/JavaScript source code.`,
 
   faithfulness: `${SHARED_PREAMBLE}
 
 DIMENSION: Visual faithfulness — which figure's rendered output more closely matches the original textbook figure.
 Evaluate: color match, compositional similarity, proportions, overall visual resemblance at a glance.
 Watch for: colors that don't match the original, elements present that don't appear in the original, proportions noticeably off.
-You will receive the original textbook figure image, plus rendered screenshots of Figure A and Figure B.`,
+You will receive the original textbook figure image, plus rendered screenshots of Figure 1 and Figure 2.`,
 
   labels: `${SHARED_PREAMBLE}
 
 DIMENSION: Label quality — which figure has better text labels and annotations matching the original.
 Evaluate: presence of all required labels, correctness of label text, readability, size, placement, and freedom from clutter.
 Watch for: important annotations absent, labels not present in the original figure.
-You will receive the original textbook figure image, plus rendered screenshots of Figure A and Figure B.`,
+You will receive the original textbook figure image, plus rendered screenshots of Figure 1 and Figure 2.`,
 
   concept: `${SHARED_PREAMBLE}
 
 DIMENSION: Concept accuracy — which figure better conveys the pedagogical concept to a student.
 Evaluate: whether the core concept is correctly illustrated, whether interactions demonstrate correct relationships, and whether a student would learn the right thing from each figure.
 Watch for: core concept misrepresented, invented elements that distort the intended meaning.
-Figure A and Figure B are provided as HTML/JavaScript source code.`,
+Figure 1 and Figure 2 are provided as HTML/JavaScript source code.`,
 };
 
-const AGGREGATOR_PROMPT = `You receive pairwise preferences from five independent dimension agents that each compared Figure A vs Figure B.
+const AGGREGATOR_PROMPT = `You receive pairwise preferences from five independent dimension agents that each compared Figure 1 vs Figure 2.
 Synthesize a final judgment. Up-weight agents with higher confidence.
 Only call "tie" if the dimension votes are genuinely split with no clear overall winner.
+Your explanation must be comparative: cite specific strengths of the winner over the loser and specific weaknesses of the loser relative to the winner — not just a list of the winner's merits in isolation.
 Respond ONLY with valid JSON — no explanation, no markdown:
-{"winner":"A"|"B"|"tie","confidence":0.0-1.0,"explanation":"<two to three sentences>"}`;
+{"winner":"1"|"2"|"tie","confidence":0.0-1.0,"explanation":"<two to three sentences comparing both figures>"}`;
 
 // ── Single dimension agent call ────────────────────────────────────────────────
 
@@ -112,16 +113,16 @@ async function callDimensionAgent(dimension, { htmlA, htmlB, thumbA, thumbB, sou
       userContent.push({ type: 'image_url', image_url: { url: `data:image/png;base64,${sourceImage}` } });
     }
     if (thumbA) {
-      userContent.push({ type: 'text', text: 'Screenshot of Figure A:' });
+      userContent.push({ type: 'text', text: 'Screenshot of Figure 1:' });
       userContent.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${thumbA}` } });
     }
     if (thumbB) {
-      userContent.push({ type: 'text', text: 'Screenshot of Figure B:' });
+      userContent.push({ type: 'text', text: 'Screenshot of Figure 2:' });
       userContent.push({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${thumbB}` } });
     }
   } else {
-    userContent.push({ type: 'text', text: `Figure A source code:\n\n${htmlA}` });
-    userContent.push({ type: 'text', text: `Figure B source code:\n\n${htmlB}` });
+    userContent.push({ type: 'text', text: `Figure 1 source code:\n\n${htmlA}` });
+    userContent.push({ type: 'text', text: `Figure 2 source code:\n\n${htmlB}` });
   }
 
   userContent.push({ type: 'text', text: 'Output ONLY the JSON object.' });
@@ -174,47 +175,47 @@ async function callAggregator(dimensionResults, evalModel) {
  */
 async function pairwiseEvaluateFigure({ htmlA, setupA, htmlB, setupB, thumbA, thumbB, sourceImage, evalModel }) {
   const usedModel = evalModel || PAIRWISE_DEFAULT_MODEL;
-  const { setupForA, setupForB } = randomizeOrder(setupA, setupB);
 
-  // Map inputs so A/B match the randomized assignment
+  // Randomize once — same assignment used for all 5 dimensions and the aggregator
+  const { figure1, figure2 } = randomizeOrder(setupA, setupB);
   const inputs = {
-    htmlA: setupForA === setupA ? htmlA : htmlB,
-    htmlB: setupForA === setupA ? htmlB : htmlA,
-    thumbA: setupForA === setupA ? thumbA : thumbB,
-    thumbB: setupForA === setupA ? thumbB : thumbA,
+    htmlA:  figure1 === setupA ? htmlA  : htmlB,
+    htmlB:  figure1 === setupA ? htmlB  : htmlA,
+    thumbA: figure1 === setupA ? thumbA : thumbB,
+    thumbB: figure1 === setupA ? thumbB : thumbA,
     sourceImage,
   };
 
   // 5 parallel dimension agents
   const [geometry, interactivity, faithfulness, labels, concept] = await Promise.all([
-    callDimensionAgent('geometry', inputs, usedModel),
+    callDimensionAgent('geometry',      inputs, usedModel),
     callDimensionAgent('interactivity', inputs, usedModel),
-    callDimensionAgent('faithfulness', inputs, usedModel),
-    callDimensionAgent('labels', inputs, usedModel),
-    callDimensionAgent('concept', inputs, usedModel),
+    callDimensionAgent('faithfulness',  inputs, usedModel),
+    callDimensionAgent('labels',        inputs, usedModel),
+    callDimensionAgent('concept',       inputs, usedModel),
   ]);
 
-  // Resolve A/B → setup names in memory
+  // Resolve 1/2 → setup names
   const rawDimensions = { geometry, interactivity, faithfulness, labels, concept };
   const resolvedDimensions = {};
   for (const [dim, result] of Object.entries(rawDimensions)) {
     resolvedDimensions[dim] = {
-      winner: resolveWinner(result.winner, setupForA, setupForB),
+      winner: resolveWinner(result.winner, figure1, figure2),
       confidence: result.confidence,
       rationale: result.rationale,
     };
   }
 
-  // Aggregator — pass resolved names so it reasons over setup strings, not A/B
-  // But aggregator prompt expects A/B labels, so pass raw results and resolve its output
+  // Aggregator — receives raw 1/2 labels (consistent with dimensions above)
   const aggRaw = await callAggregator(rawDimensions, usedModel);
 
   return {
+    figure1Setup: figure1,
+    figure2Setup: figure2,
     dimensions: resolvedDimensions,
     aggregator: {
-      winner: resolveWinner(aggRaw.winner, setupForA, setupForB),
+      winner: resolveWinner(aggRaw.winner, figure1, figure2),
       confidence: aggRaw.confidence,
-
       explanation: aggRaw.explanation,
     },
     evalModel: usedModel,

@@ -1326,6 +1326,24 @@ function scanAgentResults() {
   return setups;
 }
 
+// Find the source image for a figure by searching FIGURES_DIR by stem + chapter.
+function findSourceImage(figName, chapter) {
+  if (!fs.existsSync(FIGURES_DIR)) return null;
+  let chDirs;
+  try { chDirs = fs.readdirSync(FIGURES_DIR); } catch { return null; }
+  for (const ext of ['png', 'jpg', 'jpeg', 'PNG', 'JPG']) {
+    if (chapter) {
+      const candidate = path.join(FIGURES_DIR, chapter, `${figName}.${ext}`);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+    for (const chDir of chDirs) {
+      const candidate = path.join(FIGURES_DIR, chDir, `${figName}.${ext}`);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
 // Walk prompt_experiments/ and return structured index:
 // [ { experiment, prompt, models: [ { model, figures: [ { name, htmlPath, imagePath } ] } ] } ]
 function scanExperiments() {
@@ -1535,15 +1553,16 @@ app.get('/api/pairwise/setups', (req, res) => {
         for (const f of sa.figures) {
           const bFig = bMapFull.get(figKey(f)) || bMapName.get(f.name);
           if (!bFig) continue;
+          const chapter = f.chapter || bFig.chapter;
           matchingFigures.push({
             name: f.name,
-            chapter: f.chapter || bFig.chapter,
+            chapter,
             htmlPathA: f.htmlPath || null,
             resultIdA: f.resultId || null,
-            imagePathA: f.imagePath || null,
+            imagePathA: f.imagePath || findSourceImage(f.name, chapter),
             htmlPathB: bFig.htmlPath || null,
             resultIdB: bFig.resultId || null,
-            imagePathB: bFig.imagePath || null,
+            imagePathB: bFig.imagePath || findSourceImage(bFig.name, chapter),
           });
         }
       }

@@ -1,1292 +1,1532 @@
 {
-  "pyramids__gabors": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "pyramids",
-    "figure": "gabors",
-    "humanEvals": [],
+  "upsamplig_downsampling__bilinear_interp2": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "upsamplig_downsampling",
+    "figure": "bilinear_interp2",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:08:14.619Z"
+      }
+    ],
     "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
       "dimensions": {
         "geometry": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 0.85,
-          "rationale": "Figure A provides a cleaner and more standard side-by-side surface plot arrangement along the X-axis, avoiding Figure B's unusual 2D floating wireframe envelopes which severely clutter the 3D surface representation."
+          "rationale": "Figure 1 uses proper ellipsoids for sample points (with a clever black-rim and red-fill layering) rather than Figure 2's flat coin-like cylinders, and includes a more comprehensive set of dashed vertical projection guides for all intermediate points rather than just the final output."
         },
         "interactivity": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure B offers superior interactive features, including a step-through guided animation system triggered by clicking the meshes, a dropdown toggle, and sliders, whereas Figure A only provides basic sliders and static popups."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A successfully renders all three plots with the correct overall layout and color schemes, whereas Figure B is poorly framed, cuts off most of the content, and inappropriately adds a wireframe envelope not present in the reference."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A successfully includes all three labels (a), (b), and (c) in positions analogous to the original, whereas Figure B's labels are cut off and out of order due to camera positioning."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B correctly implements 2D orientation control (a defining feature of 2D Gabor filters) and displays the Gaussian envelope as a wireframe bounding the oscillations, which perfectly illustrates the concept of amplitude modulation."
-        }
-      },
-      "aggregator": {
-        "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.85,
-        "explanation": "Figure A is the overall winner due to its superior faithfulness, geometry, and labeling. While Figure B offers advanced interactive features and conceptual representations, its poor framing cuts off most of the content and introduces unnecessary clutter, making Figure A a much cleaner and more accurate replication of the reference."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:56:11.734Z"
-    }
-  },
-  "upsamplig_downsampling__bilinear_interp2": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "upsamplig_downsampling",
-    "figure": "bilinear_interp2",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A provides an excellent geometric reconstruction with a fully functional UI that allows interactive manipulation of the interpolation coordinates and corner heights, strictly adhering to the 3D relationships and demonstrating bilinear interpolation dynamically."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure A features highly functional developer-built interactions, including parameter sliders that dynamically update the scene and click-to-animate step-through states, whereas Figure B lacks parameter controls entirely."
+          "rationale": "Figure 2 includes functional sliders to dynamically change interpolation coordinates and corner heights, and clicking components triggers animated step-by-step demonstrations, whereas Figure 1 only offers basic tooltips and static popups."
         },
         "faithfulness": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 0.9,
-          "rationale": "Figure A correctly implements the red color for the interpolated points and fits the entire scene in the frame, whereas Figure B incorrectly colors all points black and crops out part of the left diagram."
+          "rationale": "Figure 2 correctly colors the interpolated nodes red to match the reference, whereas Figure 1 incorrectly leaves them black and suffers from cluttered, overlapping text labels."
         },
         "labels": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A includes almost all required labels in their correct relative positions, while Figure B is severely cropped, omitting several key labels on the left and right edges, and adds an extra label not found in the original."
+          "confidence": 0.8,
+          "rationale": "Figure 2 successfully includes the leftmost labels that are completely cropped out in Figure 1 and avoids Figure 1's erroneous extra label, though both figures suffer from poor label placement and overlapping text."
         },
         "concept": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure A provides interactive controls that dynamically update the interpolation coordinates and heights, allowing students to actively observe the weighted averaging process and the geometric properties of the bilinear patch, which is crucial for deeply understanding the concept."
+          "rationale": "Figure 2 includes interactive sliders to manipulate the interpolation coordinates 'a' and 'b', which dynamically update the 1D and 2D interpolation points and directly teach the student how the weights affect the output, whereas Figure 1 is entirely static."
         }
       },
       "aggregator": {
         "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
         "confidence": 0.95,
-        "explanation": "Figure A is the clear winner across all dimensions, featuring an excellent geometric reconstruction with fully functional interactive sliders and step-through states. In contrast, Figure B lacks interactivity, applies incorrect colors to the points, and is severely cropped, causing it to miss important labels and geometry."
+        "explanation": "Figure 2 is the clear winner because it offers robust interactivity with functional sliders that dynamically update interpolation points, whereas Figure 1 is entirely static. Additionally, Figure 2 is more faithful to the reference by correctly coloring the interpolated nodes red and including fully visible labels, whereas Figure 1 crops out the leftmost labels, incorrectly leaves the nodes black, and suffers from cluttered, overlapping text."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:56:33.545Z"
+      "evaluatedAt": "2026-06-26T17:51:13.095Z"
     }
   },
   "vision_and_language__clip_mapping_diagram_two_branch": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
     "chapter": "vision_and_language",
     "figure": "clip_mapping_diagram_two_branch",
-    "humanEvals": [],
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:08:43.422Z"
+      }
+    ],
     "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
       "dimensions": {
         "geometry": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure A constructs a flat 2D diagram on the XY plane viewed straight-on, whereas Figure B accurately reconstructs the 3D geometry of the architecture using 3D stacks of planes and a 3D viewing angle."
+          "rationale": "Figure 2 correctly reconstructs the implied 3D geometry of the architecture using stacked 3D planes and an angled perspective, whereas Figure 1 creates a flat 2D canvas in 3D space, which automatically loses."
         },
         "interactivity": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure B features significantly richer developer-built interactions, including a functional layout slider, a highlight toggle dropdown, and click-to-highlight paths, whereas Figure A only relies on click-to-read text popups."
+          "rationale": "Figure 2 provides rich developer-built interactions including a layer spacing slider, a highlight group dropdown, and interactive path highlighting upon clicking nodes, whereas Figure 1 only provides basic click-to-explain popups with no interactive UI controls."
         },
         "faithfulness": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 0.9,
-          "rationale": "Figure A maintains the correct left-to-right composition and layout of the original figure, whereas Figure B incorrectly swaps the positions of the 'ViT block' and 'transformer block' sections and suffers from severe text overlapping."
+          "rationale": "Figure 1 correctly maintains the left-to-right structural layout of the encoders, whereas Figure 2 completely reverses the sides, suffers from severe layout distortion, and includes extraneous UI elements."
         },
         "labels": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.85,
-          "rationale": "Figure A correctly places the image and text encoder labels on the left and right respectively and includes the main title, whereas Figure B swaps the left/right placement of the encoders and is missing the main title."
+          "confidence": 0.9,
+          "rationale": "Figure 1 correctly places the ViT and transformer labels on the left and right sides and includes the top title, whereas Figure 2 completely swaps the left/right labels, omits the main title, and has worse text-to-box alignment."
         },
         "concept": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 0.95,
-          "rationale": "Figure B leverages true 3D spatial stacking to clearly illustrate the embedding space at each layer, and its interactive grouping highlights explicitly teach the representational shifts that occur within the encoders."
+          "rationale": "Figure 2's 3D stacked-plane layout and interactive path-highlighting much more clearly demonstrate how paired representations evolve layer-by-layer and align in the joint space, whereas Figure 1's flat 2D layout results in a visually tangled set of trajectories that obscures these transformations."
         }
       },
       "aggregator": {
         "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.65,
-        "explanation": "Figure B constructs a true 3D architecture with robust interactivity, significantly improving the illustration of the model's concepts and embeddings. Although Figure A maintains better spatial layouts and label placement, Figure B's advanced geometry and interactive features make it the overall superior educational visualization."
+        "confidence": 0.85,
+        "explanation": "Figure 2 is the overall winner because it successfully reconstructs the architecture using an immersive 3D stacked-plane layout and provides rich interactive controls like layer spacing sliders and path highlighting to clearly illustrate layer-by-layer evolution. In contrast, while Figure 1 preserves the original left-to-right layout and labels more faithfully, it merely places a flat 2D canvas in 3D space, resulting in visually tangled trajectories and a complete lack of deep interactive exploration."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:44:24.684Z"
+      "evaluatedAt": "2026-06-26T17:51:45.876Z"
+    }
+  },
+  "pyramids__gabors": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "pyramids",
+    "figure": "gabors",
+    "humanEvals": [
+      {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:09:47.632Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 accurately reconstructs textbook Gabor filter plots by including the upper and lower Gaussian envelope wireframes bounding the sinusoidal surfaces, as well as distinct zero-planes with axis crosses, which Figure 1 lacks."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 provides more extensive and pedagogically useful interactions, featuring an animated step-through demo triggered by clicking the meshes, in addition to functional sliders and a dropdown, whereas Figure 1 only offers basic sliders and static popups."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 correctly replicates the three distinct, ordered subplots with corresponding labels and the correct colormap, whereas Figure 2 has a completely broken layout with overlapping, misordered plots and an extraneous wireframe envelope."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 successfully includes all required subfigure labels (a, b, c) with good readability, whereas Figure 2 has cut-off labels that are poorly placed and incomplete."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 is significantly more educational because it allows controlling orientation (a fundamental property of 2D Gabor filters), overlays a translucent Gaussian envelope to visually explain amplitude modulation, and includes an interactive animated tutorial."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 2 surpasses Figure 1 by offering a rich, educational experience with an animated step-through tutorial, functional orientation controls, and accurate Gaussian envelope wireframes that Figure 1 lacks. Although Figure 1 successfully maintains a correct, non-overlapping layout with clear labels, its static interactive elements and missing geometric context make it fundamentally weaker as an educational tool compared to Figure 2."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T17:52:12.428Z"
     }
   },
   "temporal_filters__gabor_spacetime_tiles": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
     "chapter": "temporal_filters",
     "figure": "gabor_spacetime_tiles",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.6,
-          "rationale": "Both figures incorrectly implement a pseudo-3D oblique projection in the XY plane instead of true 3D geometry; however, Figure B's procedural generation of the velocity plane's spherical filters using basis vectors and polygon testing yields a slightly more robust geometric distribution than Figure A's hardcoded slice coordinates."
-        },
-        "interactivity": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure A implements a custom interaction system that provides rich visual feedback (changing color, specularity, opacity, and scale) upon hovering and clicking, making it significantly more engaging than Figure B, which only relies on standard tooltips."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.7,
-          "rationale": "Figure A preserves the 3D perspective of the cubic lattice and the rectangular shape of the plane, whereas Figure B uses an isometric projection that flattens the cube into a 2D-looking hexagonal pattern."
-        },
-        "labels": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.85,
-          "rationale": "Figure B places the axis labels outside the sphere clusters making them much more readable, whereas Figure A's labels severely overlap the geometry."
-        },
-        "concept": {
-          "winner": "tie",
-          "confidence": 0.7,
-          "rationale": "Both figures accurately depict the 3D spatial/temporal frequency lattice and the selected velocity plane slice, with functionally equivalent geometric representations and interactions."
-        }
-      },
-      "aggregator": {
+    "humanEvals": [
+      {
         "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.65,
-        "explanation": "Figure A edges out Figure B primarily due to its highly engaging custom interaction system and more faithful preservation of the 3D perspective of the cubic lattice. While Figure B offers better label placement and slightly more robust geometric distribution, Figure A's superior interactivity and accurate representation of the spatial/temporal frequency lattice make it the stronger overall choice."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:44:49.252Z"
-    }
-  },
-  "imaging_geometry__reprojection_error": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "imaging_geometry",
-    "figure": "reprojection_error",
-    "humanEvals": [],
+        "notes": "",
+        "submittedAt": "2026-06-26T20:10:25.158Z"
+      }
+    ],
     "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
       "dimensions": {
         "geometry": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B correctly implements perspective projection mathematics to place the image points on the image plane, whereas Figure A manually overrides the Z-coordinates of interpolated points, breaking collinearity and 3D geometry."
+          "confidence": 0.75,
+          "rationale": "Both figures incorrectly flatten the 3D frequency space into a 2.5D oblique projection on the XY plane rather than using true 3D coordinates and camera perspective, but Figure 1 generates the filter subset on the velocity plane algorithmically using basis vectors and polygon clipping, whereas Figure 2 relies on an extensive hardcoded list of 2D coordinates for the spheres."
         },
         "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B provides highly pedagogical interactions, including sliders that physically model calibration error and sensor noise, as well as click interactions that trigger smooth, step-by-step educational animations explaining the concepts."
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 implements custom hover and click handlers that dynamically update the materials, scale, and opacity of the 3D objects to provide visual feedback, whereas Figure 1 only uses the basic tooltip and popup system without visual state changes."
         },
         "faithfulness": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A closely matches the layout, composition, and viewing angle of the original, whereas Figure B renders the scene from a completely reversed perspective."
+          "confidence": 0.9,
+          "rationale": "Figure 2 correctly reproduces the 3D cubic volume and distinct faces of the sphere arrangement in part (a), whereas Figure 1 flattens it into a 2D hexagonal grid."
         },
         "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 0.9,
-          "rationale": "Figure A accurately includes all required labels with clear placement, whereas Figure B suffers from overlapping text, severe clutter, and missing labels due to poor camera framing."
+          "rationale": "Figure 1 positions the axis labels on the left clearly outside the sphere cluster, whereas Figure 2 places them overlapping the spheres, severely reducing readability."
         },
         "concept": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B dynamically demonstrates calibration by actually altering the camera model parameters to move the estimated projections towards the fixed measured points, perfectly illustrating the optimization concept, whereas Figure A merely scales static 2D offsets."
+          "confidence": 0.75,
+          "rationale": "Figure 1 uses a mathematically consistent oblique 2.5D projection to render the lattice and plane, effectively showing the boundary and intersection, whereas Figure 2 uses a rigid orthogonal 2D plane for the velocity slice that distorts the frequency space perspective."
         }
       },
       "aggregator": {
         "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.75,
-        "explanation": "Figure B offers a far superior conceptual and geometrical foundation by accurately implementing perspective projection and dynamically demonstrating camera calibration via physical modeling. Although Figure A boasts clearer labels and closely matches the original layout, Figure B's exceptional interactivity and mathematical correctness make it the stronger overall educational figure."
+        "confidence": 0.6,
+        "explanation": "Figure 1 provides a more mathematically robust algorithmic generation of the velocity plane and grid projection, whereas Figure 2 relies on an extensive hardcoded list of 2D coordinates that distorts the frequency space perspective. Additionally, Figure 1 positions its axis labels clearly outside the data clusters for high readability, unlike Figure 2 which suffers from overlapping text, even though Figure 2 offers superior interactivity and better reproduces the initial 3D cubic volume."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:45:08.199Z"
-    }
-  },
-  "imaging_geometry__pinhole_and_sensor": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "imaging_geometry",
-    "figure": "pinhole_and_sensor",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A provides a superior 3D geometric construction of the scene, viewing from a realistic positive elevation angle (unlike B's unusual negative elevation), and correctly models the house as a volumetric 3D object with faces on multiple planes rather than a thinly extruded front-facing 2D profile."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A includes a fully functional drag interaction for point P that dynamically updates the projection rays and mapped points on the sensor planes, providing significantly better pedagogical value than Figure B's simple click-to-toggle highlighting."
-        },
-        "faithfulness": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A accurately reproduces the structural components, colors, and specific details like the projection points and house features (windows, solid roof), whereas Figure B features an incorrectly modeled house and misses key elements like the projection points."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B correctly positions the grid and dimension labels (e.g., M pixels, f, w) according to the reference, whereas Figure A incorrectly places 'M pixels' over the focal length arrows and scatters other annotations."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure A accurately keeps the virtual and physical image planes at the exact same focal distance (f) and provides an interactive draggable point that updates the projection rays in real-time, greatly reinforcing the geometric relationship."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.95,
-        "explanation": "Figure A excels in its 3D geometric construction, interactivity, faithfulness to the reference structure, and conceptual accuracy, particularly by allowing real-time dragging of point P. Although Figure B handles labels slightly better, Figure A's substantial advantages in conveying the core spatial and pedagogical concepts make it the definitive winner."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:45:30.394Z"
+      "evaluatedAt": "2026-06-26T17:52:54.922Z"
     }
   },
   "optical_flow__barber_pole": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
     "chapter": "optical_flow",
     "figure": "barber_pole",
-    "humanEvals": [],
+    "humanEvals": [
+      {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:10:37.162Z"
+      }
+    ],
     "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
       "dimensions": {
         "geometry": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 0.95,
-          "rationale": "Figure B constructs true 3D arrows (an arc in the XZ plane and a 3D cone) while Figure A fakes the perspective by drawing a flat 2D elliptical arc and 2D triangular arrowheads on the XY plane facing the camera."
+          "rationale": "Figure 2 accurately models the real-motion arrow as a 3D arc in the XZ plane with a 3D cone arrowhead wrapping around the cylinder's vertical axis, whereas Figure 1 improperly uses a flat 2D elliptical arc and 2D triangle placed in the XY plane facing the camera, failing to reconstruct the true 3D geometry of the rotation."
         },
         "interactivity": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure B features richer interactions, including a controllable slider that flips arrow directions for negative speeds, an aperture mask toggle that dynamically reveals flow vectors, and a pedagogical step-through tutorial triggered by clicking the 3D objects."
+          "rationale": "Figure 2 offers far superior pedagogical interactions, including an aperture mask toggle that overlays local flow vectors, bidirectional rotation speed that dynamically updates the size and direction of 3D arrows, and click-based guided tutorial steps, whereas Figure 1 only provides basic play/pause and positive speed controls."
         },
         "faithfulness": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A captures the proportions of the cylinder and the thickness/number of stripes much better, and correctly points the 'Real motion' arrow to the right, whereas Figure B makes the cylinder too narrow, has too many stripes, and reverses the top arrow."
+          "confidence": 0.9,
+          "rationale": "Figure 1 accurately reproduces the clockwise direction of the 'Real motion' arrow and maintains proper text spacing, whereas Figure 2 points the arrow counter-clockwise and has overlapping text elements."
         },
         "labels": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A places the 'Real motion' label cleanly above the rotation arrow, whereas Figure B has severe overlap between the text and the arrow, reducing readability."
+          "confidence": 0.95,
+          "rationale": "Figure 1 positions its labels clearly without overlap or clipping, whereas Figure 2 suffers from severe top-edge clipping and overlaps the 'Real motion' text with the curved arrow."
         },
         "concept": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure B explicitly illustrates the aperture problem by allowing the student to toggle an actual aperture mask and see the corresponding local optical-flow vectors, whereas Figure A only relies on text explanations."
+          "rationale": "Figure 2 explicitly visualizes the underlying aperture problem by including a toggleable mask and local optical-flow vectors, making the core mechanism of the illusion directly observable rather than just explaining it in text."
         }
       },
       "aggregator": {
         "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.85,
-        "explanation": "Figure B is the overall winner due to its superior 3D geometric construction, interactive features, and clear conceptual demonstration of the aperture problem. Although Figure A is more faithful to the original image's proportions and handles label placement better, Figure B's rich educational interactions and accurate 3D modeling significantly outweigh these drawbacks."
+        "confidence": 0.8,
+        "explanation": "Figure 2 is the superior visualization because it accurately models the true 3D geometry of the rotation rather than relying on Figure 1's flat 2D approximations. Furthermore, Figure 2 explicitly reveals the core mechanism of the illusion through advanced interactivity like a toggleable mask and local optical-flow vectors, whereas Figure 1 only offers basic playback controls. Although Figure 1 features better label placement and faithfully points the arrow in the correct direction, Figure 2's profound pedagogical and geometric enhancements make it the stronger overall educational tool."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:45:49.803Z"
+      "evaluatedAt": "2026-06-26T17:53:18.403Z"
+    }
+  },
+  "imaging_geometry__pinhole_and_sensor": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "imaging_geometry",
+    "figure": "pinhole_and_sensor",
+    "humanEvals": [
+      {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:11:16.733Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 2 reconstructs the 3D object and its projections with more robust geometric primitives (using a proper 3D extruded prism for the roof and mapped shape geometries for details) and sets a more standard positive-elevation initial camera angle, whereas Figure 1 views the scene from below (elevation -7) and relies on less accurate hardcoded quads."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 implements a highly pedagogical drag interaction allowing the user to move a 3D point on the house and see its corresponding projections and rays update in real-time, whereas Figure 1 only offers a simple click-to-toggle highlight."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 1 accurately reproduces the viewing angle and spatial composition of the original diagram to keep the planes and projection lines clear, whereas Figure 2 uses a grazing camera angle that severely foreshortens the planes and causes text labels to overlap illegibly."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 includes all required labels with mostly accurate placement, whereas Figure 2 completely omits the 'f' label, severely misplaces the 'Image plane / sensor' and 'Virtual image plane' texts far from their targets, and suffers from illegible overlapping on the 'M pixels' label."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 allows the user to interactively drag the 3D point P and dynamically observe its inverted projection on the physical sensor versus its upright projection on the virtual image plane, directly teaching the geometry of perspective projection much better than Figure 1's static highlights."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.8,
+        "explanation": "Figure 2 excels at demonstrating the geometry of perspective projection through a highly pedagogical drag interaction that updates projections in real-time, whereas Figure 1 is limited to static, click-to-toggle highlights and less accurate hardcoded geometries. Although Figure 1 features superior label placement and a clearer viewing angle compared to Figure 2's overlapping text and heavily foreshortened camera view, Figure 2's robust interactive features make it a significantly more effective educational tool."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T17:53:46.818Z"
+    }
+  },
+  "imaging_geometry__reprojection_error": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "imaging_geometry",
+    "figure": "reprojection_error",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:11:50.843Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 correctly implements the 3D geometry of a pinhole camera model where projection rays from the origin intersect the 3D points and precisely pass through the projected points on a distinct 2D image plane, whereas Figure 1 places all points in a nearly flat 2D layout with inconsistent depth coordinates that do not mathematically align."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 offers superior interactions by providing sliders that dynamically simulate mathematical calibration error and sensor noise, plus a step-through animation system triggered by clicking objects, whereas Figure 1's slider only scales a static visual offset and clicks merely change object colors temporarily."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 accurately reproduces the camera angle and compositional layout of the reference image, whereas Figure 2 is rendered from a completely reversed viewpoint that destroys the visual resemblance."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 includes all required labels with correct subscripts and clear placement, whereas Figure 2 is missing several key labels (such as P1, P3, and Y_L) and suffers from severely overlapping text."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 correctly simulates reprojection error by altering the camera projection model (calibration error) and adding physically meaningful sensor noise to straight optical rays, whereas Figure 1 draws physically inaccurate bent optical rays and uses arbitrary hardcoded offsets."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.65,
+        "explanation": "Figure 2 excels at demonstrating the core concept by correctly implementing 3D pinhole camera geometry and simulating reprojection error with physically meaningful interactions, whereas Figure 1 relies on a mathematically inconsistent flat layout with physically inaccurate bent rays and superficial sliders. Although Figure 1 is more faithful to the reference composition and includes clearer, more complete labels, Figure 2's geometric accuracy and deeper interactive features make it the stronger overall visualization."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T17:54:19.616Z"
     }
   },
   "homography__homography_plane_geometry2": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
     "chapter": "homography",
     "figure": "homography_plane_geometry2",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A utilizes precise 3D custom primitives (tubes, cones, concentric spheres) and accurately models the oblique 3D orientations of both planes, whereas Figure B relies on generic 1px lines and an overly simplified orthogonal setup."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B provides meaningful parameter controls (sliders for plane tilt and point position) and step-through animations, whereas Figure A only offers static click-to-reveal tooltips."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A closely matches the original's composition, perspective, and text labels, whereas Figure B omits several key labels and uses a noticeably different camera angle."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.8,
-          "rationale": "Figure A includes all required labels from the original, whereas Figure B completely omits the 'Camera center' annotation."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B correctly implements the mathematical projection and allows the user to interactively tilt the plane and move the point, which demonstrates the projective homography mapping dynamically and far more effectively than Figure A's static hardcoded model."
-        }
-      },
-      "aggregator": {
-        "winner": "tie",
-        "confidence": 0.8,
-        "explanation": "The figures present a clear trade-off between graphical fidelity and functional depth. Figure A is the better visual replica, excelling in geometry, labeling, and faithfulness to the original static composition, while Figure B is vastly superior conceptually and interactively by providing a true mathematical model with dynamic controls."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:46:12.359Z"
-    }
-  },
-  "imaging__similar_triangles2": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "imaging",
-    "figure": "similar_triangles2",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A correctly models the pinhole camera with orthogonal 3D axes and matches the textbook's oblique perspective via camera placement, whereas Figure B physically distorts the 3D geometry by using non-orthogonal basis vectors, resulting in a sheared model when rotated."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B includes functional sliders to adjust the focal length and depth, as well as a custom drag interaction to move the point in 3D space, whereas Figure A only provides hover tooltips."
-        },
-        "faithfulness": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.99,
-          "rationale": "Figure B includes the essential colored geometric planes and data points present in the reference, which are entirely missing from Figure A."
-        },
-        "labels": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B includes all required labels from the original, whereas Figure A is missing the 'X' label and cuts off the 'Y' label."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B correctly illustrates the full 3D projection ray connecting the 3D scene point, pinhole, and 2D image point, whereas Figure A incorrectly places the main point and ray on the XZ plane, confusing the 3D concept."
-        }
-      },
-      "aggregator": {
+    "humanEvals": [
+      {
         "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.95,
-        "explanation": "Figure B is the overall winner, dominating in interactivity, faithfulness, labels, and conceptual clarity. Although Figure A correctly models the underlying orthogonal geometry, Figure B successfully includes the required interactive sliders, correct projection rays, and geometric planes that are essential to the reference."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:46:32.298Z"
-    }
-  },
-  "imaging__orthogonal_projection": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "imaging",
-    "figure": "orthogonal_projection",
-    "humanEvals": [],
+        "notes": "",
+        "submittedAt": "2026-06-26T20:12:00.758Z"
+      }
+    ],
     "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
       "dimensions": {
         "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B constructs a genuine 3D scene with depth, whereas Figure A fakes the 3D geometry by drawing a 2D oblique projection flat on the XY plane."
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 uses high-quality 3D primitives (cylindrical tubes, custom thick arrows, and dashed tubes) and properly oriented, arbitrarily angled planes, whereas Figure 2 relies on thin WebGL lines and rigidly axis-aligned planes that fail to capture the true 3D perspective of the textbook diagram."
         },
         "interactivity": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure B includes functional sliders for yaw and depth that dynamically update the projection, as well as step-through animations with pedagogical explanations, whereas Figure A only provides basic static click-to-read popups."
+          "rationale": "Figure 2 includes interactive sliders to dynamically adjust plane tilt and point position, along with an animated step-through demo, whereas Figure 1 only provides static hover and click tooltips without any state manipulation."
         },
         "faithfulness": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 0.8,
-          "rationale": "Figure A captures the correct orientation and coloring of the L-shaped block (red front faces, green top faces, blue side faces) and closely mirrors the compositional arrangement and projection style of the reference, whereas Figure B has incorrect colors and reversed geometry."
+          "rationale": "Figure 1 accurately places the coordinate axes at the corners of their respective planes and matches the original perspective, whereas Figure 2 detaches the axes and alters the planar surface's orientation."
         },
         "labels": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 0.9,
-          "rationale": "Figure B contains all the required labels from the original, including the 'Z' axis label which is completely missing in Figure A."
+          "rationale": "Figure 1 includes all required annotations, notably 'Camera center' and the 'Y' axis label, which are completely missing in Figure 2."
         },
         "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B dynamically computes the orthographic projection, allowing students to interactively change the object's rotation and depth to see that distance does not affect projection size, while Figure A is a static, distorted 2.5D drawing forced into 3D space."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.95,
-        "explanation": "Figure B overwhelmingly wins by providing a genuine 3D scene with dynamic interactivity, allowing users to manipulate rotation and depth to explore the concept. Although Figure A exhibits more faithful colors and geometry orientation compared to the original reference, Figure B's superior pedagogical interactivity, proper 3D construction, and complete labeling make it the overall better figure."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:46:58.385Z"
-    }
-  },
-  "neural_nets_as_data_transformations__2D_mapping_diagrams": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "neural_nets_as_data_transformations",
-    "figure": "2D_mapping_diagrams",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.7,
-          "rationale": "Figure B correctly highlights the positive axes in the ReLU output plane (which is a key geometric feature of how ReLU collapses negative space) and provides a more faithful dashed representation of the transformation lines."
-        },
-        "interactivity": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure B includes a highly pedagogically useful interactive bias slider that shifts the input data points and dynamically updates their mapping, along with a dropdown and clickable elements for step-through animations."
-        },
-        "faithfulness": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B correctly renders all three sub-figures side-by-side and accurately depicts the mathematical transformations (linear, relu, L2-norm), whereas Figure A is cropped and incorrectly introduces a pinched focal point in the center of the lines."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A places the plane labels (x_in and x_out) in the correct corners matching the reference, whereas Figure B incorrectly positions them in the center or right side of the planes."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B includes an interactive bias slider that dynamically shifts the input distribution, providing a superior pedagogical demonstration of how ReLU induces sparsity and how L2 normalization behaves as inputs change."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.9,
-        "explanation": "Figure B is overwhelmingly preferred due to its accurate depiction of the mathematical transformations, correct multi-figure layout, and addition of highly pedagogical interactive elements like the bias slider. While Figure A positions labels slightly better, Figure B's superior faithfulness and concept execution make it the clear overall winner."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:47:19.258Z"
-    }
-  },
-  "neural_nets__vit_mapping_plot": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "neural_nets",
-    "figure": "vit_mapping_plot",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.82,
-          "rationale": "Figure B correctly constructs straight, dashed multi-segment lines between the discrete layers and accurately aligns the side arrows on a strict 2D plane (Z=0 relative to stack depth) rather than offsetting them in Z, matching typical textbook figure geometry better than Figure A's curved splines."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure A provides functional developer-built interactions including a dropdown to filter by class, a slider to adjust layer spacing, and click-to-highlight trajectories, whereas Figure B lacks any such UI controls."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.85,
-          "rationale": "Figure B captures the tall, narrow aspect ratio of the original much better than Figure A, features more accurate arrow styles, and correctly implements the simple cross-grid on the planes."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B closer matches the original typewriter font and arrowhead proportions, and avoids the extraneous UI clutter present in Figure A."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A provides interactive class filtering and path highlighting, which makes the complex concept of high-dimensional representation routing much easier for a student to trace and understand compared to the dense, static web in Figure B."
+          "rationale": "Figure 2 allows interactive manipulation of the point position and plane tilt, dynamically demonstrating the homography mapping and perspective distortion, whereas Figure 1 is entirely static."
         }
       },
       "aggregator": {
         "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.65,
-        "explanation": "Figure B is the overall winner due to its superior geometry, faithfulness, and accurate labeling, closely matching the structural properties, fonts, and aspect ratio of the reference. While Figure A provides excellent interactive elements that benefit conceptual exploration, Figure B's strict adherence to the original design and absence of extraneous UI clutter make it a more faithful reproduction."
+        "confidence": 0.7,
+        "explanation": "Figure 1 provides a significantly more faithful and geometrically robust visualization, utilizing high-quality 3D primitives and complete labeling (including the crucial 'Camera center' and 'Y' axis). While Figure 2 offers excellent interactivity to dynamically demonstrate the concept, it falls short visually due to its reliance on thin lines, rigidly axis-aligned planes, and missing annotations, making Figure 1 the overall superior choice."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:47:46.779Z"
-    }
-  },
-  "imaging__pinhole_names2": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "imaging",
-    "figure": "pinhole_names2",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A accurately models the full projection geometry by including the 3D world point P, its projected point p on the image plane, and the continuous light ray, whereas Figure B omits these critical conceptual elements."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure A provides significantly richer developer-built interactions, including a parameter slider, a 3D draggable world point that dynamically updates the projection, and click-to-animate guided steps, whereas Figure B only offers a single basic toggle."
-        },
-        "faithfulness": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.7,
-          "rationale": "Figure A includes extra point and ray elements not present in the reference, but it achieves a much closer match in box proportions, colors, label styling, and overall layout compared to Figure B's distorted axes and squashed box."
-        },
-        "labels": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.8,
-          "rationale": "Figure A maintains legible text placement, whereas Figure B has severe readability issues with labels overlapping the thick axis lines."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure A provides a highly interactive simulation of perspective projection, allowing students to drag a 3D point and dynamically observe its inverted projection on the plane, which perfectly demonstrates the core mathematical concept."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.95,
-        "explanation": "Figure A unanimously wins across all dimensions due to its highly interactive and conceptually accurate simulation of perspective projection, including draggable 3D points and clear projection geometry. In contrast, Figure B suffers from omitted conceptual elements, distorted proportions, overlapping labels, and limited interactivity."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:48:11.789Z"
-    }
-  },
-  "imaging__pinhole_geometry2": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "imaging",
-    "figure": "pinhole_geometry2",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B completely flattens the scene into a 2D drawing constructed in 3D space, which automatically loses, whereas Figure A attempts a 3D reconstruction (albeit using an oblique basis)."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B includes a functional slider, a dropdown toggle, and a dynamically draggable 3D point that updates the projection geometry in real-time, offering vastly superior pedagogical interactivity compared to Figure A's static hover/click tooltips."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A includes the projection plane, correct point colors, and dashed projection lines, whereas Figure B is missing major structural elements and uses incorrect colors for the points."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.8,
-          "rationale": "Figure A includes nearly all required annotations from the reference, whereas Figure B is missing several key labels in the right-hand panel."
-        },
-        "concept": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A models the projection planes and rays in true 3D space, which is essential for understanding camera geometry, whereas Figure B incorrectly flattens the entire 3D diagram into a 2D plane, completely misrepresenting the geometric relationships if the student orbits the view."
-        }
-      },
-      "aggregator": {
-        "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.95,
-        "explanation": "Figure A successfully models the core 3D geometry of the projection scene, including the projection planes, correct colors, and dashed projection lines. While Figure B features superior interactive controls, it completely fails to represent the scene in 3D space, instead flattening the geometry into a 2D drawing and omitting crucial structural elements and labels."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:48:34.106Z"
-    }
-  },
-  "imaging__no_picture_on_a_wall_aina": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "imaging",
-    "figure": "no_picture_on_a_wall_aina",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A reconstructs the geometry using true 3D primitives (cylinders and cones for rays) whereas Figure B uses entirely flat 2D shapes on the XY plane."
-        },
-        "interactivity": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure A includes functional sliders to control the pinhole size and ray opacity, dynamically demonstrating their effects on the projected image, whereas Figure B lacks these pedagogical controls."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A retains the overall composition and proportions of the original, whereas Figure B suffers from severe scaling and layout issues that obscure key elements."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A includes all necessary labels from the original, while Figure B completely misses the 'Wall' label in part (a) and severely clips the 'Pinhole' label."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A's rays physically bend at the pinhole rather than traveling in straight lines, which violates the core geometric concept of pinhole projection, whereas Figure B correctly depicts straight ray paths."
-        }
-      },
-      "aggregator": {
-        "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.8,
-        "explanation": "Although Figure B correctly depicts the straight paths of the light rays, Figure A is overwhelmingly stronger across all other dimensions. Figure A features genuine 3D geometry, interactive controls, better overall proportions, and complete labels, whereas Figure B suffers from severe scaling issues and missing text."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:49:16.097Z"
+      "evaluatedAt": "2026-06-26T17:54:48.625Z"
     }
   },
   "neural_nets__nn_training_viz": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
     "chapter": "neural_nets",
     "figure": "nn_training_viz",
-    "humanEvals": [],
+    "humanEvals": [
+      {
+        "winner": "tie",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:12:32.633Z"
+      }
+    ],
     "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
       "dimensions": {
         "geometry": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.78,
-          "rationale": "Figure B correctly implements the mathematical operations of a neural network (affine transformations and ReLU folds) to geometrically warp the data, whereas Figure A uses arbitrary continuous trigonometric functions which fail to capture the characteristic piecewise-linear folding of ReLU layers."
+          "confidence": 0.95,
+          "rationale": "Figure 1 accurately reconstructs the characteristic folded geometry of the original by explicitly simulating the sequence of affine transformations and ReLU folds, whereas Figure 2 applies a generic continuous mathematical distortion that fails to capture the distinct sharp creases of the source concept."
         },
         "interactivity": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B implements a custom hover interaction that highlights the complete trajectory of individual datapoints across all layers, which is highly effective for pedagogical understanding."
+          "confidence": 1,
+          "rationale": "Figure 1 implements a custom raycasting interaction that allows users to hover and click individual data points to highlight their specific trajectories through the network, whereas Figure 2 only offers generic group-level tooltips."
         },
         "faithfulness": {
           "winner": "tie",
           "confidence": 1,
-          "rationale": "Both figures are visually indistinguishable from the original textbook figure."
+          "rationale": "Both figures are pixel-perfect identical to the reference image, presenting no discernible differences in color, composition, or proportions."
         },
         "labels": {
           "winner": "tie",
           "confidence": 1,
-          "rationale": "Both figures contain the exact same labels, annotations, and text styling as the reference, making them indistinguishable on this dimension."
-        },
-        "concept": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A correctly traces the cumulative transformation of the domain through the layers, creating a continuous geometrical flow, whereas Figure B inconsistently connects fixed unwarped anchor points at layer L to cumulatively warped points at layer L+1."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.75,
-        "explanation": "Figure B is the overall winner due to its accurate mathematical representation of piecewise-linear ReLU folds and its highly effective interactive hover features for tracing datapoints. Although Figure A is praised for continuous geometrical flow, Figure B's pedagogical enhancements and geometric correctness outweigh it."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:49:53.781Z"
-    }
-  },
-  "Image_processing_fourier__complexexponential": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "Image_processing_fourier",
-    "figure": "complexexponential",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.85,
-          "rationale": "Figure A provides more accurate geometric reconstruction by properly including the vertical and horizontal projection guide lines connecting the samples to the Real and Imaginary planes, which are characteristic of this standard textbook illustration, whereas Figure B omits them and uses an awkward camera orientation."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A includes a guided step-through animation sequence that is highly pedagogically useful, along with functional controls for frequency and component isolation."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B accurately reproduces the curves without adding the extraneous vertical projection lines present in Figure A, resulting in a much closer match to the original composition."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B correctly includes all the required labels with appropriate mathematical fonts (like the blackboard bold R and I), whereas Figure A is missing several key labels on both subfigures."
+          "rationale": "Both figures appear identical to the reference image in terms of label content, placement, typography, and arrows."
         },
         "concept": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 0.95,
-          "rationale": "Figure A provides explicit projection lines connecting the 3D complex samples to their 2D real and imaginary counterparts, which is highly effective for teaching Euler's formula in this context."
+          "rationale": "Figure 1 authentically models the geometric warping using explicit affine maps and ReLU folds, and its interactive trajectory highlighting allows students to trace exactly how a specific data point is routed differently as training progresses, whereas Figure 2 relies on generic trigonometric offsets that do not accurately reflect actual neural network operations."
         }
       },
       "aggregator": {
         "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.65,
-        "explanation": "Although Figure B offers a more faithful reproduction of the original composition with accurate mathematical labels, Figure A emerges as the overall winner. Figure A provides superior conceptual clarity and geometric reconstruction by adding explicit projection lines to illustrate Euler's formula, alongside highly beneficial interactive educational features."
+        "confidence": 0.98,
+        "explanation": "Figure 1 provides a superior educational experience by accurately simulating the neural network's explicit affine transformations and ReLU folds, while offering custom raycasting to interactively trace individual data point trajectories. In contrast, Figure 2 relies on generic continuous mathematical distortions that fail to capture the characteristic sharp creases of the network operations, and it only provides basic group-level tooltips rather than point-specific interactive tracking."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:50:18.006Z"
+      "evaluatedAt": "2026-06-26T17:55:04.909Z"
     }
   },
-  "generative_modeling_and_representation_learning__rep_gen_schematic": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "generative_modeling_and_representation_learning",
-    "figure": "rep_gen_schematic",
-    "humanEvals": [],
+  "imaging__similar_triangles2": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "similar_triangles2",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:13:10.499Z"
+      }
+    ],
     "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
       "dimensions": {
         "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A accurately reproduces the correct number of layers (5), paths (5), and the initial isometric camera angle, whereas Figure B has incorrect element counts and an orthographic side view that fails to match the perspective of the source."
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 correctly models the camera geometry in standard orthogonal 3D space, whereas Figure 2 applies a non-orthogonal custom basis transformation to its coordinates, resulting in a sheared and distorted 3D geometry that breaks down when the user rotates the view."
         },
         "interactivity": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure A provides comprehensive developer-built interactions including a flow direction selector, a layer focus slider, step-through narration logic, and animated particles, whereas Figure B only includes basic click-to-explain popups."
+          "rationale": "Figure 2 includes interactive UI sliders to adjust parameters and a custom 3D drag interaction for the world point, whereas Figure 1 only offers click-to-explain tooltips."
         },
         "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B accurately reproduces the curved trajectories of the internal arrows and includes all four text labels, whereas Figure A uses straight arrows and is missing the side labels."
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 accurately reproduces the colored cyan and green triangular planes and the red/brown spherical points, whereas Figure 1 entirely omits these filled areas and lacks the colored points."
         },
         "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 0.8,
-          "rationale": "Figure B includes all four required labels from the original, whereas Figure A completely omits the side annotations, despite Figure B's text being oversized and partially clipped."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A includes an interactive animation that toggles the flow direction between representation learning and generative modeling, actively demonstrating the core pedagogical concept."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.85,
-        "explanation": "Figure A significantly outperforms Figure B by accurately matching the source's 3D perspective, layer counts, and core pedagogical concepts through rich interactive animations. Although Figure B successfully retains the original labels and curved arrow trajectories that Figure A misses, Figure A's superior geometry and deep developer-built interactions make it the clear overall winner."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:50:32.381Z"
-    }
-  },
-  "spatial_filters__DFTlaplacians": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "spatial_filters",
-    "figure": "DFTlaplacians",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B uses exact mathematical formulas for the Laplacian of Gaussian and discrete Laplacian DFT responses, whereas Figure A attempts to fake the geometry using hallucinated trigonometric noise."
-        },
-        "interactivity": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B provides an additional functional slider to adjust the gain of the surfaces, which enhances the pedagogical value and interactivity compared to Figure A."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B correctly implements all four subplots with shapes and colors that closely match the reference, whereas Figure A only implements two mismatched subplots."
-        },
-        "labels": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.6,
-          "rationale": "Figure A has fewer labels overall due to missing subplots, but its existing labels are correctly sized and reasonably placed, whereas Figure B suffers from severe clutter and concatenated, misplaced text (e.g., 'b) u')."
+          "rationale": "Figure 2 successfully displays all required labels, whereas Figure 1 cuts off the 'X' and 'Y' labels entirely at the edge of the frame."
         },
         "concept": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure B correctly implements the exact mathematical formulas for the Fourier transforms of the Laplacian of Gaussian and the discrete Laplacian, whereas Figure A uses fabricated, arbitrary math functions."
-        }
-      },
-      "aggregator": {
-        "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.95,
-        "explanation": "Figure B is the overwhelming winner because it accurately implements the exact mathematical formulas for all four subplots and includes functional interactivity. Although Figure A has slightly better label placement due to having fewer subplots, Figure B's conceptual accuracy, faithfulness to the reference, and proper geometry make it significantly superior."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:50:56.057Z"
-    }
-  },
-  "imaging_geometry__homogeneousAndHeteregeneous_VS3": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "imaging_geometry",
-    "figure": "homogeneousAndHeteregeneous_VS3",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.85,
-          "rationale": "Figure B dynamically and mathematically models the coordinate spaces with accurate 3D vector basis mapping and intersections, whereas Figure A uses manual visual approximations (like starting rays at Z=0.11) that lack strict geometric rigor."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B includes functional sliders for Scale and Height that dynamically update the scene geometry, whereas Figure A only provides hover/click tooltips."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A accurately reproduces the layout, text labels, and axis proportions of the reference, whereas Figure B has truncated text, a misplaced x-axis, and visible UI slider elements."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure A includes all the required labels clearly and accurately, whereas Figure B has truncated text for 'Heterogeneous', 'Homogeneous', and the top-right coordinate, as well as unnecessary UI labels."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B mathematically constructs the coordinate space properly, binding the interactive sliders perfectly to the underlying homogeneous coordinate math (λx, λy, λ), whereas Figure A relies on hardcoded vector approximations that misalign the scaling ray's origin."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.75,
-        "explanation": "Figure B excels in geometric rigor, conceptual depth, and interactivity by dynamically modeling the coordinate spaces with functional sliders. Although Figure A offers better visual faithfulness and clearer labels, Figure B's accurate mathematical construction and interactive features make it the stronger overall visualization."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:51:22.585Z"
-    }
-  },
-  "spatial_filters__DFTderivativeoperators": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "spatial_filters",
-    "figure": "DFTderivativeoperators",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.85,
-          "rationale": "Figure A implements the 2D magnitude equations for the Roberts and Sobel operators correctly, forming the expected isotropic/rounded peaks, whereas Figure B incorrectly implements Roberts as a 1D diagonal wave."
-        },
-        "interactivity": {
-          "winner": "tie",
-          "confidence": 1,
-          "rationale": "Neither figure implements any meaningful developer-built UI controls (buttons, sliders, toggles), relying only on the standard boilerplate interactions."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B correctly implements the four side-by-side subplots with their respective axes and labels, whereas Figure A displays overlapping, zoomed-in meshes that completely fail to match the overall composition."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B includes the required titles and axis labels present in the original, whereas Figure A is missing the titles entirely."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A accurately represents the frequency responses over the range 0 to Nyquist (showing one lobe for the central difference operator), whereas Figure B maps the frequency incorrectly, producing double lobes for D1 and misplacing the origin for D0."
+          "rationale": "Figure 1 correctly constructs the pinhole camera geometry in true orthogonal 3D space, whereas Figure 2 applies an arbitrary non-orthogonal skew to its basis vectors to force a specific 2D perspective, completely breaking the actual geometric relationships when the student rotates the view."
         }
       },
       "aggregator": {
         "winner": "tie",
         "confidence": 0.9,
-        "explanation": "The dimension agents are genuinely split between the two figures. Figure A correctly implements the mathematical concepts and underlying geometry, but suffers from severe layout issues with overlapping meshes and missing labels. Conversely, Figure B accurately replicates the layout, subplots, and labels of the original, but fails to correctly model the mathematical frequency responses."
+        "explanation": "Figure 2 successfully reproduces key visual elements like the colored planes and spherical points, and offers superior interactivity compared to Figure 1, which omits these features and crops its labels. However, Figure 1 maintains a mathematically correct orthogonal 3D geometry, whereas Figure 2 relies on an arbitrary non-orthogonal skew that distorts geometric relationships when the user rotates the view, resulting in a tie between visual completeness and structural accuracy."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:51:51.048Z"
+      "evaluatedAt": "2026-06-26T17:55:28.806Z"
     }
   },
-  "3d_scene_understanding__epipolar_geometry": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "3d_scene_understanding",
-    "figure": "epipolar_geometry",
-    "humanEvals": [],
+  "neural_nets__vit_mapping_plot": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "neural_nets",
+    "figure": "vit_mapping_plot",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:13:26.329Z"
+      }
+    ],
     "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
       "dimensions": {
         "geometry": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B constructs a true 3D geometric scene, whereas Figure A hardcodes 2D projected coordinates onto a flat plane to fake the 3D perspective."
+          "confidence": 0.9,
+          "rationale": "Figure 1 uses proper 3D cylinders and cones for arrows and curved Catmull-Rom paths for trajectories, whereas Figure 2 relies on thin ArrowHelpers and straight lines that look less like a polished textbook diagram."
         },
         "interactivity": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B provides two sliders for independent control of X and Depth, plus a step-through interactive tutorial with animated transitions, whereas Figure A only provides a single linear slider."
+          "confidence": 1,
+          "rationale": "Figure 1 includes a rich set of meaningful developer-built interactions, including a class filter dropdown, a layer spacing slider, hover/click trajectory highlighting, and an automated guided tour, whereas Figure 2 relies entirely on static geometry with basic click-to-explain popups and no interactive controls."
         },
         "faithfulness": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 0.9,
-          "rationale": "Figure A correctly positions the epipoles on the image planes and accurately represents the epipolar lines, whereas Figure B places the epipoles arbitrarily on the baseline and draws incorrect intersecting red lines on the planes."
+          "rationale": "Figure 2 better matches the tall proportions, dense connecting lines, and arrow styling of the original, whereas Figure 1 has overly sparse lines, incorrect arrowheads, and includes unwanted UI elements."
         },
         "labels": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 0.9,
-          "rationale": "Figure A correctly labels the camera centers as O1 and O2, whereas Figure B incorrectly uses the Greek letter Phi, and Figure B suffers from severe text overlapping between 'Epipolar plane' and 'Epipolar line'."
+          "rationale": "Figure 2 accurately replicates the original's standard arrow annotations and relative label placement, whereas Figure 1 uses disproportionately large, distracting arrowheads and includes unrelated UI clutter."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 includes interactive class filtering and a guided stepper that explicitly narrates the semantic routing process, making the core concept of clustering much clearer than Figure 2's static instanced mesh approach."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.65,
+        "explanation": "Figure 1 excels over Figure 2 by incorporating polished 3D geometry and a comprehensive suite of interactive features—such as class filtering and a guided tour—that deeply clarify the core semantic routing concept. Although Figure 2 is more faithful to the original image's tall proportions and label placement, its reliance on basic straight lines and a completely static interface makes it far less effective as an interactive explanatory tool."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T17:55:45.250Z"
+    }
+  },
+  "imaging__pinhole_geometry2": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "pinhole_geometry2",
+    "humanEvals": [
+      {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:13:51.956Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 constructs the true 3D geometry of the planes and optical rays, whereas Figure 2 improperly draws a flat 2D perspective diagram onto a single 2D plane in 3D space, which fails to reconstruct the actual 3D spatial relationships of the camera model."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 offers extensive, pedagogically useful interactions including a draggable 3D point, a functional slider for focal length, and a dropdown for coordinate visibility, whereas Figure 1 only provides basic click/hover popups."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 accurately reproduces the cyan points and includes the projection plane from the original, whereas Figure 2 incorrectly colors the points black and completely omits the projection plane."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.8,
+          "rationale": "Figure 1 includes a more complete set of required labels (e.g., those on the projection plane and camera coordinates), whereas Figure 2 completely omits several key annotations from the original diagram, despite both suffering from overlap and clipping issues."
+        },
+        "concept": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2's interactivity relies on a flawed mathematical mapping where moving the point in depth incorrectly shifts it horizontally in the 2D image plane panel, and changing the focal length slider fails to update the image plane panel entirely; Figure 1 maintains correct static geometric relationships."
+        }
+      },
+      "aggregator": {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "confidence": 0.95,
+        "explanation": "Figure 1 correctly constructs the true 3D geometry of the optical rays and projection plane, whereas Figure 2 incorrectly draws a flat 2D perspective diagram onto a single plane in 3D space. Furthermore, while Figure 2 offers more interactive elements, its mathematical mapping is flawed, causing incorrect projection shifts when manipulating the depth and focal length, whereas Figure 1 maintains mathematically accurate static spatial relationships. Finally, Figure 1 is more faithful to the original by accurately reproducing the projection plane and correct colors, which Figure 2 entirely omits or alters."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T17:56:23.672Z"
+    }
+  },
+  "imaging__orthogonal_projection": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "orthogonal_projection",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:14:02.918Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 constructs a genuine 3D scene with true 3D spatial relationships and primitives, whereas Figure 2 improperly fakes the 3D geometry by flattening 3D coordinates onto a 2D oblique projection within the 3D space (acting as a 2D canvas)."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 features highly effective developer-built interactions, including parameter sliders for object rotation and depth that dynamically update the scene geometry, as well as step-through animations tied to clicking 3D elements, whereas Figure 2 relies solely on static popups."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.7,
+          "rationale": "Figure 2 correctly constructs the 3D step block extruded along the X-axis (with red faces as steps and the blue face as the L-shaped profile), closely matching the original figure's orientation and face coloring, whereas Figure 1 incorrectly orientates the L-shape along the Z-axis, swapping the red and blue faces."
+        },
+        "labels": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 includes all required labels with clear placement, whereas Figure 2 is missing the 'Z' label entirely and suffers from overlapping 'X' and 'y' labels."
         },
         "concept": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure B accurately simulates the 3D mathematics of epipolar geometry with correct planar intersections, whereas Figure A completely fakes the 3D effect by hardcoding 2D coordinates and linear interpolations that do not represent true projection."
+          "rationale": "Figure 1 uses a true interactive 3D environment with sliders to dynamically demonstrate depth independence and rotation, whereas Figure 2 is a static, pseudo-3D flat illustration that fails to utilize the medium to teach the concepts."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.9,
+        "explanation": "Figure 1 is significantly stronger because it builds a true, interactive 3D environment with sliders that dynamically demonstrate depth and rotation, whereas Figure 2 improperly relies on a flattened 2D projection acting as a static illustration. Although Figure 2 more faithfully matches the original step block's orientation and face colors, Figure 1 overcomes this with its superior spatial geometry, engaging interactive capabilities, and complete, well-placed labels (unlike Figure 2's missing 'Z' axis label and overlapping text)."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T17:57:04.186Z"
+    }
+  },
+  "neural_nets_as_data_transformations__2D_mapping_diagrams": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "neural_nets_as_data_transformations",
+    "figure": "2D_mapping_diagrams",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:17:12.551Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 correctly implements the ReLU mapping into the positive quadrant and includes explicit visual geometry (red cylinder axes) for the activation pile-up, whereas Figure 2 inaccurately negates the ReLU output coordinates."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 provides meaningful developer-built interactions, including a functional bias slider that dynamically updates the data distribution and a dropdown for camera focus, whereas Figure 2 relies entirely on hover/click tooltips with no UI controls."
+        },
+        "faithfulness": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 correctly maintains the two-plane structure and spatial transformations of the original, whereas Figure 2 hallucinates a completely nonexistent middle layer of data points in the 'relu' plot."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 correctly positions the 'x_in' and 'x_out' labels to the left of the planes with proper subscript formatting, whereas Figure 1 incorrectly places them inside or to the right of the plots and uses a mismatched font."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 mathematically correctly implements ReLU (mapping to positive values) and includes an interactive bias slider to dynamically demonstrate sparsity and non-linearity, whereas Figure 2 incorrectly maps ReLU outputs to the negative quadrant and lacks interactive distribution shifting."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.95,
+        "explanation": "Figure 1 accurately maps the ReLU activation to the positive quadrant, maintains the correct structural planes, and provides dynamic interactive features like a functional bias slider. In contrast, Figure 2 incorrectly negates the ReLU output coordinates, hallucinates an extraneous middle layer of data points, and lacks UI controls, although it does position text labels more effectively."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T17:57:26.029Z"
+    }
+  },
+  "imaging__pinhole_names2": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "pinhole_names2",
+    "humanEvals": [
+      {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:17:30.100Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 1 accurately reconstructs the full pinhole camera box, including the essential front face with the pinhole aperture, whereas Figure 2 omits the front face entirely, breaking the physical concept of the model. Figure 1 also uses thicker custom primitives for callouts and arrows that better match textbook diagrams."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 offers significantly more meaningful interactivity, including a draggable 3D point that dynamically updates its projection, a functional focal length slider, and clickable elements that trigger animated transitions, whereas Figure 1 only provides a single checkbox to toggle a static ray."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.8,
+          "rationale": "Figure 1 is more visually faithful because it avoids introducing extraneous geometric elements, whereas Figure 2 adds unreferenced objects like the red point 'P', the blue projected point 'p', and their connecting rays."
+        },
+        "labels": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 maintains clear readability and spacing for the required text, whereas Figure 1 places the 'Pinhole / camera center' label directly over the thick Z-axis, rendering it nearly illegible, even though Figure 2 includes extraneous point labels not in the reference."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 allows the student to drag a 3D world point and dynamically observe its inverted projection on the image plane, as well as adjust the focal length to see its effect on magnification, whereas Figure 1 only presents a static unchangeable model."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.75,
+        "explanation": "Figure 2 surpasses Figure 1 by offering rich interactive educational tools, such as a dynamically draggable 3D point that updates its projection and a functional focal length slider, whereas Figure 1 provides only a mostly static model. Although Figure 1 is more faithful to the reference geometry by properly enclosing the camera box, Figure 2 effectively avoids Figure 1's severe text overlap issues by keeping its labels clear and legible."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T17:58:00.562Z"
+    }
+  },
+  "imaging__no_picture_on_a_wall_aina": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "no_picture_on_a_wall_aina",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:17:51.804Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Both figures fail to construct a true 3D scene and instead rely on flat 2D shapes with faked perspective in the XY plane, but Figure 1 implements this layering correctly whereas Figure 2 places its rays behind the opaque black screen in Z-space, causing the light rays to be incorrectly occluded."
+        },
+        "interactivity": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 includes functional sliders to control the pinhole aperture size and ray opacity which dynamically update the brightness of the projected image, whereas Figure 1 provides no active parameter controls beyond basic tooltips."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 correctly frames the entire composition showing both full diagrams, whereas Figure 1 is severely zoomed in, completely cutting off the rightmost tree and the 'Pinhole' label."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 successfully includes all required labels from the original, whereas Figure 1 completely misses the 'Wall' label in panel (a) and truncates the 'Pinhole' label to 'inhole'."
+        },
+        "concept": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 includes interactive sliders that allow students to manipulate the pinhole size and observe its effect on image brightness, actively demonstrating a core concept that Figure 1 only describes in static text."
+        }
+      },
+      "aggregator": {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "confidence": 0.94,
+        "explanation": "Figure 2 is the clear winner because it offers interactive sliders to manipulate the pinhole size and brightness, correctly frames the entire composition, and accurately includes all labels. In contrast, Figure 1 lacks interactivity, is severely zoomed in so that it cuts off part of the diagram, and misses or truncates key labels like 'Wall' and 'Pinhole'. Although Figure 1 handles the depth layering of light rays slightly better, Figure 2's functional and compositional strengths make it significantly more effective."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T17:58:37.805Z"
+    }
+  },
+  "imaging_geometry__homogeneousAndHeteregeneous_VS3": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "imaging_geometry",
+    "figure": "homogeneousAndHeteregeneous_VS3",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:18:50.728Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 constructs a genuine 3D coordinate system to map the projective geometry, whereas Figure 2 fakes the 3D effect by forcing elements onto fixed Z-layers (e.g., overwriting pLambda's Z-coordinate), which breaks the spatial relationships when the camera is rotated."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 includes functional sliders to dynamically adjust parameters (Scale and Height) which update the scene in real-time, whereas Figure 2 provides no interactive controls aside from standard tooltips and OrbitControls."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 accurately replicates the label placement, correct line styles without extraneous arrowheads, and composition of the original, whereas Figure 1 introduces incorrect arrowheads, misplaces the x-axis label, and clips the top-right coordinate text."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 successfully includes all required labels with accurate text and placement, whereas Figure 1 omits the top-right coordinate label and cuts off the word 'Heterogeneous'."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 includes interactive sliders that dynamically demonstrate the scale-invariance of homogeneous coordinates (showing how varying λ slides the point along the ray), whereas Figure 2 is completely static and relies on a hardcoded 'fake 3D' projection that prevents true exploration of the concept."
         }
       },
       "aggregator": {
         "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
         "confidence": 0.8,
-        "explanation": "Figure B is the overall winner due to its true 3D geometric construction and superior interactive features, including multiple sliders and an animated tutorial. Although Figure A features better labeling and more accurate placement of the epipoles, Figure B's authentic mathematical simulation of the 3D concept outweighs Figure A's faked 2D projection."
+        "explanation": "Figure 1 excels by constructing a genuine 3D coordinate system with interactive sliders that effectively demonstrate the scale-invariance of homogeneous coordinates. In contrast, Figure 2 relies on a static, 'fake 3D' projection with fixed Z-layers that breaks spatial relationships upon camera rotation and lacks interactive elements. Although Figure 2 is more faithful to the original's label placement and line styles, Figure 1's superior geometrical setup and interactivity make it a much stronger conceptual demonstration."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:52:16.018Z"
-    }
-  },
-  "optical_flow__flying_bird": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "optical_flow",
-    "figure": "flying_bird",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.85,
-          "rationale": "Figure B correctly computes the geometry parametrically with responsive updates to slider changes, whereas Figure A relies on hardcoded coordinates for elements like the velocity arrows and labels which become disconnected from the scene when the slider is moved."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B provides significantly better interactivity, featuring multiple sliders, numeric value readouts, and a guided step-through animation system triggered by clicking 3D elements."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A accurately reproduces the radiating green projection lines connecting the origin to the birds, whereas Figure B incorrectly replaces these with a single green line along the flight path and has disconnected labels."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A includes all required labels accurately placed near their corresponding elements, whereas Figure B has misplaced labels floating disconnected from the objects."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B explicitly includes a time slider and visualizes the optical flow vectors on the image plane, providing a much clearer and more interactive pedagogical demonstration of the motion field and vanishing point."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.65,
-        "explanation": "Figure B excels in interactivity, dynamic geometry, and conceptual demonstration by properly implementing parametric sliders and visualizing optical flow vectors. Although Figure A is more faithful to the original static reference with accurate labels and projection lines, Figure B's robust interactive features and dynamic updates make it an overall stronger submission."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:52:39.473Z"
-    }
-  },
-  "blur_filters__bin2": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "blur_filters",
-    "figure": "bin2",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A uses actual 3D cylinders for the stems (avoiding 1px WebGL line limitations), correctly aligns the n and m axes to match the textbook perspective (m pointing down-left, n pointing down-right), and accurately reproduces the surrounding spatial grid cage."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure A provides a fully functional control panel with a mode selector that animatedly transitions between three pedagogically useful states (Coefficients, Separability, Frequency Response), whereas Figure B only includes basic click-to-explain tooltips."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.8,
-          "rationale": "Figure B better replicates the compositional structure of the reference by placing the bounding walls and vertical axis at the edges of the grid, whereas Figure A centers the axes and includes an extraneous UI element."
-        },
-        "labels": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A places the axis labels ('m', 'n') and tick marks more appropriately and legibly at the ends of the axes, whereas Figure B incorrectly places the 'm' label near the origin where it overlaps with other elements."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A significantly enhances pedagogical value by explicitly illustrating the filter's separability and its low-pass frequency response, making the underlying concepts much clearer to a student."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.95,
-        "explanation": "Figure A is the decisive winner due to its superior 3D geometry using actual cylinders, excellent pedagogical interactivity, and clearer axis labeling. Although Figure B is slightly more faithful to the original compositional bounding, Figure A's substantial conceptual and technical improvements make it much better overall."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:53:01.551Z"
-    }
-  },
-  "graphical_models__mrf": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "graphical_models",
-    "figure": "mrf",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure B constructs a genuine 3D spatial layout of the Markov Random Field with depth (separated into X, Y, Z coordinates) and uses camera elevation for perspective, whereas Figure A hardcodes a fake 2D isometric projection flat onto the XY plane (Z=0)."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B provides a richer set of meaningful pedagogical interactions, including a slider for coupling strength, a dropdown for MRF state, animated particles illustrating influence, and click-to-trigger step-through narratives, compared to Figure A's single checkbox."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A accurately reproduces the grid structure, node connections, and label placement of the original, whereas Figure B has incorrect label positioning and confusing depth sorting with line overlaps."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A correctly places the x labels next to the back row of white nodes as seen in the reference, whereas Figure B incorrectly places them near the middle row and suffers from overlapping lines."
-        },
-        "concept": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.85,
-          "rationale": "Figure A accurately presents the standard graphical model notation for an MRF (white latent disks, gray observed disks) without adding extraneous and distracting inventions like animated message-passing particles and colored probability halos found in Figure B."
-        }
-      },
-      "aggregator": {
-        "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.85,
-        "explanation": "While Figure B implements a true 3D spatial layout and provides richer interactivity, it introduces distracting elements and suffers from depth-sorting issues and incorrect label placement. Figure A is favored for its faithful adherence to standard graphical model notation, accurately reproducing the grid structure, node colors, and correct label positioning without unnecessary clutter."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:53:25.016Z"
-    }
-  },
-  "blur_filters__box": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "blur_filters",
-    "figure": "box",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.85,
-          "rationale": "Figure B includes axis margins and rear grid planes that accurately replicate the typical MATLAB-style 3D stem plot appearance of the textbook source."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure A provides extensive, functional, and pedagogically valuable developer-built interactions including parameter sliders, a normalization toggle, and a step-through tutorial, whereas Figure B only includes passive click-to-read tooltips."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B successfully renders the 3D stem plot with the correct blue points, stems, and axis labels, whereas Figure A is rendered so small and illegibly that the main visual elements are missing."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B includes readable labels that match the text of the original figure, whereas Figure A's labels are vanishingly small and illegible."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A includes interactive controls that allow students to explore the effects of changing the filter support and applying normalization, which significantly enhances the pedagogical value and concept accuracy compared to the static plot in Figure B."
-        }
-      },
-      "aggregator": {
-        "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.75,
-        "explanation": "Although Figure A includes highly valuable interactive features for exploring the concept, it is rendered so small that its labels and main visual elements are illegible. Figure B is chosen as the overall winner because it faithfully replicates the 3D stem plot from the source with clear geometry and readable labels."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:53:45.108Z"
-    }
-  },
-  "optical_flow__basic_motion_point": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "optical_flow",
-    "figure": "basic_motion_point",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B constructs a true 3D perspective model with accurate depth relationships, whereas Figure A merely draws a flat 2D diagram using 3D primitives on a single plane."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B provides richer developer-built interactions, including clickable objects that trigger animated transitions through predefined pedagogical steps, whereas Figure A only provides basic sliders and static tooltips."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.99,
-          "rationale": "Figure A accurately reproduces the colors, labels, and geometry of the original figure, whereas Figure B is missing key labels (O, P) and incorrectly colors a point red."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.99,
-          "rationale": "Figure A includes all the correct labels from the reference (O, p, P, and their derivatives), while Figure B is missing several key labels like O and P."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B constructs a true 3D camera geometry where the viewing ray mathematically intersects the image plane, whereas Figure A incorrectly fakes the diagram by placing all points on a single flat plane that doesn't actually intersect the drawn image plane in 3D space."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.85,
-        "explanation": "While Figure A is more faithful to the original's superficial traits like labels and colors, Figure B constructs a vastly superior true 3D mathematical model of the camera geometry and features richer interactivity. Figure A fundamentally fails geometrically by faking a 3D diagram on a flat 2D plane, making Figure B the stronger educational tool."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:53:57.388Z"
-    }
-  },
-  "optical_flow__yaw_pitch_roll": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "optical_flow",
-    "figure": "yaw_pitch_roll",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B implements true 3D spatial geometry with proper perspective projection, whereas Figure A hardcodes a flattened 2D drawing onto a single plane in 3D space."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B includes functional sliders and step-through animations that modify the 3D scene, providing meaningful pedagogical interaction, whereas Figure A only relies on tooltips and standard camera controls."
-        },
-        "faithfulness": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A accurately reproduces the blue color of the points, correct placement of the rotation arrows, and the scale of the local green axes, whereas Figure B has black points, misplaced arrows, and visible UI sliders."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A accurately reproduces the placement, styling, and relative sizing of all labels, whereas Figure B has severe positioning errors for the rotational labels (Yaw, Pitch, θy, θx) that clutter the scene and fail to match the original."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure B correctly implements the mathematical relationship between 3D point rotation and 2D perspective projection, allowing students to interactively learn the concepts through functional sliders."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.75,
-        "explanation": "Although Figure A is more faithful to the original aesthetic design and label placement, it relies on a hardcoded, flattened 2D drawing. Figure B is the stronger overall choice because it implements true 3D mathematical geometry and perspective projection, offering functional sliders and animations that meaningfully convey the underlying pedagogical concepts."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:54:14.578Z"
-    }
-  },
-  "learning_3d__geometry_reconstruction_12": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
-    "chapter": "learning_3d",
-    "figure": "geometry_reconstruction_12",
-    "humanEvals": [],
-    "machineEval": {
-      "dimensions": {
-        "geometry": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.7,
-          "rationale": "Both figures incorrectly implement the 3D camera geometry as a flattened 2D diagram in the XY plane, but Figure A is better due to its interactive representation of depth along the back-projection ray."
-        },
-        "interactivity": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 1,
-          "rationale": "Figure A provides meaningful developer-built interactions, including a functional depth slider and 3D point dragging that dynamically update the projection geometry, whereas Figure B is entirely static besides basic tooltips."
-        },
-        "faithfulness": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A correctly places the origin and destination of the curved arrows at the red points p and p', matching the reference, whereas Figure B incorrectly connects them to the dashed projection lines."
-        },
-        "labels": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure B has significantly better label placement, avoiding the severe text-object overlapping seen in Figure A (especially on the red dots)."
-        },
-        "concept": {
-          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure A includes an interactive slider that dynamically demonstrates how changing depth $z$ slides the lifted 3D point along its back-projection ray and moves the projected correspondence $p'$ in the reference frame, actively teaching the core geometric relationship."
-        }
-      },
-      "aggregator": {
-        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
-        "confidence": 0.95,
-        "explanation": "Figure A is the clear overall winner due to its highly effective interactivity and dynamic demonstration of the core geometric concepts, alongside better faithfulness to the reference diagram. While Figure B has superior label placement, Figure A's functional depth slider and draggable points provide significant pedagogical value that outweighs its overlapping text issues."
-      },
-      "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T13:54:37.481Z"
+      "evaluatedAt": "2026-06-26T17:58:57.592Z"
     }
   },
   "imaging__brdf": {
-    "setupA": "No_Planner_Benchmark/gpt-5.5",
-    "setupB": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
     "chapter": "imaging",
     "figure": "brdf",
-    "humanEvals": [],
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:18:56.665Z"
+      }
+    ],
     "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
       "dimensions": {
         "geometry": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.85,
-          "rationale": "Figure A constructs a smooth multi-segment gradient for the incoming light ray and accurately matches the static layout and element counts of the standard BRDF diagram, whereas Figure B uses a much coarser two-cylinder approximation for the ray and introduces extraneous lobe geometries."
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 constructs the 3D spatial relationships using robust vector math centered at the origin, correctly modeling the physical angles and optionally the reflection lobes, whereas Figure 1 relies on arbitrary hardcoded offsets that fail to represent the exact geometric constraints of a BRDF."
         },
         "interactivity": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure B includes functional sliders and a dropdown to interactively adjust the light angle, view angle, and BRDF type, whereas Figure A only relies on click-to-read popups."
+          "rationale": "Figure 2 provides rich developer-built interactions including a dropdown to switch BRDF types and sliders to dynamically adjust incident and outgoing angles that instantly update the geometry, whereas Figure 1 only offers basic click-to-explain tooltips on a static scene."
         },
         "faithfulness": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 0.8,
-          "rationale": "Figure A reproduces the multiple semi-transparent scattered rays from the reference, whereas Figure B incorrectly substitutes them with a single specular lobe and includes extraneous UI controls."
+          "rationale": "Figure 1 correctly renders the multiple semi-transparent green outgoing arrows from the original, whereas Figure 2 replaces them with a single blob and uses a flatter, less accurate camera angle."
         },
         "labels": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.9,
-          "rationale": "Figure A accurately replicates the mathematical typography of the reference by using the correct script 'ell' and bold, non-italic font for vectors p, n, and q, whereas Figure B incorrectly italicizes these vectors."
+          "confidence": 0.8,
+          "rationale": "Figure 1 correctly styles the vector labels (p, n, q) as bold upright serif text matching the reference, whereas Figure 2 incorrectly italicizes them; however, both figures unfortunately truncate the long equation on the right."
         },
         "concept": {
           "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
           "confidence": 1,
-          "rationale": "Figure B interactively models the BRDF lobes (specular and Lambertian) and allows students to manipulate incoming and outgoing angles, brilliantly demonstrating both the directional dependence and cosine falloff."
+          "rationale": "Figure 2 dynamically visualizes the mathematical properties of the BRDF—such as cosine falloff and specular versus diffuse lobes—allowing students to interactively explore the relationships between angles and reflected intensity, whereas Figure 1 only provides a static 3D diagram."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 2 excels at dynamically demonstrating the mathematical properties and spatial constraints of a BRDF through robust interactions and accurate vector math, whereas Figure 1 is limited to a static scene with arbitrary hardcoded offsets. Although Figure 1 captures the original aesthetic details more faithfully, such as rendering the multiple outgoing arrows and matching the bold serif label stylings, Figure 2's interactive sliders and conceptual accuracy make it vastly superior for exploring the relationships between angles and reflected intensity."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T17:59:27.042Z"
+    }
+  },
+  "Image_processing_fourier__complexexponential": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "Image_processing_fourier",
+    "figure": "complexexponential",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:19:13.691Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.75,
+          "rationale": "Figure 1 includes crucial geometric details for discrete 3D signal diagrams, specifically the sample-to-plane projection guidelines (red and green guide lines) that ground the discrete samples to the component axes, which Figure 2 misses entirely."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 offers more pedagogically useful controls by allowing users to isolate the real or imaginary components via a dropdown and includes a click-triggered guided step-through, whereas Figure 2 only allows toggling both components on or off simultaneously."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 accurately reproduces the discrete points and smooth projection curves without adding the extraneous vertical drop lines seen in Figure 1, resulting in a much closer match to the original composition."
+        },
+        "labels": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 features legible, well-placed labels that avoid intersecting with the 3D geometry, whereas Figure 2's labels (such as '40' and 'n') severely overlap with the data points and are rendered unreadable."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 includes explicit vertical and horizontal projection lines connecting the 3D helical path to its 2D sine and cosine components, perfectly illustrating the pedagogical concept of decomposition that Figure 2 leaves implicit."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.9,
+        "explanation": "Figure 1 is the stronger visualization because it includes pedagogical projection guidelines grounding the 3D samples to 2D components and offers superior interactivity for isolating those components, whereas Figure 2 leaves these relationships implicit and limits interaction. Additionally, Figure 1 features clear, well-placed text, whereas Figure 2's labels severely overlap with the data points, rendering them unreadable despite its stricter adherence to the original composition."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T18:00:05.218Z"
+    }
+  },
+  "graphical_models__mrf": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "graphical_models",
+    "figure": "mrf",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:19:19.401Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 completely collapses the 3D structure into a flat 2D plane at Z=0 (creating a 2D canvas in 3D space), whereas Figure 2 correctly models the MRF graph with true 3D spatial relationships, placing the latent grid on the XZ plane and elevating observations in the Y axis."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 provides significantly richer interactivity, featuring a parameter slider, a multi-state dropdown, and click-triggered tweened transitions that modify particle animations and edge properties, whereas Figure 1 only offers a single basic toggle for a highlight."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 accurately reproduces the layout, clean edges, and perspective of the original, whereas Figure 2 adds unnecessary line extensions, a yellow glow to the center node, and has labels obscured by foreground elements."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 places the labels clearly without occlusion, whereas Figure 2 positions the 'x' labels such that they overlap with the lines and nodes, reducing readability."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 interactively visualizes the core mechanics of an MRF—how unary evidence and pairwise spatial smoothing interact to form a posterior—using color blending and particle flow, whereas Figure 1 only shows a static structural graph and risks misleading students about conditional independence by implying a single node separates neighbors in a 2D grid."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.75,
+        "explanation": "Figure 2 is the overall winner because it successfully models the true 3D spatial relationships of the MRF graph and provides rich interactivity to demonstrate core concepts like unary evidence and pairwise smoothing. In contrast, Figure 1 completely collapses the 3D structure into a flat 2D plane and offers only basic interactivity, though it does present slightly cleaner labels and greater faithfulness to the original static layout."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T18:00:30.793Z"
+    }
+  },
+  "optical_flow__flying_bird": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "optical_flow",
+    "figure": "flying_bird",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:19:35.160Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 constructs a geometrically accurate pinhole camera model with a proper rectangular image plane orthogonal to the optical axis, whereas Figure 1 artificially hardcodes a skewed quadrilateral for the image plane to fake perspective, which breaks when the 3D camera rotates."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 provides superior interactivity through multiple synced sliders with value readouts and an orchestrated step-through tween animation triggered by scene clicks, whereas Figure 1 only offers a single basic slider and static tooltips."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 correctly implements the green projection lines radiating from the origin point to the birds, whereas Figure 2 incorrectly draws them parallel to the flight path, missing the core concept of the original diagram."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 correctly includes and positions all reference labels (O, uppercase V's, Vanishing point), whereas Figure 2 uses incorrect lowercase 'v's that are poorly placed, including one floating disconnected in space."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 uses a standard camera coordinate system (origin at 0,0,0, image plane at z=-f) and introduces a time parameter 't' to animate the bird, which conveys the concept of motion and continuous projection much more effectively than Figure 1's static ghosted path."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.7,
+        "explanation": "Figure 2 delivers a geometrically accurate pinhole camera model and superior interactivity through synchronized sliders and animations, whereas Figure 1 relies on a hardcoded skewed quadrilateral for its image plane that breaks upon camera rotation and lacks continuous motion. Although Figure 1 more faithfully implements the original diagram's radiating projection lines and exact reference labels, Figure 2's robust 3D spatial setup and animated concepts make it the stronger overall visualization."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T18:00:53.303Z"
+    }
+  },
+  "spatial_filters__DFTderivativeoperators": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "spatial_filters",
+    "figure": "DFTderivativeoperators",
+    "humanEvals": [
+      {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:19:41.811Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 1 correctly positions its axes at the corner (u=-1, v=-1) representing the DC component, matching the mathematical functions which evaluate to zero at this origin, whereas Figure 2 places its vertical axis in the center but uses functions that are asymmetrical or non-zero at the center, breaking the geometric accuracy of the frequency domain representation."
+        },
+        "interactivity": {
+          "winner": "tie",
+          "confidence": 1,
+          "rationale": "Both figures implement identical raycast-based hover tooltips and click popups for the surfaces and axes, providing the same level and quality of developer-built interactions."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 2 correctly displays all four distinct plots with side-by-side composition and labels, whereas Figure 1 suffers from severe camera and layout issues that cause overlapping and cropping."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 includes all the necessary axis and subplot labels from the original, whereas Figure 1 is missing most labels and those present are poorly placed due to the view."
+        },
+        "concept": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.75,
+          "rationale": "Figure 2 aligns the mathematical zero (DC component) of most of its filter magnitudes with the visual origin of the axes (center of the plane for D1, Roberts, and Sobel), making the concept of derivative filters suppressing low frequencies much clearer, whereas Figure 1 places the axes arbitrarily relative to the functions' zeros, causing a severe disconnect between the geometry and the mathematical meaning."
         }
       },
       "aggregator": {
         "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.65,
-        "explanation": "Although Figure B offers excellent interactivity and conceptual modeling of BRDF lobes, Figure A is the overall winner due to its superior geometry, precise mathematical typography, and strict faithfulness to the reference diagram. Figure A accurately reproduces the complex scattered rays and standard layout, making it a more faithful recreation despite lacking the dynamic UI of Figure B."
+        "confidence": 0.85,
+        "explanation": "Figure 2 is the better representation because it correctly displays all four distinct plots with appropriate side-by-side composition and necessary labels, whereas Figure 1 suffers from severe camera issues that cause overlapping, cropping, and missing text. Although Figure 1 mathematically positions its axes more accurately at the corner to represent the DC component, Figure 2's superior layout and conceptually clearer alignment of the functions' mathematical zeros make it vastly more effective and faithful overall."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T15:28:30.719Z"
+      "evaluatedAt": "2026-06-26T18:01:31.018Z"
+    }
+  },
+  "optical_flow__yaw_pitch_roll": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "optical_flow",
+    "figure": "yaw_pitch_roll",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:19:49.067Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 constructs a genuine 3D model of the camera projection geometry, whereas Figure 2 completely fails by drawing a flat 2D imitation of the perspective on a single plane."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 includes functional sliders for yaw and pitch that dynamically update the 3D scene and step-through animations linked to clickable elements, whereas Figure 2 only provides static hover tooltips with no parameter controls."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 accurately reproduces the distinctive light blue color of points P and p and the green planar axes, whereas Figure 1 incorrectly renders these points as black dots and includes unwanted UI sliders."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 accurately replicates the size, font, and precise placement of all labels from the original, whereas Figure 1 suffers from poor label positioning, such as the 'Pitch' label overlapping the Y-axis and misplaced theta symbols."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 builds a true 3D mathematical model of camera projection with interactive sliders that correctly demonstrate how yaw and pitch affect the projected point, whereas Figure 2 merely traces the 2D textbook diagram onto a flat plane with hardcoded geometry."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 1 constructs a functional, interactive 3D model with dynamic sliders for yaw and pitch, effectively demonstrating the mathematical concept of camera projection. In contrast, Figure 2 merely draws a flat, hardcoded 2D imitation of the perspective with no dynamic parameter controls. While Figure 2 more accurately reproduces the original colors and precise label placements that Figure 1 misses, Figure 1's superior interactive geometry makes it vastly more successful."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T18:01:44.977Z"
+    }
+  },
+  "optical_flow__basic_motion_point": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "optical_flow",
+    "figure": "basic_motion_point",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:19:54.541Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 correctly implements the actual 3D geometry of a pinhole camera projection, whereas Figure 2 fakes the 3D perspective by drawing a flat 2D diagram in the XY plane."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 provides significantly better interactivity by including a guided step-through animation system triggered by clicking scene elements, whereas Figure 2 only offers basic scalar sliders and static popups."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 includes all correct labels and point colors, while Figure 1 omits labels O and P, incorrectly colors point p red, and misaligns the dashed green line."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 correctly includes all labels from the original (O, p, dot-p, P, dot-P), whereas Figure 1 is entirely missing the labels for the origin 'O' and the 3D point 'P'."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 uses genuine 3D geometry and projection math to accurately simulate and display how 3D velocity projects onto a 2D image plane, whereas Figure 2 relies on a flattened, hardcoded 2D approximation that fails to convey the true 3D spatial relationships."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.8,
+        "explanation": "Figure 1 is the stronger visualization because it utilizes genuine 3D geometry and guided step-through animation to accurately depict the projection of 3D velocity onto a 2D plane. In contrast, Figure 2 relies on a flattened, hardcoded 2D approximation with basic sliders, failing to convey true spatial relationships despite having more complete text labels."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T18:02:05.119Z"
+    }
+  },
+  "spatial_filters__DFTlaplacians": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "spatial_filters",
+    "figure": "DFTlaplacians",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:20:17.724Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 correctly computes the mathematically accurate analytical surfaces for the continuous LoG and discrete Laplacian frequency responses, whereas Figure 1 hallucinates completely arbitrary mathematical equations to generate generic proxy shapes."
+        },
+        "interactivity": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 provides a functional 'gain' slider that dynamically scales the vertical magnitude of the 3D surfaces, whereas Figure 1 relies solely on hover/click tooltips with no parameter controls."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 successfully reproduces all four distinct surface plots from the original image, whereas Figure 1 only renders two, making Figure 2 far more compositionally and structurally faithful."
+        },
+        "labels": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.7,
+          "rationale": "Figure 1 features properly sized axis labels that are somewhat readable, whereas Figure 2 suffers from comically oversized, misaligned text that merges subfigure letters with axis labels, causing severe clutter."
+        },
+        "concept": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 implements the exact theoretical mathematical formulas for the frequency responses of the continuous and discrete Laplacians, whereas Figure 1 relies on hallucinated, asymmetrical heuristic functions with arbitrary noise that misrepresent the underlying concepts."
+        }
+      },
+      "aggregator": {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "confidence": 0.95,
+        "explanation": "Figure 2 is the clear winner because it accurately reproduces all four subplots using mathematically correct analytical surfaces for the Laplacian frequency responses, while offering dynamic interactivity through a gain slider. Conversely, Figure 1 is significantly weaker as it hallucinates arbitrary proxy equations, lacks parameter controls, and misses half of the required subplots entirely. Although Figure 1 features better-formatted axis labels than the cluttered text in Figure 2, the overwhelming superiority of Figure 2 in structural faithfulness and conceptual accuracy makes it the definitive choice."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T18:02:30.364Z"
+    }
+  },
+  "blur_filters__bin2": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "blur_filters",
+    "figure": "bin2",
+    "humanEvals": [
+      {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:20:24.263Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 accurately recreates the 3D bounding box and grid structure typical of standard mathematical plots and models the stems as volumetric cylinders rather than plain 1D lines like Figure 1."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 includes a fully functional interactive dropdown menu that elegantly transitions between three distinct pedagogical views of the data, whereas Figure 1 relies solely on basic click-to-explain tooltips."
+        },
+        "faithfulness": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.7,
+          "rationale": "Figure 2 maintains clear, legible text labels and a full view of the plot, whereas Figure 1 suffers from severe text distortion, an awkward camera angle that crops out the axes, and overall poor framing, even though Figure 2 deviates by placing the z-axis in the center and including a UI dropdown."
+        },
+        "labels": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 clearly displays all axis titles ($m$, $n$, and $b_{2,2}[n,m]$) with good placement and readability, whereas Figure 1 has illegibly small tick labels and is missing the $m$ and $n$ axis titles."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 significantly enhances the pedagogical value by introducing interactive modes that visually explain filter separability (using marginal 1D plots and projection lines) and frequency response, whereas Figure 1 only presents a static stem plot of the coefficients."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.95,
+        "explanation": "Figure 2 significantly outperforms Figure 1 by providing an interactive dropdown menu with multiple pedagogical views, clear and legible axis labels, and a well-framed 3D volumetric structure. In contrast, Figure 1 presents a basic, static stem plot that suffers from severe text distortion, an awkward camera angle that crops out the axes, and missing axis titles."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T18:03:02.156Z"
+    }
+  },
+  "generative_modeling_and_representation_learning__rep_gen_schematic": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "generative_modeling_and_representation_learning",
+    "figure": "rep_gen_schematic",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:20:31.316Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 correctly uses an angled camera azimuth to show the 3D volume of the cuboid, whereas Figure 2 places the camera at a 90-degree azimuth that completely flattens the 3D planes into 1D horizontal lines, ruining the perspective. Figure 1 also correctly generates 5 mapping paths as requested, while Figure 2 creates 6."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 includes a functional control panel with a layer focus slider and flow direction toggle, plus click-driven step-through animations, whereas Figure 2 relies entirely on static tooltips with no active developer-built UI controls."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 captures the curved paths of the dashed lines, shades multiple internal planes, and includes the side text labels, whereas Figure 1 uses incorrect straight lines, only shades the bottom plane, and completely omits the side text."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.8,
+          "rationale": "Figure 2 includes the side annotations which Figure 1 completely omits, making it more complete despite suffering from severe text scaling and clipping issues."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 includes an animated particle flow that reverses direction based on user selection, directly illustrating the duality of representation learning and generative modeling, whereas Figure 2 relies solely on static arrows."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 1 successfully captures the 3D volume of the cuboid using an angled camera and features robust interactivity, including an animated particle flow that illustrates the core concept. In contrast, Figure 2 completely flattens the 3D perspective into horizontal lines by using a 90-degree azimuth and lacks active UI controls. Although Figure 2 includes side text labels and curved paths that Figure 1 omits, Figure 1's superior geometry and interactive elements make it the much stronger overall visualization."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T18:03:18.241Z"
+    }
+  },
+  "blur_filters__box": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "blur_filters",
+    "figure": "box",
+    "humanEvals": [
+      {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:20:35.303Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "No_Planner_Benchmark/gpt-5.5",
+      "figure2Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 contains a ReferenceError due to a missing updateLabels function that breaks the scene, whereas Figure 1 successfully renders the 3D stem plot with accurate primitives and spatial relationships."
+        },
+        "interactivity": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 provides functional click and hover interactions, whereas Figure 2 crashes immediately on load due to a missing 'updateLabels' function, rendering its otherwise superior sliders and toggles completely broken."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 successfully renders the 3D grid and the blue stems with sphere markers matching the original, whereas Figure 2 completely fails to render the primary data points and only shows an empty bounding box."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 includes legible axis labels and correctly formatted text for the function, whereas Figure 2's labels are microscopic and completely unreadable."
+        },
+        "concept": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 accurately displays the 3x3 box filter with correct labels and axes, whereas Figure 2 fails to render entirely due to a fatal JavaScript ReferenceError caused by a missing 'updateLabels' function."
+        }
+      },
+      "aggregator": {
+        "winner": "No_Planner_Benchmark/gpt-5.5",
+        "confidence": 1,
+        "explanation": "Figure 1 successfully renders the 3D stem plot with legible labels, accurate primitives, and functional interactivity. In contrast, Figure 2 suffers from a fatal JavaScript ReferenceError that breaks the scene entirely, leaving it as an empty bounding box with microscopic labels and completely broken interactive controls."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T18:03:30.105Z"
+    }
+  },
+  "3d_scene_understanding__epipolar_geometry": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "3d_scene_understanding",
+    "figure": "epipolar_geometry",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:20:51.277Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 constructs a genuine 3D scene with mathematically correct planes, rays, and spatial intersections, whereas Figure 2 fakes the 3D perspective by hardcoding pre-projected 2D coordinates into flat shape geometries with artificial Z-ordering."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 offers superior interactivity by providing two independent sliders (X and Z depth) to manipulate the 3D point and a fully animated, narrated step-through tutorial triggered by clicking the point, whereas Figure 2 only provides a single 1D slider."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 correctly places the epipoles on the image planes and draws accurate epipolar lines, whereas Figure 1 incorrectly floats the epipoles in the middle of the baseline and displays incorrect crossing lines on the planes."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 correctly places labels like 'e1', 'e2', and 'Epipolar line' near their respective geometric features, whereas Figure 1 clumps them illegibly in the center and uses the wrong symbol (Φ instead of O) for the camera centers."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 implements genuine 3D geometric math and ray-plane intersections allowing the user to correctly view the epipolar relationships from any angle, whereas Figure 2 fakes the 3D perspective using flat 2D shapes that completely break the illusion if the camera is rotated."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 1 is the stronger visualization because it constructs a mathematically genuine 3D scene with true ray-plane intersections and superior interactivity, such as multi-dimensional sliders and an animated tutorial, whereas Figure 2 relies on flat, hardcoded 2D projections that break the perspective illusion if rotated. Although Figure 2 features much better label placement and geometrically faithful epipoles compared to Figure 1's cluttered text and incorrect floating positions, Figure 1's robust 3D foundation and interactive depth make it significantly more effective overall."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T18:03:47.339Z"
+    }
+  },
+  "learning_3d__geometry_reconstruction_12": {
+    "setupA": "Full_Pipeline_System_Benchmark/gpt-5.5",
+    "setupB": "No_Planner_Benchmark/gpt-5.5",
+    "chapter": "learning_3d",
+    "figure": "geometry_reconstruction_12",
+    "humanEvals": [
+      {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "notes": "",
+        "submittedAt": "2026-06-26T20:21:00.067Z"
+      }
+    ],
+    "machineEval": {
+      "figure1Setup": "Full_Pipeline_System_Benchmark/gpt-5.5",
+      "figure2Setup": "No_Planner_Benchmark/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 0.8,
+          "rationale": "Both figures map the 2D textbook illustration onto a flat 3D plane rather than genuinely reconstructing the 3D camera frustums, but Figure 1 accurately encodes the geometric spatial relationships by allowing the 3D point P to interactively slide along the back-projection ray and correctly updating its projection in the reference frame."
+        },
+        "interactivity": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 provides meaningful developer-built interactions by allowing the user to dynamically adjust the depth parameter via a slider or direct 3D point dragging, whereas Figure 2 is static and only offers basic hover tooltips."
+        },
+        "faithfulness": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 captures the distinct black outlines on the red points much better than Figure 1 and avoids the extraneous slider UI element present in the bottom-left corner of Figure 1."
+        },
+        "labels": {
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 wins because its 'p' and 'p'' labels are readable, whereas in Figure 1 these labels are completely obstructed by the red data points."
+        },
+        "concept": {
+          "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 features an interactive depth slider that accurately moves the 3D point along the back-projection ray and dynamically updates its reprojection in the reference frame, perfectly illustrating the concept of depth ambiguity and view synthesis, whereas Figure 2 remains completely static."
+        }
+      },
+      "aggregator": {
+        "winner": "Full_Pipeline_System_Benchmark/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 1 is the overall winner because it successfully illustrates the core concept of depth ambiguity through meaningful interactivity, allowing the user to dynamically adjust the 3D point along the back-projection ray and observe its reprojection. While Figure 2 features clearer text labels and superior visual faithfulness to the original textbook illustration by avoiding UI clutter, its entirely static nature fails to convey the complex spatial relationships that Figure 1 demonstrates so effectively."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-26T18:04:10.194Z"
     }
   }
 }
