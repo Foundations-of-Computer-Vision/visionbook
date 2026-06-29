@@ -9,6 +9,7 @@
 const fs = require('fs');
 const path = require('path');
 const { generateWithModel } = require('./models');
+const { loadQmdForChapter, numberLines } = require('./qmd_utils');
 
 const PAIRWISE_DEFAULT_MODEL = 'gpt-4o';
 const PAIRWISE_MAX_TOKENS = 4096;
@@ -84,12 +85,19 @@ Evaluate: presence of all required labels, correctness of label text, readabilit
 Watch for: important annotations absent, labels not present in the original figure.
 You will receive the original textbook figure image, plus rendered screenshots of Figure 1 and Figure 2.`,
 
-  concept: `${SHARED_PREAMBLE}
+  concept: `You are a strict evaluator comparing two Three.js 3D figures against their textbook source.
+You will receive some numbered textbook lines (lines prefixed L00001:, L00002:), then Figure 1 and Figure 2 source code.
 
-DIMENSION: Concept accuracy — which figure better conveys the pedagogical concept to a student.
-Evaluate: whether the core concept is correctly illustrated, whether interactions demonstrate correct relationships, and whether a student would learn the right thing from each figure.
-Watch for: core concept misrepresented, invented elements that distort the intended meaning.
-Figure 1 and Figure 2 are provided as HTML/JavaScript source code.`,
+1. EXTRACT: list the key concepts taught by this textbook section (1-4 concepts)
+2. FOR EACH CONCEPT: find the book lines that define it; assess how well Figure 1 and Figure 2 each teach it via their labels, tooltips, interactions, and geometry
+3. IDENTIFY MISMATCHES: claims in either figure that contradict or ignore the textbook
+4. DECIDE: which figure better grounds its interactions and labels in the textbook
+
+Be critical and honest. Only call "tie" when both are genuinely indistinguishable on this dimension.
+Your rationale must be comparative: explain specifically what the winner does better AND what the loser does worse.
+
+Output ONLY valid JSON (use "1" and "2" for figures — do NOT use setup names):
+{"winner":"1"|"2"|"tie","confidence":0.0-1.0,"concepts_tested":[{"concept":"<name>","book_lines":["L02916-L02924"],"source_claim":"<textbook statement>","figure_1_match":"<how Figure 1 addresses this>","figure_2_match":"<how Figure 2 addresses this>","verdict":"1"|"2"|"tie"}],"mismatches":[{"figure":"1"|"2","book_lines":["L02920-L02924"],"issue":"<what is wrong or missing>"}],"rationale":"<two sentences comparing both figures against the textbook>"}`,
 };
 
 const AGGREGATOR_PROMPT = `You receive pairwise preferences from five independent dimension agents that each compared Figure 1 vs Figure 2.
@@ -101,13 +109,18 @@ Respond ONLY with valid JSON — no explanation, no markdown:
 
 // ── Single dimension agent call ────────────────────────────────────────────────
 
-async function callDimensionAgent(dimension, { htmlA, htmlB, thumbA, thumbB, sourceImage }, evalModel) {
+async function callDimensionAgent(dimension, { htmlA, htmlB, thumbA, thumbB, sourceImage }, evalModel, numberedQmd = null) {
   const systemPrompt = DIMENSION_PROMPTS[dimension];
   const usesImages = dimension === 'faithfulness' || dimension === 'labels';
 
   const userContent = [];
 
-  if (usesImages) {
+  if (dimension === 'concept') {
+    if (!numberedQmd) throw new Error('callDimensionAgent(concept): numberedQmd is required');
+    userContent.push({ type: 'text', text: `Numbered textbook QMD:\n\n${numberedQmd}` });
+    userContent.push({ type: 'text', text: `Figure 1 source code:\n\n${htmlA}` });
+    userContent.push({ type: 'text', text: `Figure 2 source code:\n\n${htmlB}` });
+  } else if (usesImages) {
     if (sourceImage) {
       userContent.push({ type: 'text', text: 'Reference textbook figure:' });
       userContent.push({ type: 'image_url', image_url: { url: `data:image/png;base64,${sourceImage}` } });
@@ -173,14 +186,19 @@ async function callAggregator(dimensionResults, evalModel) {
  * @param {string} [opts.evalModel] - model ID from MODEL_REGISTRY
  * @returns {Promise<{dimensions, aggregator, evalModel, evaluatedAt}>}
  */
-async function pairwiseEvaluateFigure({ htmlA, setupA, htmlB, setupB, thumbA, thumbB, sourceImage, evalModel }) {
+async function pairwiseEvaluateFigure({ htmlA, setupA, htmlB, setupB, thumbA, thumbB, sourceImage, evalModel, qmdContent = null, chapterName = null }) {
   const usedModel = evalModel || PAIRWISE_DEFAULT_MODEL;
+
+  let resolvedQmd = qmdContent;
+  if (!resolvedQmd && chapterName) resolvedQmd = loadQmdForChapter(chapterName);
+  if (!resolvedQmd) throw new Error('pairwiseEvaluateFigure: qmdContent or chapterName is required');
+  const numberedQmd = numberLines(resolvedQmd);
 
   // Randomize once — same assignment used for all 5 dimensions and the aggregator
   const { figure1, figure2 } = randomizeOrder(setupA, setupB);
   const inputs = {
-    htmlA:  figure1 === setupA ? htmlA  : htmlB,
-    htmlB:  figure1 === setupA ? htmlB  : htmlA,
+    htmlA: figure1 === setupA ? htmlA : htmlB,
+    htmlB: figure1 === setupA ? htmlB : htmlA,
     thumbA: figure1 === setupA ? thumbA : thumbB,
     thumbB: figure1 === setupA ? thumbB : thumbA,
     sourceImage,
@@ -188,22 +206,44 @@ async function pairwiseEvaluateFigure({ htmlA, setupA, htmlB, setupB, thumbA, th
 
   // 5 parallel dimension agents
   const [geometry, interactivity, faithfulness, labels, concept] = await Promise.all([
-    callDimensionAgent('geometry',      inputs, usedModel),
+    callDimensionAgent('geometry', inputs, usedModel),
     callDimensionAgent('interactivity', inputs, usedModel),
-    callDimensionAgent('faithfulness',  inputs, usedModel),
-    callDimensionAgent('labels',        inputs, usedModel),
-    callDimensionAgent('concept',       inputs, usedModel),
+    callDimensionAgent('faithfulness', inputs, usedModel),
+    callDimensionAgent('labels', inputs, usedModel),
+    callDimensionAgent('concept', inputs, usedModel, numberedQmd),
   ]);
 
-  // Resolve 1/2 → setup names
+  // Resolve 1/2 → setup names; remap figure_1/figure_2 fields in concept richer output
+  const aIsOne = figure1 === setupA;
   const rawDimensions = { geometry, interactivity, faithfulness, labels, concept };
   const resolvedDimensions = {};
   for (const [dim, result] of Object.entries(rawDimensions)) {
-    resolvedDimensions[dim] = {
-      winner: resolveWinner(result.winner, figure1, figure2),
-      confidence: result.confidence,
-      rationale: result.rationale,
-    };
+    if (dim === 'concept') {
+      resolvedDimensions.concept = {
+        winner: resolveWinner(result.winner, figure1, figure2),
+        confidence: result.confidence,
+        rationale: result.rationale,
+        concepts_tested: (result.concepts_tested || []).map(ct => ({
+          concept: ct.concept,
+          book_lines: ct.book_lines,
+          source_claim: ct.source_claim,
+          figure_a_match: aIsOne ? ct.figure_1_match : ct.figure_2_match,
+          figure_b_match: aIsOne ? ct.figure_2_match : ct.figure_1_match,
+          verdict: resolveWinner(ct.verdict, figure1, figure2),
+        })),
+        mismatches: (result.mismatches || []).map(m => ({
+          figure: resolveWinner(m.figure, figure1, figure2),
+          book_lines: m.book_lines,
+          issue: m.issue,
+        })),
+      };
+    } else {
+      resolvedDimensions[dim] = {
+        winner: resolveWinner(result.winner, figure1, figure2),
+        confidence: result.confidence,
+        rationale: result.rationale,
+      };
+    }
   }
 
   // Aggregator — receives raw 1/2 labels (consistent with dimensions above)

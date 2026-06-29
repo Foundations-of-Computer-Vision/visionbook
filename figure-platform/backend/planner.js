@@ -18,45 +18,11 @@ const fs = require('fs');
 const path = require('path');
 const { generateWithModel } = require('./models');
 const { inferChapterFromFilename, list3dCandidates } = require('./chapter-discovery');
+const { findQmdFile } = require('./qmd_utils');
 
 // ── Paths ──────────────────────────────────────────────────────────────────────
-const ROOT_DIR = path.join(__dirname, '..', '..');
-const QMD_DIR = ROOT_DIR;                                     // .qmd files live at repo root
-
 const PLANNER_MODEL = 'gemini-3.5-flash';
 const PLANNER_MAX_TOKENS = 10240;
-
-// ── Context extraction ─────────────────────────────────────────────────────────
-
-/**
- * Find the .qmd file for a given chapter name.
- * Chapter names may differ slightly from filenames, so we try several matches.
- */
-function findQmdFile(chapterName) {
-  if (!chapterName) return null;
-
-  // Direct match
-  const direct = path.join(QMD_DIR, `${chapterName}.qmd`);
-  if (fs.existsSync(direct)) return direct;
-
-  // Try common variations: underscores → hyphens, etc.
-  const candidates = fs.readdirSync(QMD_DIR).filter(f => f.endsWith('.qmd'));
-  const normalised = chapterName.toLowerCase().replace(/[-_ ]/g, '');
-  for (const c of candidates) {
-    const stem = c.replace(/\.qmd$/, '').toLowerCase().replace(/[-_ ]/g, '');
-    if (stem === normalised) return path.join(QMD_DIR, c);
-  }
-
-  // Substring match (e.g. "blurring_2" matches "blurring_2.qmd")
-  for (const c of candidates) {
-    const stem = c.replace(/\.qmd$/, '').toLowerCase();
-    if (stem.includes(chapterName.toLowerCase()) || chapterName.toLowerCase().includes(stem)) {
-      return path.join(QMD_DIR, c);
-    }
-  }
-
-  return null;
-}
 
 /**
  * Extract a focused chunk of text around references to a specific figure.

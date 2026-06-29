@@ -7,6 +7,7 @@
 const { generateWithModel } = require('./models');
 const { screenshotHtml } = require('./runtime-helpers');
 const { upsertEvaluation } = require('./result_schema');
+const { loadQmdForChapter, numberLines } = require('./qmd_utils');
 
 const EVALUATOR_DEFAULT_MODEL = 'gpt-4o';
 const SCORE_KEYS = ['geometry_accuracy', 'interactivity_usability', 'faithfulness', 'label_quality', 'concept_accuracy'];
@@ -163,33 +164,39 @@ Score 3 — half the label set has issues:
 
 Output ONLY a valid JSON object with exactly three keys: {"label_quality_analysis": "<observations and quality characterization>", "label_quality": <integer 1-5>, "label_quality_reasoning": "<one sentence tying the analysis to the rubric>"}`;
 
-const PROMPT_CONCEPT_ACCURACY = `You are a strict evaluator of generated interactive Three.js 3D figures against original 2D textbook figure images.
-You will receive the generated HTML/JavaScript code only (no source figure image, no screenshot).
+const PROMPT_CONCEPT_ACCURACY = `You are a strict evaluator of generated interactive Three.js 3D figures against their textbook source.
+You will receive:
+  1. The numbered textbook QMD (each line prefixed L00001:, L00002:, etc.)
+  2. The generated HTML/JavaScript code
+
 Score the "concept_accuracy" dimension by working through these steps:
-1. OBSERVE: identify the core concept being illustrated; then check each interactive explanation (tooltip, popup, label) for correctness and specificity
-2. CHARACTERIZE: in 1-2 sentences describe how accurately and specifically the figure conveys the concept — note any errors, omissions, or generic filler
-3. SCORE: assign an integer 1-5 per the rubric — err toward lower scores when in doubt
+1. OBSERVE: identify the core concept; extract every user-visible factual claim (label text, tooltip/popup content, button descriptions — NOT code comments)
+2. VERIFY: cite the specific QMD line(s) supporting or contradicting each claim; mark claims with no supporting line as unsupported
+3. CHARACTERIZE: in 1-2 sentences describe accuracy and textbook grounding quality
+4. SCORE: assign an integer 1-5 per the rubric — err toward lower scores when in doubt
 
 Be critical: do not give credit for things that are absent or barely present.
 
-EXPLANATION SPECIFICITY CHECK: if the figure includes hover tooltips or click popups on scene objects, evaluate whether they are specific to this figure's concept or generic filler. Text like "notice how things change" or "this demonstrates the principle" with no concrete reference to the figure's actual variables, equations, or geometry should be penalized here.
+EXPLANATION SPECIFICITY CHECK: generic filler ("notice how things change", "this demonstrates the principle") with no concrete reference to the figure's variables, equations, or geometry is penalized.
+TEXTBOOK GROUNDING CHECK: claims that contradict or have no basis in the numbered QMD lower the score.
 
 concept_accuracy:
-  5 – All concepts accurate; interactions and explanations are figure-specific and demonstrate correct relationships; no misinformation
-  4 – Main concept correct; ≤1 minor detail wrong, missing, or expressed too generically
-  3 – Main concept present; 2-3 details wrong, missing, or explanations are noticeably generic
-  2 – Significant errors or fabrications; would mislead students; or explanations are entirely generic with no figure-specific content
-  1 – Completely incorrect or misleading
+  5 – All claims figure-specific and traceable to specific QMD lines; no misinformation
+  4 – ≤1 claim slightly imprecise or weakly supported in the QMD
+  3 – 2-3 details wrong, generic, or unsupported in the QMD
+  2 – Entirely generic filler, or multiple claims contradict the textbook
+  1 – Completely incorrect or contradicts the textbook
 
 Examples (for reference only — do not copy):
 
-Score 2 — entirely generic tooltip filler:
-{"concept_accuracy_analysis": "The figure is meant to illustrate epipolar geometry. Clicking a ray produces the popup 'this ray shows how the camera sees the scene.' Clicking an image plane produces 'notice how the planes relate.' No popup mentions epipolar lines, the fundamental matrix, the epipole, or any variable from the source figure. The geometry itself is roughly correct, but every explanation is context-free filler that could apply to any 3D scene.", "concept_accuracy": 2, "concept_accuracy_reasoning": "All explanations are generic filler with no reference to epipolar lines, the fundamental matrix, or any figure-specific variable — fails the EXPLANATION SPECIFICITY CHECK."}
+Score 2 — generic filler, no QMD grounding:
+{"concept_accuracy_analysis": "The figure illustrates epipolar geometry. Clicking a ray produces 'this ray shows how the camera sees the scene.' No popup cites the epipolar line, fundamental matrix, or any QMD variable. No QMD line supports any tooltip text — all explanations are context-free filler.", "concept_accuracy": 2, "concept_accuracy_reasoning": "All tooltips are generic filler unsupported by any QMD line — fails both EXPLANATION SPECIFICITY CHECK and TEXTBOOK GROUNDING CHECK.", "supported_claims": [], "unsupported_claims": ["this ray shows how the camera sees the scene", "notice how the planes relate"]}
 
-Score 3 — main concept present but 2-3 details wrong or generic:
-{"concept_accuracy_analysis": "The epipolar constraint is correctly illustrated: a ray from Camera 1 does project to an epipolar line on Image Plane 2, and rotating the slider adjusts the geometry correctly. However, the baseline tooltip reads 'this shows camera displacement' rather than naming the translation vector T. Clicking the fundamental matrix label produces no popup. The epipole is labeled 'vanishing point' rather than 'epipole'. Two tooltips are missing and one is mislabeled.", "concept_accuracy": 3, "concept_accuracy_reasoning": "Core epipolar constraint correctly shown but baseline tooltip is too generic, fundamental matrix click is unresponsive, and epipole is mislabeled — three details wrong or absent."}
+Score 3 — main concept grounded but 2-3 details wrong or unsupported:
+{"concept_accuracy_analysis": "The epipolar constraint is illustrated at L02916-L02924. The ray-to-epipolar-line mapping is correct (L02918). However, the baseline tooltip says 'camera displacement' rather than citing the translation vector T (L02920). The epipole is labeled 'vanishing point' — contradicts L02922 which names it 'epipole'. Two of five claims lack QMD support.", "concept_accuracy": 3, "concept_accuracy_reasoning": "Core constraint grounded in QMD but baseline tooltip unsupported and epipole mislabeled — three details wrong or absent.", "supported_claims": [{"claim": "ray projects to epipolar line on second image plane", "lines": ["L02918"]}], "unsupported_claims": ["camera displacement tooltip", "vanishing point label"]}
 
-Output ONLY a valid JSON object with exactly three keys: {"concept_accuracy_analysis": "<observations and quality characterization>", "concept_accuracy": <integer 1-5>, "concept_accuracy_reasoning": "<one sentence tying the analysis to the rubric>"}`;
+Output ONLY a valid JSON object:
+{"concept_accuracy_analysis": "<observations and grounding characterization>", "concept_accuracy": <integer 1-5>, "concept_accuracy_reasoning": "<one sentence tying analysis to rubric>", "supported_claims": [{"claim": "...", "lines": ["L00784"]}], "unsupported_claims": ["..."]}`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -206,10 +213,16 @@ function finaliseEval(evaluation) {
   return evaluation;
 }
 
-async function evaluateFigure({ record, evalModel, useFewShot = true }) {
+async function evaluateFigure({ record, evalModel, useFewShot = true, qmdContent = null, chapterName = null }) {
   if (!record?.html) {
     return { skipped: true, passCount: 0 };
   }
+
+  let resolvedQmd = qmdContent;
+  if (!resolvedQmd && chapterName)        resolvedQmd = loadQmdForChapter(chapterName);
+  if (!resolvedQmd && record.chapterName) resolvedQmd = loadQmdForChapter(record.chapterName);
+  if (!resolvedQmd) throw new Error('evaluateFigure: qmdContent or chapterName is required');
+  const numberedQmd = numberLines(resolvedQmd);
 
   const usedEvalModel = evalModel || EVALUATOR_DEFAULT_MODEL;
 
@@ -257,6 +270,11 @@ async function evaluateFigure({ record, evalModel, useFewShot = true }) {
     },
   ];
 
+  const userContentConcept = [
+    { type: 'text', text: `Numbered textbook QMD:\n\n${numberedQmd}` },
+    { type: 'text', text: `Generated figure code:\n\n${record.html}\n\nOutput ONLY the JSON evaluation object.` },
+  ];
+
   function parseJsonResponse(raw) {
     const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
     const text = fenced ? fenced[1].trim() : raw.trim();
@@ -280,7 +298,7 @@ async function evaluateFigure({ record, evalModel, useFewShot = true }) {
     generateWithModel(usedEvalModel, { systemPrompt: PROMPT_INTERACTIVITY_USABILITY, userContent, maxTokens: 4096 }),
     generateWithModel(usedEvalModel, { systemPrompt: PROMPT_FAITHFULNESS, userContent: userContentVisualOnly, maxTokens: 4096 }),
     generateWithModel(usedEvalModel, { systemPrompt: PROMPT_LABEL_QUALITY, userContent: userContentVisualOnly, maxTokens: 4096 }),
-    generateWithModel(usedEvalModel, { systemPrompt: PROMPT_CONCEPT_ACCURACY, userContent: userContentCodeOnly, maxTokens: 4096 }),
+    generateWithModel(usedEvalModel, { systemPrompt: PROMPT_CONCEPT_ACCURACY, userContent: userContentConcept, maxTokens: 4096 }),
   ]);
 
   const parsed = Object.assign(

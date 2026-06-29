@@ -1120,7 +1120,7 @@ app.post('/api/evaluate-human', (req, res) => {
 // ── POST /api/evaluate ────────────────────────────────────────────────────────
 // User-triggered evaluation endpoint. Routes through evaluator.js (external source).
 app.post('/api/evaluate', async (req, res) => {
-  const { id, evalModel, criticVersion } = req.body;
+  const { id, evalModel, criticVersion, chapterName } = req.body;
   if (!id) return res.status(400).json({ error: 'id is required.' });
 
   const filePath = path.join(RESULTS_DIR, `${id}.json`);
@@ -1131,7 +1131,7 @@ app.post('/api/evaluate', async (req, res) => {
   catch { return res.status(500).json({ error: 'Failed to read result file.' }); }
 
   try {
-    const result = await evaluateFigure({ record, evalModel, criticVersion });
+    const result = await evaluateFigure({ record, evalModel, criticVersion, chapterName: chapterName || null });
     if (!result) {
       return res.json({ skipped: true });
     }
@@ -1457,9 +1457,10 @@ app.get('/api/experiments', (req, res) => {
 // ── POST /api/experiments/evaluate ───────────────────────────────────────────
 // Evaluate a single experiment figure in-place; cache result as <name>.eval.json
 app.post('/api/experiments/evaluate', async (req, res) => {
-  const { htmlPath, imagePath, evalModel, criticVersion } = req.body;
+  const { htmlPath, imagePath, evalModel, criticVersion, qmdPath } = req.body;
   if (!htmlPath) return res.status(400).json({ error: 'htmlPath required.' });
   if (!imagePath) return res.status(400).json({ error: 'imagePath required.' });
+  if (!qmdPath) return res.status(400).json({ error: 'qmdPath required.' });
 
   const absHtml = path.resolve(htmlPath);
   if (!fs.existsSync(absHtml)) return res.status(404).json({ error: 'HTML file not found.' });
@@ -1467,12 +1468,16 @@ app.post('/api/experiments/evaluate', async (req, res) => {
   const absImg = path.resolve(imagePath);
   if (!fs.existsSync(absImg)) return res.status(404).json({ error: 'Source image not found.' });
 
+  const absQmd = path.resolve(qmdPath);
+  if (!fs.existsSync(absQmd)) return res.status(404).json({ error: 'QMD file not found.' });
+
   const html = fs.readFileSync(absHtml, 'utf-8');
   const base64thumb = fs.readFileSync(absImg).toString('base64');
+  const qmdContent = fs.readFileSync(absQmd, 'utf-8');
 
   try {
     const record = { html, source_base64: base64thumb, source_media_type: 'image/png' };
-    const result = await evaluateFigure({ record, evalModel, criticVersion });
+    const result = await evaluateFigure({ record, evalModel, criticVersion, qmdContent });
 
     if (!result) {
       return res.json({ skipped: true });
@@ -1648,7 +1653,7 @@ app.post('/api/pairwise/batch-evaluate', async (req, res) => {
       const thumbB = assetsB.thumb;
       const sourceImage = assetsA.sourceImg || assetsB.sourceImg;
 
-      const evalResult = await pairwiseEvaluateFigure({ htmlA, setupA, htmlB, setupB, thumbA, thumbB, sourceImage, evalModel });
+      const evalResult = await pairwiseEvaluateFigure({ htmlA, setupA, htmlB, setupB, thumbA, thumbB, sourceImage, evalModel, chapterName: chapter });
 
       // Load existing record (to preserve humanEvals) or start fresh
       const existing = loadPairwiseResult(setupA, setupB, chapter, name) || { setupA, setupB, chapter, figure: name, humanEvals: [] };

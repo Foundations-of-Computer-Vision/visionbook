@@ -1,0 +1,1501 @@
+{
+  "3d_scene_understanding__epipolar_1": {
+    "setupA": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "setupB": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "chapter": "3d_scene_understanding",
+    "figure": "epipolar_1",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 accurately reconstructs the full 3D epipolar geometry by explicitly including the 3D point P and intersecting rays from the camera centers, whereas Figure 1 omits the 3D point entirely and only visualizes the 2D image planes."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 1 provides more descriptive step button labels (e.g., 'Constraint' vs 'Step 4') and includes an extra parameter slider for the baseline, making its control panel slightly more intuitive and comprehensive than Figure 2."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 maintains a clear viewing angle that effectively displays the camera planes, coordinate axes, and data points, whereas Figure 1 suffers from a severe edge-on perspective that makes the composition nearly incomprehensible."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 includes the 'R,T' label and correctly distributes the 'p2?' labels across the points, whereas Figure 1 omits 'R,T' and renders the 'p2?' labels as an overlapping, unreadable cluster."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Both figures fundamentally mismatch the textbook's main focus on Single View Metrology (vanishing points, cross-ratios) by teaching two-view epipolar geometry instead. However, Figure 2 is the clear winner because it visualizes the 3D depth ambiguity along a camera ray, elegantly illustrating the textbook's premise that a single 2D view cannot locate a 3D point without additional constraints.",
+          "concepts_tested": [
+            {
+              "concept": "Single View Depth Ambiguity",
+              "book_lines": [
+                "L00681-L00683",
+                "L00014-L00017"
+              ],
+              "source_claim": "In the absence of any other information, we cannot recover the 3D location of a single point from a single view, which is why methods like stereo vision utilize multiple images.",
+              "figure_a_match": "Explicitly visualizes depth ambiguity by providing a '3D Point Depth' slider that slides point P along the projection ray from Camera 1, showing how it affects Camera 2.",
+              "figure_b_match": "Fails to show the 3D projection ray or the ambiguity of depth from the first camera, jumping straight to 2D epipolar constraints.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Multiview vs. Single View Geometry",
+              "book_lines": [
+                "L00015-L00019"
+              ],
+              "source_claim": "Stereo vision and multiview geometry utilize multiple images to reconstruct 3D information, in contrast to single view metrology.",
+              "figure_a_match": "Demonstrates the correspondence problem more comprehensively by showing how the single-view 3D ray projects into the second camera to form the epipolar line.",
+              "figure_b_match": "Illustrates a two-camera setup with baseline and rotation controls to demonstrate the correspondence problem, but relies on abstract points.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00118-L00120",
+                "L00352-L00354"
+              ],
+              "issue": "The figure completely ignores the chapter's actual core topics (vanishing points, horizon lines, and cross-ratios), substituting an entire lesson on two-view epipolar geometry instead."
+            },
+            {
+              "figure": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+              "book_lines": [
+                "L00118-L00120",
+                "L00352-L00354"
+              ],
+              "issue": "Like Figure 1, this figure focuses heavily on stereo/multiview epipolar geometry rather than teaching the Single View Metrology techniques detailed in the text."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.95,
+        "explanation": "Figure 2 is highly preferred for accurately reconstructing the full 3D epipolar geometry and maintaining a clear viewing angle, whereas Figure 1 suffers from a severe edge-on perspective that renders its content nearly incomprehensible. Furthermore, Figure 2 effectively distributes its labels and illustrates 3D depth ambiguity, while Figure 1 omits the 3D point entirely and clusters labels into an unreadable mess, despite offering slightly more intuitive interactive controls."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:04:15.311Z"
+    }
+  },
+  "3d_scene_understanding__epipolar_geometry": {
+    "setupA": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "setupB": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "chapter": "3d_scene_understanding",
+    "figure": "epipolar_geometry",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 accurately constructs true 3D spheres for points and explicitly models the camera frustums, whereas Figure 1 uses flat 2D billboard sprites for points and omits the standard frustum edges."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 provides highly pedagogical interactions, such as moving the point specifically along a camera ray to demonstrate the stereo search constraint, and includes a dynamic narration box that updates with the step buttons to explain the concepts."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 accurately replicates the spatial layout and distinct image planes of the original, whereas Figure 1 suffers from a poor viewing angle that severely overlaps the geometry and text labels, making it difficult to read."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 correctly places labels near their corresponding elements with minimal overlap, whereas Figure 1 suffers from severe label clutter, incorrect positioning (like the 'Epipolar line' labels), and unreadable overlapping text."
+        },
+        "concept": {
+          "winner": "tie",
+          "confidence": 1,
+          "rationale": "Both figures are completely unrelated to the provided textbook text. The chapter focuses entirely on single view metrology (vanishing points, horizon lines, cross-ratio), explicitly contrasting it with multiview and stereo vision methods, yet both figures solely illustrate two-camera epipolar geometry.",
+          "concepts_tested": [],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00014-L00019"
+              ],
+              "issue": "The figure illustrates epipolar geometry and stereo vision (using two cameras, O1 and O2, to find point correspondences), which the textbook explicitly states is outside the scope of this chapter on single view metrology."
+            },
+            {
+              "figure": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+              "book_lines": [
+                "L00014-L00019"
+              ],
+              "issue": "The figure teaches the epipolar search constraint and stereo camera baseline principles, contradicting the chapter's strict focus on extracting 3D information from a single image."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.95,
+        "explanation": "Figure 2 significantly outperforms Figure 1 by utilizing true 3D spheres and explicit camera frustums rather than relying on flat 2D billboards that lack frustum edges. Furthermore, Figure 2 avoids the severe label clutter and poor viewing angle of Figure 1 by correctly placing labels with minimal overlap, while adding pedagogical value through interactive elements like step-based narration and ray-constrained point movement."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:04:50.522Z"
+    }
+  },
+  "stereo__stereocnn": {
+    "setupA": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "setupB": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "chapter": "stereo",
+    "figure": "stereocnn",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 constructs genuine 3D geometries (e.g., 3D boxes with depth for feature maps and a true 3D point cloud for the cost volume), whereas Figure 1 relies on flat 2D planes and fakes the 3D perspective of the cost volume by drawing skewed lines at a constant Z-depth."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 offers significantly more profound developer-built interactions, including smooth state tweening via demo buttons, a dynamic 2D graph that updates based on slider values, and voxel cloud updates when toggling the 3D CNN, whereas Figure 1 only provides basic opacity toggles and a single plane translation slider."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 accurately reproduces the text labels, flat 2D green boxes, and overall composition of the original, whereas Figure 2 incorrectly alters the labels, inappropriately renders the green feature boxes as 3D volumes, and includes extraneous elements like a line graph."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 perfectly reproduces the label text from the original reference, whereas Figure 2 significantly alters the terminology (e.g., 'Features' instead of 'Feature Extraction', '3D CNN Aggregation' instead of 'Cost Aggregation')."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 goes far beyond a static block diagram by illustrating the mathematical mechanics of the cost volume. By graphing a single pixel's cost against disparity and showing how the 3D CNN smooths that curve, Figure 2 perfectly grounds the textbook's concepts of matching costs and neural regularization.",
+          "concepts_tested": [
+            {
+              "concept": "Stereo CNN Pipeline",
+              "book_lines": [
+                "L00788-L00790",
+                "L00809-L00810"
+              ],
+              "source_claim": "A block diagram of CNN stereo processing involves rectification, feature extraction, cost volume formation, and 3D CNN aggregation to output a disparity estimate.",
+              "figure_a_match": "Displays a 3D block diagram of the pipeline with a step-by-step interactive tutorial that guides the user through the transformations.",
+              "figure_b_match": "Displays a 3D block diagram with five stages corresponding to the pipeline, allowing the user to highlight each step.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "3D Cost Volume",
+              "book_lines": [
+                "L00797-L00800"
+              ],
+              "source_claim": "Forms a 3D cost volume indicating the local visual evidence of a match between the two images for each possible pixel position and each possible stereo disparity.",
+              "figure_a_match": "Renders the volume as a voxel cloud, highlights a 1D 'fiber' for a specific pixel, and plots that pixel's visual matching cost across all disparities on a 2D graph.",
+              "figure_b_match": "Represents the cost volume as a solid bounding box with axes (height, width, disparity) and allows sliding a 2D slice plane through the disparity dimension.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "3D CNN Aggregation",
+              "book_lines": [
+                "L00802-L00807"
+              ],
+              "source_claim": "A 3D convolutional neural net aggregates costs over the 3D cost volume to estimate a single best disparity, performing a regularization function.",
+              "figure_a_match": "Animates a 3D convolution kernel traversing the volume and provides a toggle to apply 3D CNN aggregation, showing how it smooths the raw, noisy cost curve into an unambiguous 'aggregated' curve.",
+              "figure_b_match": "Includes a generic 'Cost Aggregation' block but does not visually explain how the CNN processes the volume or affects the costs.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": []
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 2 significantly outperforms Figure 1 by utilizing genuine 3D geometries and offering profound interactivity, such as dynamic 2D graphs and voxel cloud updates, which powerfully illustrate the underlying mathematical concepts of the cost volume. Although Figure 1 is more faithful to the original image's layout and perfectly reproduces the textbook labels, its reliance on flat 2D planes and basic interactions ultimately limits its educational value compared to Figure 2's deep conceptual grounding."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:06:01.017Z"
+    }
+  },
+  "imaging__pinhole_geometry2": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "pinhole_geometry2",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 attempts to embed a 2D panel as a billboarded plane in the 3D scene (which automatically loses), whereas Figure 2 correctly dedicates the scene entirely to reconstructing the 3D pinhole camera geometry."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 2 provides better interactivity by including an extra toggle for the real sensor plane and, crucially, a live-updating formula box in the UI that explicitly shows the calculated projection coordinates as the user moves the sliders, directly reinforcing the pedagogical concepts."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 1 is more faithful as it captures the overall composition by including both the 3D scene (a) and the 2D camera plane inset (b), whereas Figure 2 completely omits the 2D inset."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.8,
+          "rationale": "Figure 1 includes the labels for the 2D inset (part b) which Figure 2 entirely omits, though Figure 1 suffers from severe label clutter and overlapping text near the origin compared to Figure 2's cleaner but overly small labels."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 is the stronger educational tool because it meticulously reconstructs both the 3D perspective geometry and the 2D affine coordinate transformation exactly as they appear in the textbook's multi-part diagram. While Figure 2 provides a slightly better UI for displaying real-time mathematical values, it completely misses the specific axis-inversion concept required for the camera-to-image coordinate mapping.",
+          "concepts_tested": [
+            {
+              "concept": "Pinhole Projection Geometry",
+              "book_lines": [
+                "L0264-L0273"
+              ],
+              "source_claim": "Perspective projection equations: x = f(X/Z) and y = f(Y/Z).",
+              "figure_a_match": "Demonstrates the relationship visually and additionally displays the real-time numerical values of the projected point (x, y) as sliders are moved.",
+              "figure_b_match": "Demonstrates the relationship by letting the user change Z and f, visually scaling the rays and projected coordinates on the planes.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Virtual Camera Plane",
+              "book_lines": [
+                "L0238-L0249"
+              ],
+              "source_claim": "A virtual camera plane placed in front of the pinhole creates a projected image without coordinate inversion (x,y share signs with X,Y).",
+              "figure_a_match": "Allows the user to toggle between the physical real sensor plane and the convenient virtual plane, explaining the inversion explicitly in the step narrations.",
+              "figure_b_match": "Displays both the inverted projection plane at -f and the upright virtual plane at +f simultaneously, connecting them through the pinhole.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Camera vs. Image Coordinates (Affine Transform)",
+              "book_lines": [
+                "L0290-L0300"
+              ],
+              "source_claim": "Image coordinates (n,m) are related to camera coordinates (x,y) by an affine transform (n = -ax + n_0, m = ay + m_0), where the x-axis direction is inverted relative to n.",
+              "figure_a_match": "Overlays a pixel grid on the 3D virtual plane but fails to depict the critical axis inversion (-a) between x and n described in the text.",
+              "figure_b_match": "Faithfully recreates the textbook's 2D sub-figure (b) as a floating panel, explicitly showing the opposite direction of the x and n axes to illustrate the negative scalar.",
+              "verdict": "few_shot_benchmark_gpt4.1/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+              "book_lines": [
+                "L0290-L0300"
+              ],
+              "issue": "Fails to illustrate the 2D affine mapping relationship and the specific negative scaling (axis inversion) between the camera x-coordinate and image n-coordinate."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+        "confidence": 0.75,
+        "explanation": "Figure 1 successfully captures both the 3D perspective geometry and the 2D camera plane inset, addressing the crucial axis-inversion concept that Figure 2 completely omits. Although Figure 2 features superior 3D rendering and a more interactive UI with live-updating formulas, its failure to include the multi-part diagram's 2D affine coordinate transformation severely limits its overall pedagogical value relative to Figure 1."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T18:59:57.132Z"
+    }
+  },
+  "imaging__sphereDiffuse": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "sphereDiffuse",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 2 provides a vastly richer and more accurate geometric reconstruction by explicitly modeling the 3D vectors (normal, light, view, reflection), surface points, and light sources using robust 3D primitives like ArrowHelpers and TorusGeometry, whereas Figure 1 only renders a bare shaded sphere without visualizing the underlying spatial relationships."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 offers significantly richer interactivity, including raycaster-based clicking on the sphere to move the vector origin, real-time dynamic formula updating based on interactions, and more parameter sliders compared to Figure 1."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 accurately replicates the two-light setup and the resulting dark shadow band seen in the reference, whereas Figure 2 incorrectly uses a single light source."
+        },
+        "labels": {
+          "winner": "tie",
+          "confidence": 1,
+          "rationale": "Both figures introduce extraneous interactive UI panels and text that are entirely absent from the completely unlabelled original textbook figure."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 comprehensively covers both Lambertian and Phong reflection models by providing separate component controls, explicit vector overlays (n, p, r, q), and real-time formula calculations. Figure 1 only illustrates diffuse and ambient lighting, failing to address the text's detailed explanation of specular reflection.",
+          "concepts_tested": [
+            {
+              "concept": "Lambertian Reflection",
+              "book_lines": [
+                "L00044-L00055"
+              ],
+              "source_claim": "The brightness of the outgoing light ray depends on the orientation of the surface relative to the incident ray, computed as proportional to the dot product of the normal vector n and the incident light direction p.",
+              "figure_a_match": "Features a diffuse intensity slider and visualizes the exact normal (n) and incoming light (p) vectors, dynamically updating the dot product in the UI.",
+              "figure_b_match": "Demonstrates diffuse reflection with adjustable light angles and explains the dot product calculation in the narration.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Phong Reflection Model (Specular)",
+              "book_lines": [
+                "L00072-L00084"
+              ],
+              "source_claim": "Specular reflection is modeled by the Phong model, calculated as (r · q)^alpha, where r is the direction of maximum reflection and q is the viewing direction.",
+              "figure_a_match": "Perfectly models the formula by providing sliders for specular intensity and shininess (alpha), and an interactive vector overlay showing n, p, r, and q while computing the math live.",
+              "figure_b_match": "Explicitly omits this concept entirely, noting in its narration that 'There is no specular term.'",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Components of Reflection",
+              "book_lines": [
+                "L00073-L00077"
+              ],
+              "source_claim": "Surface reflection consists of three components: an ambient term, a diffuse (Lambertian) term, and a specular term.",
+              "figure_a_match": "Offers distinct sliders for ambient, diffuse, and specular intensity, directly matching the three-component decomposition described in the text.",
+              "figure_b_match": "Provides controls for ambient and diffuse components but ignores specular reflection.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00070-L00084"
+              ],
+              "issue": "Figure 1 completely ignores the Phong specular reflection model, which is a major sub-section of the provided textbook text."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 2 is the stronger visualization because it explicitly models 3D vectors (normal, light, view, reflection) and offers rich interactivity, such as real-time formula updates and raycaster-based clicking, to comprehensively explain Lambertian and Phong reflection models. Conversely, while Figure 1 more accurately replicates the reference's specific dual-light shading, it falls short conceptually and geometrically by presenting only a bare shaded sphere that fails to visualize the underlying spatial relationships or address specular reflection."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:00:26.028Z"
+    }
+  },
+  "imaging__orthogonal_projection": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "orthogonal_projection",
+    "humanEvals": []
+  },
+  "imaging__similar_triangles2": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "similar_triangles2",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 constructs a much more robust 3D representation by using cylinder primitives for outlines (avoiding the thin 1px WebGL line issue seen in Figure 2), correctly dynamically scales its axes based on the parameters, and models the standard virtual image plane setup."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 includes an extra dropdown to isolate horizontal or vertical projection planes and features a dynamic equation readout that updates live, making it significantly more pedagogically useful than Figure 1."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 closely replicates the original's layout, camera angle, and color scheme including the red bounding lines, whereas Figure 2 reverses the geometry by placing the image plane on the right and uses incorrect bounding line colors."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 provides clear, readable labels with appropriate sizing, whereas Figure 1's labels are extremely small, overlapping, and virtually illegible."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 is significantly better for teaching the geometric derivation because it allows the user to isolate the XZ and YZ planes, removing the 3D clutter that plagues Figure 1. Furthermore, Figure 2 grounds the math in the physical reality of the pinhole camera by modeling the inverted projection plane behind the origin, directly addressing the coordinate sign flip discussed in the textbook.",
+          "concepts_tested": [
+            {
+              "concept": "Perspective Projection & Similar Triangles",
+              "book_lines": [
+                "L00264-L00273",
+                "L00285-L00288"
+              ],
+              "source_claim": "The perspective projection equations (x = fX/Z and y = fY/Z) are derived geometrically using similar triangles.",
+              "figure_a_match": "Draws the similar triangles and crucially provides a dropdown menu to isolate the horizontal (XZ) and vertical (YZ) planes independently, which makes the 2D geometric derivation much easier to comprehend.",
+              "figure_b_match": "Draws the XZ and YZ similar triangles simultaneously using colored meshes and labels the segments. The overlapping triangles can become visually cluttered.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Projection Plane vs. Virtual Camera Plane",
+              "book_lines": [
+                "L00238-L00249"
+              ],
+              "source_claim": "The actual camera projection plane is behind the pinhole (creating an inverted image), but a virtual camera plane in front of the pinhole is often used so the image is not inverted.",
+              "figure_a_match": "Models the physical projection plane behind the pinhole, explicitly showing the resulting inverted coordinates (-x, -y, -f) in the 3D scene while still providing the standard x=fX/Z math in the UI readout.",
+              "figure_b_match": "Models the virtual camera plane in front of the pinhole, but labels it \"the camera plane\" without explaining the abstraction from the physical inverted plane.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": []
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.6,
+        "explanation": "Although Figure 1 provides a more faithful reproduction of the original layout and more robust 3D geometry, Figure 2 wins overall by offering significantly greater pedagogical utility. Figure 2 includes interactive options to isolate projection planes and displays dynamic equations, whereas Figure 1 suffers from 3D clutter and illegible, overlapping labels. Furthermore, Figure 2 effectively grounds the mathematical concepts by modeling the inverted projection plane, making it a much more effective educational tool than Figure 1."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:02:17.981Z"
+    }
+  },
+  "imaging__brdf": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "brdf",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 more accurately reconstructs the 3D geometric concepts by modeling the continuous BRDF reflection lobe as a dynamic 3D mesh and allowing full spherical coordinate manipulation, whereas Figure 1 restricts movement to a 2D plane and uses only sparse, discrete arrows for the outgoing light."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 offers significantly more developer-built interactions, including full spherical coordinate control for both incoming and outgoing rays, wavelength selection, and real-time calculated readouts, compared to Figure 1's more limited set of controls."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 accurately reproduces the thick yellow-to-red incoming ray and the distinct multiple green outgoing arrows of the original, whereas Figure 2 uses a thin line, lacks the red segment, and incorrectly renders a diffuse lobe instead of discrete scattering arrows."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 includes all required labels with appropriate math formatting, whereas Figure 2 includes an extraneous 'l_out' label, is missing the 'n' label, and uses less accurate font styling."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 faithfully translates the textbook's mathematical models into an interactive visual, explicitly showing the BRDF lobe, the reflection vector r, and computing the n·p dot product in real-time. Figure 1 is overly simplified, omitting the wavelength dependency, the specular vector, and full angular controls required to explore the full BRDF equation.",
+          "concepts_tested": [
+            {
+              "concept": "BRDF and Wavelength Dependency",
+              "book_lines": [
+                "L00031-L00037"
+              ],
+              "source_claim": "The power of the outgoing light... is some function, F, of the surface normal, the incoming and outgoing ray directions, the wavelength, and the incoming light power",
+              "figure_a_match": "Provides full angular controls for both incident (p) and outgoing (q) directions, and explicitly includes a wavelength slider that recolors the rays and BRDF lobe.",
+              "figure_b_match": "Displays the general BRDF equation but only allows the user to change the incoming angle and albedo.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Lambertian Reflection",
+              "book_lines": [
+                "L00045-L00061"
+              ],
+              "source_claim": "The outgoing ray intensity... is a function only of the surface orientation... a \\ell_{\\texttt{in}}(\\lambda) ( \\mathbf{n} \\cdot \\mathbf{p} )... not a function of the outgoing direction of the ray, \\mathbf{q}.",
+              "figure_a_match": "Visualizes the uniform independence from q via a 3D hemispherical lobe, and explicitly calculates and displays the n · p dot product in the UI.",
+              "figure_b_match": "Shows outgoing arrows with uniform intensity when the Lambertian toggle is checked, and visually dims them at grazing angles.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Specular Reflection (Phong Model)",
+              "book_lines": [
+                "L00077-L00084"
+              ],
+              "source_claim": "For a given ray direction, \\mathbf{q}... the Phong specular contribution... is k_s (\\mathbf{r} \\cdot \\mathbf{q})^\\alpha \\ell_{\\texttt{in}}... where \\mathbf{r} denotes the direction of maximum specular reflection",
+              "figure_a_match": "Explicitly adds and labels the ideal reflection vector r, renders a directional specular lobe along it, and allows users to align q with r to observe the highlight.",
+              "figure_b_match": "Has a generic non-Lambertian mode but fails to explicitly model the specular peak or display the reflection vector r.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00082-L00084"
+              ],
+              "issue": "Completely omits the ideal reflection vector r, which is crucial for defining specular surface behavior as described in the text."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.75,
+        "explanation": "Figure 2 provides a vastly superior conceptual tool by featuring a dynamic 3D BRDF reflection lobe mesh and full spherical coordinate interactivity, whereas Figure 1 restrictively limits movement to a 2D plane and uses an overly simplified physics model with sparse discrete arrows. Although Figure 1 is more faithful to the source diagram's exact visual styling and precise labeling, Figure 2's addition of real-time mathematical readouts and wavelength controls makes it significantly better at conveying the underlying textbook principles."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:02:48.191Z"
+    }
+  },
+  "imaging__pinhole_names2": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "pinhole_names2",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 accurately reconstructs the core geometry of the concept by modeling a 3D object, its scaled projection on the image plane, and the light rays passing through the pinhole, whereas Figure 1 only models the empty camera box without any projection geometry."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 provides more extensive and granular interactions, including sliders for both object distance and box opacity as well as a virtual plane toggle, whereas Figure 1 only offers a single focal length slider and a basic opacity toggle."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 accurately reproduces the clean, empty camera box and specific labels from the reference, whereas Figure 2 introduces extraneous elements like a 3D target object and light rays that significantly deviate from the original image."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 features clear, correctly sized labels that closely match the original's placement, whereas Figure 2 suffers from tiny, misplaced text (such as the Z-axis) and includes extra annotations not found in the reference."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 comprehensively covers the textbook's geometric derivation by illustrating the target object, tracing rays, demonstrating perspective scaling via object distance, and introducing the upright virtual image. Figure 1 only shows an empty camera box and completely omits the projection mechanics and the virtual projection plane.",
+          "concepts_tested": [
+            {
+              "concept": "Pinhole Camera Projection",
+              "book_lines": [
+                "L00217-L00221",
+                "L00256-L00262"
+              ],
+              "source_claim": "A pinhole camera projects 3D coordinates in the world to 2D positions on the projection plane... A 3D point P projects into the location p in the projection plane.",
+              "figure_a_match": "Features a recognizable asymmetric 3D target, explicitly traces colored rays through the pinhole, and displays the resulting inverted image on the projection plane.",
+              "figure_b_match": "Displays the physical camera box, the pinhole, and the projection plane, but fails to show any 3D object or how light rays project onto the plane.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Virtual Camera Plane",
+              "book_lines": [
+                "L00238-L00249"
+              ],
+              "source_claim": "It is useful to create a virtual camera plane that is radially symmetrical to the projection plane... and it is placed in front of the camera. This virtual camera plane will create a projected image without the inversion of the image.",
+              "figure_a_match": "Includes a specific toggle for the 'Virtual projection plane' at Z = +f, which reveals an upright (non-inverted) image and the corresponding mathematical rays.",
+              "figure_b_match": "Does not mention or visualize the virtual camera plane.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Perspective Scaling and Object Distance",
+              "book_lines": [
+                "L00267-L00283"
+              ],
+              "source_claim": "From similar triangles... equations are called the perspective projection equations. Under perspective projection, distant objects become smaller, through the inverse scaling by Z.",
+              "figure_a_match": "Provides an 'Object distance (Z)' slider that dynamically updates the target's position and the projection size, explicitly explaining the f/Z scale factor.",
+              "figure_b_match": "Omits any target object, making it impossible to demonstrate the perspective equations or the effect of distance (Z).",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00238-L00249",
+                "L00267-L00283"
+              ],
+              "issue": "Completely ignores the virtual camera plane and the projection of actual points/objects, which are the main focus of the textbook's geometric derivation of perspective projection."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.8,
+        "explanation": "Figure 2 is the overall winner because it successfully illustrates the core concept of pinhole projection by modeling a 3D target object, light rays, and perspective scaling, whereas Figure 1 merely depicts an empty camera box and completely omits these crucial geometric mechanics. Although Figure 1 is more faithful to the original image's visual appearance and exact label placement, Figure 2's comprehensive representation of the projection derivation and superior interactive controls make it a much stronger conceptual model."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:03:13.939Z"
+    }
+  },
+  "imaging__no_picture_on_a_wall_aina": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "imaging",
+    "figure": "no_picture_on_a_wall_aina",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 accurately constructs the subject (the tree) using true 3D primitives (spheres and cylinders), whereas Figure 1 improperly uses flat 2D geometries (circles and custom shapes) for the tree in a 3D space, which defeats the geometric purpose of demonstrating 3D-to-2D projection."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 offers a continuous slider for aperture size to interactively demonstrate the relationship between hole size, blur, and brightness, which is pedagogically richer than Figure 1's binary on/off pinhole toggle."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 more accurately captures the tree's layered, vibrant appearance and maintains a faithful, sparse representation of the light rays, whereas Figure 2 clutters the scene with an overwhelming number of rays and an exaggeratedly large pinhole aperture."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.8,
+          "rationale": "Figure 1 correctly limits its label to 'Wall' matching the original, whereas Figure 2 adds unnecessary labels ('Tree') and modifies the pinhole text ('Barrier / Pinhole')."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 is the clear winner because it correctly models the physical effects of aperture size on image sharpness, directly supporting the textbook's claim about larger holes creating blurrier images. Figure 1's binary on/off toggle for the pinhole misses this crucial continuous relationship, even though it slightly edges out Figure 2 by including a control for object distance.",
+          "concepts_tested": [
+            {
+              "concept": "Role of the pinhole in image formation",
+              "book_lines": [
+                "L00111-L00115",
+                "L00124-L00128",
+                "L00134-L00138"
+              ],
+              "source_claim": "Without a pinhole, light from every surface averages together on a wall, resulting in no image. A pinhole organizes these rays by restricting light so each spot on the wall receives light from only one direction.",
+              "figure_a_match": "Demonstrates this dynamically by treating 'no pinhole' as a maximum aperture size. Shows ray bundles spreading from single points on the tree to cover large areas of the wall, which restricts to a single ray path as the aperture shrinks.",
+              "figure_b_match": "Demonstrates this with an on/off toggle for the pinhole enclosure. In 'off' mode, the wall is uniformly washed; in 'on' mode, an image appears.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Aperture size and blur",
+              "book_lines": [
+                "L00158-L00161"
+              ],
+              "source_claim": "By making the hole large you will get a brighter, but blurrier image.",
+              "figure_a_match": "Features a continuous 'Aperture size' slider. Visually spreads out the ray bundles and blurs the projected image geometry into overlapping circles as the aperture increases.",
+              "figure_b_match": "Completely omits aperture size control.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Perspective projection scaling",
+              "book_lines": [
+                "L00264-L00274",
+                "L00279-L00282"
+              ],
+              "source_claim": "Image size depends on the distance to the projection plane (f) and inverse scaling by the distance to the object (Z).",
+              "figure_a_match": "Provides a 'Wall distance' slider to scale the image, though it lacks an object distance control.",
+              "figure_b_match": "Provides sliders for both 'Wall distance' and 'Tree distance', accurately scaling the inverted image.",
+              "verdict": "few_shot_benchmark_gpt4.1/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00158-L00161"
+              ],
+              "issue": "Fails to include the core tradeoff of pinhole cameras: aperture size vs image sharpness/brightness."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.8,
+        "explanation": "Figure 2 excels at demonstrating the core physical concepts by providing a continuous slider for aperture size to interactively show the relationship between hole size, blur, and brightness, whereas Figure 1 relies on a limited binary pinhole toggle that fails to capture these effects. Additionally, Figure 2 correctly constructs the scene using proper 3D primitives, while Figure 1 improperly uses flat 2D shapes for the tree in a 3D environment. Although Figure 1 features more faithful tree aesthetics and accurate labeling, Figure 2's superior interactive and geometric design makes it a much stronger conceptual educational tool."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:03:38.611Z"
+    }
+  },
+  "3d_scene_understanding__triangularization_stereo": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "3d_scene_understanding",
+    "figure": "triangularization_stereo",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 provides a much better 3D geometric reconstruction by using volumetric cylinders and cones for lines/rays instead of 1px WebGL lines, explicitly drawing drop lines to a projection plane to ground the similar triangles in 3D space, and accurately visualizing the x and y coordinates on the image planes originating from the principal points."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 includes a pedagogical 'Top-down 2D view' toggle that smoothly animates the camera to clearly show similar triangles, as well as an additional slider for lateral position, providing richer and more useful interactive controls than Figure 2."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.7,
+          "rationale": "Figure 1 correctly colors the 3D point and its projections red while maintaining a cleaner perspective view, whereas Figure 2 incorrectly colors the point black and inappropriately merges the yellow triangle from the 2D schematic into the 3D view."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 1 provides much more readable and better-placed labels, whereas Figure 2 suffers from severe text overlap and congestion that makes the annotations nearly illegible."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Both figures focus on stereo vision geometry to illustrate why stereo is unreliable at large distances (a concept mentioned only briefly as a contrast to the chapter's main topic). Figure 1 is significantly better because it includes a top-down 2D view and explicit mathematical readouts (Z = fT/d) that clearly visualize the similar triangles driving this limitation.",
+          "concepts_tested": [
+            {
+              "concept": "Stereo Vision Limitations",
+              "book_lines": [
+                "L00024-L00026"
+              ],
+              "source_claim": "Even when we have stereo vision, stereo is only effective when the disparity is large enough which limits the range of distances for which stereo can be used reliably.",
+              "figure_a_match": "Features a specific step 'Limits at infinity' showing how disparity approaches zero at large distances, supported by a top-down view and mathematical readouts that clearly demonstrate the similar triangles involved.",
+              "figure_b_match": "Includes a step showing that as depth increases, disparity shrinks, but lacks the 2D top-down perspective and the explicit depth formula readout to fully explain the geometric limitation.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+              "book_lines": [
+                "L00012-L00017",
+                "L00030-L00032"
+              ],
+              "issue": "The figure focuses entirely on stereo vision geometry, which is only mentioned in passing as a contrast. It ignores the chapter's actual focus on single-view metrology, vanishing points, and projective invariants."
+            },
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00012-L00017",
+                "L00030-L00032"
+              ],
+              "issue": "Like Figure 1, this figure illustrates stereo camera geometry instead of the primary topics of single-view 3D estimation discussed throughout the text."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 1 provides a significantly more effective pedagogical experience through its interactive top-down 2D view toggle and clear mathematical readouts, whereas Figure 2 lacks these features and suffers from severe text congestion that makes annotations illegible. Although Figure 2 excels with superior volumetric 3D geometric rendering, Figure 1's combination of readable labels, faithful color mapping, and richer interactive controls makes it the stronger overall visualization."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:05:35.077Z"
+    }
+  },
+  "3d_scene_understanding__epipolar_game_play": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "3d_scene_understanding",
+    "figure": "epipolar_game_play",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 accurately reconstructs the 3D epipolar geometry (baselines, intersecting image planes, and the epipolar plane) in true 3D space, whereas Figure 1 improperly lays out the 2D sensor views as flat planes on the 3D floor (violating the '2D canvases in 3D space' constraint) and lacks the geometric primitives connecting the cameras."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 offers continuous parametric control over camera translation and rotation with real-time updates to the epipolar geometry and a synchronized 2D sensor overlay, whereas Figure 1 is limited to discrete, predefined camera configurations and basic visibility toggles."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 1 attempts to recreate the full grid of camera pairs and line sets seen in the original, whereas Figure 2 abandons the overall composition to focus on a detailed, labeled view of a single camera setup."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.7,
+          "rationale": "Figure 1 includes all the original A-F and 1-6 labels in the 3D scene, whereas Figure 2 omits them from the scene space and introduces numerous instructional annotations not present in the textbook figure."
+        },
+        "concept": {
+          "winner": "tie",
+          "confidence": 1,
+          "rationale": "Both figures fail to address the textbook chapter, which is strictly about Single View Metrology (vanishing points, horizon lines, and cross-ratios). Instead, both figures teach Epipolar Geometry (stereo vision, camera pairs, epipoles), making them equally irrelevant to the provided text.",
+          "concepts_tested": [
+            {
+              "concept": "Single View Metrology Focus",
+              "book_lines": [
+                "L00005-L00019"
+              ],
+              "source_claim": "The chapter focuses on recovering 3D information from a single image, explicitly contrasting this with stereo vision and multiview geometry.",
+              "figure_a_match": "Focuses entirely on multiview geometry by illustrating a two-camera stereo setup with baselines, epipolar planes, and epipoles.",
+              "figure_b_match": "Focuses entirely on multiview geometry by showing pairs of cameras and matching them to epipolar line sets.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Vanishing Points",
+              "book_lines": [
+                "L00172-L00188"
+              ],
+              "source_claim": "Parallel lines in 3D project into non-parallel 2D lines that converge to a finite vanishing point in the image.",
+              "figure_a_match": "Does not illustrate single-image vanishing points or perspective convergence of 3D parallel lines.",
+              "figure_b_match": "Does not illustrate single-image vanishing points or perspective convergence of 3D parallel lines.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Cross-Ratio",
+              "book_lines": [
+                "L00374-L00392"
+              ],
+              "source_claim": "The cross-ratio of four collinear points is preserved under perspective projection and is fundamental to single view metrology.",
+              "figure_a_match": "Does not cover projective invariants, collinear points, or cross-ratios.",
+              "figure_b_match": "Does not cover projective invariants, collinear points, or cross-ratios.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00015-L00017"
+              ],
+              "issue": "Teaches epipolar line patterns for stereo camera pairs, which is a multiview geometry concept explicitly excluded from this chapter's scope."
+            },
+            {
+              "figure": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+              "book_lines": [
+                "L00015-L00017"
+              ],
+              "issue": "Teaches epipoles, epipolar planes, and baselines between two cameras, which are stereo vision concepts completely absent from the text."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.8,
+        "explanation": "While both figures mistakenly teach epipolar geometry instead of single view metrology, Figure 2 offers a vastly superior 3D geometric reconstruction with continuous parametric controls and properly oriented 2D canvases in 3D space. In contrast, Figure 1 awkwardly flattens the 2D sensor views onto the 3D floor and restricts interactivity to discrete, predefined configurations, even though it retains more of the original textbook labels and composition."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:07:06.722Z"
+    }
+  },
+  "3d_scene_understanding__epipolar_3": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "3d_scene_understanding",
+    "figure": "epipolar_3",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 includes the essential epipolar plane (the translucent triangular wedge formed by the two camera centers and the 3D point), which is a core geometric primitive of this concept missing in Figure 1."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 provides superior usability by including explanatory tooltips on its control labels, and its developer-built interactions (like sweeping the observed point on the image sensor) offer deeper pedagogical value than Figure 1's camera separation control."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.7,
+          "rationale": "Figure 1 better replicates the large coordinate axes, floating transformation arrow, and distinct dashed projection lines of the original, whereas Figure 2 introduces an unreferenced solid pink plane, shrinks the axes significantly, and loses all point color-coding."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.8,
+          "rationale": "Figure 1 correctly includes the required labels with appropriate subscripts (p1, p2?) matching the original, whereas Figure 2 lacks the subscript for p1 and introduces several extraneous annotations not present in the reference."
+        },
+        "concept": {
+          "winner": "tie",
+          "confidence": 1,
+          "rationale": "Both figures visualize two-camera epipolar geometry and stereo vision, entirely ignoring the textbook's focus on Single View Metrology, vanishing points, and the cross-ratio. Since the text explicitly states that multiview geometry is outside the scope of this chapter, both figures completely fail to align with the provided source material.",
+          "concepts_tested": [
+            {
+              "concept": "Single View vs. Multiview Geometry",
+              "book_lines": [
+                "L00014-L00017"
+              ],
+              "source_claim": "Single view metrology relies on understanding the geometry of the image formation process... This is in contrast to other methods, like stereo vision, structure from motion or multiview geometry, which utilize multiple images",
+              "figure_a_match": "Figure 2 also ignores single view metrology, focusing entirely on a two-camera setup to demonstrate epipolar lines and the coplanarity principle.",
+              "figure_b_match": "Figure 1 completely ignores single view metrology and instead visualizes a two-camera stereo vision setup to explain the epipolar constraint.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00005-L00008",
+                "L00014-L00017"
+              ],
+              "issue": "The figure teaches multiview/epipolar geometry, which is explicitly excluded from the scope of this chapter in favor of single-view techniques like vanishing points and cross-ratios."
+            },
+            {
+              "figure": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+              "book_lines": [
+                "L00005-L00008",
+                "L00014-L00017"
+              ],
+              "issue": "The figure teaches multiview/epipolar geometry, which is explicitly excluded from the scope of this chapter in favor of single-view techniques like vanishing points and cross-ratios."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 2 surpasses Figure 1 by explicitly rendering the essential epipolar plane and providing superior interactivity, such as explanatory tooltips and point-sweeping controls. While Figure 1 more faithfully replicates the original diagram's styling and labels, it lacks the geometric completeness and pedagogical depth offered by Figure 2."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:07:56.217Z"
+    }
+  },
+  "imaging_geometry__horizon_line": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "imaging_geometry",
+    "figure": "horizon_line",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "tie",
+          "confidence": 0.9,
+          "rationale": "Both figures reconstruct the 2D projective geometry diagram using flat Three.js primitives mapped onto planes and an OrthographicCamera, resulting in an equivalent geometric approach with no meaningful differences in 3D depth or spatial relationships."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.8,
+          "rationale": "Figure 2 offers more independent and continuous controls, including individual line angle adjustments and both camera pitch and roll, providing a richer interactive exploration of the geometric concepts than Figure 1."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 accurately places the mathematical labels directly above the vanishing points and renders clean, solid lines, whereas Figure 1 misaligns the labels and suffers from severe rendering artifacts that make the thick lines appear hollow and the grid lines look like disconnected triangles."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 correctly places the mathematical expressions for the vanishing points directly above the corresponding green dots, whereas Figure 1 incorrectly groups all top-level labels together in the center."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 accurately grounds its interactions in the textbook's discussion of camera extrinsics by using 'Camera Pitch' and 'Camera Roll' to manipulate the horizon. Figure 1 incorrectly frames this interaction as 'Ground tilt', diverging from the textbook's explicit camera-centric modeling.",
+          "concepts_tested": [
+            {
+              "concept": "Effect of Camera Angle on the Horizon Line",
+              "book_lines": [
+                "L00679-L00682",
+                "L00752-L00755"
+              ],
+              "source_claim": "Let's now consider that the camera is tilted by looking downward with an angle θ... the horizon line is located at y = a tan(θ).",
+              "figure_a_match": "Provides a 'Camera Pitch' slider that directly models the camera tilt θ discussed in the text, correctly shifting the horizon line up and down.",
+              "figure_b_match": "Uses a 'Ground tilt' slider to shift the horizon line, which is an inverse way of thinking about the problem and diverges from the text's framing.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00679-L00682"
+              ],
+              "issue": "The figure explains horizon shifts using 'Ground tilt', whereas the textbook explicitly attributes this to the camera's angle/tilt (extrinsic parameter)."
+            },
+            {
+              "figure": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+              "book_lines": [
+                "L00066-L00072"
+              ],
+              "issue": "The figure heavily relies on the projective geometry cross-product formulations for points and lines (e.g., h = (l1×l2)×(l3×l4)) which are not taught in this specific text chapter."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.95,
+        "explanation": "Figure 2 excels by accurately placing mathematical labels over their respective vanishing points and rendering clean, solid lines, whereas Figure 1 suffers from severe rendering artifacts and groups all top-level labels incorrectly in the center. Furthermore, Figure 2 correctly frames its interactions around camera extrinsics (pitch and roll) as discussed in the source material and offers richer controls, while Figure 1 diverges conceptually by mischaracterizing these adjustments as 'Ground tilt'."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:12:16.139Z"
+    }
+  },
+  "optical_flow__camera_lateral_translation_flow": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "optical_flow",
+    "figure": "camera_lateral_translation_flow",
+    "humanEvals": []
+  },
+  "optical_flow__yaw_pitch_roll": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "optical_flow",
+    "figure": "yaw_pitch_roll",
+    "humanEvals": []
+  },
+  "optical_flow__flying_bird": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "optical_flow",
+    "figure": "flying_bird",
+    "humanEvals": []
+  },
+  "optical_flow__camera_forward_translation": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "optical_flow",
+    "figure": "camera_forward_translation",
+    "humanEvals": []
+  },
+  "optical_flow__camera_lateral_translation": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "optical_flow",
+    "figure": "camera_lateral_translation",
+    "humanEvals": []
+  },
+  "optical_flow__examples_3d_moving_points": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "optical_flow",
+    "figure": "examples_3d_moving_points",
+    "humanEvals": []
+  },
+  "optical_flow__basic_motion_point": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "optical_flow",
+    "figure": "basic_motion_point",
+    "humanEvals": []
+  },
+  "optical_flow__camera_motion_field_rotation_three_f": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "optical_flow",
+    "figure": "camera_motion_field_rotation_three_f",
+    "humanEvals": []
+  },
+  "single_view_3d__vanishing_points": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "single_view_3d",
+    "figure": "vanishing_points",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 properly constructs projection rays directly from the origin through the image plane to the 3D points (with distinct solid/dashed segments), and correctly clips the projected 2D line to the boundaries of the image plane, whereas Figure 1's rays overlap by drawing from the 3D point to the origin and back to the image plane, and its projected line overflows the plane geometry."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 offers more pedagogically effective controls by using intuitive yaw/pitch angles and a trace point slider to demonstrate convergence to the vanishing point, whereas Figure 1 uses less intuitive raw vector components."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 captures the colors (red lines, yellow vanishing point) and spatial layout of the reference much better, whereas Figure 1 incorrectly uses black for the vanishing point and line points, resulting in a cluttered and compressed composition."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 provides crisp, readable labels with correct subscript formatting and logical placement, whereas Figure 1's labels are clustered, overlapping, and highly unreadable."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 adheres strictly to the textbook's Cartesian variables for the UI controls. However, Figure 2 is the stronger educational tool because it includes an interactive 't' slider that perfectly visualizes the textbook's mathematical definition of a vanishing point as a limit, allowing users to physically trace the projection to infinity.",
+          "concepts_tested": [
+            {
+              "concept": "Parametric Line Equation",
+              "book_lines": [
+                "L00138-L00147"
+              ],
+              "source_claim": "A 3D line is parameterized by a starting point and a direction vector D = [D_X, D_Y, D_Z]^T.",
+              "figure_a_match": "Parameterizes the line direction using Yaw and Pitch angles, and offset via a generic 'Parallel Offset' slider.",
+              "figure_b_match": "Provides exact UI sliders for the Cartesian components (Dx, Dy, Dz) and offset (Z0) as defined in the equations.",
+              "verdict": "few_shot_benchmark_gpt4.1/gpt-5.5"
+            },
+            {
+              "concept": "Vanishing Point as a Limit",
+              "book_lines": [
+                "L00172-L00176"
+              ],
+              "source_claim": "In the limit when the line parameter t goes to infinity, the 2D projection converges to a finite vanishing point.",
+              "figure_a_match": "Includes a 'Trace point (t)' slider that lets the user interactively slide a point towards infinity, directly visualizing the limit as the projection crawls toward the vanishing point.",
+              "figure_b_match": "Plots a few static points (t=-1, 0, 1, 2) on the line and their projections, but does not allow interaction with t.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Parallel Lines Share Vanishing Points",
+              "book_lines": [
+                "L00182-L00186"
+              ],
+              "source_claim": "The vanishing point only depends on the direction vector D, thus all parallel lines converge to the same vanishing point.",
+              "figure_a_match": "Provides a 'Parallel Offset' slider and a dedicated narration step showing that shifting the line sideways moves the line projection but leaves the vanishing point fixed.",
+              "figure_b_match": "Uses the Z0 offset slider to shift the line, noting in the narration that v depends only on D.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+              "book_lines": [
+                "L00139-L00140"
+              ],
+              "issue": "Uses spherical angles (Yaw, Pitch) to define the line direction in the UI, whereas the textbook explicitly defines and relies on the Cartesian vector components (D_X, D_Y, D_Z)."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.93,
+        "explanation": "Figure 2 is the clear winner because it correctly clips the projected 2D line to the image plane and properly constructs projection rays, whereas Figure 1 suffers from confusing, overlapping rays and a projected line that overflows the geometry. Furthermore, Figure 2 provides highly effective yaw/pitch controls and crisp, readable labels, in stark contrast to Figure 1's less intuitive vector component controls and highly cluttered, overlapping text."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:08:35.237Z"
+    }
+  },
+  "single_view_3d__locating_a_3d_point": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "single_view_3d",
+    "figure": "locating_a_3d_point",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 correctly implements the mathematical projection of 3D points onto an image plane to construct the vanishing points and lines, whereas Figure 2 completely misunderstands perspective geometry by placing vanishing points at arbitrary finite coordinates in the 3D world and drawing lines directly from 3D object points to them."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 includes a highly pedagogical 'View Mode' toggle that smoothly transitions the camera between a 2D projection view and a 3D physical setup view, providing a significantly better interactive learning experience than Figure 2's static perspective."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 2 correctly replicates the orientation, colors, and labels of the coordinate axes and vanishing points, whereas Figure 1 completely scrambles the axis directions and incorrectly swaps the positions of the vanishing points."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 2 correctly includes and clearly formats the fundamental coordinate axes labels (X_w, Y_w, Z_w) which Figure 1 completely omits, while Figure 1 also suffers from cluttered, overlapping text and incorrectly renames the central point."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 accurately separates 3D world space from 2D image space, properly applying the textbook's projective geometry and cross-ratio constructions onto a simulated 2D image plane. Figure 2 fundamentally misunderstands the math, incorrectly attempting to place vanishing points and draw 2D perspective construction lines as finite objects within a 3D world space.",
+          "concepts_tested": [
+            {
+              "concept": "Ambiguity of a Single Point",
+              "book_lines": [
+                "L00681-L00684"
+              ],
+              "source_claim": "In the absence of any other information, we can not recover the 3D location of a single point P from a single view as illustrated in @fig-locating_a_3d_point [a].",
+              "figure_a_match": "Effectively illustrates this by rendering the 3D viewing ray passing from the camera through point P, showing that depth is completely ambiguous along this line.",
+              "figure_b_match": "States that the point is ambiguous in the UI text, but visually just shows a point floating in 3D space without illustrating the camera or the projective ray that causes the ambiguity.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Using ground context to localize P",
+              "book_lines": [
+                "L00689-L00696"
+              ],
+              "source_claim": "The trick consists in using context (what object is the point part of...) to localize the projection of the point P on the ground plane, which we denote with G.",
+              "figure_a_match": "Provides a 3D wedge object that connects P to the ground at G, and projects this geometric relationship correctly onto the virtual image plane (G').",
+              "figure_b_match": "Uses a vertical bounding box to project P to G, but keeps the visualization strictly in 3D, missing the transition to the image plane where the math is performed.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Estimating Y-coordinate via horizon line (l3 and l4)",
+              "book_lines": [
+                "L00702-L00708"
+              ],
+              "source_claim": "First find the line, l3, that passes by the point G and the origin, and then find the intersection with the horizon line, giving the point v. Next, find the line, l4, that passes by v and P. The intersection... gives Py.",
+              "figure_a_match": "Faithfully calculates and draws this construction on the 2D image plane, finding the true 2D intersections to locate v on the horizon and Py on the projected Y-axis.",
+              "figure_b_match": "Attempts to draw this 2D construction inside a 3D coordinate system, faking the intersections by placing the vanishing point 'v' at an arbitrary finite 3D location.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00700-L00710"
+              ],
+              "issue": "The figure attempts to perform a 2D image plane perspective construction (vanishing points, horizon line, l3, l4) inside a 3D Cartesian space. Vanishing points are at infinity in 3D space; placing them at finite 3D coordinates and drawing 3D lines to them is geometrically invalid."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 1 is the overall winner due to its mathematically sound implementation of projective geometry, correctly separating 3D world space from the 2D image plane, whereas Figure 2 fundamentally misunderstands the math by incorrectly placing vanishing points as finite objects within a 3D space. Additionally, Figure 1 offers a highly pedagogical interactive view toggle that Figure 2 lacks. However, Figure 2 is notably stronger in its faithful replication of original axis orientations and labels, which Figure 1 unfortunately omits or scrambles."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:09:40.757Z"
+    }
+  },
+  "single_view_3d__streetgeons": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "single_view_3d",
+    "figure": "streetgeons",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 constructs genuine 3D volumes (boxes and cylinders) to model the scene, whereas Figure 2 uses a fake 2.5D approach with oblique offsets and 2D shapes that fails to properly represent the true 3D spatial relationships of the geons."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 features a more pedagogically powerful set of interactions, including a synchronized step-through sequence with explanatory narration and a smooth slider to explore the illusion's viewing angle, whereas Figure 2 offers standard visual toggles but lacks contextual guidance to explain the visual concepts being demonstrated."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 maintains the original black and white line art style and captures the overall composition and perspective of the sketch, whereas Figure 1 introduces unfaithful gray shading and fails to replicate the correct camera angle or building layout."
+        },
+        "labels": {
+          "winner": "tie",
+          "confidence": 1,
+          "rationale": "Both figures tie in label quality as the original reference image contains no text annotations, making both implementations identical in their complete lack of replicated figure labels."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 perfectly captures the textbook's theme by constructing a true 3D scene that magically aligns into the 2D line drawing through perspective projection, even explicitly highlighting the 'Geons' referenced in the image filename and source. Figure 2's use of flat, sheared 2.5D panels under an orthographic camera fails to demonstrate the geometry of image formation and perspective that the chapter is built upon.",
+          "concepts_tested": [
+            {
+              "concept": "Human Perception of 3D from 2D Lines",
+              "book_lines": [
+                "L00036-L00045",
+                "L00047-L00053"
+              ],
+              "source_claim": "A flat set of lines can elicit a powerful 3D perception, causing us to discern buildings, people, and cars even though it is just a 2D sketch.",
+              "figure_a_match": "Builds a full 3D scene from 3D primitives (geons) that exactly aligns into the 2D sketch under a specific perspective camera angle, allowing the user to rotate the camera to break the illusion and explicitly highlight the primitive shapes.",
+              "figure_b_match": "Constructs the sketch using 2.5D sheared flat panels and tubes under an orthographic camera, using camera rotation to show how the flat layers separate.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "few_shot_benchmark_gpt4.1/gpt-5.5",
+              "book_lines": [
+                "L00005-L00008",
+                "L00012-L00014"
+              ],
+              "issue": "Uses an orthographic camera and stacked flat/sheared 2D panels (like a pop-up book), failing to illustrate the fundamental ambiguity of perspective projection from a true 3D scene."
+            }
+          ]
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.95,
+        "explanation": "Figure 1 successfully models true 3D volumes and perspective projection to demonstrate the underlying textbook concepts, further enhanced by pedagogical interactive stepping and explanations. In contrast, Figure 2 relies on flat 2.5D shapes and orthographic projection, failing to illustrate the genuine spatial geometry of image formation despite its more faithful black-and-white line art style."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:10:01.122Z"
+    }
+  },
+  "single_view_3d__office_measuring_desk_sketch": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "single_view_3d",
+    "figure": "office_measuring_desk_sketch",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 1 correctly models the spatial relationship by including a separate 3D desk object and explicitly demonstrating the height transfer to the reference line, whereas Figure 2 abstracts the scene into a single vertical pole and omits the physical desk entirely."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 offers more pedagogically useful controls (camera tilt and height vs an abstract vanishing point slider) and features a dynamic SVG inset and detailed numerical readouts that respond to user interaction, making the cross-ratio concept much easier to understand."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.85,
+          "rationale": "Figure 2 maintains a clean, legible layout with correct label colors and structural elements like the ground plane and projection lines, whereas Figure 1 suffers from severe text overlapping that completely breaks the visual resemblance."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.8,
+          "rationale": "Figure 2 maintains much better readability by avoiding the catastrophic text overlapping seen in Figure 1, though it relies on a 2D inset for the image plane points and has minor clipping on the 'Ground plane' label."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 is significantly more effective pedagogically because it explicitly calculates the naive image distance ratio to demonstrate its error due to foreshortening, perfectly motivating the need for the cross-ratio as described in the text. Furthermore, Figure 2's 1D SVG inset does a brilliant job of isolating the collinear points to show exactly what data goes into the mathematical definition of the cross-ratio.",
+          "concepts_tested": [
+            {
+              "concept": "Foreshortening vs. Cross-Ratio",
+              "book_lines": [
+                "L00487-L00491"
+              ],
+              "source_claim": "...due to the foreshortening effect induced by perspective projection, we cannot simply rely on the ratio of image distances to estimate the desk's true height. Instead, we will utilize the cross-ratio invariant...",
+              "figure_a_match": "Explicitly calculates the naive 'simple ratio' of image distances, displays its error against the true 3D ratio, and then contrasts this with the accurate cross-ratio calculation.",
+              "figure_b_match": "Displays the cross-ratio value and the ratio of 3D heights, showing they are equal.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Collinear Points on the Image Plane",
+              "book_lines": [
+                "L00374-L00375",
+                "L00518-L00522"
+              ],
+              "source_claim": "The cross-ratio of four collinear points is defined... In the image plane, we have the four image points t_b, b, g_b and v_3.",
+              "figure_a_match": "Maps the four points onto the 2D plane and includes a dedicated 1D SVG inset that isolates the line, clarifying how the points sit on a 1D axis for the cross-ratio formula.",
+              "figure_b_match": "Labels the four collinear points on the 3D representation of the translucent image plane.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            },
+            {
+              "concept": "Invariance to Projection Changes",
+              "book_lines": [
+                "L00369-L00371",
+                "L00387-L00392"
+              ],
+              "source_claim": "Fortunately, some geometric properties are preserved under perspective projection... Two sets of points P and Q related by a projective transformation... have the same cross-ratio...",
+              "figure_a_match": "Uses physical 'Camera Pitch' and 'Camera Height' sliders accompanied by step-by-step narration explaining how changing the viewpoint preserves the cross-ratio invariant.",
+              "figure_b_match": "Uses a 'Vertical vanishing pt Y' slider to warp the projection while keeping the cross-ratio constant.",
+              "verdict": "few_shot_benchmark_gemini3.5flash/gpt-5.5"
+            }
+          ],
+          "mismatches": []
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+        "confidence": 0.9,
+        "explanation": "Figure 2 is significantly more effective pedagogically and visually, offering legible labels, dynamic numerical readouts, and an SVG inset that clearly demonstrates the cross-ratio calculation, whereas Figure 1 suffers from severe text overlapping that breaks visual resemblance. Although Figure 1 provides a more literal 3D geometry of the scene by including a desk, Figure 2's superior interactive controls and explicit presentation of foreshortening errors make it the clear overall winner."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:10:25.813Z"
+    }
+  },
+  "single_view_3d__axis_calibration_procedure": {
+    "setupA": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+    "setupB": "few_shot_benchmark_gpt4.1/gpt-5.5",
+    "chapter": "single_view_3d",
+    "figure": "axis_calibration_procedure",
+    "humanEvals": [],
+    "machineEval": {
+      "figure1Setup": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+      "figure2Setup": "few_shot_benchmark_gpt4.1/gpt-5.5",
+      "dimensions": {
+        "geometry": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 1 correctly builds a true 3D geometric model of the perspective projection, whereas Figure 2 essentially draws a flattened 2D diagram within the 3D space, which violates the requirement for authentic 3D spatial relationships."
+        },
+        "interactivity": {
+          "winner": "few_shot_benchmark_gemini3.5flash/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Figure 1 provides highly illustrative camera tweening between a 3D setup and the actual camera view, while Figure 2's interactions only manipulate parameters within a static viewing angle."
+        },
+        "faithfulness": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.99,
+          "rationale": "Figure 2 successfully replicates both the 3D setup (a) and the 2D projection (b) with accurate angles, colors, and labels, whereas Figure 1 only provides an awkwardly angled 3D view and entirely omits the 2D projection half of the diagram."
+        },
+        "labels": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 0.95,
+          "rationale": "Figure 2 includes nearly all required labels from the original, such as titles, point markers (P1-P4, v1-v3), and part identifiers (a/b), whereas Figure 1 is missing the vast majority of these annotations."
+        },
+        "concept": {
+          "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+          "confidence": 1,
+          "rationale": "Figure 2 explicitly reconstructs the textbook's core diagram for this section (@fig-axis_calibration_procedure), complete with matching notation (P1, P2, r, q) and side-by-side panels to explain the cross-ratio calibration geometry. Figure 1 provides a good generic 3D camera projection playground, but fails to ground its visual in the specific mathematical construction and variables detailed in the text.",
+          "concepts_tested": [
+            {
+              "concept": "Perspective distortion of evenly spaced points",
+              "book_lines": [
+                "L00634-L00636"
+              ],
+              "source_claim": "Due to geometric distortion introduced by perspective projection, the tick marks are not evenly spaced within the image plane.",
+              "figure_a_match": "Shows 3D axes with evenly spaced ticks and their corresponding 2D projections, visually demonstrating the compression towards vanishing points.",
+              "figure_b_match": "Displays the uneven spacing on the 2D image plane (panel b) and the 3D rays causing it (panel a), allowing users to adjust the number of ticks.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Axis calibration via cross-ratio geometry",
+              "book_lines": [
+                "L00641-L00657"
+              ],
+              "source_claim": "We will use the cross-ratio to calibrate the projection of the world coordinate system... As shown in @fig-axis_calibration_procedure (a)...",
+              "figure_a_match": "Briefly mentions the cross-ratio in a demo step but does not isolate or label the specific points used in the textbook's geometric construction.",
+              "figure_b_match": "Directly recreates the textbook's construction figure, explicitly labeling the 3D points (P1, P2...) and their 2D projections (r, q) to illustrate the cross-ratio invariant along each selected axis.",
+              "verdict": "few_shot_benchmark_gpt4.1/gpt-5.5"
+            }
+          ],
+          "mismatches": []
+        }
+      },
+      "aggregator": {
+        "winner": "few_shot_benchmark_gpt4.1/gpt-5.5",
+        "confidence": 0.85,
+        "explanation": "Figure 2 excels by accurately replicating both the 3D setup and the 2D projection panels of the original diagram, along with all critical mathematical notation (P1-P4, v1-v3) needed for the textbook's cross-ratio geometry. In contrast, while Figure 1 offers a superior, truly interactive 3D geometric model with camera tweening, it completely omits the crucial 2D projection panel and fails to include the necessary labels to connect the visual to the text."
+      },
+      "evalModel": "gemini-3.1-pro",
+      "evaluatedAt": "2026-06-29T19:11:11.868Z"
+    }
+  }
+}
