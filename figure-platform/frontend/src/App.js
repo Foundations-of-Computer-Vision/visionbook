@@ -4322,6 +4322,52 @@ function PairwiseTab({ availableModels }) {
     setRunning(false);
   }, [matchingFigures, setupA, setupB, evalModel, running]);
 
+  const runConceptOnlyEval = useCallback(async () => {
+    if (!matchingFigures || matchingFigures.length === 0 || running) return;
+    setRunning(true);
+    setProgress({ done: 0, total: matchingFigures.length, log: [] });
+
+    const body = JSON.stringify({ setupA, setupB, figures: matchingFigures, evalModel, conceptOnly: true });
+    const res = await fetch('/api/pairwise/batch-evaluate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    });
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line);
+          const icon = parsed.status === 'ok' ? '✓' : parsed.status === 'skipped' ? '⏭' : '✗';
+          setProgress(p => ({
+            done: p.done + 1,
+            total: p.total,
+            log: [...p.log, `${icon} ${parsed.chapter}/${parsed.name}${parsed.status === 'skipped' ? ' (skipped)' : ''}`],
+          }));
+          if (parsed.status === 'ok' && parsed.result) {
+            setResults(prev => {
+              const idx = prev.findIndex(r => r.chapter === parsed.chapter && r.figure === parsed.name);
+              const updated = { setupA, setupB, chapter: parsed.chapter, figure: parsed.name, machineEval: parsed.result, humanEvals: [] };
+              if (idx >= 0) { const next = [...prev]; next[idx] = { ...prev[idx], machineEval: parsed.result }; return next; }
+              return [...prev, updated];
+            });
+          }
+        } catch { /* malformed line */ }
+      }
+    }
+    setRunning(false);
+  }, [matchingFigures, setupA, setupB, evalModel, running]);
+
   const openHumanPanel = useCallback(async (result) => {
     setHumanPanelFig(result);
     setHumanWinner(null);
@@ -4670,6 +4716,14 @@ function PairwiseTab({ availableModels }) {
             onClick={runMachineEval}
           >
             {running ? 'Running…' : 'Run Machine Evaluation'}
+          </button>
+          <button
+            style={{ ...styles.pwRunBtn, ...(!matchingFigures || matchingFigures.length === 0 || running ? styles.pwRunBtnDisabled : {}), marginLeft: 8, fontSize: 12 }}
+            disabled={!matchingFigures || matchingFigures.length === 0 || running}
+            onClick={runConceptOnlyEval}
+            title="Re-run only the concept accuracy and overall scores, keeping other dimensions intact"
+          >
+            {running ? 'Running…' : 'Redo Concept + Overall'}
           </button>
         </div>
         {(running || progress.done > 0) && progress.total > 0 && (

@@ -15,6 +15,7 @@ const {
 const { evaluateFigure } = require('./evaluator');
 const {
   pairwiseEvaluateFigure,
+  pairwiseEvaluateConceptOnly,
   loadPairwiseResult,
   savePairwiseResult,
   loadAllPairwiseResults,
@@ -1595,7 +1596,7 @@ app.get('/api/pairwise/results/:setupA/:setupB', (req, res) => {
 // Figures from prompt_experiments have htmlPath; agent results have resultId.
 // Streams NDJSON progress, one line per figure.
 app.post('/api/pairwise/batch-evaluate', async (req, res) => {
-  const { setupA, setupB, figures, evalModel } = req.body;
+  const { setupA, setupB, figures, evalModel, conceptOnly = false } = req.body;
   if (!setupA || !setupB) return res.status(400).json({ error: 'setupA and setupB are required.' });
   if (!Array.isArray(figures) || figures.length === 0) return res.status(400).json({ error: 'figures array is required.' });
 
@@ -1635,6 +1636,38 @@ app.post('/api/pairwise/batch-evaluate', async (req, res) => {
     const { name, chapter, htmlPathA, resultIdA, imagePathA, htmlPathB, resultIdB, imagePathB } = fig;
     try {
       const existingResult = loadPairwiseResult(setupA, setupB, chapter, name);
+
+      if (conceptOnly) {
+        // Redo only concept + aggregator; skip figures with no existing eval (nothing to patch)
+        if (!existingResult?.machineEval) {
+          res.write(JSON.stringify({ name, chapter, status: 'skipped', reason: 'no existing eval to patch' }) + '\n');
+          continue;
+        }
+        // Skip figures whose concept was already successfully redone
+        if (existingResult.machineEval.conceptRedoneAt) {
+          res.write(JSON.stringify({ name, chapter, status: 'skipped' }) + '\n');
+          continue;
+        }
+        const assetsA = readFigureAssets(htmlPathA, resultIdA, imagePathA);
+        const assetsB = readFigureAssets(htmlPathB, resultIdB, imagePathB);
+        if (!assetsA || !assetsB) {
+          res.write(JSON.stringify({ name, chapter, status: 'error', error: 'HTML assets not found.' }) + '\n');
+          continue;
+        }
+        const evalResult = await pairwiseEvaluateConceptOnly({
+          htmlA: assetsA.html, setupA,
+          htmlB: assetsB.html, setupB,
+          thumbA: assetsA.thumb, thumbB: assetsB.thumb,
+          sourceImage: assetsA.sourceImg || assetsB.sourceImg,
+          evalModel, chapterName: chapter,
+          existingMachineEval: existingResult.machineEval,
+        });
+        const record = { ...existingResult, machineEval: evalResult };
+        savePairwiseResult(setupA, setupB, chapter, name, record);
+        res.write(JSON.stringify({ name, chapter, status: 'ok', result: evalResult }) + '\n');
+        continue;
+      }
+
       if (existingResult?.machineEval) {
         res.write(JSON.stringify({ name, chapter, status: 'skipped' }) + '\n');
         continue;

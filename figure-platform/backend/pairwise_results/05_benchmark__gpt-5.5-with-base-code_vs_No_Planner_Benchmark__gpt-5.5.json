@@ -32,16 +32,57 @@
         "concept": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 0.9,
-          "rationale": "Figure 2 allows the student to manipulate both the carrier frequency and the Gaussian envelope width (sigma) rather than just the frequency, and includes explicit zero-planes that help clarify the positive and negative lobes of the wave components."
+          "rationale": "Both figures present Gabor filters, which are a mismatch for a textbook section exclusively focused on multiscale Image Pyramids (Gaussian, Laplacian, Steerable). However, because the text explicitly discusses 'wider Gaussian filters', Figure 2 is the better tool as it includes a σ (sigma) slider to actively demonstrate Gaussian width, whereas Figure 1 only allows frequency adjustment.",
+          "concepts_tested": [
+            {
+              "concept": "Gaussian Filter Scale",
+              "book_lines": [
+                "L00132-L00135"
+              ],
+              "source_claim": "A Gaussian filter is a natural one to use to blur out an image, since the multiple successive application of a Gaussian filter is equivalent to application of a single, wider Gaussian filter.",
+              "figure_a_match": "Displays a 3D Gaussian window and provides a σ (sigma) slider, allowing the user to dynamically visualize a 'wider Gaussian filter'.",
+              "figure_b_match": "Displays a 3D Gaussian window but does not allow the user to adjust its width.",
+              "verdict": "No_Planner_Benchmark/gpt-5.5"
+            },
+            {
+              "concept": "Oriented Filters",
+              "book_lines": [
+                "L00468-L00478"
+              ],
+              "source_claim": "The steerable pyramid adds information about image orientation... We analyze in orientation using a steerable filter bank.",
+              "figure_a_match": "Attempts to illustrate oriented filters using Gabor functions, offering sliders for both the carrier frequency and the Gaussian envelope width.",
+              "figure_b_match": "Attempts to illustrate oriented filters using Gabor functions, offering a slider for the carrier frequency.",
+              "verdict": "No_Planner_Benchmark/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "05_benchmark/gpt-5.5-with-base-code",
+              "book_lines": [
+                "L00013-L00025",
+                "L00466-L00478"
+              ],
+              "issue": "The figure focuses entirely on 'Gabor Functions' and sine/cosine phases, which are never mentioned in the text. The text is focused on multiscale Image Pyramids."
+            },
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00013-L00025",
+                "L00466-L00478"
+              ],
+              "issue": "Like Figure 1, this figure introduces 'Gabor filters' and specific formulas (like u0 and σ for Gabor patches) that do not appear in the textbook's discussion of Steerable Pyramids."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "No_Planner_Benchmark/gpt-5.5",
         "confidence": 0.9,
-        "explanation": "Figure 2 is the clear winner because it successfully conveys the 3D geometry of the wave components using an angled camera perspective, proper lighting, and zero-reference planes, whereas Figure 1 uses a flat, unlit front-on view that obscures the 3D surface shapes. Furthermore, Figure 2 provides superior interactivity and conceptual depth by offering functional sliders for both carrier frequency and Gaussian envelope width, unlike Figure 1 which only provides a single frequency slider. Although Figure 1 features more accurate and logical label placement, this minor strength is vastly outweighed by Figure 2's significant graphical and interactive advantages."
+        "explanation": "Figure 2 excels at conveying 3D geometry with an angled camera viewpoint, proper lighting, and zero-reference planes, whereas Figure 1 uses a flat, side-on angle that obscures the 3D surface shapes. Furthermore, Figure 2 provides superior interactivity and conceptual alignment by including dual sliders for both frequency and Gaussian width, whereas Figure 1 only offers a single frequency slider. Although Figure 1 features more accurate label placements, Figure 2's overwhelming advantages in spatial representation and interactive control make it the much stronger overall figure."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:34:13.895Z"
+      "evaluatedAt": "2026-06-30T02:17:36.346Z",
+      "conceptRedoneAt": "2026-06-30T02:17:36.346Z"
     }
   },
   "upsamplig_downsampling__bilinear_interp2": {
@@ -77,16 +118,42 @@
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
           "confidence": 1,
-          "rationale": "Figure 2 allows the student to interactively manipulate the fractional coordinates via sliders to instantly observe how the interpolated value changes continuously in both the 1D and 2D contexts, whereas Figure 1 is entirely static and only offers textual tooltips."
+          "rationale": "Figure 2 is vastly superior due to its interactive sliders for parameters 'a' and 'b'. While Figure 1 provides a good static 3D reproduction of the textbook diagram, Figure 2 allows the user to dynamically explore the interpolation space, making the mathematical mechanics of linear and bilinear interpolation immediately intuitive.",
+          "concepts_tested": [
+            {
+              "concept": "Linear Interpolation",
+              "book_lines": [
+                "L00503-L00506",
+                "L00527"
+              ],
+              "source_claim": "The value of ℓ_out(a) is a result of linear interpolation between the two closest input values ℓ_in[n] and ℓ_in[n+1].",
+              "figure_a_match": "Visualizes the 1D interpolation as a static green line with a red point. Features tooltips to explain the components.",
+              "figure_b_match": "Provides an interactive slider for 'a' that dynamically moves the red sample point along the green line, perfectly demonstrating the continuous nature of the interpolation.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Bilinear Interpolation",
+              "book_lines": [
+                "L00513-L00517",
+                "L00519-L00524"
+              ],
+              "source_claim": "Bilinear interpolation consists of first applying linear interpolation to obtain ℓ_out(a,m) and ℓ_out(a,m+1) and then again applying linear interpolation between those two values to obtain ℓ_out(a,b).",
+              "figure_a_match": "Shows a static 3D bilinear surface with the intermediate and final interpolated points highlighted.",
+              "figure_b_match": "Provides interactive sliders for both 'a' and 'b'. As the sliders move, the intermediate lines and the final output point shift across the 3D bilinear surface, explicitly showing the two-stage linear interpolation process in real-time.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 0.85,
-        "explanation": "Figure 2 is the stronger educational tool because it provides interactive sliders that allow users to dynamically adjust interpolation coordinates, whereas Figure 1 remains entirely static with only basic tooltips. Furthermore, Figure 2 faithfully reproduces the original red interpolated points and features better overall framing, whereas Figure 1 incorrectly uses black dots and suffers from poor cropping, despite its superior 3D guideline geometry and cleaner label placement."
+        "explanation": "Figure 2 offers vastly superior pedagogical value by including interactive sliders that let users dynamically explore the interpolation space, along with more faithful coloring of key points and better framing compared to Figure 1's static representation and incorrect point colors. Although Figure 1 features more consistent 3D dashed lines and avoids the overlapping label issues seen in Figure 2, the interactive mechanics of Figure 2 make it the much stronger overall choice."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:34:37.536Z"
+      "evaluatedAt": "2026-06-30T02:17:53.589Z",
+      "conceptRedoneAt": "2026-06-30T02:17:53.589Z"
     }
   },
   "vision_and_language__clip_mapping_diagram_two_branch": {
@@ -121,17 +188,50 @@
         },
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 1,
-          "rationale": "Figure 1 brilliantly conveys the core pedagogical concept of representation learning by physically organizing the embedding trajectories into semantic clusters across layers, and providing an interactive cueing system (color vs. shape) to let the student easily observe these relationships, whereas Figure 2 offers a static, messy 2D projection that fails to leverage the medium to teach the concept."
+          "confidence": 0.95,
+          "rationale": "Figure 1 is vastly superior because it uses genuine 3D space to represent the layers and the target hypersphere, paired with a clever UI toggle that actively demonstrates the textbook's claim about representation drift (color vs. shape). Figure 2 improperly uses Three.js as a 2D canvas, creating a fake isometric drawing that collapses as soon as the user interacts with the camera.",
+          "concepts_tested": [
+            {
+              "concept": "CLIP Two-Branch Architecture and Joint Space",
+              "book_lines": [
+                "L00121-L00142",
+                "L00199-L00204"
+              ],
+              "source_claim": "CLIP consists of separate image and text encoders that process data and map it to a shared embedding space, where vectors are normalized to lie on the surface of a hypersphere.",
+              "figure_a_match": "Represents the structure entirely as a flat 2D drawing on the XY plane, using a 2D circle for the joint space instead of a hypersphere.",
+              "figure_b_match": "Models the architecture using vertical stacks of true 3D horizontal planes, converging into a 3D sphere ('jointSphere') that accurately represents the hypersphere.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Layer-wise Representation Drift (Color vs. Shape)",
+              "book_lines": [
+                "L00186-L00192"
+              ],
+              "source_claim": "In the image encoder, early layers group by color and later layers group by shape. The text encoder follows the opposite pattern because color and shape words are equally superficial in text-space.",
+              "figure_a_match": "Also attempts to interpolate token positions between color and shape centers, but does so on a flat plane with scattered text labels, offering no interactive way to isolate and verify the clustering patterns.",
+              "figure_b_match": "Programmatically interpolates token positions between color and shape clusters depending on the layer index and branch. Crucially, it includes an interactive 'Cue' button that highlights tokens by either color or shape, allowing users to visually verify the clustering behavior at different depths.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00178-L00184"
+              ],
+              "issue": "Constructs a fake 3D isometric diagram by drawing skewed 2D diamonds on a flat vertical plane. Because OrbitControls are enabled, any user rotation instantly breaks the illusion, revealing it as a flat cardboard cutout rather than a valid 3D spatial visualization."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 0.98,
-        "explanation": "Figure 1 significantly outperforms Figure 2 by constructing a true 3D spatial layout with stacked grids and an angled isometric view, whereas Figure 2 relies on a flat, straight-on 2D projection that completely misses the original's dimensionality. Additionally, Figure 1 enhances the pedagogical value through custom interactive UI buttons and clear semantic clustering of trajectories, while Figure 2 provides a static, poorly proportioned diagram missing key side labels and text borders."
+        "explanation": "Figure 1 successfully constructs a genuine 3D scene to represent the spatial layers and includes pedagogically useful UI controls to toggle semantic groupings, whereas Figure 2 improperly uses the 3D space as a flat 2D canvas that collapses upon camera interaction. Furthermore, Figure 1 faithfully preserves the layout, proportions, and required side labels of the original, while Figure 2 suffers from severe proportion issues with comically small grids and completely lacks side labels and text borders."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:34:55.534Z"
+      "evaluatedAt": "2026-06-30T02:18:22.761Z",
+      "conceptRedoneAt": "2026-06-30T02:18:22.761Z"
     }
   },
   "temporal_filters__gabor_spacetime_tiles": {
@@ -167,16 +267,49 @@
         "concept": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 0.9,
-          "rationale": "Figure 1 uses group-level interactions to explain the core concepts (the entire filter bank, the velocity plane, and the selected subset of filters), whereas Figure 2 limits interaction to individual spheres, missing the overarching pedagogical point about pooling and energy planes."
+          "rationale": "Both figures excellently recreate the classic 3D frequency lattice and velocity plane diagram used to explain space-time motion energy. However, Figure 1 correctly keeps its terminology general ('velocity-selected filter', 'filter bank'), whereas Figure 2 hallucinates the term 'Gabor filter', which is absent from the provided textbook text on Gaussian derivatives and nulling filters.",
+          "concepts_tested": [
+            {
+              "concept": "Moving Images in the Fourier Domain",
+              "book_lines": [
+                "L00037-L00041"
+              ],
+              "source_claim": "The FT of a globally moving image is... equal to the product of the 2D FT of the static image and a delta wall. $\\delta (w_t + v_x w_x + v_y w_y)$",
+              "figure_a_match": "Also models a 3D frequency lattice with a slicing 'motion-energy plane', explaining that moving signals concentrate energy there.",
+              "figure_b_match": "Models the 'delta wall' as a velocity-dependent 2D plane cutting through a 3D frequency lattice (w_x, w_y, w_t), explaining via tooltips that uniform translation concentrates Fourier energy on this plane.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Velocity-Tuned Filters",
+              "book_lines": [
+                "L00183-L00188"
+              ],
+              "source_claim": "By using different filters, each one computing derivatives along different space-time orientations, we can create output sequences where specific objects disappear... The behavior will be correct if in a local image patch there is only one velocity present.",
+              "figure_a_match": "Highlights a subset of filters on the plane, indicating they have high amplitude responses for the chosen motion.",
+              "figure_b_match": "Shows a subset of filters being 'velocity-selected' by the plane, illustrating how a motion-tuned bank is formed by retaining filters near the velocity plane.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "05_benchmark/gpt-5.5-with-base-code",
+              "book_lines": [
+                "L00098-L00103",
+                "L00121-L00142"
+              ],
+              "issue": "Explicitly labels the geometry as 'Gabor' filters ('Gabor Space-Time Tiles', 'One Gabor filter'). The textbook text never mentions Gabor filters, focusing instead on Spatiotemporal Gaussians and their temporal derivatives."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.8,
-        "explanation": "Although Figure 2 constructs a true 3D lattice and features perfectly placed labels, Figure 1 is the stronger visualization overall due to its conceptual accuracy and faithful design. Figure 1 correctly implements a simple cubic lattice with metallic shading and pedagogically meaningful grouped interactions, whereas Figure 2 relies on an incorrect staggered lattice, flat shading, and generic interactions that fail to convey the overarching concepts."
+        "confidence": 0.75,
+        "explanation": "Although Figure 2 successfully constructs a true 3D geometric lattice and features accurately positioned labels, it suffers from an incorrect staggered lattice structure and hallucinates key terminology. Figure 1 is the better overall diagram because it maintains the correct simple cubic lattice, provides pedagogically meaningful grouped interactions, and uses accurate terminology, even though it relies on a simulated 2D projection rather than genuine 3D geometry."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:35:33.846Z"
+      "evaluatedAt": "2026-06-30T14:55:07.264Z",
+      "conceptRedoneAt": "2026-06-30T14:55:07.264Z"
     }
   },
   "imaging_geometry__reprojection_error": {
@@ -210,18 +343,62 @@
           "rationale": "Figure 1 formats subscripts more accurately without visible underscores and positions the labels clearly, whereas Figure 2 includes literal underscores in the text and suffers from severe overlapping and clutter in the smaller triangle's annotations."
         },
         "concept": {
-          "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 0.95,
-          "rationale": "Figure 2 correctly places the image points on the image plane and maintains straight collinear optical rays, whereas Figure 1 draws physically impossible bent rays and floats its 2D points far off the image plane in 3D space."
+          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "confidence": 0.9,
+          "rationale": "Both figures effectively recreate the textbook's reprojection error schematic, utilizing red segments and sliders to visualize the error distance between measured and estimated image points. Figure 1 wins because its interactivity is much more thorough, providing explanations for all points and geometric elements (like the projection rays and triangles), whereas Figure 2 leaves most of its points unclickable.",
+          "concepts_tested": [
+            {
+              "concept": "Reprojection Error Definition",
+              "book_lines": [
+                "L01102-L01104",
+                "L01114"
+              ],
+              "source_claim": "The reprojection error is the difference between the estimated image coordinates of a 3D point and its ground-truth image coordinates... indicated by the red lines on the image plane.",
+              "figure_a_match": "Clearly labels ground-truth points (p) and estimated projections (p'), connecting them with red segments. Includes comprehensive interactive tooltips for every point (P_i, p_i, p'_i) to explain their distinct roles.",
+              "figure_b_match": "Also draws the points and red segments, but neglects to add interactive tooltips to points P2, P3, p2, p3, p2Prime, and p3Prime, making the scene less uniformly explorable.",
+              "verdict": "No_Planner_Benchmark/gpt-5.5"
+            },
+            {
+              "concept": "Reprojection Loss Minimization",
+              "book_lines": [
+                "L01116-L01126"
+              ],
+              "source_claim": "The reprojection error can be evaluated with the loss: sum ||p_i - p'_i||^2 ... The reprojection loss can be minimized by gradient descent, optimizing the three matrices.",
+              "figure_a_match": "Provides an 'err scale' slider and an interactive click action on the error segments that explains how changing the camera parameters drives these distances toward zero.",
+              "figure_b_match": "Provides an error scale slider and an interactive click action on individual error segments that highlights them and shows an 'e_i' label to explain the loss terms.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Perspective Projection Rays",
+              "book_lines": [
+                "L00263-L00268",
+                "L01106-L01109"
+              ],
+              "source_claim": "The ray that connects the camera center and the point p... Any 3D point along this line will project into the same image point p under perspective projection.",
+              "figure_a_match": "Draws dashed projection rays from the optical center through the image plane to the 3D object points, and includes a UI toggle to show/hide them for visual clarity.",
+              "figure_b_match": "Draws dashed projection rays but forces them to always be visible with no option to toggle them off.",
+              "verdict": "No_Planner_Benchmark/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "05_benchmark/gpt-5.5-with-base-code",
+              "book_lines": [
+                "L01106-L01112"
+              ],
+              "issue": "Incomplete interactivity: while the code sets up 3 points for P, p, and p', it only registers interactive tooltips for P1 and p'1, leaving the user without explanations if they click the other labeled points."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.65,
-        "explanation": "Figure 1 provides a more faithful visual reproduction of the original layout with accurate vertex colors and superior label formatting, while also offering a significantly richer set of interactive controls. Although Figure 2 more accurately models the mathematical collinearity of the projection rays, it suffers from a mirrored overall composition, missing vertex colors, and severe label clutter compared to Figure 1."
+        "confidence": 0.95,
+        "explanation": "Figure 1 is the overall winner due to its significantly richer interactivity—including toggles and clickable educational popups—as well as its faithful reproduction of the original layout, vertex colors, and clean label formatting. Although Figure 2 provides a more mathematically sound geometry by strictly enforcing collinearity, it falls short because its overall composition is mirrored, its labels suffer from severe overlapping and literal underscores, and it offers far fewer interactive elements to explain the underlying concepts."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:36:15.500Z"
+      "evaluatedAt": "2026-06-30T02:19:20.973Z",
+      "conceptRedoneAt": "2026-06-30T02:19:20.973Z"
     }
   },
   "imaging_geometry__pinhole_and_sensor": {
@@ -257,16 +434,51 @@
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
           "confidence": 0.95,
-          "rationale": "Figure 1 accurately places the physical and virtual image planes at equal distances (-f and +f) from the camera center to maintain the same image scale, whereas Figure 2 places them at unequal distances (-1.42 and 1.62), breaking the core geometric symmetry of the pinhole model."
+          "rationale": "Figure 1 is the clear winner because it utilizes a dynamic interactive element (toggling the sensor grid density) to actively teach the 'Meters to Pixels' scaling factor ($N/w$), whereas Figure 2 leaves this as a static visual. Furthermore, Figure 2 hallucinates an unsupported 'v' label on the image plane, departing from the textbook's notation.",
+          "concepts_tested": [
+            {
+              "concept": "Pinhole Camera Projection and Rays",
+              "book_lines": [
+                "L00254-L00261",
+                "L00265-L00268"
+              ],
+              "source_claim": "The point p is contained in the image plane which is located at a distance f... The ray that connects the camera center and the point p is λ (x,y,f). Any 3D point along this line will project into the same image point p.",
+              "figure_a_match": "Also provides an interactive point 'P' that highlights the projection ray using translucent cylinders to connect the sensor, camera center, and 3D point.",
+              "figure_b_match": "Provides a clickable 3D point 'P' that highlights the collinear projection ray passing through the virtual image plane, the camera center, and striking the physical sensor behind the pinhole.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Meters to Pixels Conversion",
+              "book_lines": [
+                "L00171-L00174",
+                "L00186-L00189"
+              ],
+              "source_claim": "The constant a is related to the physical camera parameters... a = f N / w where f is the focal length (in meters), w is the width of the sensor in meters, and N is the image width in pixels. The ratio N/w is the number of pixels per meter.",
+              "figure_a_match": "Explains the concept in a text popup but relies on a static mesh for the sensor grid, failing to visually demonstrate the relationship between pixel count and sensor width.",
+              "figure_b_match": "Features an interactive sensor grid that dynamically toggles between high and low density when clicked, visually demonstrating how 'N' pixels subdivide the fixed physical sensor width 'w'.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00056-L00058",
+                "L00229-L00230"
+              ],
+              "issue": "Includes a floating 'v' label on the virtual image plane alongside 'x' and 'y'. The textbook strictly uses (x, y) for continuous image coordinates and (n, m) for discrete pixel arrays, never introducing 'v'."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
-        "confidence": 0.75,
-        "explanation": "Figure 1 accurately represents the core geometry of the pinhole camera model by placing the physical sensor and virtual image plane at symmetric focal distances, whereas Figure 2 breaks this fundamental geometric equivalence by using unequal distances. Additionally, Figure 1 offers richer pedagogical interactivity through functional toggles like changing sensor grid density, whereas Figure 2 relies mostly on static popups. Although Figure 2 exhibits stronger faithfulness with a correct spatial layout and precise label placement compared to Figure 1's overlapping text and reversed arrangement, Figure 1's conceptual accuracy and interactivity make it the superior visualization."
+        "confidence": 0.7,
+        "explanation": "Figure 1 excels by correctly maintaining the symmetric geometric distances of the sensor and virtual image planes and offering dynamic grid density toggles to actively teach the scaling concept, whereas Figure 2 breaks the fundamental geometric projection model with asymmetric focal distances and relies on static visualizations. Although Figure 2 features superior visual organization, correct spatial layout, and accurate label placement, Figure 1's stronger adherence to the core mathematical and conceptual principles makes it the overall better educational tool."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:36:49.660Z"
+      "evaluatedAt": "2026-06-30T02:19:59.258Z",
+      "conceptRedoneAt": "2026-06-30T02:19:59.258Z"
     }
   },
   "optical_flow__barber_pole": {
@@ -302,16 +514,40 @@
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
           "confidence": 0.95,
-          "rationale": "Figure 1 includes a toggleable 'Aperture' overlay that explicitly masks the cylinder edges, directly demonstrating how the aperture problem causes the illusion by hiding the 3D wrap-around terminators, whereas Figure 2 relies entirely on text to explain this core concept."
+          "rationale": "Figure 1 significantly outperforms Figure 2 by including an interactive aperture mask that physically hides the stripe terminations, perfectly demonstrating the textbook's definition of the aperture problem. Figure 2 lacks this visual aid, relying only on tooltips to explain that the cylinder edges act as an aperture.",
+          "concepts_tested": [
+            {
+              "concept": "Aperture Problem",
+              "book_lines": [
+                "L00088-L00094"
+              ],
+              "source_claim": "The aperture problem happens when observing the motion of a one-dimensional (1D) structure larger than the image frame... If none of the termination points are in view within the observation window (i.e., the aperture), it is impossible to measure the actual image motion.",
+              "figure_a_match": "Relies on a tooltip text to explain that the cylinder outline acts as an aperture, without providing a visual toggle to show or hide the terminations.",
+              "figure_b_match": "Includes a dedicated 'Aperture' button that overlays a physical frame, hiding the stripe ends to explicitly demonstrate how the observation window causes the illusion.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Barber-pole Illusion",
+              "book_lines": [
+                "L00099-L00103"
+              ],
+              "source_claim": "The barber pole induces the illusion of downward motion while rotating.",
+              "figure_a_match": "Replicates the textbook's arrows for 'Real motion' and 'Observed motion' and allows speed adjustments for the rotation.",
+              "figure_b_match": "Replicates the textbook's arrows for 'Real motion' (rotation) and 'Observed motion' (downward) while allowing the user to toggle the rotation.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
-        "confidence": 0.75,
-        "explanation": "Figure 1 provides a significantly better pedagogical experience by using an interactive aperture overlay to explicitly demonstrate the illusion and rendering the rotation arrow with accurate 3D geometry, whereas Figure 2 relies on flat 2D shapes and text-based explanations. While Figure 2 is more faithful to the original solid stripe styling and features better label placement without overlap, Figure 1's interactive masking makes it a functionally superior demonstration of the core concept."
+        "confidence": 0.8,
+        "explanation": "Figure 1 excels by incorporating a 3D spatial rotation arrow and an interactive aperture mask that perfectly demonstrates the aperture problem, whereas Figure 2 relies on flat 2D geometry and lacks the visual mask. However, Figure 2 better replicates the original red, white, and blue diagonal stripes and places labels clearly to the right, whereas Figure 1 incorrectly renders thin colored lines and suffers from poor readability due to overlapping text."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:37:15.594Z"
+      "evaluatedAt": "2026-06-30T02:20:16.348Z",
+      "conceptRedoneAt": "2026-06-30T02:20:16.348Z"
     }
   },
   "homography__homography_plane_geometry2": {
@@ -346,17 +582,43 @@
         },
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 0.95,
-          "rationale": "Figure 1 includes an interactive slider that dynamically tilts the world plane and recalculates the projection ray and image point, providing a superior pedagogical demonstration of the geometric relationship compared to Figure 2's static setup."
+          "confidence": 1,
+          "rationale": "Figure 1 is significantly better because it uses an interactive slider to tilt the planar surface, directly illustrating the textbook's claim that the homography relationship holds 'independently of relative position between the plane and the camera.' Figure 2 only provides a static diorama of the scene.",
+          "concepts_tested": [
+            {
+              "concept": "Homography of a Planar Surface",
+              "book_lines": [
+                "L00270-L00272",
+                "L00283-L00289"
+              ],
+              "source_claim": "The coordinates inside a plane relate to the coordinates in the image plane by a homography independently of relative position between the plane and the camera.",
+              "figure_a_match": "Provides a static 3D recreation of the textbook figure, explaining the components via tooltips but lacking any interaction to show independence from the camera's relative position.",
+              "figure_b_match": "Provides a 'tilt plane' slider that dynamically changes the relative orientation between the camera and the world plane, actively recalculating the projection ray and image point to demonstrate that the planar constraint (X,Y,0) holds regardless of the plane's tilt.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "World Coordinate System Alignment",
+              "book_lines": [
+                "L00276-L00279",
+                "L00306-L00309"
+              ],
+              "source_claim": "The world-coordinate system is placed on the plane so that points in the plane have coordinates Z=0, with the Z-axis perpendicular to it.",
+              "figure_a_match": "Accurately models the static local world axes on the planar surface with Z pointing perpendicularly away from the plane.",
+              "figure_b_match": "Attaches the world coordinate axes (X, Y, Z) directly to the rotatable planar surface, ensuring the Z=0 constraint is visually maintained as the local coordinate system transforms.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 0.85,
-        "explanation": "Figure 1 provides a significantly superior pedagogical experience through its interactive slider and mathematically accurate dynamic 3D projection model, effectively demonstrating the geometric relationships. While Figure 2 is more faithful to the original visual styling and label placements, its static, flattened perspective obscures the underlying 3D geometry that Figure 1 elegantly captures."
+        "explanation": "Figure 1 is the overall winner because it successfully implements an interactive slider that dynamically demonstrates the core textbook concept of ray-plane intersections, significantly outperforming Figure 2's static, flattened viewpoint. While Figure 2 is more faithful to the original image's stylistic details and label placements, it functions only as a basic diorama and fails to capture the underlying 3D mathematical relationships and interactivity presented in Figure 1."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:37:43.595Z"
+      "evaluatedAt": "2026-06-30T02:20:34.283Z",
+      "conceptRedoneAt": "2026-06-30T02:20:34.283Z"
     }
   },
   "imaging__similar_triangles2": {
@@ -391,17 +653,41 @@
         },
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 0.75,
-          "rationale": "Figure 1 attempts to construct the similar triangles using three collinear points (the image point, origin, and scene point), which results in degenerate, zero-area meshes that do not render, entirely failing to illustrate the concept. Figure 2 uses a dynamic interactive model that actually renders visible planar geometry to represent the relationships (even if slightly idiosyncratic in its axis bounding), making the proportional changes visible as depth Z is manipulated."
+          "confidence": 1,
+          "rationale": "Figure 2 is significantly better because it includes an interactive Z-depth slider. While both figures correctly color-code the similar triangles, Figure 2's slider allows the user to see the triangles dynamically resize, perfectly demonstrating the textbook's claim about inverse scaling by depth.",
+          "concepts_tested": [
+            {
+              "concept": "Similar Triangles",
+              "book_lines": [
+                "L00285-L00288"
+              ],
+              "source_claim": "From similar triangles, we have x/f = X/Z and y/f = Y/Z. Similar triangles are indicated by the same color.",
+              "figure_a_match": "Uses colored triangles (green and cyan) and tooltips to point out the geometric similarity statically.",
+              "figure_b_match": "Uses colored triangles (green and cyan) to match the text, and updates them dynamically as depth changes.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Inverse Scaling by Depth",
+              "book_lines": [
+                "L00279-L00281"
+              ],
+              "source_claim": "Under perspective projection, distant objects become smaller, through the inverse scaling by Z.",
+              "figure_a_match": "Mentions inverse depth in a static tooltip but provides no interaction to observe it.",
+              "figure_b_match": "Provides a 'Z depth' slider that dynamically moves the 3D point and visually shrinks the projected image offsets, directly demonstrating the mathematical relationship.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
-        "confidence": 0.9,
-        "explanation": "Figure 2 surpasses Figure 1 by offering a dynamic, interactive parameter slider that demonstrates the effect of depth on projection, alongside complete, readable labels and the crucial colored projection planes. In contrast, while Figure 1 constructs its geometry with strict collinearity, it fails to render visible meshes for the triangles, completely omits the main colored surfaces, and cuts off key labels due to poor camera framing."
+        "confidence": 0.85,
+        "explanation": "Figure 2 wins by providing an interactive Z-depth slider that dynamically demonstrates inverse scaling, alongside complete projection planes and properly framed labels. Although Figure 1 correctly constructs the similar triangles with proper collinear edges—a geometric detail Figure 2 breaks—it falls short by lacking interactivity, omitting essential colored surfaces, and severely cropping crucial axis labels."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:38:21.146Z"
+      "evaluatedAt": "2026-06-30T02:20:57.691Z",
+      "conceptRedoneAt": "2026-06-30T02:20:57.691Z"
     }
   },
   "imaging__orthogonal_projection": {
@@ -437,16 +723,40 @@
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
           "confidence": 1,
-          "rationale": "Figure 2 models the actual 3D geometry and includes an interactive depth slider that perfectly demonstrates how orthographic projection size is independent of distance, whereas Figure 1 hardcodes a 2D oblique drawing that breaks completely when the 3D camera is rotated."
+          "rationale": "Figure 2 excels by adding an interactive 'Depth' button that translates the object along the projection axis, allowing the user to directly observe that the 2D orthographic projection's size does not change. Figure 1 only describes this crucial property in text without showing it.",
+          "concepts_tested": [
+            {
+              "concept": "Orthographic Projection Geometry",
+              "book_lines": [
+                "L00316-L00321"
+              ],
+              "source_claim": "Projection is done by parallel rays orthogonal to the projection plane.",
+              "figure_a_match": "Displays parallel dashed lines connecting the 3D solid to the projection plane, with visual tooltips identifying them.",
+              "figure_b_match": "Displays parallel dashed lines connecting the 3D solid to the projection plane, with visual tooltips identifying them.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Depth Independence",
+              "book_lines": [
+                "L00322-L00324"
+              ],
+              "source_claim": "In this projection, as the rays are orthogonal to the projection plane, the size of objects is independent of the distance to the camera.",
+              "figure_a_match": "Explains that size does not change with distance inside a tooltip, but the scene is completely static.",
+              "figure_b_match": "Provides a 'Depth' UI button that animates the 3D object along the Z-axis, dynamically updating the rays while keeping the projected image exactly the same size to physically prove the claim.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 1,
-        "explanation": "Figure 2 correctly constructs the true 3D geometry and relies on proper camera projection, whereas Figure 1 improperly flattens the 3D scene into a distorted 2D oblique drawing that breaks upon camera rotation. Furthermore, Figure 2 includes a pedagogically useful interactive depth button and complete, well-placed axis labels, while Figure 1 lacks interactive UI controls and suffers from omitted axes and messy overlapping text."
+        "explanation": "Figure 2 accurately models true 3D geometry and utilizes an interactive 'Depth' button to dynamically demonstrate orthographic projection principles, whereas Figure 1 improperly flattens the scene into a 2D oblique projection and relies solely on static text to convey the concept. Furthermore, Figure 2 faithfully reproduces the reference block's shape and includes clear, comprehensive labeling, while Figure 1 severely distorts the geometry and omits key labels like the Z-axis."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:38:48.701Z"
+      "evaluatedAt": "2026-06-30T02:21:16.710Z",
+      "conceptRedoneAt": "2026-06-30T02:21:16.710Z"
     }
   },
   "neural_nets_as_data_transformations__2D_mapping_diagrams": {
@@ -482,16 +792,61 @@
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
           "confidence": 1,
-          "rationale": "Figure 1 correctly maps the ReLU outputs to the positive quadrant, whereas Figure 2 applies a negative sign and incorrectly maps the ReLU outputs to the negative quadrant, fundamentally misrepresenting the activation function."
+          "rationale": "Figure 1 successfully models the textbook's descriptions of layer mappings, including emphasizing the buildup of point density along the positive quadrant axes for the ReLU layer. Figure 2 completely misrepresents the ReLU transformation mathematically by negating the output, mapping points into the negative quadrant in direct contradiction to the textbook.",
+          "concepts_tested": [
+            {
+              "concept": "2D-to-2D Mapping Diagrams",
+              "book_lines": [
+                "L00009",
+                "L00037"
+              ],
+              "source_claim": "Visualizing 2D-to-2D mappings by mapping a Gaussian blob of data from an input plane to an output plane layer by layer.",
+              "figure_a_match": "Likewise maps a Gaussian blob from a bottom plane to a top plane with visual traces between the corresponding layers.",
+              "figure_b_match": "Draws an initial 2D Gaussian blob on a bottom plane ($x_{in}$) and maps the points to an upper plane ($x_{out}$), optionally rendering straight line traces between them.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "ReLU Layer Transformations",
+              "book_lines": [
+                "L00021",
+                "L00042"
+              ],
+              "source_claim": "The relu nonlinearity applies an identity map to nonnegative data and snaps negative data to 0, causing data density to build up along the axes of the positive quadrant.",
+              "figure_a_match": "Mathematically negates the ReLU output (`-Math.max(0, ...)`), erroneously collapsing all data into the negative quadrant instead of the positive quadrant.",
+              "figure_b_match": "Properly implements the mapping `Math.max(0, p.x)` and visually emphasizes the density buildup on the axes of the positive quadrant with thick red lines.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Linear Layer Transformations",
+              "book_lines": [
+                "L00021",
+                "L00039"
+              ],
+              "source_claim": "Linear layers shift, stretch, and rotate the data distribution depending on their weights and biases.",
+              "figure_a_match": "Also applies an affine map and appropriately shears the top guide frame to explicitly visualize the linear transformation on the space.",
+              "figure_b_match": "Implements an affine transformation that visibly rotates and shears the grid and points, confirming the text's description.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00042"
+              ],
+              "issue": "The `reluPoint` function negates its coordinates (`-Math.max(...)`), moving the outputs to the negative quadrant and directly contradicting the text which states points map to the axes of the positive quadrant."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
-        "confidence": 0.85,
-        "explanation": "Figure 1 is the stronger visualization because it correctly implements the mathematical concept of the ReLU activation function by mapping outputs to the positive quadrant and includes interactive UI controls. While Figure 2 more faithfully reproduces the original layout and offers better label positioning, it fundamentally misrepresents the core concept by incorrectly mapping the ReLU outputs to negative coordinates."
+        "confidence": 0.8,
+        "explanation": "Figure 1 correctly implements the mathematical concepts, accurately visualizing the ReLU layer by mapping to positive coordinates, and offers functional UI buttons to toggle traces and focus. In contrast, Figure 2 completely misrepresents the ReLU transformation by incorrectly mapping points into the negative quadrant and lacks developer-built UI controls. While Figure 2 is more faithful to the original's visual layout and label placements, Figure 1's conceptual accuracy and interactivity make it the stronger overall figure."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:39:29.076Z"
+      "evaluatedAt": "2026-06-30T02:21:37.763Z",
+      "conceptRedoneAt": "2026-06-30T02:21:37.763Z"
     }
   },
   "neural_nets__vit_mapping_plot": {
@@ -526,17 +881,49 @@
         },
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 0.9,
-          "rationale": "Figure 1 includes an interactive trace mode that highlights a single semantic class across all layers, directly reinforcing the pedagogical concept of how representations of a specific class evolve and cluster through the network, whereas Figure 2 relies only on static highlighting and textual tooltips."
+          "confidence": 0.85,
+          "rationale": "Both figures are technically mismatched with the specific text provided, as they visualize Vision Transformers and t-SNE rather than the basic MLPs discussed in the chapter. However, Figure 1 is the better educational tool for the general concept of 'layer-by-layer abstraction' because its interactive 'Trace' and slider controls actively demonstrate how deep networks disentangle semantic classes across depth.",
+          "concepts_tested": [
+            {
+              "concept": "Layer-by-layer Abstraction",
+              "book_lines": [
+                "L00763-L00771",
+                "L00171-L00176"
+              ],
+              "source_claim": "Layer by layer, neural nets build up increasingly abstracted representations of the input data, and these abstractions tend to be increasingly useful.",
+              "figure_a_match": "Visualizes sequential transformations using stacked slices and dotted paths for data points, but lacks interactive tools to isolate classes or emphasize the disentanglement process.",
+              "figure_b_match": "Visualizes sequential transformations across layers. Features a 'Trace' button to highlight how a single semantic class groups together across depth, and a separation slider to interactively demonstrate the network disentangling representations.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "05_benchmark/gpt-5.5-with-base-code",
+              "book_lines": [
+                "L00103-L00104",
+                "L00130-L00132"
+              ],
+              "issue": "The text focuses on fundamental MLP architectures and basic concepts. The figure specifically visualizes Vision Transformers (ViT blocks) and t-SNE projections, neither of which are introduced in this textbook section."
+            },
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00103-L00104",
+                "L00130-L00132"
+              ],
+              "issue": "The text focuses on fundamental MLP architectures and basic concepts. The figure specifically visualizes Vision Transformers (ViT blocks) and t-SNE projections, neither of which are introduced in this textbook section."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 0.9,
-        "explanation": "Figure 1 provides a significantly better overall experience than Figure 2 by incorporating solid 3D structural arrows and pedagogically meaningful interactive controls, such as a cluster separation slider and a class tracing mode. In contrast, Figure 2 lacks developer-built UI controls entirely and relies on overly thin, awkwardly intersecting 1px lines for its structural shafts. Although Figure 2 more accurately reproduces the required text without hallucinating extraneous labels, Figure 1 captures the specific point clusters and converging line trajectories of the original concept much more faithfully."
+        "explanation": "Figure 1 significantly outperforms Figure 2 by utilizing robust 3D primitives for its structural arrows and providing pedagogically meaningful interactive controls, whereas Figure 2 relies on awkwardly thin lines and lacks developer-built UI elements entirely. Although Figure 2 is more precise in its text rendering by avoiding the extraneous, hallucinated labels present in Figure 1, Figure 1 captures the original's point clusters and converging trajectories far more faithfully. Ultimately, Figure 1's interactivity and accurate geometry make it a much stronger educational tool for demonstrating layer-by-layer abstraction."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:40:09.962Z"
+      "evaluatedAt": "2026-06-30T02:22:03.915Z",
+      "conceptRedoneAt": "2026-06-30T02:22:03.915Z"
     }
   },
   "imaging__pinhole_names2": {
@@ -571,17 +958,53 @@
         },
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 1,
-          "rationale": "Figure 1 includes a dynamic focal length slider that interactively updates the projection plane and the resulting image point intersection along the ray, beautifully illustrating the core mathematical concept of perspective projection, whereas Figure 2 is entirely static."
+          "confidence": 0.95,
+          "rationale": "Figure 1 transforms a static textbook diagram into an interactive learning tool by allowing the user to adjust the focal length. Watching the projection plane move and seeing the projected point dynamically slide along the light ray perfectly demonstrates the geometry of perspective projection equations, whereas Figure 2 remains entirely static.",
+          "concepts_tested": [
+            {
+              "concept": "World Coordinate System",
+              "book_lines": [
+                "L00232-L00236"
+              ],
+              "source_claim": "Let the origin of a World Cartesian coordinate system be the camera's pinhole... where the Z axis is perpendicular to the camera's sensing plane",
+              "figure_a_match": "Also places the X, Y, Z axes origin at the pinhole with Z aligned to the principal axis.",
+              "figure_b_match": "Places the origin of the X, Y, and Z axes exactly at the pinhole, with Z pointing along the optical axis perpendicular to the projection plane.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Focal Length (f)",
+              "book_lines": [
+                "L00238-L00240",
+                "L00264-L00264"
+              ],
+              "source_claim": "The camera projection plane is behind the pinhole and at a distance f of the origin.",
+              "figure_a_match": "Shows a static red double-arrow labeled 'f' representing the distance to the fixed projection plane.",
+              "figure_b_match": "Features an interactive slider for 'f' that dynamically moves the projection plane closer to or further from the pinhole, updating the camera housing geometry in real-time.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Perspective Projection Ray",
+              "book_lines": [
+                "L00217-L00219",
+                "L00267-L00273"
+              ],
+              "source_claim": "projects 3D coordinates in the world to 2D positions on the projection plane of the camera through the straight line path of each light ray through the pinhole",
+              "figure_a_match": "Provides a toggle for a static dashed ray that passes through the pinhole, but lacks any dynamic relationship to scene points or focal length.",
+              "figure_b_match": "When the 'Rays' toggle is active, it shows a 3D world point, a ray passing through the pinhole, and its projected image point. Crucially, as the user adjusts 'f', the projected point visually scales along the ray, physically demonstrating the perspective projection equations.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
-        "confidence": 0.8,
-        "explanation": "Figure 1 provides a superior conceptual representation of pinhole camera geometry by featuring a slider that dynamically updates the focal length, projection plane, and projection ray, whereas Figure 2 offers only a static view with incorrectly offset coordinate axes. Although Figure 2 benefits from cleaner label placement and avoids the severe text overlaps found in Figure 1, Figure 1's real-time interactivity and accurate mathematical modeling make it much more pedagogically valuable."
+        "confidence": 0.75,
+        "explanation": "Figure 1 provides a significantly better conceptual and geometric demonstration by allowing users to dynamically adjust the focal length, which updates the projection ray and camera geometry in real time. In contrast, Figure 2 is almost entirely static, incorrectly offsets its coordinate axes from the camera center, and only provides a basic visibility toggle. Although Figure 2 has much cleaner label placement without the severe text overlap found in Figure 1, the interactive pedagogical value of Figure 1 makes it the much stronger educational tool overall."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:40:32.736Z"
+      "evaluatedAt": "2026-06-30T02:22:26.521Z",
+      "conceptRedoneAt": "2026-06-30T02:22:26.521Z"
     }
   },
   "imaging__pinhole_geometry2": {
@@ -616,17 +1039,51 @@
         },
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 1,
-          "rationale": "Figure 1 correctly models the camera geometry in true 3D space, whereas Figure 2 fakes an oblique 2D textbook drawing by skewing the 3D geometry itself, which distorts the orthogonal relationships and completely breaks the pedagogical concept as soon as the student rotates the view."
+          "confidence": 0.95,
+          "rationale": "Figure 1 natively leverages 3D spatial geometry to model the pinhole camera, allowing the user to orbit around a physically coherent setup with helpful interactive ray-tracing. Figure 2 uses a destructive anti-pattern by hardcoding skewed vectors to mimic a static 2D isometric textbook illustration, which fundamentally breaks the 3D viewing experience when rotated.",
+          "concepts_tested": [
+            {
+              "concept": "Pinhole Camera Geometry",
+              "book_lines": [
+                "L0238-L0249",
+                "L0256-L0262"
+              ],
+              "source_claim": "The virtual camera plane is radially symmetrical to the projection plane with respect to the origin and is placed in front of the camera to create a projected image without inversion.",
+              "figure_a_match": "Attempts to recreate the textbook's 2D isometric drawing by hardcoding skewed 3D vectors (`Xdir = V(0.86, 1.12, -1.08)`). This fake 3D breaks completely when the camera is rotated.",
+              "figure_b_match": "Builds a true 3D scene with the pinhole at the origin, the inverted physical projection plane at Z = -f, and the upright virtual plane at Z = f. Interactive tooltips and pulsing rays demonstrate the inversion and radial symmetry.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Camera vs Image Coordinates",
+              "book_lines": [
+                "L0251-L0254",
+                "L0290-L0304"
+              ],
+              "source_claim": "Camera coordinates (x,y) and image coordinates (n,m) are related by an affine transform. The x coordinate is in the opposite direction of n.",
+              "figure_a_match": "Draws the second panel using the same skewed isometric hack. Provides tooltips to explain the axes but lacks the visual mapping aids found in Figure 1.",
+              "figure_b_match": "Includes a separate 3D UI panel showing the virtual plane. A 'Map' button visually connects the affine shift between the (x,y) origin at the center and the (n,m) origin at the corner. Orientations match the equations.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L0217-L0221"
+              ],
+              "issue": "Instead of building a genuine 3D model of a camera frustum and letting the WebGL camera handle perspective, Figure 2 hardcodes a skewed 2D isometric projection into its 3D geometry. Orbiting the camera reveals a flattened, distorted mess."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 0.85,
-        "explanation": "Figure 1 constructs a mathematically correct, highly interactive 3D model of the camera geometry, offering rich pedagogical tools like ray toggles and hover highlights. In contrast, Figure 2 fakes the static 2D textbook drawing by using distorted oblique geometry in 3D space, which completely breaks the underlying spatial relationships when the user rotates the view. Although Figure 2 maintains a better layout and more faithful label placement, Figure 1's true 3D foundation makes it a far superior interactive diagram."
+        "explanation": "Figure 1 succeeds over Figure 2 by constructing a mathematically correct 3D spatial model of the pinhole camera and offering rich pedagogical interactions like ray toggling, whereas Figure 2 relies on a destructive oblique basis to fake a static 2D isometric drawing that completely breaks when the camera is rotated. Although Figure 2 more faithfully maintains spatial plane separation and avoids the severe label clustering seen in Figure 1, Figure 1's true 3D coherence and interactive depth make it the stronger overall implementation."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:40:55.713Z"
+      "evaluatedAt": "2026-06-30T01:56:09.361Z",
+      "conceptRedoneAt": "2026-06-30T01:56:09.361Z"
     }
   },
   "imaging__brdf": {
@@ -661,17 +1118,41 @@
         },
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 0.9,
-          "rationale": "Figure 2 provides an interactive wavelength slider that dynamically changes the color of the incident and outgoing light rays, significantly enhancing the pedagogical explanation of the lambda parameter in the BRDF equation compared to Figure 1's static gradient."
+          "confidence": 0.95,
+          "rationale": "Figure 2 is the stronger educational tool because it transforms the mathematical parameter lambda (wavelength) into an interactive slider. This allows the user to directly observe how varying the incoming light's wavelength alters both the incoming ray and the computed outgoing power, perfectly aligning with the BRDF equation defined in the text.",
+          "concepts_tested": [
+            {
+              "concept": "BRDF and Light Vectors",
+              "book_lines": [
+                "L00028-L00037"
+              ],
+              "source_claim": "The outgoing power... is some function, F, of the surface normal, the incoming and outgoing ray directions, the wavelength, and the incoming light power. Incident light ray from direction p, outgoing in direction q.",
+              "figure_a_match": "Draws static vectors for p, n, q, and uses a static gradient arrow to represent the incoming light spectrum.",
+              "figure_b_match": "Draws the exact same vectors but adds a functional slider for lambda (wavelength) that updates the color of the incoming and outgoing light rays.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Diffuse Scattering",
+              "book_lines": [
+                "L00041-L00045"
+              ],
+              "source_claim": "Even surfaces with completely diffuse reflections can give complicated reflectance distributions... Lambertian model describes diffuse reflection.",
+              "figure_a_match": "Shows static translucent green arrows to represent the spray of diffusely scattered light.",
+              "figure_b_match": "Includes a toggle to show or hide the diffuse Lambertian ray spray, and explicitly links it to Lambertian scattering in its tooltips.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 0.95,
-        "explanation": "Figure 2 is the clear winner because it precisely aligns its light rays using directional vectors and introduces valuable interactive elements like a wavelength slider, whereas Figure 1 suffers from noticeable manual misalignments and lacks custom interactivity. Furthermore, Figure 1 awkwardly cuts off the right-hand equation label, a flaw that Figure 2 successfully avoids. Although Figure 1 is more faithful to the specific vector colors of the original reference, Figure 2's geometric precision and pedagogical enhancements make it the significantly superior visualization."
+        "explanation": "Figure 2 significantly outperforms Figure 1 by offering precise geometric alignment of the light rays and fully visible equation labels, whereas Figure 1 suffers from noticeable endpoint misalignment and truncated text. Furthermore, Figure 2 elevates the educational experience with custom interactions like a dynamic wavelength slider, whereas Figure 1 only provides basic tooltips, even though it more faithfully matches the original vector colors."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:41:16.606Z"
+      "evaluatedAt": "2026-06-30T02:23:18.163Z",
+      "conceptRedoneAt": "2026-06-30T02:23:18.163Z"
     }
   },
   "imaging__no_picture_on_a_wall_aina": {
@@ -707,16 +1188,58 @@
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
           "confidence": 1,
-          "rationale": "Figure 2 perfectly illustrates the core concept by showing multiple rays from different parts of the tree converging on single points on the open wall in panel (a), and its aperture slider actually simulates the resulting image blur in panel (b) rather than just changing opacity."
+          "rationale": "Figure 2 is significantly better because it directly implements the physical phenomena described in the text. It uses a clever 'Ray map' feature to visually demonstrate how an open wall integrates rays versus how a pinhole isolates them, and its aperture slider actively generates geometric blur, whereas Figure 1 only alters opacity.",
+          "concepts_tested": [
+            {
+              "concept": "Lack of image on a bare wall",
+              "book_lines": [
+                "L00111-L00115"
+              ],
+              "source_claim": "The light reflected from the wall integrates light from every reflecting surface in the room, so the reflected intensities are an average of light intensities from many different directions.",
+              "figure_a_match": "Shows rays from different parts of the tree hitting various spots on the wall, and provides a tooltip explaining that directions overlap.",
+              "figure_b_match": "Provides a 'Ray map' tool that highlights specific points on the wall receiving multiple different rays (green and brown) simultaneously, visually proving the many-to-one integration.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Pinhole camera projection",
+              "book_lines": [
+                "L00134-L00138"
+              ],
+              "source_claim": "For any given point on the projection surface, the light that falls there comes from only from one direction, along the straight line joining the surface position and the pinhole.",
+              "figure_a_match": "Draws straight rays intersecting at the pinhole aperture and hitting the projection wall.",
+              "figure_b_match": "Draws straight rays intersecting at the pinhole and uses the 'Ray map' to explicitly pair specific object points with their corresponding single image points.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Aperture size and blur",
+              "book_lines": [
+                "L00158-L00160"
+              ],
+              "source_claim": "By making the hole large you will get a brighter, but blurrier image.",
+              "figure_a_match": "Provides a 'hole' slider that increases the hole's physical size and changes the opacity of the projected tree to make it brighter, but does not visually blur the image.",
+              "figure_b_match": "Provides a 'Hole' slider that increases brightness and dynamically generates shifted, semitransparent copies of the projected tree to visually simulate the physical blur effect.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00158-L00160"
+              ],
+              "issue": "The tooltip claims that a larger hole 'would blur the image', but the interactive slider only changes the opacity/brightness of the projected tree without actually blurring the geometry, creating a disconnect between the text and the visual."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
-        "confidence": 0.85,
-        "explanation": "Figure 2 surpasses Figure 1 by correctly modeling the scene in true 3D and accurately simulating the pedagogical concept of aperture blur dynamically using multiple rays. Although Figure 1 is more faithful to the original composition by including all text labels and complete walls, it fails to illustrate the core concept, resorting to a flattened 2D diagram and a simple brightness adjustment instead of genuine projection blurring."
+        "confidence": 0.8,
+        "explanation": "Figure 2 excels over Figure 1 by implementing true 3D geometry and providing interactive pedagogical features like a 'Ray map' and a hole-size slider that dynamically simulates geometric blur. While Figure 1 retains all original labels and wall planes, it fundamentally flattens the scene into a 2D diagram and relies on a simplistic opacity change rather than correctly modeling the physical light interactions shown in Figure 2."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:41:34.311Z"
+      "evaluatedAt": "2026-06-30T02:23:42.458Z",
+      "conceptRedoneAt": "2026-06-30T02:23:42.458Z"
     }
   },
   "neural_nets__nn_training_viz": {
@@ -751,17 +1274,53 @@
         },
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 0.95,
-          "rationale": "Figure 2 genuinely simulates the alternating affine and ReLU operations—complete with the piecewise-linear clipping characteristic of ReLUs—whereas Figure 1 relies on arbitrary continuous polynomial/trigonometric functions that fail to show the true geometric nature of network transformations."
+          "confidence": 0.9,
+          "rationale": "Figure 2 provides a far superior interactive experience for learning how data flows through a network. By allowing the user to click and highlight individual datapoint trajectories or isolate specific layer activations, it makes the abstract concept of high-dimensional feature transformations concrete, while its explicit one-hot goal labels beautifully tie the spatial warping back to classification objectives.",
+          "concepts_tested": [
+            {
+              "concept": "Layer-by-Layer Activations",
+              "book_lines": [
+                "L00151-L00162"
+              ],
+              "source_claim": "The activations are the neural representations of the data being processed layer by layer, forming a sequence of transformations.",
+              "figure_a_match": "Visualizes the sequence of transformations using stacked 2D planes connected by dotted lines representing the datapoints' paths.",
+              "figure_b_match": "Implements interactive stacked planes and datapoints; clicking a specific datapoint isolates its trajectory, making the layer-by-layer transformation of a single input highly tangible.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Classification and Softmax Targets",
+              "book_lines": [
+                "L00682-L00696",
+                "L00068-L00080"
+              ],
+              "source_claim": "Training adjusts parameters to separate classes, and the softmax output layer maps the final neural representation to class predictions (e.g., one-hot target distributions).",
+              "figure_a_match": "Shows the red and blue points untangling and separating by the final layer across training checkpoints.",
+              "figure_b_match": "Shows the points separating and includes a 'goal' toggle that reveals the explicit (0,1) and (1,0) one-hot target coordinates at the softmax layer, concretely grounding the spatial separation in classification targets.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Deep Net Linear-Nonlinear Motif",
+              "book_lines": [
+                "L00210-L00220",
+                "L00138-L00147"
+              ],
+              "source_claim": "Deep networks are built by repeatedly stacking linear layers interleaved with nonlinearities (like ReLU).",
+              "figure_a_match": "Displays a vertical text list of alternating 'linear' and 'relu' operations corresponding to the spatial slices.",
+              "figure_b_match": "Displays a styled ladder of 'linear' and 'relu' operations with arrows, directly aligning with the 3D layer planes.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
-        "confidence": 0.8,
-        "explanation": "Figure 2 is the overall winner because it accurately models the true piecewise-linear geometry of neural network layers with ReLU clamping and offers rich, pedagogical interactivity. In contrast, while Figure 1 is highly faithful to the original image's static layout and labels, it relies on arbitrary continuous functions that fail to represent the actual mathematical concepts and lacks meaningful interactive features."
+        "confidence": 0.6,
+        "explanation": "Figure 2 offers a superior representation of the underlying mathematical concepts by using accurate piecewise-linear geometry and providing rich interactivity, such as highlighting specific data trajectories and layer activations. In contrast, Figure 1 relies on arbitrary continuous polynomials and offers only superficial text popups, although it does achieve higher faithfulness to the original image's static layout and labeling."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:42:13.812Z"
+      "evaluatedAt": "2026-06-30T01:57:18.622Z",
+      "conceptRedoneAt": "2026-06-30T01:57:18.622Z"
     }
   },
   "Image_processing_fourier__complexexponential": {
@@ -796,17 +1355,51 @@
         },
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 0.9,
-          "rationale": "Figure 1's interactive slider explicitly links a specific discrete index across both panels, using a highlighted plane and connecting lines to brilliantly illustrate how the 3D complex point projects onto its real and imaginary components, whereas Figure 2 lacks this sample-level anatomical breakdown."
+          "confidence": 0.95,
+          "rationale": "Figure 1 is the clear winner due to its pedagogical interaction design. By allowing the user to drag a slider through the sample index 'n', Figure 1 interactively draws the geometric projection from the 3D complex point to its 1D real and imaginary components, perfectly elucidating Euler's formula.",
+          "concepts_tested": [
+            {
+              "concept": "Euler's Formula and Projections",
+              "book_lines": [
+                "L00171-L00178",
+                "L00181"
+              ],
+              "source_claim": "Complex exponentials are related to cosine and sine waves by Euler's formula... The red and green curves show the real and imaginary waves. The black line is the complex exponential.",
+              "figure_a_match": "Renders the red, green, and black curves and allows toggling the visibility of the red and green waves, but does not visually bridge the complex point to its components at specific samples.",
+              "figure_b_match": "Provides a shared interactive slider for `n` that draws a cross-sectional plane at that sample index, explicitly rendering lines from the 3D complex point to its 2D real (red) and imaginary (green) projections.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Spatial Frequency (k)",
+              "book_lines": [
+                "L00142-L00144",
+                "L00176-L00181"
+              ],
+              "source_claim": "As n goes from 0 to N-1 the function rotates along the complex circle... k denotes the frequency (i.e., the number of wave cycles...)",
+              "figure_a_match": "Provides a slider to change the frequency `k` in panel (b) dynamically, allowing users to see how the spiral tightens as frequency increases.",
+              "figure_b_match": "Synchronizes the `n` slider across the k=1 and k=3 panels, allowing users to step through time and directly observe the k=3 point rotating three times as fast as the k=1 point.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00181"
+              ],
+              "issue": "Adds small brown crosses over the discrete sample points, which clutters the visual and contradicts the textbook's specific description: 'The dots correspond to the discrete samples.'"
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
-        "confidence": 0.8,
-        "explanation": "Figure 1 is the overall winner due to its vastly superior interactive and conceptual features, utilizing a synchronized slider and cross-section plane to explicitly demonstrate how 3D complex points project onto their 2D components, a pedagogical breakdown that Figure 2 lacks. While Figure 2 more faithfully reproduces the original's static aesthetics, such as the blackboard bold typography and specific marker styles, Figure 1's dynamic geometric connections make it a substantially more powerful mathematical visualization."
+        "confidence": 0.7,
+        "explanation": "Figure 1 is the overall winner due to its sophisticated interactive features and conceptual clarity, offering a synchronized cross-section plane and a slider that dynamically connects 3D complex points to their 2D sine and cosine projections, which Figure 2 completely lacks. While Figure 2 is more faithful to the original static image's styling by correctly rendering the blackboard bold axis labels and specific marker styles, its lack of pedagogical interaction makes it far less effective at elucidating Euler's formula compared to Figure 1."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:42:55.863Z"
+      "evaluatedAt": "2026-06-30T02:24:30.541Z",
+      "conceptRedoneAt": "2026-06-30T02:24:30.541Z"
     }
   },
   "generative_modeling_and_representation_learning__rep_gen_schematic": {
@@ -842,16 +1435,50 @@
         "concept": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 0.95,
-          "rationale": "Figure 1 maintains conceptual consistency, whereas Figure 2 contains a significant error by highlighting upward-pointing paths when the 'Generative modeling' mode (which maps downward from embedding to data) is selected."
+          "rationale": "Both figures build an appropriate 3D stack showing Data at the bottom and Embedding at the top, supported by large side arrows indicating the respective directions of representation learning and generative modeling. Figure 1 wins because Figure 2's interactive 'Gen' mode highlights internal paths that point in the wrong direction (upwards), contradicting the top-down nature of generative modeling explicitly taught in the text.",
+          "concepts_tested": [
+            {
+              "concept": "Direction of Representation Learning",
+              "book_lines": [
+                "L00010-L00011",
+                "L00016-L00018"
+              ],
+              "source_claim": "Representation learning maps raw data to simple underlying representations (embeddings), layer by layer.",
+              "figure_a_match": "Shows a left-side arrow pointing upward from 'Data' to 'Embedding', and internal dashed paths with upward-pointing arrowheads. Interactive tooltips correctly explain this bottom-up mapping.",
+              "figure_b_match": "Shows a left-side arrow pointing upward and provides an interactive 'Rep' mode that highlights internal paths. The paths correctly feature arrowheads pointing upward from 'Data' to 'Embedding'.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Direction of Generative Modeling",
+              "book_lines": [
+                "L00009-L00010",
+                "L00020-L00023"
+              ],
+              "source_claim": "Deep generative networks map from abstracted representations (embeddings) to concrete data in backward order (top-down).",
+              "figure_a_match": "Includes a downward-pointing right arrow labeled 'Generative modeling' and uses a tooltip on the internal paths to clarify that reversing the drawn paths gives the generative modeling view.",
+              "figure_b_match": "Features a downward-pointing right arrow and a 'Gen' toggle button. However, the internal paths highlighted in 'Gen' mode feature arrowheads that point upward (from data to embedding), contradicting the concept.",
+              "verdict": "No_Planner_Benchmark/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "05_benchmark/gpt-5.5-with-base-code",
+              "book_lines": [
+                "L00020-L00023"
+              ],
+              "issue": "When the 'Gen' (Generative modeling) mode is active, the highlighted internal paths have arrowheads pointing from the bottom (Data) to the top (Embedding), which is the exact opposite of the generative modeling mapping described in the text and its own tooltip."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.9,
-        "explanation": "Figure 1 significantly outperforms Figure 2 by employing robust 3D cylinder primitives for paths, accurately capturing the curved trajectories, and successfully avoiding the severe text-geometry overlap seen in Figure 2. Although Figure 2 offers functional UI toggles for interactivity, it suffers from a major conceptual error by highlighting upward paths during the downward generative modeling mode, making Figure 1 the vastly superior and more faithful representation."
+        "confidence": 0.95,
+        "explanation": "Figure 1 provides a significantly more accurate conceptual and geometric model than Figure 2, utilizing robust cylinder primitives for paths and correctly demonstrating the directions of representation learning and generative modeling. Although Figure 2 includes interactive UI buttons that Figure 1 lacks, it suffers from severe text-geometry overlap and inaccurately depicts generative paths pointing upwards, contradicting the fundamental top-down concept taught in the text."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:43:26.671Z"
+      "evaluatedAt": "2026-06-30T02:24:55.856Z",
+      "conceptRedoneAt": "2026-06-30T02:24:55.856Z"
     }
   },
   "spatial_filters__DFTlaplacians": {
@@ -885,18 +1512,57 @@
           "rationale": "Figure 1 keeps the axis and subfigure labels as separate entities despite missing 'a)' and having poor sizing, whereas Figure 2 bizarrely concatenates the v-axis and subfigure labels into single strings like 'va)' on the axes."
         },
         "concept": {
-          "winner": "No_Planner_Benchmark/gpt-5.5",
+          "winner": "tie",
           "confidence": 1,
-          "rationale": "Figure 1 accurately represents the mathematical surfaces of the frequency responses, whereas Figure 2 applies an artificial 'plateau lift' to the center of the discrete Laplacian, falsely giving it a non-zero DC response and completely breaking the fundamental property of derivative operators."
+          "rationale": "Both figures visualize the Fourier Transform of the continuous Laplacian of Gaussian and a five-point discrete Laplacian, subjects that do not appear in the provided textbook section covering Gabor filters, steerable filters, and motion analysis. Because both figures are based on completely unrelated concepts, they fail equally to ground their geometry and labels in the text.",
+          "concepts_tested": [
+            {
+              "concept": "Gabor Filters in the Frequency Domain",
+              "book_lines": [
+                "L00064-L00067"
+              ],
+              "source_claim": "The Fourier transform of a complex Gabor function is a Gaussian in the Fourier domain shifted with respect to the origin.",
+              "figure_a_match": "Visualizes the DFT of the Laplacian of Gaussian instead, which is zero at the origin and radially symmetric, ignoring Gabor filters entirely.",
+              "figure_b_match": "Visualizes the DFT of the Laplacian of Gaussian, ignoring Gabor filters and their shifted Gaussian frequency representation.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Steerable Gaussian Derivatives",
+              "book_lines": [
+                "L00343-L00352"
+              ],
+              "source_claim": "Higher order Gaussian derivatives like g_xx and g_yy can be steered to interpolate derivatives along any orientation.",
+              "figure_a_match": "Models the isotropic Laplacian (sum of unsteered g_xx and g_yy) and a discrete five-point approximation, ignoring orientation and steerability.",
+              "figure_b_match": "Models the isotropic Laplacian spectrum without any interactive steering, directional basis filters, or orientation analysis.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00001-L00645"
+              ],
+              "issue": "The figure illustrates the DFT of Gaussian Laplacians and a five-point discrete Laplacian, which are never mentioned in this textbook section focused on Gabor and Steerable filters."
+            },
+            {
+              "figure": "05_benchmark/gpt-5.5-with-base-code",
+              "book_lines": [
+                "L00001-L00645"
+              ],
+              "issue": "The figure visualizes the isotropic Laplacian of Gaussian and discrete Laplacian, entirely ignoring the text's subject matter of oriented band-pass filters, quadrature pairs, and steerable bases."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.95,
-        "explanation": "Figure 1 provides a significantly more accurate visual and conceptual representation of the mathematical surfaces, correctly maintaining a flat side-by-side layout with proper quad-based colored wireframes. Conversely, Figure 2 applies an erroneous artificial lift to the discrete Laplacian that breaks fundamental mathematical properties, arranges the plots obliquely, uses unwanted diagonal mesh lines, and bizarrely concatenates axis labels. Although Figure 2 features superior standalone interactivity, Figure 1's overwhelming conceptual, geometric, and stylistic faithfulness makes it the clear winner."
+        "confidence": 0.85,
+        "explanation": "Figure 1 constructs accurate quad-based colored wireframes and aligns the panels perfectly for a flat side-by-side layout, whereas Figure 2 relies on an oblique diagonal arrangement with incorrect solid shading and mesh wireframes. Additionally, Figure 1 correctly separates its axis and subfigure labels, avoiding Figure 2's bizarre concatenated strings like 'va)', even though Figure 2 provides a superior standalone interactivity system."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:43:51.053Z"
+      "evaluatedAt": "2026-06-30T02:25:27.955Z",
+      "conceptRedoneAt": "2026-06-30T02:25:27.955Z"
     }
   },
   "imaging_geometry__homogeneousAndHeteregeneous_VS3": {
@@ -932,16 +1598,41 @@
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
           "confidence": 1,
-          "rationale": "Figure 2 implements a true 3D coordinate system that remains mathematically valid when the user rotates the camera, and it includes an interactive slider that perfectly demonstrates the core concept of scale invariance, whereas Figure 1 fakes the 3D axes by drawing them flat on a 2D plane, completely breaking the conceptual model when viewed from different angles."
+          "rationale": "Figure 2 significantly outperforms Figure 1 by using an interactive slider to teach scale invariance, which is the core conceptual hurdle of homogeneous coordinates. While Figure 1 statically labels a point with λ, Figure 2 allows the user to actively manipulate λ and watch the point slide along the equivalence ray, providing a much stronger intuition for the math in the text.",
+          "concepts_tested": [
+            {
+              "concept": "Equivalence up to Scale",
+              "book_lines": [
+                "L00126-L00128",
+                "L00486-L00497"
+              ],
+              "source_claim": "Homogeneous coordinates are defined up to an arbitrary uniform scale factor, where scaling the coordinates represents the same projected point.",
+              "figure_a_match": "Displays a static point labeled (λx, λy, λ) on a dashed ray to represent the scaled version.",
+              "figure_b_match": "Provides an interactive slider for λ that dynamically moves the point along the scale-invariant ray, concretely demonstrating that changing the scale factor changes the 3D homogeneous coordinate but keeps it on the same ray representing the same 2D point.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Homogeneous to Heterogeneous Mapping",
+              "book_lines": [
+                "L00102-L00121"
+              ],
+              "source_claim": "Transforming the vector from homogeneous coordinates to heterogeneous coordinates involves dividing by the scaling factor (or recovering the slice where the scale is 1).",
+              "figure_a_match": "Places a static plane at w=1 and connects the heterogeneous point (x,y) to the homogeneous point (x,y,1) with a solid correspondence line.",
+              "figure_b_match": "Also shows the w=1 slice and the separated heterogeneous plane, but adds a visual dashed 'normalization' arc that explicitly points from the scaled point back to the w=1 plane, cuing the mental operation of division by w.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 0.85,
-        "explanation": "Figure 2 is the better figure because it constructs a mathematically valid 3D space and includes an interactive slider to demonstrate scale invariance, whereas Figure 1 incorrectly flattens the 3D geometry into a 2D plane using hardcoded vectors and lacks interaction. Although Figure 1 is more faithful to the original colors and avoids Figure 2's overlapping text issues, Figure 2's accurate structural representation and superior interactivity make it a much more effective pedagogical tool."
+        "explanation": "Figure 2 is the superior figure because it constructs a genuine 3D space and features an interactive slider that intuitively teaches the core concept of scale invariance by letting users manipulate lambda. In contrast, Figure 1 is entirely static and incorrectly flattens the 3D geometry into a 2D plane using hardcoded isometric vectors. Although Figure 1 is more faithful to the original's colors and avoids Figure 2's overlapping labels, Figure 2's geometric depth and interactive pedagogical elements make it much stronger overall."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:44:16.037Z"
+      "evaluatedAt": "2026-06-30T02:25:47.378Z",
+      "conceptRedoneAt": "2026-06-30T02:25:47.378Z"
     }
   },
   "spatial_filters__DFTderivativeoperators": {
@@ -975,18 +1666,57 @@
           "rationale": "Figure 2 correctly positions the main titles above their respective subfigures and styles the labels with a serif font that better mimics the mathematical formatting of the original, whereas Figure 1 haphazardly clusters the main titles in the top left corner and struggles with axis label placement."
         },
         "concept": {
-          "winner": "05_benchmark/gpt-5.5-with-base-code",
+          "winner": "tie",
           "confidence": 1,
-          "rationale": "Figure 2 correctly uses the actual mathematical frequency response functions for the derivative operators (e.g., |sin(u/2)| and |sin(u)| over [-π, π]), whereas Figure 1 uses arbitrarily shifted and exponentiated approximations that distort the true magnitudes."
+          "rationale": "Both figures visualize the frequency magnitude of discrete spatial derivative operators (such as the Sobel-Feldman and Roberts cross operators). However, the provided textbook text focuses entirely on continuous filter banks, specifically Gabor filters, quadrature pairs, and steerable Gaussian derivatives, meaning both figures completely fail to address the assigned material.",
+          "concepts_tested": [
+            {
+              "concept": "Gabor Filters in the Frequency Domain",
+              "book_lines": [
+                "L00064-L00080"
+              ],
+              "source_claim": "The Fourier transform of a complex Gabor function is a Gaussian in the Fourier domain shifted with respect to the origin.",
+              "figure_a_match": "Completely ignores Gabor filters, plotting the magnitude responses of discrete derivative operators instead.",
+              "figure_b_match": "Completely ignores Gabor filters, plotting the magnitude responses of discrete derivative operators instead.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Steerable Filters",
+              "book_lines": [
+                "L00335-L00355"
+              ],
+              "source_claim": "A directional derivative in any direction can be synthesized as a linear combination of derivatives in horizontal and vertical directions via the steering equation.",
+              "figure_a_match": "Provides no visualization or information regarding steerable filters, basis combinations, or orientation interpolation.",
+              "figure_b_match": "Provides no visualization or information regarding steerable filters, basis combinations, or orientation interpolation.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00001-L00646"
+              ],
+              "issue": "The figure visualizes the frequency responses of discrete derivative operators (D0, D1, Roberts cross, Sobel-Feldman), a topic that is not discussed anywhere in this chapter on Filter Banks, Gabor filters, and Steerable filters."
+            },
+            {
+              "figure": "05_benchmark/gpt-5.5-with-base-code",
+              "book_lines": [
+                "L00001-L00646"
+              ],
+              "issue": "The figure visualizes the frequency responses of discrete derivative operators, completely missing the textbook's actual focus on continuous Gabor filters, local amplitude/phase, and orientation analysis."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
-        "confidence": 0.98,
-        "explanation": "Figure 2 significantly outperforms Figure 1 by utilizing the correct mathematical frequency response functions and symmetric V-shaped magnitudes, whereas Figure 1 relies on distorted, asymmetric equations. Additionally, Figure 2 enhances user engagement with an interactive slice toggle and slider, and achieves a much cleaner layout by properly positioning titles and preventing the messy axis overlaps seen in Figure 1."
+        "confidence": 0.94,
+        "explanation": "Figure 2 excels over Figure 1 by correctly rendering the symmetric V-shaped frequency magnitude and avoiding the messy, overlapping axis labels that clutter Figure 1's layout. Furthermore, Figure 2 significantly outshines Figure 1 in interactivity and formatting, offering functional slice toggles and properly positioned, math-styled titles, whereas Figure 1 provides only basic hover interactions and clusters its titles haphazardly."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:44:43.249Z"
+      "evaluatedAt": "2026-06-30T02:26:15.261Z",
+      "conceptRedoneAt": "2026-06-30T02:26:15.261Z"
     }
   },
   "3d_scene_understanding__epipolar_geometry": {
@@ -1020,18 +1750,67 @@
           "rationale": "Figure 2 correctly implements subscripts (e.g., O₁, p₁) matching the original, aligns the 'Epipolar line' text cleanly along the lines, and avoids the severe text overlapping seen in Figure 1's camera labels."
         },
         "concept": {
-          "winner": "05_benchmark/gpt-5.5-with-base-code",
+          "winner": "tie",
           "confidence": 1,
-          "rationale": "Figure 2 correctly implements the mathematical 3D model of epipolar geometry (calculating true 3D line-plane intersections), whereas Figure 1 fakes the entire diagram using flat 2D coordinates and hardcoded linear interpolations, completely defeating the 3D pedagogical purpose when the camera is rotated."
+          "rationale": "Neither figure is a winner because both completely ignore the textbook's subject matter (single-view metrology, vanishing points, cross-ratios) and instead depict an out-of-scope topic (epipolar geometry for stereo vision). Both figures fail identically in grounding their interactions and geometries in the provided text.",
+          "concepts_tested": [
+            {
+              "concept": "Single View vs. Stereo Vision Focus",
+              "book_lines": [
+                "L00012-L00017"
+              ],
+              "source_claim": "The chapter focuses strictly on single view metrology, explicitly contrasting it with stereo vision or multiview geometry that uses multiple images.",
+              "figure_a_match": "Completely misses the concept by illustrating a stereo vision setup with two cameras (O1 and O2) and epipolar geometry.",
+              "figure_b_match": "Completely misses the concept by illustrating a stereo vision setup with two cameras (O1 and O2) and epipolar geometry.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Vanishing Points and Linear Perspective",
+              "book_lines": [
+                "L00172-L00188"
+              ],
+              "source_claim": "Parallel 3D lines project into non-parallel 2D image lines that converge to a finite vanishing point.",
+              "figure_a_match": "Does not illustrate parallel lines, perspective convergence, or single-view vanishing points.",
+              "figure_b_match": "Does not illustrate parallel lines, perspective convergence, or single-view vanishing points.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Cross-Ratio Invariant",
+              "book_lines": [
+                "L00374-L00392"
+              ],
+              "source_claim": "The cross-ratio of four collinear points is preserved under perspective projection and can be used for single-view 3D measurements.",
+              "figure_a_match": "Provides no collinear points, cross-ratio measurements, or reference objects.",
+              "figure_b_match": "Provides no collinear points, cross-ratio measurements, or reference objects.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00015-L00019"
+              ],
+              "issue": "Depicts epipolar geometry (O1, O2, e1, e2, epipolar lines) for a two-camera stereo setup, which the text explicitly excludes from this chapter's focus."
+            },
+            {
+              "figure": "05_benchmark/gpt-5.5-with-base-code",
+              "book_lines": [
+                "L00015-L00019"
+              ],
+              "issue": "Depicts epipolar geometry (O1, O2, e1, e2, epipolar lines) for a two-camera stereo setup, which the text explicitly excludes from this chapter's focus."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
-        "confidence": 0.98,
-        "explanation": "Figure 2 successfully constructs a genuine 3D mathematical model of epipolar geometry with correctly calculated intersections and accurate epipolar lines, whereas Figure 1 relies on faked 2D coordinates that completely break the pedagogical purpose when rotated. Furthermore, Figure 2 features clean, properly formatted labels with subscripts, while Figure 1 suffers from misplaced lines, anomalous objects, and severe text overlapping."
+        "confidence": 0.95,
+        "explanation": "Figure 2 is the clear winner because it constructs genuine 3D geometry with mathematically correct intersections and accurate epipolar lines, whereas Figure 1 relies on flat 2D shapes to fake 3D perspective and misplaces the epipolar lines. Additionally, Figure 2 features clean, properly formatted labels with correct subscripts, completely avoiding the severe text overlap and anomalous visual artifacts seen in Figure 1."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:44:58.201Z"
+      "evaluatedAt": "2026-06-30T02:26:45.612Z",
+      "conceptRedoneAt": "2026-06-30T02:26:45.612Z"
     }
   },
   "optical_flow__flying_bird": {
@@ -1066,17 +1845,53 @@
         },
         "concept": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
-          "confidence": 0.95,
-          "rationale": "Figure 1's inclusion of a V_z slider allows students to dynamically alter the depth velocity and immediately observe how the 3D trajectory, projection rays, and vanishing point shift in response, which actively reinforces the underlying mathematical concept far better than Figure 2's static geometry."
+          "confidence": 0.8,
+          "rationale": "Both figures almost entirely ignore the textbook's actual focus on optical flow estimation algorithms, brightness constancy, and the aperture problem, choosing instead to illustrate a 3D perspective projection concept that is only briefly alluded to in the introduction and conclusion. Given that both figures are similarly misaligned with the text, Figure 1 is chosen as the winner because its interactive slider for depth velocity provides a much more pedagogical exploration of how a 3D motion vector maps to a 2D projection.",
+          "concepts_tested": [
+            {
+              "concept": "2D Motion Field from 3D Motion",
+              "book_lines": [
+                "L00005-L00009",
+                "L00414-L00420"
+              ],
+              "source_claim": "A moving three-dimensional (3D) scene produces a two-dimensional (2D) motion field on the image.",
+              "figure_a_match": "Visualizes a 3D bird's trajectory projecting onto a 2D image plane, with an interactive slider to adjust the depth velocity (V_Z) and observe how it dynamically shifts the vanishing point on the 2D plane.",
+              "figure_b_match": "Visualizes the 3D-to-2D projection of a moving bird's trajectory, using a static 'Trace' button to highlight the projection rays converging to a fixed vanishing point.",
+              "verdict": "No_Planner_Benchmark/gpt-5.5"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00031-L00038",
+                "L00088-L00096",
+                "L00149-L00157",
+                "L00183-L00207"
+              ],
+              "issue": "Ignores the core concepts taught in this section, completely omitting optical flow estimation, the brightness constancy assumption, the aperture problem, and the Lucas-Kanade gradient-based equations."
+            },
+            {
+              "figure": "05_benchmark/gpt-5.5-with-base-code",
+              "book_lines": [
+                "L00031-L00038",
+                "L00088-L00096",
+                "L00149-L00157",
+                "L00183-L00207"
+              ],
+              "issue": "Ignores the core concepts taught in this section, completely omitting optical flow estimation, the brightness constancy assumption, the aperture problem, and the Lucas-Kanade gradient-based equations."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "No_Planner_Benchmark/gpt-5.5",
         "confidence": 0.98,
-        "explanation": "Figure 1 offers a far superior 3D oblique viewpoint with actual wireframe geometries and accurate graphics, whereas Figure 2 obscures depth with a head-on angle and relies on flat, abstract 2D cutouts. Additionally, Figure 1 includes a highly effective interactive slider to manipulate depth velocity and correctly places all necessary labels, while Figure 2 provides only a basic highlight toggle and misplaces its poorly formatted text."
+        "explanation": "Figure 1 significantly outperforms Figure 2 by providing a clear oblique viewpoint that effectively reveals the 3D projective geometry, whereas Figure 2's head-on camera angle obscures depth and overlapping components. Furthermore, Figure 1 features an interactive depth velocity slider and actual 3D wireframe geometries for the birds, contrasting sharply with Figure 2's simple highlight toggle, flat abstract cutouts, extraneous planes, and misoriented velocity arrows. Finally, Figure 1 accurately includes all necessary, well-placed labels, while Figure 2 omits key text and formats the remaining labels poorly."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:45:18.633Z"
+      "evaluatedAt": "2026-06-30T02:27:14.917Z",
+      "conceptRedoneAt": "2026-06-30T02:27:14.917Z"
     }
   },
   "blur_filters__bin2": {
@@ -1112,16 +1927,51 @@
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
           "confidence": 1,
-          "rationale": "Figure 1 includes interactive features that explicitly demonstrate the filter's separability (via the outer product visualization) and its real-world application (via the normalization toggle), which significantly enhance pedagogical value compared to Figure 2's basic static representation."
+          "rationale": "Figure 1 actively teaches the textbook's key insights by introducing interactive toggles for both filter separability (visualizing the 1D outer product) and DC gain normalization. Figure 2 provides a well-rendered but essentially static stem plot that only relies on text tooltips to explain these deeper concepts, making Figure 1 far superior pedagogically.",
+          "concepts_tested": [
+            {
+              "concept": "2D Binomial Filter Structure",
+              "book_lines": [
+                "L00312-L00326"
+              ],
+              "source_claim": "The filter b_{2,2} takes the 3x3 matrix values [[1, 2, 1], [2, 4, 2], [1, 2, 1]].",
+              "figure_a_match": "Accurately recreates the 3x3 stem plot with interactive tooltips showing the coordinates and weights.",
+              "figure_b_match": "Accurately recreates the 3x3 stem plot with interactive tooltips showing the coordinates and weights.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Filter Separability",
+              "book_lines": [
+                "L00310-L00325"
+              ],
+              "source_claim": "The 2D binomial filter is obtained by convolving a vertical and horizontal 1D binomial filter (outer product of [1,2,1]).",
+              "figure_a_match": "Mentions the outer product in a text tooltip, but provides no visual representation of the separation.",
+              "figure_b_match": "Provides an 'outer' button that visually displays the 1D [1,2,1] kernels along the axes to show how they intersect to form the 2D surface.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "DC Gain Normalization",
+              "book_lines": [
+                "L00333-L00334",
+                "L00351-L00363"
+              ],
+              "source_claim": "The filter has a DC gain of 16, so its output must be divided by 16 to preserve contrast.",
+              "figure_a_match": "Mentions the DC gain of 16 in a tooltip but does not allow the user to visualize the normalized kernel.",
+              "figure_b_match": "Includes a '/16' toggle that animates the stems shrinking to their normalized heights, directly demonstrating the mathematical operation.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 0.95,
-        "explanation": "Figure 1 significantly outperforms Figure 2 by utilizing 3D cylinders with lit materials for better depth perception and providing concept-driven interactive features, such as animated outer product visualizations. In contrast, Figure 2 suffers from a poorly positioned camera that clips the plot and its labels, relies on flat 1px-wide lines lacking 3D shading, and offers only basic tooltips instead of meaningful pedagogical interactions."
+        "explanation": "Figure 1 excels over Figure 2 by providing deep pedagogical interactivity, such as toggles for filter separability and normalization, paired with accurate 3D geometry using properly scaled, lit cylinders. In contrast, Figure 2 offers only basic tooltips and utilizes flat, 1px lines that fail to convey 3D depth accurately. Additionally, Figure 2 suffers from a poorly positioned camera that clips the plot and omits essential axis labels, whereas Figure 1 presents a clear, well-labeled, and structurally coherent visualization."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:45:56.380Z"
+      "evaluatedAt": "2026-06-30T02:00:43.581Z",
+      "conceptRedoneAt": "2026-06-30T02:00:43.581Z"
     }
   },
   "graphical_models__mrf": {
@@ -1156,17 +2006,49 @@
         },
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 1,
-          "rationale": "Figure 1 correctly models the spatial lattice and observation nodes as a true 3D structure, whereas Figure 2 hardcodes a slanted 2D projection directly into the XY plane, causing awkward edge overlaps and failing to leverage the 3D medium to clarify the field's topology."
+          "confidence": 0.95,
+          "rationale": "Figure 1 excellently translates a notoriously cluttered 2D textbook diagram into a clear 3D representation by lifting the observation layer, making the spatial lattice distinct from the unary factors. It also correctly implements conditional independence for a 2D grid by highlighting the full neighborhood (Markov blanket), whereas Figure 2 inaccurately applies a 1D separation concept to a 2D network.",
+          "concepts_tested": [
+            {
+              "concept": "Markov Random Field (MRF) Structure",
+              "book_lines": [
+                "L00137-L00149"
+              ],
+              "source_claim": "A 2D structure where joint probability factorizes into a product over spatial neighbors $\\phi_{ij}(x_i, x_j)$ and a product over nodes $\\psi_i(x_i, y_i)$.",
+              "figure_a_match": "Draws the graph flat in 2D. Distinguishes hidden and observed nodes by color, and uses tooltips to describe the $\\phi$ and $\\psi$ factors, but visually clutters the spatial and observation edges.",
+              "figure_b_match": "Uses the 3rd dimension to separate the 2D lattice of hidden states $x$ from the observation layer $y$. It allows toggling the observation layer to clearly distinguish the pairwise spatial prior from the unary likelihoods.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Conditional Independence in Undirected Graphs",
+              "book_lines": [
+                "L00019-L00025"
+              ],
+              "source_claim": "Variables are independent conditioned on the values of intervening nodes in *any* path between them in the graph.",
+              "figure_a_match": "Provides a 'condition x2' interaction that highlights only the top row (x1-x2-x3), explaining that it blocks dependence 'along the chain segment'.",
+              "figure_b_match": "Provides a 'Markov blanket' interaction that highlights all spatial neighbors and the observed node for $x_2$, accurately showing the complete set of intervening nodes required to isolate it.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00019-L00025"
+              ],
+              "issue": "It implies conditioning on $x_2$ separates $x_1$ and $x_3$ in the MRF. Because it is a 2D grid, $x_1$ and $x_3$ are still statistically dependent through paths in the lower rows. The figure conflates the textbook's earlier 1D chain example with the 2D MRF structure."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 0.75,
-        "explanation": "Figure 1 emerges as the winner due to its superior structural design, constructing a genuine 3D lattice and providing rich interactivity for exploring the Markov blanket. While Figure 2 is more faithful to the original image's label placement, it relies on a hardcoded, slanted 2D projection rather than true 3D elements, severely limiting its conceptual depth and pedagogical value."
+        "explanation": "Figure 1 is the stronger model because it constructs a genuine 3D lattice with rich interactive features and correctly illustrates the full Markov blanket of a 2D grid. In contrast, Figure 2 improperly fakes perspective using flat 2D disks and inaccurately applies a 1D conditional separation concept to a 2D network, even though it places labels more faithfully than Figure 1."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:46:20.192Z"
+      "evaluatedAt": "2026-06-30T02:28:01.089Z",
+      "conceptRedoneAt": "2026-06-30T02:28:01.089Z"
     }
   },
   "blur_filters__box": {
@@ -1202,16 +2084,42 @@
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
           "confidence": 0.95,
-          "rationale": "Figure 2 includes an interactive normalization toggle that visually animates the stems to 1/9 height, effectively teaching the crucial concept of unit DC gain in box filters, whereas Figure 1 only presents a static unnormalized state."
+          "rationale": "Both figures accurately reproduce the textbook's static 3D stem plot of the unnormalized box filter. Figure 2 wins decisively by adding an interactive normalization toggle that visually demonstrates dividing the kernel by its spatial area to achieve a unit DC gain, a key concept taught in the text.",
+          "concepts_tested": [
+            {
+              "concept": "Box Filter Structure",
+              "book_lines": [
+                "L00021-L00031",
+                "L00033-L00037"
+              ],
+              "source_claim": "The box filter uses a box function as the convolution kernel, where values are 1 if within the -N to N and -M to M bounds, and 0 otherwise. The textbook visually shows a 3D stem plot for N=M=1.",
+              "figure_a_match": "Faithfully recreates the 3D stem plot with 9 blue stems of height 1 on an (n,m) grid, providing tooltips for each coordinate.",
+              "figure_b_match": "Also recreates the textbook's 3D stem plot accurately, using robust hover effects, clean typography for the axes, and clear tooltips for the stem coordinates.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Filter Normalization / DC Gain",
+              "book_lines": [
+                "L00068-L00072",
+                "L00086-L00087"
+              ],
+              "source_claim": "When designing blur kernels, we generally want a DC gain of 1. In the case of the box filter, this means dividing the kernel values by (2N+1)(2M+1).",
+              "figure_a_match": "Mentions normalization in a static global tooltip, but visually the stems remain fixed at a height of 1.",
+              "figure_b_match": "Provides a '1/9' toggle button that dynamically shrinks the 3D stems from height 1 to 1/9, updating tooltips and providing a popup explaining that this step preserves the mean image intensity.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 0.95,
-        "explanation": "Figure 2 is unequivocally superior to Figure 1 due to its optimal camera angle that clearly separates the spatial axes, whereas Figure 1's flawed perspective causes visual overlap and degrades the 3D stem plot. Furthermore, Figure 2 enhances conceptual understanding with a functional, animated normalization toggle and features clear, properly placed labels. In contrast, Figure 1 is limited to static interactivity, suffers from extremely tiny text, and misplaces the vertical axis on the right."
+        "explanation": "Figure 2 wins decisively across all dimensions by providing a clear camera angle that effectively separates the axes, whereas Figure 1 suffers from a poor azimuth that visually overlaps them and ruins the 3D perspective. Furthermore, Figure 2 enhances the conceptual value with a functional 'Normalize' button to demonstrate unit DC gain and features large, accurately placed labels, unlike Figure 1, which lacks interactivity, misplaces the vertical axis on the right, and uses extremely tiny text."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:46:57.903Z"
+      "evaluatedAt": "2026-06-30T02:28:21.194Z",
+      "conceptRedoneAt": "2026-06-30T02:28:21.194Z"
     }
   },
   "optical_flow__basic_motion_point": {
@@ -1247,16 +2155,40 @@
         "concept": {
           "winner": "No_Planner_Benchmark/gpt-5.5",
           "confidence": 0.95,
-          "rationale": "Figure 2 interactively demonstrates the core concept that projected 2D velocity is inversely proportional to depth by allowing students to adjust the depth and see the image motion scale change, whereas Figure 1 only provides a static toggle for the vectors."
+          "rationale": "Figure 2 significantly outperforms Figure 1 by incorporating interactive sliders for depth and motion magnitude, allowing users to actively discover how 2D image velocity scales inversely with a point's depth under perspective projection. Figure 1 only offers a basic visibility toggle for a static scene, making it a much weaker tool for understanding the geometric relationships that govern the motion field.",
+          "concepts_tested": [
+            {
+              "concept": "Generation of the 2D Motion Field",
+              "book_lines": [
+                "L00005-L00009"
+              ],
+              "source_claim": "A moving three-dimensional (3D) scene (or camera) produces a two-dimensional (2D) motion field on the image, representing the 2D displacement of every pixel.",
+              "figure_a_match": "Provides an interactive setup where sliders for 'motion' and 'depth' dynamically adjust the 3D velocity and point position, instantly updating the resulting 2D motion projection.",
+              "figure_b_match": "Shows a static setup of a 3D point and its velocity vector projecting onto a 2D image plane, with a simple button to toggle the motion vectors on and off.",
+              "verdict": "No_Planner_Benchmark/gpt-5.5"
+            },
+            {
+              "concept": "Perspective Projection Effects on Motion",
+              "book_lines": [
+                "L00118-L00120"
+              ],
+              "source_claim": "The appearance of a moving 3D scene point changes over time due to perspective projection.",
+              "figure_a_match": "Uses a 'depth' slider to move the 3D point along its line of sight, explicitly demonstrating through the code's math and the visual rendering that the projected 2D image velocity scales inversely with depth.",
+              "figure_b_match": "Provides a fixed visualization of projection rays, but does not allow the user to observe how varying depth alters the projection.",
+              "verdict": "No_Planner_Benchmark/gpt-5.5"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "No_Planner_Benchmark/gpt-5.5",
-        "confidence": 0.92,
-        "explanation": "Figure 2 successfully captures the pedagogical purpose of the original by providing interactive sliders that demonstrate how depth affects 2D projected velocity, whereas Figure 1 only offers a basic static toggle for motion vectors. Additionally, Figure 2 better replicates the visual style with more accurate label fonts and 3D perspective alignment, whereas Figure 1 suffers from poorly styled labels, incorrectly flattens the projection plane, and misplaces the origin point. Although Figure 1 mathematically models the geometric projection more rigorously, Figure 2's interactive and visual strengths make it the clear overall winner."
+        "confidence": 0.93,
+        "explanation": "Figure 2 significantly outperforms Figure 1 by offering robust interactive sliders that let users parametrically explore how depth and 3D motion scale affect 2D projected velocity, whereas Figure 1 is limited to a static scene with only basic visibility toggles. Furthermore, Figure 2 features much more accurate label styling and properly aligns the points within the 3D perspective, whereas Figure 1 utilizes thin labels and erroneously places the origin directly on the projection surface."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:47:16.204Z"
+      "evaluatedAt": "2026-06-30T02:28:53.998Z",
+      "conceptRedoneAt": "2026-06-30T02:28:53.998Z"
     }
   },
   "optical_flow__yaw_pitch_roll": {
@@ -1291,17 +2223,69 @@
         },
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
-          "confidence": 1,
-          "rationale": "Figure 2 constructs a mathematically accurate 3D scene with proper geometric relationships and interactive rotation, whereas Figure 1 incorrectly hardcodes the 2D perspective of the textbook drawing onto a flat plane, completely breaking the spatial concepts when rotated."
+          "confidence": 0.9,
+          "rationale": "Both figures are fundamentally mismatched with the provided textbook text, as they illustrate 3D camera geometry and Euler angles rather than optical flow or gradient-based motion estimation. However, Figure 2 wins because its interactive sliders physically move the 3D point P in space, which loosely demonstrates the text's introductory premise of 3D scene motion, whereas Figure 1 is entirely static.",
+          "concepts_tested": [
+            {
+              "concept": "2D Motion Field from 3D Motion",
+              "book_lines": [
+                "L00005-L00009",
+                "L00414-L00424"
+              ],
+              "source_claim": "A moving three-dimensional (3D) scene (or camera) produces a two-dimensional (2D) motion field on the image.",
+              "figure_a_match": "Illustrates the static projection of a 3D point P to 2D point p, with tooltips stating that camera motion changes p's position.",
+              "figure_b_match": "Provides interactive sliders for Yaw, Pitch, and Roll that dynamically rotate a ghost 3D point P, actively demonstrating how 3D spatial changes occur before projection.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Optical Flow & Brightness Constancy",
+              "book_lines": [
+                "L00031-L00033",
+                "L00149-L00156"
+              ],
+              "source_claim": "Optical flow is computed by measuring the displacement of image brightness, assuming brightness remains constant as elements move.",
+              "figure_a_match": "Ignores this concept entirely, focusing exclusively on spatial geometry and projection.",
+              "figure_b_match": "Ignores this concept entirely, focusing exclusively on spatial geometry and projection.",
+              "verdict": "tie"
+            },
+            {
+              "concept": "Gradient-Based Estimation & Aperture Problem",
+              "book_lines": [
+                "L00088-L00094",
+                "L00201-L00216"
+              ],
+              "source_claim": "Motion estimation relies on image gradients (Taylor expansion) and suffers from the aperture problem when structures are 1D.",
+              "figure_a_match": "Fails to address image structures, pixels, or gradients.",
+              "figure_b_match": "Fails to address image structures, pixels, or gradients.",
+              "verdict": "tie"
+            }
+          ],
+          "mismatches": [
+            {
+              "figure": "No_Planner_Benchmark/gpt-5.5",
+              "book_lines": [
+                "L00001-L00447"
+              ],
+              "issue": "Dedicating the entire figure to Euler angles (Yaw, Pitch, Roll) and static camera coordinates, which are not the subject of this chapter."
+            },
+            {
+              "figure": "05_benchmark/gpt-5.5-with-base-code",
+              "book_lines": [
+                "L00001-L00447"
+              ],
+              "issue": "Focuses primarily on Euler angle rotations and 3D coordinate geometry, completely ignoring the chapter's core topics of optical flow, pixels, gradients, and optimization."
+            }
+          ]
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
-        "confidence": 0.8,
-        "explanation": "Figure 2 is the stronger overall visualization because it constructs a mathematically accurate 3D scene with functional interactive controls to demonstrate rotations, whereas Figure 1 merely hardcodes a flat 2D perspective onto a single plane that breaks spatial concepts when manipulated. Although Figure 1 is more visually faithful to the original reference with better label placement and geometric proportions, Figure 2's correct 3D spatial relationships and pedagogical interactivity make it significantly better at conveying the core concepts despite its clustered labels and malformed arrows."
+        "confidence": 0.75,
+        "explanation": "Figure 2 provides a true 3D geometric representation of the projection and features functional interactive sliders to demonstrate spatial rotations, whereas Figure 1 improperly draws a flat 2D diagram onto a single plane in 3D space with limited interactivity. Although Figure 1 is more faithful in reproducing the original label placements and point colors without overlapping text, Figure 2's superior 3D modeling and pedagogical interactivity make it the stronger overall visualization."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:47:32.053Z"
+      "evaluatedAt": "2026-06-30T02:29:23.363Z",
+      "conceptRedoneAt": "2026-06-30T02:29:23.363Z"
     }
   },
   "learning_3d__geometry_reconstruction_12": {
@@ -1337,16 +2321,40 @@
         "concept": {
           "winner": "05_benchmark/gpt-5.5-with-base-code",
           "confidence": 1,
-          "rationale": "Figure 1 includes an interactive depth slider that dynamically updates the lifted 3D point and its projection in the reference frame, perfectly illustrating the mathematical relationship between depth, 3D position, and reprojection, whereas Figure 2 is completely static."
+          "rationale": "Figure 1 transforms a static textbook diagram into a dynamic simulation by allowing the user to scrub the depth parameter 'z'. This perfectly captures the textbook's explanation of how estimated depth dictates a pixel's 3D position and subsequent reprojection into a reference frame, whereas Figure 2 is merely a static 2D reproduction of the book's figure.",
+          "concepts_tested": [
+            {
+              "concept": "Lifting a pixel to 3D via depth",
+              "book_lines": [
+                "L00358-L00366"
+              ],
+              "source_claim": "Given the depth at that location, recover the 3D world coordinates of the target point, $\\mathbf{P}$... $\\mathbf{P} = z(\\mathbf{p}) \\mathbf{K}^{-1} \\mathbf{p}$.",
+              "figure_a_match": "Provides a static rendering of the geometry with a label for the equation, but does not allow manipulation of depth.",
+              "figure_b_match": "Provides a depth slider ('z') that physically slides the 3D point P along the target camera's viewing ray, interactively demonstrating the equation.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            },
+            {
+              "concept": "Projection into the reference frame",
+              "book_lines": [
+                "L00374-L00376"
+              ],
+              "source_claim": "Finally, we project the point $\\mathbf{P}'$ into the image coordinates of the reference frame $\\mathbf{p}' = \\mathbf{K} \\mathbf{P}'$.",
+              "figure_a_match": "Shows a static dashed ray projecting P into the reference plane at p', without dynamic behavior.",
+              "figure_b_match": "As the depth slider is adjusted, the 3D point P moves, and its projection p' dynamically updates its position across the reference image plane, visualizing the deterministic warping function.",
+              "verdict": "05_benchmark/gpt-5.5-with-base-code"
+            }
+          ],
+          "mismatches": []
         }
       },
       "aggregator": {
         "winner": "05_benchmark/gpt-5.5-with-base-code",
         "confidence": 0.95,
-        "explanation": "Figure 1 excels by constructing true mathematical 3D geometry and incorporating a functional depth slider to dynamically illustrate point projection, whereas Figure 2 limits itself to a flat, static 2D drawing that offers no parameter manipulation. Although Figure 2 more faithfully reproduces the original diagram's specific curved arrows without adding extraneous UI elements, Figure 1 is vastly superior overall due to its clean label placement and powerful pedagogical interactivity."
+        "explanation": "Figure 1 significantly outperforms Figure 2 by accurately modeling the true 3D geometry of the scene and introducing a dynamic depth slider, whereas Figure 2 merely hardcodes a static 2D perspective drawing onto a flat plane with no parameter manipulation. Although Figure 2 more faithfully reproduces the original diagram's curved arrows without extraneous UI elements, Figure 1 avoids the cluttered, overlapping text seen in Figure 2 and provides a functional simulation that perfectly captures the underlying concepts of projection."
       },
       "evalModel": "gemini-3.1-pro",
-      "evaluatedAt": "2026-06-26T18:47:53.571Z"
+      "evaluatedAt": "2026-06-30T02:29:41.196Z",
+      "conceptRedoneAt": "2026-06-30T02:29:41.196Z"
     }
   }
 }

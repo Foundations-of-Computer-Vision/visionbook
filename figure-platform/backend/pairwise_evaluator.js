@@ -12,7 +12,7 @@ const { generateWithModel } = require('./models');
 const { loadQmdForChapter, numberLines } = require('./qmd_utils');
 
 const PAIRWISE_DEFAULT_MODEL = 'gpt-4o';
-const PAIRWISE_MAX_TOKENS = 4096;
+const PAIRWISE_MAX_TOKENS = 8192;
 const PAIRWISE_RESULTS_DIR = path.join(__dirname, 'pairwise_results');
 
 // ── Pair & position helpers ────────────────────────────────────────────────────
@@ -36,6 +36,13 @@ function randomizeOrder(setupA, setupB) {
 function resolveWinner(llmWinner, figure1, figure2) {
   if (llmWinner === '1') return figure1;
   if (llmWinner === '2') return figure2;
+  return 'tie';
+}
+
+// Inverse of resolveWinner — converts a resolved setup-name winner back to "1"/"2"/"tie"
+function resolvedToRaw(resolvedWinner, figure1, figure2) {
+  if (resolvedWinner === figure1) return '1';
+  if (resolvedWinner === figure2) return '2';
   return 'tie';
 }
 
@@ -85,19 +92,13 @@ Evaluate: presence of all required labels, correctness of label text, readabilit
 Watch for: important annotations absent, labels not present in the original figure.
 You will receive the original textbook figure image, plus rendered screenshots of Figure 1 and Figure 2.`,
 
-  concept: `You are a strict evaluator comparing two Three.js 3D figures against their textbook source.
-You will receive some numbered textbook lines (lines prefixed L00001:, L00002:), then Figure 1 and Figure 2 source code.
+  concept: `${SHARED_PREAMBLE}
 
 1. EXTRACT: list the key concepts taught by this textbook section (1-4 concepts)
 2. FOR EACH CONCEPT: find the book lines that define it; assess how well Figure 1 and Figure 2 each teach it via their labels, tooltips, interactions, and geometry
 3. IDENTIFY MISMATCHES: claims in either figure that contradict or ignore the textbook
-4. DECIDE: which figure better grounds its interactions and labels in the textbook
-
-Be critical and honest. Only call "tie" when both are genuinely indistinguishable on this dimension.
-Your rationale must be comparative: explain specifically what the winner does better AND what the loser does worse.
-
-Output ONLY valid JSON (use "1" and "2" for figures — do NOT use setup names):
-{"winner":"1"|"2"|"tie","confidence":0.0-1.0,"concepts_tested":[{"concept":"<name>","book_lines":["L02916-L02924"],"source_claim":"<textbook statement>","figure_1_match":"<how Figure 1 addresses this>","figure_2_match":"<how Figure 2 addresses this>","verdict":"1"|"2"|"tie"}],"mismatches":[{"figure":"1"|"2","book_lines":["L02920-L02924"],"issue":"<what is wrong or missing>"}],"rationale":"<two sentences comparing both figures against the textbook>"}`,
+4. DECIDE: which figure better grounds its interactions and labels in the textbook in a clear manner.
+The numbered textbook lines as well as Figure 1 and Figure 2 are provided as HTML/JavaScript source code.`
 };
 
 const AGGREGATOR_PROMPT = `You receive pairwise preferences from five independent dimension agents that each compared Figure 1 vs Figure 2.
@@ -263,6 +264,94 @@ async function pairwiseEvaluateFigure({ htmlA, setupA, htmlB, setupB, thumbA, th
   };
 }
 
+/**
+ * Re-evaluate only the concept dimension (and re-run the aggregator) for an existing eval.
+ * All other dimensions are preserved from existingMachineEval. The figure1/figure2 position
+ * assignment is restored from the existing eval so results are comparable.
+ *
+ * @param {object} opts
+ * @param {string} opts.htmlA / opts.htmlB / opts.setupA / opts.setupB / opts.thumbA / opts.thumbB / opts.sourceImage
+ * @param {object} opts.existingMachineEval - the saved machineEval object from the pair file
+ * @param {string} [opts.evalModel]
+ * @param {string} [opts.qmdContent] / [opts.chapterName]
+ */
+async function pairwiseEvaluateConceptOnly({ htmlA, setupA, htmlB, setupB, thumbA, thumbB, sourceImage, evalModel, qmdContent = null, chapterName = null, existingMachineEval }) {
+  if (!existingMachineEval) throw new Error('pairwiseEvaluateConceptOnly: existingMachineEval is required');
+
+  const usedModel = evalModel || PAIRWISE_DEFAULT_MODEL;
+  let resolvedQmd = qmdContent;
+  if (!resolvedQmd && chapterName) resolvedQmd = loadQmdForChapter(chapterName);
+  if (!resolvedQmd) throw new Error('pairwiseEvaluateConceptOnly: qmdContent or chapterName is required');
+  const numberedQmd = numberLines(resolvedQmd);
+
+  // Restore original figure1/figure2 assignment so position is consistent with existing dims
+  const { figure1Setup, figure2Setup } = existingMachineEval;
+  if (!figure1Setup || !figure2Setup) throw new Error('pairwiseEvaluateConceptOnly: existingMachineEval is missing figure1Setup/figure2Setup — cannot restore position mapping');
+  const figure1 = figure1Setup;
+  const figure2 = figure2Setup;
+  const aIsOne = figure1 === setupA;
+  const inputs = {
+    htmlA: aIsOne ? htmlA : htmlB,
+    htmlB: aIsOne ? htmlB : htmlA,
+    thumbA: aIsOne ? thumbA : thumbB,
+    thumbB: aIsOne ? thumbB : thumbA,
+    sourceImage,
+  };
+
+  // Run only the concept agent
+  const conceptRaw = await callDimensionAgent('concept', inputs, usedModel, numberedQmd);
+
+  // Resolve concept result to setup names
+  const resolvedConcept = {
+    winner: resolveWinner(conceptRaw.winner, figure1, figure2),
+    confidence: conceptRaw.confidence,
+    rationale: conceptRaw.rationale,
+    concepts_tested: (conceptRaw.concepts_tested || []).map(ct => ({
+      concept: ct.concept,
+      book_lines: ct.book_lines,
+      source_claim: ct.source_claim,
+      figure_a_match: aIsOne ? ct.figure_1_match : ct.figure_2_match,
+      figure_b_match: aIsOne ? ct.figure_2_match : ct.figure_1_match,
+      verdict: resolveWinner(ct.verdict, figure1, figure2),
+    })),
+    mismatches: (conceptRaw.mismatches || []).map(m => ({
+      figure: resolveWinner(m.figure, figure1, figure2),
+      book_lines: m.book_lines,
+      issue: m.issue,
+    })),
+  };
+
+  // Build raw (1/2-label) versions of all 5 dims for the aggregator
+  // — existing 4 dimensions are stored resolved; convert them back
+  const existingDims = existingMachineEval.dimensions || {};
+  const rawForAgg = {
+    geometry: { winner: resolvedToRaw(existingDims.geometry?.winner, figure1, figure2), confidence: existingDims.geometry?.confidence, rationale: existingDims.geometry?.rationale },
+    interactivity: { winner: resolvedToRaw(existingDims.interactivity?.winner, figure1, figure2), confidence: existingDims.interactivity?.confidence, rationale: existingDims.interactivity?.rationale },
+    faithfulness: { winner: resolvedToRaw(existingDims.faithfulness?.winner, figure1, figure2), confidence: existingDims.faithfulness?.confidence, rationale: existingDims.faithfulness?.rationale },
+    labels: { winner: resolvedToRaw(existingDims.labels?.winner, figure1, figure2), confidence: existingDims.labels?.confidence, rationale: existingDims.labels?.rationale },
+    concept: conceptRaw,
+  };
+
+  const aggRaw = await callAggregator(rawForAgg, usedModel);
+
+  return {
+    figure1Setup: figure1,
+    figure2Setup: figure2,
+    dimensions: {
+      ...existingDims,
+      concept: resolvedConcept,
+    },
+    aggregator: {
+      winner: resolveWinner(aggRaw.winner, figure1, figure2),
+      confidence: aggRaw.confidence,
+      explanation: aggRaw.explanation,
+    },
+    evalModel: usedModel,
+    evaluatedAt: new Date().toISOString(),
+    conceptRedoneAt: new Date().toISOString(),
+  };
+}
+
 // ── Result file I/O ────────────────────────────────────────────────────────────
 // One file per pair: pairwise_results/<key>.json
 // Contents: { "<chapter>__<figure>": { setupA, setupB, chapter, figure, machineEval, humanEvals }, ... }
@@ -326,6 +415,7 @@ function clearAllMachineEvals(setupA, setupB) {
 
 module.exports = {
   pairwiseEvaluateFigure,
+  pairwiseEvaluateConceptOnly,
   loadPairwiseResult,
   savePairwiseResult,
   loadAllPairwiseResults,
