@@ -15,18 +15,11 @@ jobs:
         with:
           fetch-depth: 4
 
-      - name: Set up SSH
+      - name: Trigger deploy
+        # POST to a token-guarded webhook on the site's 443 vhost that runs
+        # `git pull && quarto render` on the host.
+        # -f makes curl exit non-zero on the webhook's HTTP 500 (render failed).
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          echo "${{ secrets.PUBLIC_KEY }}" > ~/.ssh/id_rsa.pub
-          chmod 600 ~/.ssh/id_rsa ~/.ssh/id_rsa.pub
-          ssh-keyscan -p ${{ secrets.PUBLIC_PORT }} -t ed25519 ${{ secrets.HOST }} >> ~/.ssh/known_hosts
-
-      - name: Pull and Render
-        run: |
-          ssh -p ${{ secrets.PUBLIC_PORT }} -o StrictHostKeyChecking=no ${{ secrets.ID }}@${{ secrets.HOST }} << 'EOF'
-          cd ${{ secrets.DIR }}
-          git pull
-          quarto render --no-clean
-          EOF
+          curl -fsS --max-time 600 -X POST \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
+            https://${{ secrets.DEPLOY_HOST }}/deploy
