@@ -45,7 +45,7 @@ reflectance distributions @Oren1994. A useful approximation describing
 diffuse reflection is the **Lambertian model**, with a particularly
 simple BRDF, which we denote as $F_L$. The outgoing ray intensity,
 $\ell_{\texttt{out}}$, is a function only of the surface orientation relative to the
-incoming and outgoing ray directions, the wavelength, a scalar surface
+incoming ray direction, the wavelength, a scalar surface
 reflectance, and the incoming light power:
 $$
 \ell_{\texttt{out}} = F_{L} \left( \ell_{\texttt{in}} (\lambda), \mathbf{n}, \mathbf{p} \right)  = a \ell_{\texttt{in}}(\lambda) \left( \mathbf{n} \cdot \mathbf{p} \right),
@@ -74,7 +74,7 @@ is the **Phong reflection model** @Phong1975. The light reflected from a
 surface is assumed to have three components that result in the observed
 reflection: (1) an ambient component, which is a constant term added to
 all reflections; (2) a diffuse component, which is the Lambertian
-reflection of @eq-Lambert; and (3) a specular reflection component. For a given ray
+reflection of @eq-lambert; and (3) a specular reflection component. For a given ray
 direction, $\mathbf{q}$, from the surface, the Phong specular
 contribution, $\ell_{\mbox{Phong spec}}$, is:
 $$\ell_{\mbox{Phong spec}} = k_s (\mathbf{r} \cdot \mathbf{q})^\alpha \ell_{\texttt{in}},$$
@@ -83,7 +83,7 @@ of the specular reflection, and the unit vector $\mathbf{r}$ denotes the
 direction of maximum specular reflection, given by
 $$\mathbf{r} = 2(\mathbf{p} \cdot \mathbf{n}) \mathbf{n} - \mathbf{p}$$
 
-@fig-rendering shows the ambient, Lambertian, and Phong shading components of a sphere
+@fig-rendering shows the Lambertian, and Phong shading components of a sphere
 under two-source illumination, and a comparison with a real sphere under
 similar real illumination.
 
@@ -130,7 +130,7 @@ space, and thus from different surfaces in the world.
 Perhaps the simplest camera is a **pinhole camera**. A pinhole camera
 requires a light-tight enclosure, a small hole that lets light pass, and
 a projection surface where one senses or views the illumination
-intensity as a function of position. @fig-wallpicture (b) shows the the geometry of a scene,
+intensity as a function of position. @fig-wallpicture (b) shows the geometry of a scene,
 the pinhole, and a projection surface (wall). For any given point on the
 projection surface, the light that falls there comes from only from one
 direction, along the straight line joining the surface position and the
@@ -289,8 +289,8 @@ width="80%"}
 
 Due to the choice of coordinate systems, the coordinates in the virtual
 camera plane have the $x$ coordinate in the opposite direction than the
-way we usually do for image coordinates $(m,n)$, where $m$ indexes the
-pixel column and $n$ the pixel row in an image. This is shown in @fig-pinholeGeometry (b). The
+way we usually do for image coordinates $(n,m)$, where $n$ indexes the
+pixel column and $m$ the pixel row in an image. This is shown in @fig-pinholeGeometry (b). The
 relationship between camera coordinates and image coordinates is
 $$\begin{aligned}
 n &= - a x + n_0\\
@@ -298,7 +298,7 @@ m &= a y + m_0
 \label{eq-cameratoimagecoordinates}
 \end{aligned}$$ where $a$ is a constant, and $(n_0, m_0)$ is the image
 coordinates of the camera optical axis. Note that this is different than
-what we introduced a simple projection model in in the framework of the
+what we introduced in the simple projection model in the framework of the
 simple vision system in @sec-simplesystem. In that example, we placed the world
 coordinate system in front of the camera, and the origin was not the
 location of the pinhole camera. 
