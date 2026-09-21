@@ -1,0 +1,462 @@
+<style>
+  .sticky-notes-button {
+    position: fixed;
+    right: 2rem;
+    bottom: 2rem;
+    z-index: 2147483646;
+    background: #ffce54;
+    color: #2d2d2d;
+    border: none;
+    border-radius: 999px;
+    padding: 0.65rem 1.25rem;
+    font-weight: 600;
+    font-family: inherit;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .sticky-notes-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 9px 24px rgba(0, 0, 0, 0.25);
+  }
+
+  .sticky-notes-button.sticky-notes-button--selecting {
+    background: #ffa940;
+    box-shadow: 0 9px 24px rgba(0, 0, 0, 0.25);
+  }
+
+  .sticky-notes-button:active {
+    transform: translateY(1px);
+  }
+
+  .sticky-notes-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    pointer-events: none;
+    z-index: 2147483645;
+  }
+
+  .sticky-notes-hint {
+    position: fixed;
+    right: 2rem;
+    bottom: 5.25rem;
+    background: rgba(103, 32, 32, 0.85);
+    color: #ffffff;
+    padding: 0.45rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    z-index: 2147483646;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(0.5rem);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  .sticky-notes-hint.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .sticky-note {
+    position: absolute;
+    width: 240px;
+    min-height: 200px;
+    background: #fff8a6;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(48, 35, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    pointer-events: auto;
+  }
+
+  .sticky-note-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.65rem;
+    background: rgba(255, 206, 84, 0.85);
+    cursor: grab;
+    user-select: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+
+  .sticky-note-header:active {
+    cursor: grabbing;
+  }
+
+  .sticky-note-remove {
+    appearance: none;
+    border: none;
+    background: transparent;
+    font-size: 1.1rem;
+    line-height: 1;
+    color: rgba(45, 45, 45, 0.7);
+    cursor: pointer;
+  }
+
+  .sticky-note-remove:hover {
+    color: rgba(45, 45, 45, 0.95);
+  }
+
+  .sticky-note textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 0.6rem 0.7rem;
+    font-size: 0.95rem;
+    font-family: inherit;
+    resize: none;
+    outline: none;
+    color: #2d2d2d;
+  }
+
+  @media print {
+    .sticky-notes-button,
+    .sticky-notes-container {
+      display: none !important;
+    }
+  }
+</style>
+<script>
+(function () {
+  const MAX_Z = 2147483647;
+  const DEFAULT_MARGIN = 16;
+  const MIN_MARGIN = 8;
+  const STORAGE_PREFIX = "visionbookStickyNotesV3::";
+
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+
+  const STORAGE_KEY = (() => {
+    try {
+      const url = new URL(window.location.href);
+      const identifier = `${url.host}${url.pathname}${url.search}`;
+      return `${STORAGE_PREFIX}${encodeURIComponent(identifier)}`;
+    } catch (err) {
+      const fallback =
+        (window.location && (window.location.pathname || window.location.href)) ||
+        "unknown";
+      return `${STORAGE_PREFIX}${encodeURIComponent(fallback)}`;
+    }
+  })();
+
+  function loadNotes() {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map((note) => ({
+          id: note.id || null,
+          content: note.content || "",
+          left: typeof note.left === "number" ? note.left : undefined,
+          top: typeof note.top === "number" ? note.top : undefined,
+          z: typeof note.z === "number" ? note.z : 1,
+        }))
+        .filter((note) => note && note.id);
+    } catch (err) {
+      console.warn("Sticky notes: failed to load notes", err);
+      return [];
+    }
+  }
+
+  function saveNotes(notes) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
+    } catch (err) {
+      console.warn("Sticky notes: failed to save notes", err);
+    }
+  }
+
+  function ensureUniqueId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+    return `note-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  }
+
+  function init() {
+    if (document.body.dataset.stickyNotesInitialized === "true") {
+      return;
+    }
+    document.body.dataset.stickyNotesInitialized = "true";
+
+    const container = document.createElement("div");
+    container.className = "sticky-notes-container";
+    document.body.appendChild(container);
+
+    const hint = document.createElement("div");
+    hint.className = "sticky-notes-hint";
+    hint.textContent = "Click anywhere to place your note. Notes are stored locally in this browser.";
+    document.body.appendChild(hint);
+
+    const button = document.createElement("button");
+    button.className = "sticky-notes-button";
+    button.type = "button";
+    button.setAttribute("aria-label", "Add sticky note (stored in local storage)");
+    button.title = "Add sticky note (stored in your browser's local storage)";
+    button.textContent = "+ Note";
+    document.body.appendChild(button);
+
+    let notes = loadNotes();
+    let highestZ = notes.reduce((max, note) => Math.max(max, note.z || 1), 1);
+    const noteElements = new Map();
+
+    let selecting = false;
+
+    function setSelecting(state) {
+      selecting = state;
+      button.classList.toggle("sticky-notes-button--selecting", state);
+      hint.classList.toggle("visible", state);
+      if (state) {
+        document.body.style.cursor = "copy";
+      } else {
+        document.body.style.cursor = "";
+      }
+    }
+
+    function persist() {
+      const all = Array.from(noteElements.values()).map(({ data }) => ({
+        id: data.id,
+        content: data.content || "",
+        left: typeof data.left === "number" ? data.left : MIN_MARGIN,
+        top: typeof data.top === "number" ? data.top : MIN_MARGIN,
+        z: data.z || 1,
+      }));
+      saveNotes(all);
+    }
+
+    function focusNote(note, element) {
+      highestZ = Math.min(MAX_Z, highestZ + 1);
+      note.z = highestZ;
+      element.style.zIndex = String(note.z);
+      persist();
+    }
+
+    function applyPosition(note, element) {
+      const width = element.offsetWidth;
+      const height = element.offsetHeight;
+      const docEl = document.documentElement;
+      const body = document.body;
+      const docWidth = Math.max(
+        docEl.scrollWidth,
+        docEl.clientWidth,
+        body ? body.scrollWidth : 0,
+        body ? body.clientWidth : 0
+      );
+      const docHeight = Math.max(
+        docEl.scrollHeight,
+        docEl.clientHeight,
+        body ? body.scrollHeight : 0,
+        body ? body.clientHeight : 0
+      );
+      const maxLeft = Math.max(MIN_MARGIN, docWidth - width - MIN_MARGIN);
+      const maxTop = Math.max(MIN_MARGIN, docHeight - height - MIN_MARGIN);
+
+      const prevLeft = note.left;
+      const prevTop = note.top;
+
+      let left = typeof note.left === "number" ? note.left : MIN_MARGIN;
+      let top = typeof note.top === "number" ? note.top : MIN_MARGIN;
+
+      left = Math.min(Math.max(left, MIN_MARGIN), maxLeft);
+      top = Math.min(Math.max(top, MIN_MARGIN), maxTop);
+
+      const changed = left !== prevLeft || top !== prevTop;
+      note.left = left;
+      note.top = top;
+      element.style.left = `${left}px`;
+      element.style.top = `${top}px`;
+      element.style.transform = "";
+      return changed;
+    }
+
+    function ensurePosition(note, element) {
+      let changed = false;
+      if (typeof note.left !== "number" || typeof note.top !== "number") {
+        note.left = window.scrollX + window.innerWidth - element.offsetWidth - DEFAULT_MARGIN;
+        note.top = window.scrollY + DEFAULT_MARGIN;
+        changed = true;
+      }
+      delete note._legacyOffsetX;
+      delete note._legacyOffsetY;
+      delete note._legacyPosition;
+      return applyPosition(note, element) || changed;
+    }
+
+    function attachNoteEvents(note, element) {
+      const header = element.querySelector(".sticky-note-header");
+      const textarea = element.querySelector("textarea");
+      const closeButton = element.querySelector(".sticky-note-remove");
+
+      textarea.addEventListener("input", () => {
+        note.content = textarea.value;
+        persist();
+      });
+
+      closeButton.addEventListener("click", () => {
+        noteElements.delete(note.id);
+        container.removeChild(element);
+        notes = notes.filter((n) => n.id !== note.id);
+        persist();
+      });
+
+      header.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        focusNote(note, element);
+        const startPointerX = event.clientX + window.scrollX;
+        const startPointerY = event.clientY + window.scrollY;
+        const startLeft = typeof note.left === "number" ? note.left : MIN_MARGIN;
+        const startTop = typeof note.top === "number" ? note.top : MIN_MARGIN;
+
+        function onMove(ev) {
+          const pointerX = ev.clientX + window.scrollX;
+          const pointerY = ev.clientY + window.scrollY;
+          note.left = startLeft + (pointerX - startPointerX);
+          note.top = startTop + (pointerY - startPointerY);
+          applyPosition(note, element);
+        }
+
+        function onUp() {
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          persist();
+        }
+
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp, { once: true });
+      });
+
+      element.addEventListener("pointerdown", () => {
+        focusNote(note, element);
+      });
+    }
+
+    function renderNote(note) {
+      const existing = noteElements.get(note.id);
+      const element = existing?.element || document.createElement("div");
+      element.className = "sticky-note";
+      element.dataset.noteId = note.id;
+      element.style.zIndex = String(note.z || 1);
+
+      if (!existing) {
+        element.innerHTML = `
+          <div class="sticky-note-header">
+            <span>Note</span>
+            <button type="button" class="sticky-note-remove" aria-label="Delete sticky note">×</button>
+          </div>
+          <textarea placeholder="Write something..."></textarea>
+        `;
+        container.appendChild(element);
+      }
+
+      const textarea = element.querySelector("textarea");
+      if (textarea && textarea.value !== note.content) {
+        textarea.value = note.content;
+      }
+
+      const changed = ensurePosition(note, element);
+
+      if (!existing) {
+        noteElements.set(note.id, { element, data: note });
+        attachNoteEvents(note, element);
+      } else {
+        noteElements.set(note.id, { element, data: note });
+      }
+
+      return changed;
+    }
+
+    function addNoteAt(x, y) {
+      const pageX = x + window.scrollX;
+      const pageY = y + window.scrollY;
+      const note = {
+        id: ensureUniqueId(),
+        content: "",
+        left: pageX - 120,
+        top: pageY - 40,
+        z: highestZ + 1,
+      };
+      highestZ = note.z;
+      notes.push(note);
+      renderNote(note);
+      persist();
+    }
+
+    function enterSelectionMode() {
+      if (selecting) {
+        setSelecting(false);
+        return;
+      }
+      setSelecting(true);
+
+      function onClick(event) {
+        setSelecting(false);
+        cleanup();
+        addNoteAt(event.clientX, event.clientY);
+      }
+
+      function onKey(event) {
+        if (event.key === "Escape") {
+          setSelecting(false);
+          cleanup();
+        }
+      }
+
+      function cleanup() {
+        document.removeEventListener("click", onClick, true);
+        document.removeEventListener("keydown", onKey);
+      }
+
+      setTimeout(() => {
+        document.addEventListener("click", onClick, true);
+        document.addEventListener("keydown", onKey);
+      }, 0);
+    }
+
+    button.addEventListener("click", enterSelectionMode);
+
+    let needsPersist = false;
+    notes.forEach((note) => {
+      if (renderNote(note)) {
+        needsPersist = true;
+      }
+    });
+
+    if (needsPersist) {
+      persist();
+    }
+
+    if (notes.length === 0) {
+      highestZ = 1;
+    }
+
+    window.addEventListener("resize", () => {
+      let changed = false;
+      noteElements.forEach(({ data, element }) => {
+        if (applyPosition(data, element)) {
+          changed = true;
+        }
+      });
+      if (changed) {
+        persist();
+      }
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init, { once: true });
+  } else {
+    init();
+  }
+})();
+</script>
