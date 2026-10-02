@@ -18,8 +18,10 @@ jobs:
       - name: Trigger deploy
         # POST to a token-guarded webhook on the site's 443 vhost that runs
         # `git pull && quarto render` on the host.
-        # -f makes curl exit non-zero on the webhook's HTTP 500 (render failed).
+        # --fail-with-body exits non-zero on the webhook's HTTP 500 and still
+        # prints the response body, which carries the git/quarto output saying
+        # what broke.
         run: |
-          curl -fsS --max-time 600 -X POST \
+          curl -sS --fail-with-body --max-time 600 -X POST \
             -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
             https://${{ secrets.DEPLOY_HOST }}/deploy
