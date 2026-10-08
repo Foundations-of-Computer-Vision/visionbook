@@ -50,9 +50,9 @@ $$
 $$
 @fig-discretederivative (e) shows the result of filtering the 1D signal (@fig-discretederivative [a]) convolved with $d_1 \left[n\right]$ (@fig-discretederivative [d]). Now the output shows the highest magnitude output in the midpoint where there is variation in the input signal.
 
-![(a) Input signal, $\ell [n]$. (b) Convolutional kernel $d_0 [n]$, defined as $d_0 [0]=1$ and $d_0 [1]=-1$ and zero everywhere else. (c) Output of the convolution between $\ell [n]$ and $d_0 [n]$. (d) Kernel $d_1 [n]$, defined as $d_1 [-1]=1$ and $d_1 [1]=-1$ and zero everywhere else. (e) Output of the convolution between $\ell [n]$ and $d_1 [n]$.](figures/derivatives/discretederivative.png){width=70% #fig-discretederivative}
+![(a) Input signal, $\ell [n]$. (b) Convolutional kernel $d_0 [n]$, defined as $d_0 [0]=1$ and $d_0 [1]=-1$ and zero everywhere else. (c) Output of the convolution between $\ell [n]$ and $d_0 [n]$. (d) Kernel $d_1 [n]$, defined as $d_1 [-1]=1/2$ and $d_1 [1]=-1/2$ and zero everywhere else. (e) Output of the convolution between $\ell [n]$ and $d_1 [n]$.](figures/derivatives/discretederivative.png){width=70% #fig-discretederivative}
 
-It is also interesting to see the behavior of the derivative and its discrete approximations in the Fourier domain. In the continuous domain, the relationship between the Fourier transform on a function and the Fourier transform of its derivative is:
+It is also interesting to see the behavior of the derivative and its discrete approximations in the Fourier domain. In the continuous domain, the relationship between the Fourier transform of a function and the Fourier transform of its derivative is:
 $$
 \frac{\partial \ell (x)}{\partial x}  
 \xrightarrow{\mathscr{F}} 
@@ -161,7 +161,7 @@ $$
 Then, the output of the derivative operator is:
 
 $$
-\mathbf{r}=\mathbf{D_0} \boldsymbol\ell=\left[0, -1, 0, 2\right]
+\mathbf{r}=\mathbf{D_0} \boldsymbol\ell=\left[0, 1, 0, -2\right]
 $$
 Note that this vector has one sample less than the input. To recover the input $\boldsymbol\ell$ we cannot invert $\mathbf{D_0}$ as it is not a square matrix, but we can compute the pseudoinverse, which turns out to be:
 
@@ -308,7 +308,7 @@ For $n=0$ we have the original Gaussian. @fig-gaussian_gaussiander shows the 1D 
 
 ![Fig (a) 1D Gaussian with $\sigma=1$. (b–d) Gaussian derivatives up to order 3.](figures/derivatives/gaussian_gaussiander.png){#fig-gaussian_gaussiander}
 
-In two dimensions, as the Gaussian is separable, the partial derivatives result on the product of two Hermite polynomial, one for each spatial dimension:
+In two dimensions, as the Gaussian is separable, the partial derivatives result on the product of two Hermite polynomials, one for each spatial dimension:
 
 $$
 \begin{split}
