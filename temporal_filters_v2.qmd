@@ -45,7 +45,7 @@ The continuous FT of the sequence is equal to the product of the 2D FT of the st
 @fig-mov_pulse_012 shows the FT for a sequence with one spatial dimension, $\ell (x,t)$, that contains a blurry rectangular pulse moving at three different speeds towards the left. @fig-mov_pulse_012 (a) shows a sequence when the pulse is static, and @fig-mov_pulse_012 (d) shows its FT. Across the spatial frequency $w_x$, the FT is approximately a sinc function. 
 
 
-Across the temporal frequency $w_t$, as the signal is constant, its FT is a delta function. Therefore, the FT is a sinc function contained inside a delta wall in the line $w_t=0$. @fig-mov_pulse_012 (b) shows the same rectangular pulse moving towards the left, $v_x=0.5$. @fig-mov_pulse_012 (e) shows the sinc function but skewed along the frequency line $w_t+0.5w_x=0$. Note that this is not a rotation of the sinc function from @fig-mov_pulse_012 (d) as the locations of the zeros lie at the same $w_x$ locations. @fig-mov_pulse_012 (c) shows the pulse moving at a faster speed resulting in a larger skewing of its FT, @fig-mov_pulse_012 (f).
+Across the temporal frequency $w_t$, as the signal is constant, its FT is a delta function. Therefore, the FT is a sinc function contained inside a delta wall in the line $w_t=0$. @fig-mov_pulse_012 (b) shows the same rectangular pulse moving towards the left, $v_x=-0.5$. @fig-mov_pulse_012 (e) shows the sinc function but skewed along the frequency line $w_t-0.5w_x=0$. Note that this is not a rotation of the sinc function from @fig-mov_pulse_012 (d) as the locations of the zeros lie at the same $w_x$ locations. @fig-mov_pulse_012 (c) shows the pulse moving at a faster speed resulting in a larger skewing of its FT, @fig-mov_pulse_012 (f).
 
 ::: {.column-margin}
 The **sinc function** is the FT of a box kernel. In the continuous domain, the sinc function has the form:
@@ -122,7 +122,7 @@ This directional blur is not a rotation of the original Gaussian as the change o
 
 Spatial derivatives were useful to find regions of image variation such as object boundaries. Temporal derivatives can be used to locate moving objects. We can approximate a temporal derivative for discrete signals as:
 $$
-\ell \left[m,n,t\right] - \ell \left[m,n,t-1\right]
+\ell \left[n,m,t\right] - \ell \left[n,m,t-1\right]
 $$
 
 
@@ -152,7 +152,7 @@ $$
 \frac{\partial \ell}{\partial t} = \frac{\partial \ell _0}{\partial t} = -v_x \frac{\partial \ell _0}{\partial x} - v_y \frac{\partial f_0}{\partial y}
 $${#eq-brightnessconstancy}
 
-This result is interesting because it shows that for a moving image there is a relationship between the temporal derivative of the sequence and the spatial derivatives a long the direction of motion. We can use this relationship to find a linear combination of the temporal and spatial derivatives so that the output is zero. 
+This result is interesting because it shows that for a moving image there is a relationship between the temporal derivative of the sequence and the spatial derivatives along the direction of motion. We can use this relationship to find a linear combination of the temporal and spatial derivatives so that the output is zero. 
 
 In fact, if we compute the gradient of the Gaussian along the vector $\left[1,v_x,v_y\right]$:
 
